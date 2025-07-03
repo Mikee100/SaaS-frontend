@@ -1,10 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState,useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiPost } from "@/utils/api";
 
 export default function RegisterPage() {
   const router = useRouter();
+  useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("token")) {
+      router.replace("/");
+    }
+  }, [router]);
+
+
   // Tenant fields
   const [businessName, setBusinessName] = useState("");
   const [businessType, setBusinessType] = useState("");
