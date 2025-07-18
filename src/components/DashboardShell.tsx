@@ -35,6 +35,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
           <a href="/inventory" className="block py-2 px-3 rounded hover:bg-blue-800">Inventory</a>
           <a href="/users" className="block py-2 px-3 rounded hover:bg-blue-800">Users</a>
           <a href="/sales" className="block py-2 px-3 rounded hover:bg-blue-800">Sales/POS</a>
+          <a href="/sales/history" className="block py-2 px-3 rounded hover:bg-blue-800">Sales History</a>
           <a href="/reports" className="block py-2 px-3 rounded hover:bg-blue-800">Reports</a>
           <a href="/settings" className="block py-2 px-3 rounded hover:bg-blue-800">Settings</a>
         </nav>
