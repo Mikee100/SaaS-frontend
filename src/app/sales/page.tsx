@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import React from "react";
 
-
 type Product = { id: number; name: string; price: number; stock: number; };
 type CartItem = Product & { quantity: number };
 
@@ -42,6 +41,7 @@ export default function SalesPage() {
   const [mpesaPolling, setMpesaPolling] = useState(false);
   const [mpesaPollProgress, setMpesaPollProgress] = useState(0);
   const [mpesaPollCancelled, setMpesaPollCancelled] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     async function fetchProducts() {
@@ -59,10 +59,18 @@ export default function SalesPage() {
     fetchProducts();
   }, []);
 
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.id.toString().includes(searchTerm)
+  );
+
   function addToCart(product: Product) {
+    if (product.stock <= 0) return;
+    
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
+        if (existing.quantity >= product.stock) return prev;
         return prev.map((item) =>
           item.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
@@ -78,10 +86,17 @@ export default function SalesPage() {
   }
 
   function updateQuantity(productId: number, quantity: number) {
+    if (quantity < 1) return;
+    
     setCart((prev) =>
-      prev.map((item) =>
-        item.id === productId ? { ...item, quantity } : item
-      )
+      prev.map((item) => {
+        if (item.id === productId) {
+          const product = products.find(p => p.id === productId);
+          const maxQuantity = product?.stock || 1;
+          return { ...item, quantity: Math.min(quantity, maxQuantity) };
+        }
+        return item;
+      })
     );
   }
 
@@ -90,90 +105,86 @@ export default function SalesPage() {
 
   function handleCheckout() {
     setCheckoutOpen(true);
-    setAmountReceived(0);
+    setAmountReceived(total); // Auto-fill amount received with total
     setPaymentMethod("cash");
+    setSaleError(null);
+    setMpesaStatus(null);
   }
 
-  // Helper: Wait for MpesaTransaction by checkoutRequestId
   async function getMpesaTransactionWithRetry(checkoutRequestId: string, retries = 5, delay = 2000): Promise<{ id: string }> {
     setMpesaPolling(true);
     setMpesaPollProgress(0);
     setMpesaPollCancelled(false);
     for (let i = 0; i < retries; i++) {
-      if (mpesaPollCancelled) throw new Error('Polling cancelled by user');
+      if (mpesaPollCancelled) throw new Error('Payment confirmation cancelled');
       try {
         const tx = await apiGet<{ id: string }>(`/mpesa/by-checkout-id/${checkoutRequestId}`);
         if (tx && tx.id) {
           setMpesaPolling(false);
-          setMpesaStatus({ success: true, message: 'M-Pesa payment confirmed!' });
+          setMpesaStatus({ success: true, message: 'Payment confirmed!' });
           return tx;
         }
       } catch (err) {
         // ignore 404
       }
-      setMpesaStatus({ success: false, message: `Waiting for M-Pesa confirmation... (${i + 1}/${retries})` });
+      setMpesaStatus({ success: false, message: `Waiting for payment confirmation... (${i + 1}/${retries})` });
       setMpesaPollProgress(((i + 1) / retries) * 100);
       await new Promise(res => setTimeout(res, delay));
     }
     setMpesaPolling(false);
-    throw new Error('M-Pesa payment not confirmed after several retries');
+    throw new Error('Payment not confirmed after several attempts');
   }
 
   async function handleConfirmSale() {
     setSaleError(null);
     setMpesaStatus(null);
     setMpesaPollCancelled(false);
+    
     if (paymentMethod === "mpesa") {
       // Validate phone
       if (!mpesaPhone.match(/^(07|2547|25407|\+2547)\d{8}$/)) {
         setMpesaStatus({ success: false, message: "Invalid phone number format. Use 07XXXXXXXX, 2547XXXXXXXX, or +2547XXXXXXXX" });
         return;
       }
+      
       setMpesaLoading(true);
       try {
         const mpesaRes = await apiPost<any>("/mpesa", { phoneNumber: mpesaPhone, amount: total });
-        setMpesaStatus({ success: mpesaRes.success, message: mpesaRes.message || (mpesaRes.success ? "Prompt sent to phone. Complete payment on your device." : "Failed to initiate payment.") });
-        setMpesaLoading(false);
-        if (mpesaRes.success && mpesaRes.data && mpesaRes.data.CheckoutRequestID) {
-          // Wait for MpesaTransaction to be available
-          setMpesaStatus({ success: false, message: "Waiting for M-Pesa confirmation..." });
-          try {
-            const tx = await getMpesaTransactionWithRetry(mpesaRes.data.CheckoutRequestID);
-            const salePayload = {
-              items: cart.map(item => ({ productId: item.id, quantity: item.quantity })),
-              paymentMethod,
-              amountReceived: total,
-              customerName: customerName || undefined,
-              customerPhone: customerPhone || undefined,
-              mpesaTransactionId: tx.id, // Use the UUID
-            };
-            const receiptData = await apiPost<Receipt>("/sales", salePayload);
-            setReceipt(receiptData);
-            setCart([]);
-            setCheckoutOpen(false);
-            setShowReceipt(true);
-            setCustomerName("");
-            setCustomerPhone("");
-            setTimeout(() => setShowReceipt(false), 8000);
-          } catch (err: any) {
-            setSaleError(err.message || "Sale failed");
-          }
+        
+        if (!mpesaRes.success) {
+          throw new Error(mpesaRes.message || "Failed to initiate payment");
         }
-        return;
+        
+        setMpesaStatus({ 
+          success: true, 
+          message: "Payment request sent to your phone. Please complete the transaction." 
+        });
+        
+        if (mpesaRes.data?.CheckoutRequestID) {
+          const tx = await getMpesaTransactionWithRetry(mpesaRes.data.CheckoutRequestID);
+          await completeSale(tx.id);
+        }
       } catch (err: any) {
-        setMpesaStatus({ success: false, message: err.message || "Failed to initiate payment." });
+        setMpesaStatus({ success: false, message: err.message || "Payment failed" });
         setMpesaLoading(false);
       }
       return;
     }
+    
+    await completeSale();
+  }
+
+  async function completeSale(mpesaTransactionId?: string) {
     try {
       const salePayload = {
         items: cart.map(item => ({ productId: item.id, quantity: item.quantity })),
         paymentMethod,
-        amountReceived,
+        amountReceived: paymentMethod === "cash" ? amountReceived : total,
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
+        mpesaTransactionId,
       };
+      
       const receiptData = await apiPost<Receipt>("/sales", salePayload);
       setReceipt(receiptData);
       setCart([]);
@@ -181,267 +192,566 @@ export default function SalesPage() {
       setShowReceipt(true);
       setCustomerName("");
       setCustomerPhone("");
-      setTimeout(() => setShowReceipt(false), 8000);
+      setMpesaPhone("");
+      setMpesaLoading(false);
+      setTimeout(() => setShowReceipt(false), 10000);
     } catch (err: any) {
       setSaleError(err.message || "Sale failed");
+      setMpesaLoading(false);
     }
   }
 
-  if (loading) return <div className="p-8">Loading products...</div>;
-  if (error) return <div className="p-8 text-red-500">{error}</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+  );
+  
+  if (error) return (
+    <div className="p-8 text-center">
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative max-w-md mx-auto">
+        <strong className="font-bold">Error!</strong>
+        <span className="block sm:inline"> {error}</span>
+      </div>
+      <button 
+        onClick={() => window.location.reload()}
+        className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+      >
+        Retry
+      </button>
+    </div>
+  );
 
   return (
-    <>
-      <div className="flex gap-8">
-        {/* Product List */}
-        <div className="w-2/3 bg-white rounded shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Products</h2>
-          <div className="grid grid-cols-2 gap-4">
-            {paginatedProducts.map((product) => (
-              <div
-                key={product.id}
-                className="border rounded-lg p-4 pt-8 flex flex-col shadow-sm hover:shadow-lg transition group bg-gradient-to-br from-blue-50 to-white relative"
-              >
-                <div className="absolute top-2 right-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-mono">ID: {product.id}</div>
-                <div className="font-extrabold text-xl text-center text-blue-900 mb-2 border-b pb-1">{product.name}</div>
-                <div className="text-gray-600 text-base mb-1">${product.price.toFixed(2)}</div>
-                <div className="text-xs mb-2">
-                  <span className={`inline-block px-2 py-0.5 rounded-full font-semibold ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>Stock: {product.stock}</span>
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Point of Sale System</h1>
+        
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Product List */}
+          <div className="lg:w-2/3">
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                <h2 className="text-xl font-bold text-gray-800">Products</h2>
+                <div className="relative w-full md:w-64">
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <svg
+                    className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
                 </div>
-                <button
-                  className="mt-auto bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition"
-                  onClick={() => addToCart(product)}
-                  disabled={product.stock === 0}
-                >
-                  {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
-                </button>
               </div>
-            ))}
-          </div>
-          {/* Pagination controls */}
-          <div className="flex justify-between items-center mt-6">
-            <button
-              className="px-3 py-1 rounded border text-xs disabled:opacity-50"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-            >
-              Prev
-            </button>
-            <span className="text-xs px-2">Page {currentPage} of {pageCount}</span>
-            <button
-              className="px-3 py-1 rounded border text-xs disabled:opacity-50"
-              onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
-              disabled={currentPage === pageCount}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-        {/* Cart */}
-        <div className="w-1/3">
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <h2 className="text-xl font-bold mb-4">Cart</h2>
-            {cart.length === 0 ? (
-              <div className="text-gray-500">Cart is empty</div>
-            ) : (
-              <ul className="space-y-3">
-                {cart.map((item) => (
-                  <li key={item.id} className="flex items-center justify-between bg-blue-50 rounded p-2">
-                    <div>
-                      <div className="font-semibold text-blue-900">{item.name}</div>
-                      <div className="text-xs text-gray-500">
-                        ${item.price.toFixed(2)} x
-                        <input
-                          type="number"
-                          min={1}
-                          max={item.stock}
-                          value={item.quantity}
-                          onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
-                          className="w-12 mx-1 border rounded px-1 text-center"
-                        />
-                        = ${(item.price * item.quantity).toFixed(2)}
+              
+              {filteredProducts.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No products found
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {filteredProducts
+                      .slice((currentPage - 1) * productsPerPage, currentPage * productsPerPage)
+                      .map((product) => (
+                      <div
+                        key={product.id}
+                        className={`border rounded-lg p-4 flex flex-col transition-all ${product.stock > 0 ? 
+                          'hover:shadow-md hover:border-blue-300 bg-white' : 
+                          'bg-gray-50 opacity-70'}`}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                            #{product.id}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            product.stock > 5 ? 'bg-green-100 text-green-800' :
+                            product.stock > 0 ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-200 text-gray-600'
+                          }`}>
+                            {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
+                          </span>
+                        </div>
+                        <div className="font-bold text-lg text-gray-800 mb-1 truncate">{product.name}</div>
+                        <div className="text-xl font-extrabold text-blue-600 mb-3">
+                          ${product.price.toFixed(2)}
+                        </div>
+                        <button
+                          className={`mt-auto w-full py-2 rounded-lg font-medium transition-colors ${
+                            product.stock > 0 ?
+                            'bg-blue-600 hover:bg-blue-700 text-white' :
+                            'bg-gray-200 text-gray-500 cursor-not-allowed'
+                          }`}
+                          onClick={() => addToCart(product)}
+                          disabled={product.stock === 0}
+                        >
+                          {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+                        </button>
                       </div>
+                    ))}
+                  </div>
+                  
+                  {filteredProducts.length > productsPerPage && (
+                    <div className="flex justify-between items-center mt-6">
+                      <button
+                        className={`px-4 py-2 rounded-lg border ${currentPage === 1 ? 
+                          'text-gray-400 cursor-not-allowed' : 
+                          'text-gray-700 hover:bg-gray-100'}`}
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-gray-600">
+                        Page {currentPage} of {Math.ceil(filteredProducts.length / productsPerPage)}
+                      </span>
+                      <button
+                        className={`px-4 py-2 rounded-lg border ${currentPage === Math.ceil(filteredProducts.length / productsPerPage) ? 
+                          'text-gray-400 cursor-not-allowed' : 
+                          'text-gray-700 hover:bg-gray-100'}`}
+                        onClick={() => setCurrentPage((p) => Math.min(Math.ceil(filteredProducts.length / productsPerPage), p + 1))}
+                        disabled={currentPage === Math.ceil(filteredProducts.length / productsPerPage)}
+                      >
+                        Next
+                      </button>
                     </div>
-                    <button
-                      className="text-red-500 hover:underline text-xs"
-                      onClick={() => removeFromCart(item.id)}
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="mt-6 border-t pt-4">
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total:</span>
-                <span>${total.toFixed(2)}</span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          
+          {/* Cart */}
+          <div className="lg:w-1/3">
+            <div className="bg-white rounded-xl shadow-sm p-6 sticky top-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800">Your Cart</h2>
+                <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                  {cart.length} {cart.length === 1 ? 'item' : 'items'}
+                </span>
               </div>
-              <button
-                className="mt-4 w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 disabled:opacity-50 transition"
-                disabled={cart.length === 0}
-                onClick={handleCheckout}
-              >
-                Checkout
-              </button>
+              
+              {cart.length === 0 ? (
+                <div className="text-center py-8">
+                  <svg
+                    className="mx-auto h-12 w-12 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1}
+                      d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  </svg>
+                  <p className="mt-2 text-gray-500">Your cart is empty</p>
+                  <p className="text-sm text-gray-400">Add products to get started</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                    {cart.map((item) => (
+                      <div key={item.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900 truncate">{item.name}</div>
+                          <div className="text-sm text-gray-500">${item.price.toFixed(2)} each</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded hover:bg-gray-300"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={item.stock}
+                            value={item.quantity}
+                            onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
+                            className="w-12 text-center border rounded py-1 text-sm"
+                          />
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded hover:bg-gray-300"
+                            disabled={item.quantity >= item.stock}
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="font-medium text-right min-w-[60px]">
+                          ${(item.price * item.quantity).toFixed(2)}
+                        </div>
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          title="Remove item"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="mt-6 border-t pt-4 space-y-3">
+                    <div className="flex justify-between font-medium">
+                      <span>Subtotal:</span>
+                      <span>${total.toFixed(2)}</span>
+                    </div>
+                    
+                    <button
+                      className={`w-full py-3 rounded-lg font-bold text-white transition-colors ${
+                        cart.length > 0 ? 
+                        'bg-green-600 hover:bg-green-700' : 
+                        'bg-gray-300 cursor-not-allowed'
+                      }`}
+                      disabled={cart.length === 0}
+                      onClick={handleCheckout}
+                    >
+                      Proceed to Checkout
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
       </div>
+      
       {/* Checkout Modal */}
       {checkoutOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Blurry overlay */}
-          <div className="absolute inset-0 bg-white/40 backdrop-blur-sm z-0"></div>
-          <div className="bg-white rounded-2xl shadow-2xl border border-blue-100 p-8 w-full max-w-md relative animate-fadeIn z-10">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={() => !mpesaPolling && setCheckoutOpen(false)}
+          ></div>
+          
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <button
-              className="absolute top-3 right-3 text-gray-400 hover:text-blue-600 text-xl font-bold"
-              onClick={() => setCheckoutOpen(false)}
-              aria-label="Close"
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10"
+              onClick={() => !mpesaPolling && setCheckoutOpen(false)}
+              disabled={mpesaPolling}
             >
-              ×
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
-            <h2 className="text-2xl font-bold mb-4 text-blue-900">Checkout</h2>
-            <div className="mb-4">
-              <div className="mb-2 text-lg">Total: <span className="font-bold text-blue-900">${total.toFixed(2)}</span></div>
-              <label className="block mb-2 font-semibold">Payment Method:</label>
-              <select
-                className="border rounded px-2 py-1 w-full mb-2"
-                value={paymentMethod}
-                onChange={e => setPaymentMethod(e.target.value)}
-                disabled={mpesaLoading || mpesaPolling}
-              >
-                <option value="cash">Cash</option>
-                <option value="card">Card</option>
-                <option value="mpesa">M-Pesa</option>
-              </select>
-              {paymentMethod === "cash" && (
-                <div>
-                  <label className="block mb-1 font-semibold">Amount Received:</label>
-                  <input
-                    type="number"
-                    min={total}
-                    value={amountReceived}
-                    onChange={e => setAmountReceived(Number(e.target.value))}
-                    className="border rounded px-2 py-1 w-full"
-                    disabled={mpesaLoading || mpesaPolling}
-                  />
-                  <div className="mt-2">Change Due: <span className="font-bold">${changeDue >= 0 ? changeDue.toFixed(2) : "0.00"}</span></div>
+            
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">Complete Your Order</h2>
+              
+              <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600">Order Total:</span>
+                  <span className="text-2xl font-bold text-blue-600">${total.toFixed(2)}</span>
                 </div>
-              )}
-              {paymentMethod === "mpesa" && (
-                <div className="mt-2">
-                  <label className="block mb-1 font-semibold">M-Pesa Phone Number:</label>
+                {cart.length > 0 && (
+                  <div className="text-sm text-gray-500">
+                    {cart.length} {cart.length === 1 ? 'item' : 'items'} in cart
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      className={`py-2 px-3 rounded-lg border ${
+                        paymentMethod === "cash" ? 
+                        'border-blue-500 bg-blue-50 text-blue-700' : 
+                        'border-gray-300 hover:bg-gray-50'
+                      }`}
+                      onClick={() => setPaymentMethod("cash")}
+                      disabled={mpesaLoading || mpesaPolling}
+                    >
+                      Cash
+                    </button>
+                    <button
+                      className={`py-2 px-3 rounded-lg border ${
+                        paymentMethod === "card" ? 
+                        'border-blue-500 bg-blue-50 text-blue-700' : 
+                        'border-gray-300 hover:bg-gray-50'
+                      }`}
+                      onClick={() => setPaymentMethod("card")}
+                      disabled={mpesaLoading || mpesaPolling}
+                    >
+                      Card
+                    </button>
+                    <button
+                      className={`py-2 px-3 rounded-lg border ${
+                        paymentMethod === "mpesa" ? 
+                        'border-blue-500 bg-blue-50 text-blue-700' : 
+                        'border-gray-300 hover:bg-gray-50'
+                      }`}
+                      onClick={() => setPaymentMethod("mpesa")}
+                      disabled={mpesaLoading || mpesaPolling}
+                    >
+                      M-Pesa
+                    </button>
+                  </div>
+                </div>
+                
+                {paymentMethod === "cash" && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Amount Received
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                      <input
+                        type="number"
+                        min={total}
+                        value={amountReceived}
+                        onChange={(e) => setAmountReceived(Number(e.target.value))}
+                        className="w-full pl-8 pr-3 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    {amountReceived > 0 && (
+                      <div className={`mt-2 text-sm font-medium ${
+                        changeDue >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        Change Due: ${Math.max(0, changeDue).toFixed(2)}
+                        {changeDue < 0 && (
+                          <span className="block text-xs text-red-500">Amount received is less than total</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {paymentMethod === "mpesa" && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      M-Pesa Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      value={mpesaPhone}
+                      onChange={(e) => setMpesaPhone(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="07XXXXXXXX or 2547XXXXXXXX"
+                      disabled={mpesaLoading || mpesaPolling}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Enter your M-Pesa registered phone number
+                    </p>
+                    
+                    {mpesaPolling && (
+                      <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                        <div className="flex flex-col items-center">
+                          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+                          <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                              style={{ width: `${mpesaPollProgress}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-sm text-center text-blue-700 mb-2">
+                            {mpesaStatus?.message || "Waiting for payment confirmation..."}
+                          </p>
+                          <button
+                            className="text-xs text-red-600 hover:underline"
+                            onClick={() => setMpesaPollCancelled(true)}
+                          >
+                            Cancel Payment
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {mpesaStatus && !mpesaPolling && (
+                      <div className={`mt-2 p-2 rounded text-sm ${
+                        mpesaStatus.success ? 
+                        'bg-green-100 text-green-700' : 
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {mpesaStatus.message}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Customer Name (optional)
+                  </label>
                   <input
                     type="text"
-                    value={mpesaPhone}
-                    onChange={e => setMpesaPhone(e.target.value)}
-                    className="border rounded px-2 py-1 w-full"
-                    placeholder="07XXXXXXXX or 2547XXXXXXXX"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Customer name"
                     disabled={mpesaLoading || mpesaPolling}
                   />
-                  {mpesaPolling && (
-                    <div className="flex flex-col items-center mt-4">
-                      <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-2"></div>
-                      <div className="w-full bg-blue-100 rounded-full h-2 mb-2">
-                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${mpesaPollProgress}%` }}></div>
-                      </div>
-                      <div className="text-xs text-blue-700 mb-2">{mpesaStatus?.message || "Waiting for M-Pesa confirmation..."}</div>
-                      <button
-                        className="text-xs text-red-600 hover:underline"
-                        onClick={() => setMpesaPollCancelled(true)}
-                        disabled={!mpesaPolling}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                  {mpesaStatus && !mpesaPolling && (
-                    <div className={mpesaStatus.success ? "text-green-600 mt-2" : "text-red-500 mt-2"}>{mpesaStatus.message}</div>
-                  )}
                 </div>
-              )}
-              <label className="block mt-4 mb-1 font-semibold">Customer Name (optional):</label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-                className="border rounded px-2 py-1 w-full"
-                placeholder="Enter customer name"
-                disabled={mpesaLoading || mpesaPolling}
-              />
-              <label className="block mt-2 mb-1 font-semibold">Customer Phone (optional):</label>
-              <input
-                type="text"
-                value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
-                className="border rounded px-2 py-1 w-full"
-                placeholder="Enter customer phone"
-                disabled={mpesaLoading || mpesaPolling}
-              />
-              {saleError && <div className="text-red-500 mt-2">{saleError}</div>}
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
-                onClick={() => setCheckoutOpen(false)}
-                disabled={mpesaLoading || mpesaPolling}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
-                disabled={
-                  (paymentMethod === "cash" && amountReceived < total) ||
-                  (paymentMethod === "mpesa" && (mpesaLoading || mpesaPolling || !mpesaPhone))
-                }
-                onClick={handleConfirmSale}
-              >
-                {mpesaLoading || mpesaPolling ? "Processing..." : "Confirm Sale"}
-              </button>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Customer Phone (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Customer phone"
+                    disabled={mpesaLoading || mpesaPolling}
+                  />
+                </div>
+                
+                {saleError && (
+                  <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                    {saleError}
+                  </div>
+                )}
+              </div>
+              
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  onClick={() => !mpesaPolling && setCheckoutOpen(false)}
+                  disabled={mpesaPolling}
+                >
+                  Cancel
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-lg text-white font-medium ${
+                    (paymentMethod === "cash" && amountReceived < total) ||
+                    (paymentMethod === "mpesa" && (mpesaLoading || mpesaPolling || !mpesaPhone)) ?
+                    'bg-gray-400 cursor-not-allowed' :
+                    'bg-green-600 hover:bg-green-700'
+                  }`}
+                  disabled={
+                    (paymentMethod === "cash" && amountReceived < total) ||
+                    (paymentMethod === "mpesa" && (mpesaLoading || mpesaPolling || !mpesaPhone))
+                  }
+                  onClick={handleConfirmSale}
+                >
+                  {mpesaLoading || mpesaPolling ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </span>
+                  ) : (
+                    'Confirm Payment'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
-      {/* Receipt/Confirmation */}
+      
+      {/* Receipt Notification */}
       {showReceipt && receipt && (
-        <div className="fixed bottom-8 right-8 bg-white border shadow-lg rounded p-6 z-50 min-w-[320px]">
-          <div className="font-bold text-lg mb-2">Sale Complete!</div>
-          <div className="mb-2 text-xs text-gray-500">Sale ID: {receipt.saleId}</div>
-          <div className="mb-2 text-xs text-gray-500">Date: {new Date(receipt.date).toLocaleString()}</div>
-          <div className="mb-2">Customer: {receipt.customerName || "-"} {receipt.customerPhone && `(${receipt.customerPhone})`}</div>
-          <table className="w-full text-xs mb-2">
-            <thead>
-              <tr>
-                <th className="text-left">Item</th>
-                <th className="text-right">Qty</th>
-                <th className="text-right">Price</th>
-                <th className="text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {receipt.items.map((item: any) => (
-                <tr key={item.productId}>
-                  <td>{item.name}</td>
-                  <td className="text-right">{item.quantity}</td>
-                  <td className="text-right">${item.price.toFixed(2)}</td>
-                  <td className="text-right">${(item.price * item.quantity).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="font-bold">Total: ${receipt.total.toFixed(2)}</div>
-          <div>Payment: {receipt.paymentMethod}</div>
-          <div>Amount Received: ${receipt.amountReceived.toFixed(2)}</div>
-          <div>Change: ${receipt.change.toFixed(2)}</div>
-          <button
-            className="mt-4 px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 w-full"
-            onClick={() => window.print()}
-          >
-            Print Receipt
-          </button>
+        <div className="fixed bottom-6 right-6 z-50 animate-fade-in-up">
+          <div className="bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden w-80">
+            <div className="bg-green-600 p-4 text-white">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-lg">Payment Successful</h3>
+                <button 
+                  onClick={() => setShowReceipt(false)}
+                  className="text-white hover:text-gray-200"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="text-sm opacity-90">#{receipt.saleId}</div>
+            </div>
+            
+            <div className="p-4">
+              <div className="flex justify-between text-sm text-gray-500 mb-3">
+                <span>Date:</span>
+                <span>{new Date(receipt.date).toLocaleString()}</span>
+              </div>
+              
+              {(receipt.customerName || receipt.customerPhone) && (
+                <div className="mb-3">
+                  <div className="text-sm text-gray-500">Customer:</div>
+                  <div className="font-medium">
+                    {receipt.customerName || '-'} {receipt.customerPhone && `(${receipt.customerPhone})`}
+                  </div>
+                </div>
+              )}
+              
+              <div className="border-t pt-3">
+                {receipt.items.map((item) => (
+                  <div key={item.productId} className="flex justify-between text-sm mb-1">
+                    <span className="truncate max-w-[180px]">
+                      {item.quantity}x {item.name}
+                    </span>
+                    <span>${(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="border-t mt-3 pt-3 space-y-1">
+                <div className="flex justify-between font-medium">
+                  <span>Total:</span>
+                  <span>${receipt.total.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Payment:</span>
+                  <span className="capitalize">{receipt.paymentMethod}</span>
+                </div>
+                {receipt.paymentMethod === "cash" && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Received:</span>
+                      <span>${receipt.amountReceived.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Change:</span>
+                      <span>${receipt.change.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                >
+                  Print Receipt
+                </button>
+                <button
+                  onClick={() => setShowReceipt(false)}
+                  className="flex-1 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg text-sm font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
-    </>
+    </div>
   );
-} 
+}
