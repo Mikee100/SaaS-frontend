@@ -5,6 +5,7 @@ import { PrinterIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import React from "react";
 
 function unique<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
@@ -218,8 +219,8 @@ export default function SalesHistoryPage() {
               </thead>
               <tbody>
                 {pagedSales.map((sale, idx) => (
-                  <>
-                    <tr key={sale.saleId} className={"transition hover:bg-blue-50 " + ((idx + (page-1)*perPage) % 2 === 0 ? "bg-gray-50" : "bg-white") }>
+                  <React.Fragment key={sale.saleId}>
+                    <tr className={"transition hover:bg-blue-50 " + ((idx + (page-1)*perPage) % 2 === 0 ? "bg-gray-50" : "bg-white") }>
                       <td className="py-2 px-4 border-b">{new Date(sale.date).toLocaleString()}</td>
                       <td className="py-2 px-4 border-b font-mono text-xs">{sale.saleId.slice(0, 8)}...</td>
                       <td className="py-2 px-4 border-b font-bold text-green-700">${sale.total.toFixed(2)}</td>
@@ -289,7 +290,7 @@ export default function SalesHistoryPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

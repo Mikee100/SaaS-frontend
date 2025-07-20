@@ -2,6 +2,10 @@
 import { useState, useEffect } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import React from "react";
+import Spinner from '@/components/Spinner';
+import { v4 as uuidv4 } from 'uuid';
+import { QRCodeCanvas } from 'qrcode.react';
+import Barcode from 'react-barcode';
 
 type Product = { id: number; name: string; price: number; stock: number; };
 type CartItem = Product & { quantity: number };
@@ -38,10 +42,13 @@ export default function SalesPage() {
   const [mpesaPhone, setMpesaPhone] = useState("");
   const [mpesaStatus, setMpesaStatus] = useState<null | { success: boolean; message: string }>(null);
   const [mpesaLoading, setMpesaLoading] = useState(false);
+  const [saleLoading, setSaleLoading] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => uuidv4());
   const [mpesaPolling, setMpesaPolling] = useState(false);
   const [mpesaPollProgress, setMpesaPollProgress] = useState(0);
   const [mpesaPollCancelled, setMpesaPollCancelled] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [businessInfo, setBusinessInfo] = useState<any>(null);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -57,6 +64,18 @@ export default function SalesPage() {
       }
     }
     fetchProducts();
+  }, []);
+
+  useEffect(() => {
+    async function fetchBusinessInfo() {
+      try {
+        const info = await apiGet('/tenant/me');
+        setBusinessInfo(info);
+      } catch (e) {
+        // Optionally handle error
+      }
+    }
+    fetchBusinessInfo();
   }, []);
 
   const filteredProducts = products.filter(product =>
@@ -109,6 +128,7 @@ export default function SalesPage() {
     setPaymentMethod("cash");
     setSaleError(null);
     setMpesaStatus(null);
+    setIdempotencyKey(uuidv4()); // Generate a new key for each checkout
   }
 
   async function getMpesaTransactionWithRetry(checkoutRequestId: string, retries = 5, delay = 2000): Promise<{ id: string }> {
@@ -175,6 +195,7 @@ export default function SalesPage() {
   }
 
   async function completeSale(mpesaTransactionId?: string) {
+    setSaleLoading(true);
     try {
       const salePayload = {
         items: cart.map(item => ({ productId: item.id, quantity: item.quantity })),
@@ -183,8 +204,8 @@ export default function SalesPage() {
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
         mpesaTransactionId,
+        idempotencyKey,
       };
-      
       const receiptData = await apiPost<Receipt>("/sales", salePayload);
       setReceipt(receiptData);
       setCart([]);
@@ -198,6 +219,8 @@ export default function SalesPage() {
     } catch (err: any) {
       setSaleError(err.message || "Sale failed");
       setMpesaLoading(false);
+    } finally {
+      setSaleLoading(false);
     }
   }
 
@@ -221,6 +244,9 @@ export default function SalesPage() {
       </button>
     </div>
   );
+
+  // Digital receipt URL
+  const digitalReceiptUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com') + `/receipt/${receipt?.saleId}`;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -648,7 +674,7 @@ export default function SalesPage() {
                   }
                   onClick={handleConfirmSale}
                 >
-                  {mpesaLoading || mpesaPolling ? (
+                  {mpesaLoading || saleLoading ? (
                     <span className="flex items-center justify-center gap-2">
                       <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -668,87 +694,119 @@ export default function SalesPage() {
       
       {/* Receipt Notification */}
       {showReceipt && receipt && (
-        <div className="fixed bottom-6 right-6 z-50 animate-fade-in-up">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden w-80">
-            <div className="bg-green-600 p-4 text-white">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold text-lg">Payment Successful</h3>
-                <button 
-                  onClick={() => setShowReceipt(false)}
-                  className="text-white hover:text-gray-200"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="text-sm opacity-90">#{receipt.saleId}</div>
+        <div className="fixed bottom-6 right-6 z-50 animate-fade-in-up print-receipt max-w-sm mx-auto p-6 bg-white rounded shadow-none border-none font-mono text-xs" style={{ width: 340 }}>
+          {/* Header */}
+          <div className="text-center mb-2">
+            {businessInfo?.logoUrl && (
+              <img src={businessInfo.logoUrl} alt="Business Logo" className="mx-auto mb-2 max-h-16" style={{ objectFit: 'contain' }} />
+            )}
+            {businessInfo && (
+              <>
+                <div className="font-bold text-lg tracking-wide">{businessInfo.name}</div>
+                <div className="text-xs">{businessInfo.businessType}</div>
+                {businessInfo.address && <div className="text-xs">{businessInfo.address}</div>}
+                {businessInfo.contactPhone && <div className="text-xs">Phone: {businessInfo.contactPhone}</div>}
+                {businessInfo.contactEmail && <div className="text-xs mb-1">Email: {businessInfo.contactEmail}</div>}
+              </>
+            )}
+            {/* Barcode for receipt number */}
+            <div className="flex justify-center my-2">
+              <Barcode value={receipt.saleId} width={1.2} height={32} fontSize={10} />
             </div>
-            
-            <div className="p-4">
-              <div className="flex justify-between text-sm text-gray-500 mb-3">
-                <span>Date:</span>
-                <span>{new Date(receipt.date).toLocaleString()}</span>
-              </div>
-              
-              {(receipt.customerName || receipt.customerPhone) && (
-                <div className="mb-3">
-                  <div className="text-sm text-gray-500">Customer:</div>
-                  <div className="font-medium">
-                    {receipt.customerName || '-'} {receipt.customerPhone && `(${receipt.customerPhone})`}
-                  </div>
-                </div>
-              )}
-              
-              <div className="border-t pt-3">
-                {receipt.items.map((item) => (
-                  <div key={item.productId} className="flex justify-between text-sm mb-1">
-                    <span className="truncate max-w-[180px]">
-                      {item.quantity}x {item.name}
-                    </span>
-                    <span>${(item.price * item.quantity).toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="border-t mt-3 pt-3 space-y-1">
-                <div className="flex justify-between font-medium">
-                  <span>Total:</span>
-                  <span>${receipt.total.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Payment:</span>
-                  <span className="capitalize">{receipt.paymentMethod}</span>
-                </div>
-                {receipt.paymentMethod === "cash" && (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Received:</span>
-                      <span>${receipt.amountReceived.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Change:</span>
-                      <span>${receipt.change.toFixed(2)}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-              
-              <div className="mt-4 flex gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
-                >
-                  Print Receipt
-                </button>
-                <button
-                  onClick={() => setShowReceipt(false)}
-                  className="flex-1 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg text-sm font-medium"
-                >
-                  Close
-                </button>
-              </div>
+            <div className="border-t border-dashed my-2"></div>
+            <div className="flex justify-between">
+              <span>Receipt:</span>
+              <span className="font-bold">#{receipt.saleId.slice(0, 8)}</span>
             </div>
+            <div className="flex justify-between">
+              <span>Date:</span>
+              <span>{new Date(receipt.date).toLocaleString()}</span>
+            </div>
+            {receipt.customerName && (
+              <div className="flex justify-between">
+                <span>Customer:</span>
+                <span>{receipt.customerName}</span>
+              </div>
+            )}
+            {receipt.customerPhone && (
+              <div className="flex justify-between">
+                <span>Phone:</span>
+                <span>{receipt.customerPhone}</span>
+              </div>
+            )}
+            <div className="border-t border-dashed my-2"></div>
+          </div>
+
+          {/* Items */}
+          <div>
+            {receipt.items.map((item) => (
+              <div key={item.productId} className="flex justify-between mb-1">
+                <span>
+                  {item.quantity} x {item.name}
+                </span>
+                <span>${(item.price * item.quantity).toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-dashed my-2"></div>
+
+          {/* Totals */}
+          <div className="flex justify-between font-bold">
+            <span>Total:</span>
+            <span>${receipt.total.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Payment:</span>
+            <span className="capitalize">{receipt.paymentMethod}</span>
+          </div>
+          {receipt.paymentMethod === "cash" && (
+            <>
+              <div className="flex justify-between">
+                <span>Received:</span>
+                <span>${receipt.amountReceived.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Change:</span>
+                <span>${receipt.change.toFixed(2)}</span>
+              </div>
+            </>
+          )}
+
+          {/* Footer */}
+          <div className="border-t border-dashed my-2"></div>
+          <div className="text-center mt-2">
+            <div className="font-semibold">Thank you for your business!</div>
+            <div className="text-xs mt-1">No returns without receipt. Earn loyalty points with every purchase!</div>
+            <div className="text-xs mt-1">Return policy: Items can be returned within 14 days with receipt.</div>
+            {/* QR Code for digital receipt at the bottom */}
+            <div className="flex justify-center my-4">
+              <QRCodeCanvas value={(typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com') + `/receipt/${receipt.saleId}`} size={64} />
+            </div>
+          </div>
+
+          {/* Print/Close Buttons (hidden in print) */}
+          <div className="mt-4 flex gap-2 no-print">
+            <button
+              onClick={() => window.print()}
+              className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+            >
+              Print Receipt
+            </button>
+            <a
+              href={digitalReceiptUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium text-center"
+              style={{ display: 'inline-block', lineHeight: '2.25rem' }}
+            >
+              View Digital Receipt
+            </a>
+            <button
+              onClick={() => setShowReceipt(false)}
+              className="flex-1 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg text-sm font-medium"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
