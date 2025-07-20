@@ -91,17 +91,9 @@ export default function BusinessInfoSettings() {
   if (loading) return <Spinner size={40} className="my-12" />;
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', fontFamily: 'Inter, sans-serif' }}>
-      <h2 style={{ fontWeight: 700, fontSize: 28, marginBottom: 24 }}>Business Info</h2>
-      <form onSubmit={handleSubmit} style={{
-        background: '#fff',
-        borderRadius: 12,
-        boxShadow: '0 2px 12px 0 rgba(0,0,0,0.06)',
-        padding: 32,
-        display: "flex",
-        flexDirection: "column",
-        gap: 20,
-      }}>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 0' }}>
+      <h2 style={{ fontWeight: 700, fontSize: 28, marginBottom: 32 }}>Business Info</h2>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         {fields.map((f) => (
           <div key={f.name} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <label htmlFor={f.name} style={{ fontWeight: 500, marginBottom: 2 }}>{f.label}</label>
@@ -117,13 +109,13 @@ export default function BusinessInfoSettings() {
                 rows={3}
                 style={{
                   border: '1px solid #e5e7eb',
-                  borderRadius: 8,
+                  borderRadius: 6,
                   padding: '10px 12px',
                   fontSize: 16,
                   outline: 'none',
-                  transition: 'border 0.2s',
                   fontFamily: 'inherit',
                   resize: 'vertical',
+                  background: '#f7fafd',
                 }}
               />
             ) : (
@@ -137,12 +129,13 @@ export default function BusinessInfoSettings() {
                   border: f.name === 'kraPin' && form.kraPin && validation.kraPin === false ? '1.5px solid #dc2626' :
                          f.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false ? '1.5px solid #dc2626' :
                          '1px solid #e5e7eb',
-                  borderRadius: 8,
+                  borderRadius: 6,
                   padding: '10px 12px',
                   fontSize: 16,
                   outline: 'none',
-                  transition: 'border 0.2s',
                   fontFamily: 'inherit',
+                  background: '#f7fafd',
+                  transition: 'border 0.2s',
                 }}
               />
             )}
@@ -156,15 +149,14 @@ export default function BusinessInfoSettings() {
         ))}
         <button type="submit" disabled={saving} style={{
           marginTop: 16,
-          background: '#2563eb',
-          color: '#fff',
-          border: 'none',
+          background: '#f7fafd',
+          color: '#222',
+          border: '1px solid #e5e7eb',
           borderRadius: 8,
           padding: '12px 0',
           fontWeight: 600,
           fontSize: 17,
           cursor: saving ? 'not-allowed' : 'pointer',
-          boxShadow: '0 1px 4px 0 rgba(37,99,235,0.08)',
           transition: 'background 0.15s',
         }}>
           {saving ? "Saving..." : "Save"}

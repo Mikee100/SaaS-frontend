@@ -65,5 +65,10 @@ export async function apiGet<T>(path: string): Promise<T> {
     throw new Error(error.message || 'Request failed');
   }
   return res.json();
+}
+
+// Fetch current user with permissions
+export async function fetchCurrentUser() {
+  return apiGet('/user/me');
 } 
 

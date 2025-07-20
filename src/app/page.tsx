@@ -1,27 +1,70 @@
+"use client";
+import { useEffect, useState } from "react";
+import { apiGet } from "@/utils/api";
 
 export default function Home() {
+  const [business, setBusiness] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiGet('/tenant/me')
+      .then(setBusiness)
+      .catch((err) => setError(err.message || "Failed to load business info"))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-8">
-      <div className="max-w-2xl w-full bg-white/90 rounded-2xl shadow-xl p-10 flex flex-col items-center">
-        <h1 className="text-4xl font-extrabold text-blue-700 mb-2 text-center">Welcome to SaaS POS</h1>
-        <p className="text-gray-600 text-lg mb-8 text-center">
-          Your all-in-one Point of Sale and business management platform. Easily manage products, inventory, sales, and reports—all in one place.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full">
-          <a href="/products" className="bg-gradient-to-r from-blue-100 to-blue-200 rounded-xl shadow p-6 flex flex-col items-center hover:shadow-lg transition">
-            <span className="text-2xl font-bold text-blue-700 mb-2">Products</span>
-            <span className="text-gray-500 text-sm text-center">Manage your product catalog</span>
-          </a>
-          <a href="/sales" className="bg-gradient-to-r from-purple-100 to-purple-200 rounded-xl shadow p-6 flex flex-col items-center hover:shadow-lg transition">
-            <span className="text-2xl font-bold text-purple-700 mb-2">Sales/POS</span>
-            <span className="text-gray-500 text-sm text-center">Process sales and print receipts</span>
-          </a>
-          <a href="/reports" className="bg-gradient-to-r from-pink-100 to-pink-200 rounded-xl shadow p-6 flex flex-col items-center hover:shadow-lg transition">
-            <span className="text-2xl font-bold text-pink-700 mb-2">Reports</span>
-            <span className="text-gray-500 text-sm text-center">View business analytics</span>
-          </a>
-        </div>
-        <div className="mt-10 text-xs text-gray-400 text-center">&copy; {new Date().getFullYear()} SaaS POS. All rights reserved.</div>
+    <div className="min-h-screen flex flex-col items-center justify-center p-8">
+      <div className="max-w-2xl w-full rounded-2xl shadow p-10 flex flex-col items-center border border-gray-100 bg-white">
+        {loading ? (
+          <div className="text-gray-400 text-center">Loading business info...</div>
+        ) : error ? (
+          <div className="text-red-500 text-center">{error}</div>
+        ) : (
+          <>
+            <h1 className="text-3xl font-bold mb-2 text-center">{business?.name || 'Business Dashboard'}</h1>
+            <div className="text-gray-500 text-center mb-6">{business?.businessType}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full mb-8">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-gray-400">Contact Email</span>
+                <span className="font-medium">{business?.contactEmail || '-'}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-gray-400">Contact Phone</span>
+                <span className="font-medium">{business?.contactPhone || '-'}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-gray-400">Address</span>
+                <span className="font-medium">{business?.address || '-'}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-gray-400">Currency</span>
+                <span className="font-medium">{business?.currency || '-'}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-gray-400">Timezone</span>
+                <span className="font-medium">{business?.timezone || '-'}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-gray-400">KRA PIN</span>
+                <span className="font-medium">{business?.kraPin || '-'}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-gray-400">VAT Number</span>
+                <span className="font-medium">{business?.vatNumber || '-'}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-4 w-full justify-center mb-8">
+              <a href="/products" className="border border-gray-200 rounded-lg px-6 py-3 text-center hover:shadow transition font-medium">Products</a>
+              <a href="/sales" className="border border-gray-200 rounded-lg px-6 py-3 text-center hover:shadow transition font-medium">Sales/POS</a>
+              <a href="/reports" className="border border-gray-200 rounded-lg px-6 py-3 text-center hover:shadow transition font-medium">Reports</a>
+              <a href="/settings" className="border border-gray-200 rounded-lg px-6 py-3 text-center hover:shadow transition font-medium">Settings</a>
+            </div>
+            <div className="w-full border-t border-dashed my-4"></div>
+            <div className="text-xs text-gray-400 text-center w-full">&copy; {new Date().getFullYear()} SaaS POS. All rights reserved.</div>
+          </>
+        )}
       </div>
     </div>
   );

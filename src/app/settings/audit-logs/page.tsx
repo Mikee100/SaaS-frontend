@@ -1,85 +1,46 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiGet } from "../../../utils/api";
-import Spinner from "@/components/Spinner";
+import { apiGet } from "@/utils/api";
 
-interface AuditLog {
-  id: string;
-  createdAt: string;
-  user?: { email?: string; name?: string } | null;
-  userId?: string | null;
-  action: string;
-  details: any;
-  ip?: string | null;
-}
-
-export default function AuditLogsPage() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+export default function AuditLogsSettings() {
+  const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isClient, setIsClient] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    async function fetchLogs() {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await apiGet("/audit-logs");
-        setLogs(Array.isArray(res) ? res : []);
-      } catch (e: any) {
-        setError(e?.message || "Failed to load audit logs");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchLogs();
-    setIsClient(true);
+    apiGet("/audit-logs").then((value) => setLogs(value as any[])).catch(() => setError("Failed to load logs")).finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="p-8 w-full">
-      <h1 className="text-2xl font-bold mb-6">Audit Logs</h1>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 0' }}>
+      <h2 style={{ fontWeight: 700, fontSize: 28, marginBottom: 32 }}>Audit Logs</h2>
       {loading ? (
-        <Spinner size={40} className="my-12" />
+        <div>Loading...</div>
       ) : error ? (
-        <div className="text-red-500">{error}</div>
+        <div style={{ color: 'red', marginBottom: 16 }}>{error}</div>
+      ) : logs.length === 0 ? (
+        <div style={{ color: '#888' }}>No audit logs found.</div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold">Date</th>
-                <th className="px-4 py-3 text-left font-semibold">User</th>
-                <th className="px-4 py-3 text-left font-semibold">Action</th>
-                <th className="px-4 py-3 text-left font-semibold">Details</th>
-                <th className="px-4 py-3 text-left font-semibold">IP</th>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#444' }}>
+              <th style={{ textAlign: 'left', padding: '8px 0' }}>Date</th>
+              <th style={{ textAlign: 'left', padding: '8px 0' }}>User</th>
+              <th style={{ textAlign: 'left', padding: '8px 0' }}>Action</th>
+              <th style={{ textAlign: 'left', padding: '8px 0' }}>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map(log => (
+              <tr key={log.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                <td style={{ padding: '8px 0', color: '#555' }}>{new Date(log.createdAt).toLocaleString()}</td>
+                <td style={{ padding: '8px 0', color: '#555' }}>{log.user?.name || log.user?.email || '-'}</td>
+                <td style={{ padding: '8px 0', color: '#555' }}>{log.action}</td>
+                <td style={{ padding: '8px 0', color: '#555', fontSize: 14 }}>{typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}</td>
               </tr>
-            </thead>
-            <tbody>
-              {logs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-8 text-gray-400">No audit logs found.</td>
-                </tr>
-              ) : (
-                logs.map((log) => (
-                  <tr key={log.id} className="border-t hover:bg-blue-50 transition">
-                    <td className="px-4 py-2 whitespace-nowrap text-gray-700">
-                      {isClient ? new Date(log.createdAt).toLocaleString() : log.createdAt}
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-gray-700">
-                      {log.user?.name || log.user?.email || log.userId || <span className="italic text-gray-400">System</span>}
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-blue-700 font-medium">{log.action}</td>
-                    <td className="px-4 py-2 max-w-xs truncate text-gray-600">
-                      <pre className="whitespace-pre-wrap break-all text-xs bg-gray-50 rounded p-2">{JSON.stringify(log.details, null, 2)}</pre>
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-gray-500">{log.ip || <span className="italic text-gray-300">-</span>}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );

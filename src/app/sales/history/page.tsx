@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import React from "react";
+import { useSocket } from '@/components/SocketContext';
 
 function unique<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
@@ -43,6 +44,7 @@ export default function SalesHistoryPage() {
   const pageCount = Math.ceil(filteredSales.length / perPage);
   const pagedSales = filteredSales.slice((page - 1) * perPage, page * perPage);
 
+  const socket = useSocket();
 
   useEffect(() => {
     setLoading(true);
@@ -51,6 +53,15 @@ export default function SalesHistoryPage() {
       .catch((err) => setError(err.message || "Failed to fetch sales"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handler = () => {
+      apiGet<any[]>("/sales").then(setSales);
+    };
+    socket.on('salesUpdate', handler);
+    return () => { socket.off('salesUpdate', handler); };
+  }, [socket]);
 
   // Summary calculations
   const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total || 0), 0);

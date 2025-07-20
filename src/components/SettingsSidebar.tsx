@@ -2,27 +2,34 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const sections = [
-  { href: '/settings/business-info', label: 'Business Info' },
-  { href: '/settings/logo', label: 'Logo Upload' },
-  { href: '/settings/password', label: 'Password Change' },
-  { href: '/settings/users', label: 'Team/User Management' },
-  { href: '/settings/permissions', label: 'Permissions' },
-  { href: '/settings/billing', label: 'Billing' },
-  { href: '/settings/audit-logs', label: 'Audit Logs' },
-];
-
 export default function SettingsSidebar() {
   const pathname = usePathname();
+  const sections = [
+    { href: "/settings", label: "Business Info" },
+    { href: "/settings/preferences", label: "Preferences" },
+    { href: "/settings/audit-logs", label: "Audit Logs" },
+    { href: "/settings/billing", label: "Billing" },
+    { href: "/settings/permissions", label: "Permissions" },
+    { href: "/settings/users", label: "Users" },
+    { href: "/settings/password", label: "Password" },
+    { href: "/settings/logo", label: "Logo" },
+    { href: "/settings/business-info", label: "Business Info (Advanced)" },
+  ];
   return (
-    <nav style={{
-      width: 260,
-      background: '#f7fafd',
-      padding: '2rem 0.5rem',
-      minHeight: '100vh',
-      borderRight: '1px solid #e5e7eb',
-      fontFamily: 'Inter, sans-serif',
-    }}>
+    <nav
+      style={{
+        width: 240,
+        minHeight: '100vh',
+        background: '#f7fafd',
+        borderRight: '1px solid #e5e7eb',
+        padding: '2rem 0.5rem',
+        position: 'sticky',
+        top: 0,
+        left: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {sections.map((s) => {
           const active = pathname === s.href;

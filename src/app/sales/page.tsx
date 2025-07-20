@@ -6,6 +6,7 @@ import Spinner from '@/components/Spinner';
 import { v4 as uuidv4 } from 'uuid';
 import { QRCodeCanvas } from 'qrcode.react';
 import Barcode from 'react-barcode';
+import { useSocket } from '@/components/SocketContext';
 
 type Product = { id: number; name: string; price: number; stock: number; };
 type CartItem = Product & { quantity: number };
@@ -49,6 +50,7 @@ export default function SalesPage() {
   const [mpesaPollCancelled, setMpesaPollCancelled] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [businessInfo, setBusinessInfo] = useState<any>(null);
+  const socket = useSocket();
 
   useEffect(() => {
     async function fetchProducts() {
@@ -77,6 +79,22 @@ export default function SalesPage() {
     }
     fetchBusinessInfo();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleSales = () => {
+      apiGet<Product[]>("/products").then(setProducts);
+    };
+    const handleInventory = () => {
+      apiGet<Product[]>("/products").then(setProducts);
+    };
+    socket.on('salesUpdate', handleSales);
+    socket.on('inventoryUpdate', handleInventory);
+    return () => {
+      socket.off('salesUpdate', handleSales);
+      socket.off('inventoryUpdate', handleInventory);
+    };
+  }, [socket]);
 
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

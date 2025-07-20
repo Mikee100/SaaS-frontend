@@ -1,11 +1,17 @@
 "use client";
 import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiGet } from '@/utils/api';
+import dynamic from "next/dynamic";
+import { FaChartLine, FaDollarSign } from "react-icons/fa";
+
+const AnalyticsSidebarSummary = dynamic(() => import("./AnalyticsSidebarSummary"), { ssr: false });
 
 export default function DashboardShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState<any>(null);
 
   useEffect(() => {
     try {
@@ -14,6 +20,10 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
       setUser(null);
     }
     setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    apiGet('/sales/analytics').then(setAnalytics).catch(() => {});
   }, []);
 
   function logout() {
@@ -27,9 +37,9 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="w-64 bg-gradient-to-b from-blue-700 to-purple-700 text-white flex flex-col p-6 space-y-4">
+      <aside className="w-64 bg-gradient-to-b from-indigo-500 to-blue-500 text-white flex flex-col p-6">
         <div className="text-2xl font-bold mb-8">SaaS POS</div>
-        <nav className="flex-1 space-y-2">
+        <nav className="flex-1">
           <a href="/" className="block py-2 px-3 rounded hover:bg-blue-800">Dashboard</a>
           <a href="/products" className="block py-2 px-3 rounded hover:bg-blue-800">Products</a>
           <a href="/inventory" className="block py-2 px-3 rounded hover:bg-blue-800">Inventory</a>
@@ -37,25 +47,30 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
           <a href="/sales" className="block py-2 px-3 rounded hover:bg-blue-800">Sales/POS</a>
           <a href="/sales/history" className="block py-2 px-3 rounded hover:bg-blue-800">Sales History</a>
           <a href="/reports" className="block py-2 px-3 rounded hover:bg-blue-800">Reports</a>
+          <a href="/analytics" className="block py-2 px-3 rounded hover:bg-blue-800 flex items-center gap-2">
+            <FaChartLine className="inline text-green-300" />
+            Analytics
+          </a>
           <a href="/settings" className="block py-2 px-3 rounded hover:bg-blue-800">Settings</a>
         </nav>
+        {/* Removed AnalyticsSidebarSummary */}
         <div className="mt-auto">
           {user && (
-            <div className="text-sm mb-2">
-              <div className="font-semibold">{user.name}</div>
-              <div className="text-xs text-blue-100">{user.role} @ {user.tenantId}</div>
+            <div className="flex items-center gap-2 text-xs text-white/80 mb-2">
+              <span>{user.name}</span>
+              <span className="opacity-60">@ {user.id}</span>
             </div>
           )}
           <button
             onClick={logout}
-            className="w-full bg-white/20 hover:bg-white/30 text-white py-2 rounded transition font-semibold"
+            className="w-full py-2 px-4 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold mt-2"
           >
             Logout
           </button>
         </div>
       </aside>
       {/* Main content */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 bg-gray-50 min-h-screen">
         {/* Topbar */}
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>

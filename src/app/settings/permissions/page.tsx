@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet, apiPut } from "@/utils/api";
-import Spinner from '../../../components/Spinner';
 
 export default function PermissionsSettings() {
   const [users, setUsers] = useState<any[]>([]);
@@ -21,7 +20,6 @@ export default function PermissionsSettings() {
       .then(async ([users, perms]) => {
         setUsers(users);
         setPermissions(perms);
-        // Fetch each user's permissions
         const permsMap: Record<string, any[]> = {};
         await Promise.all(
           users.map(async (u) => {
@@ -57,45 +55,29 @@ export default function PermissionsSettings() {
     }
   };
 
-  const handleNoteChange = async (userId: string, permKey: string, note: string) => {
-    setSaving(true);
-    setError(null);
-    setSuccess(false);
-    try {
-      const current = userPerms[userId] || [];
-      const newPerms = current.map((p) =>
-        p.permission.key === permKey ? { key: p.permission.key, note } : { key: p.permission.key, note: p.note }
-      );
-      await apiPut(`/user/${userId}/permissions`, { permissions: newPerms });
-      setUserPerms({ ...userPerms, [userId]: await apiGet<any[]>(`/user/${userId}/permissions`) });
-      setSuccess(true);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return <Spinner size={40} className="my-12" />;
+  if (loading) return <div>Loading...</div>;
 
   return (
-    <div style={{ maxWidth: '100%', overflowX: 'auto' }}>
-      <h2>Permissions</h2>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 0' }}>
+      <h2 style={{ fontWeight: 700, fontSize: 28, marginBottom: 8 }}>Permissions</h2>
+      <div style={{ color: '#666', fontSize: 15, marginBottom: 28 }}>
+        Manage which users can access specific features. Toggle permissions below.
+      </div>
       {success && <div style={{ color: 'green', marginBottom: 8 }}>Saved!</div>}
       {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
-      <table style={{ borderCollapse: 'collapse', minWidth: 600 }}>
+      <table style={{ borderCollapse: 'collapse', minWidth: 600, width: '100%', marginBottom: 32 }}>
         <thead>
-          <tr>
-            <th style={{ borderBottom: '1px solid #ccc', textAlign: 'left' }}>User</th>
+          <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#444' }}>
+            <th style={{ textAlign: 'left', padding: '8px 0' }}>User</th>
             {permissions.map((perm) => (
-              <th key={perm.key} style={{ borderBottom: '1px solid #ccc', textAlign: 'center' }}>{perm.key}</th>
+              <th key={perm.key} style={{ textAlign: 'center', padding: '8px 0' }}>{perm.key}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {users.map((user) => (
-            <tr key={user.id}>
-              <td style={{ fontWeight: 500 }}>{user.name || user.email}</td>
+            <tr key={user.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+              <td style={{ fontWeight: 500, color: '#555', padding: '8px 0' }}>{user.name || user.email}</td>
               {permissions.map((perm) => {
                 const userPerm = (userPerms[user.id] || []).find((p) => p.permission.key === perm.key);
                 return (
@@ -106,17 +88,6 @@ export default function PermissionsSettings() {
                       onChange={() => handleToggle(user.id, perm.key)}
                       disabled={saving}
                     />
-                    <br />
-                    {userPerm && (
-                      <input
-                        type="text"
-                        placeholder="Note"
-                        value={userPerm.note || ''}
-                        onChange={e => handleNoteChange(user.id, perm.key, e.target.value)}
-                        style={{ width: 80, fontSize: 12 }}
-                        disabled={saving}
-                      />
-                    )}
                   </td>
                 );
               })}
@@ -124,6 +95,10 @@ export default function PermissionsSettings() {
           ))}
         </tbody>
       </table>
+      <hr style={{ border: 0, borderTop: '1px solid #eee', margin: '32px 0' }} />
+      <div style={{ color: '#888', fontSize: 14 }}>
+        Changes are saved instantly. Permissions are enforced across the app.
+      </div>
     </div>
   );
 } 

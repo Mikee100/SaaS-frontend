@@ -1,136 +1,52 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import Spinner from '../../../components/Spinner';
-
-const roles = ["owner", "manager", "cashier"];
+import { apiGet } from "@/utils/api";
 
 export default function UsersSettings() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("cashier");
-  const [inviting, setInviting] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [editRole, setEditRole] = useState<string>("");
-
-  const fetchUsers = () => {
-    setLoading(true);
-    apiGet<any[]>("/user")
-      .then(setUsers)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  };
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchUsers();
+    apiGet("/user").then((data) => setUsers(data)).catch(() => setError("Failed to load users")).finally(() => setLoading(false));
   }, []);
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setInviting(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      await apiPost("/user", { email: inviteEmail, role: inviteRole });
-      setSuccess("User invited!");
-      setInviteEmail("");
-      setInviteRole("cashier");
-      fetchUsers();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setInviting(false);
-    }
-  };
-
-  const handleEditRole = async (user: any) => {
-    setEditing(user.id);
-    setEditRole(user.role);
-  };
-
-  const handleSaveRole = async (user: any) => {
-    try {
-      await apiPut(`/user/${user.id}`, { role: editRole });
-      setEditing(null);
-      fetchUsers();
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const handleRemove = async (user: any) => {
-    if (!window.confirm("Remove this user?")) return;
-    try {
-      await apiDelete(`/user/${user.id}`);
-      fetchUsers();
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  if (loading) return <Spinner size={40} className="my-12" />;
-
   return (
-    <div style={{ maxWidth: 700 }}>
-      <h2>Team/User Management</h2>
-      <form onSubmit={handleInvite} style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-        <input
-          type="email"
-          placeholder="Invite user by email"
-          value={inviteEmail}
-          onChange={e => setInviteEmail(e.target.value)}
-          required
-        />
-        <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}>
-          {roles.map(r => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <button type="submit" disabled={inviting}>{inviting ? "Inviting..." : "Invite"}</button>
-      </form>
-      {success && <div style={{ color: "green", marginBottom: 8 }}>{success}</div>}
-      {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Name</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Email</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Role</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map(user => (
-            <tr key={user.id}>
-              <td>{user.name || "-"}</td>
-              <td>{user.email}</td>
-              <td>
-                {editing === user.id ? (
-                  <select value={editRole} onChange={e => setEditRole(e.target.value)}>
-                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                ) : (
-                  user.role
-                )}
-              </td>
-              <td>
-                {editing === user.id ? (
-                  <>
-                    <button onClick={() => handleSaveRole(user)} style={{ marginRight: 8 }}>Save</button>
-                    <button onClick={() => setEditing(null)}>Cancel</button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => handleEditRole(user)} style={{ marginRight: 8 }}>Edit Role</button>
-                    <button onClick={() => handleRemove(user)} style={{ color: "red" }}>Remove</button>
-                  </>
-                )}
-              </td>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 0' }}>
+      <h2 style={{ fontWeight: 700, fontSize: 28, marginBottom: 8 }}>Users</h2>
+      <div style={{ color: '#666', fontSize: 15, marginBottom: 28 }}>
+        View all users in your organization. Roles determine access to features.
+      </div>
+      {loading ? (
+        <div>Loading...</div>
+      ) : error ? (
+        <div style={{ color: 'red', marginBottom: 16 }}>{error}</div>
+      ) : users.length === 0 ? (
+        <div style={{ color: '#888' }}>No users found.</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15, marginBottom: 32 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#444' }}>
+              <th style={{ textAlign: 'left', padding: '8px 0' }}>Name</th>
+              <th style={{ textAlign: 'left', padding: '8px 0' }}>Email</th>
+              <th style={{ textAlign: 'left', padding: '8px 0' }}>Role</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {users.map(user => (
+              <tr key={user.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                <td style={{ padding: '8px 0', color: '#555' }}>{user.name}</td>
+                <td style={{ padding: '8px 0', color: '#555' }}>{user.email}</td>
+                <td style={{ padding: '8px 0', color: '#555' }}>{user.role}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <hr style={{ border: 0, borderTop: '1px solid #eee', margin: '32px 0' }} />
+      <div style={{ color: '#888', fontSize: 14 }}>
+        Contact your admin to add or remove users.
+      </div>
     </div>
   );
 } 

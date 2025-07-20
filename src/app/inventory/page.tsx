@@ -1,8 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiGet, apiPost } from "../../utils/api";
-import { jwtDecode } from "jwt-decode";
+import { apiGet, apiPost } from "@/utils/api";
+import { useSocket } from '@/components/SocketContext';
 
+interface Product {
+  id: string;
+  name: string;
+}
 interface InventoryItem {
   id: string;
   product: { id: string; name: string };
@@ -10,79 +14,113 @@ interface InventoryItem {
   updatedAt: string;
 }
 
-interface Product {
-  id: string;
-  name: string;
-}
-
 export default function InventoryPage() {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ productId: "", quantity: 0 });
-  const [formError, setFormError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [modalProduct, setModalProduct] = useState<Product | null>(null);
+  const [modalQuantity, setModalQuantity] = useState(0);
+  const [modalError, setModalError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    apiGet<InventoryItem[]>("/inventory").then(setInventory).finally(() => setLoading(false));
-    apiGet<Product[]>("/products").then(setProducts);
+    setLoading(true);
+    Promise.all([
+      apiGet<Product[]>("/products"),
+      apiGet<InventoryItem[]>("/inventory"),
+    ]).then(([prods, invs]) => {
+      setProducts(prods);
+      setInventory(invs);
+    }).finally(() => setLoading(false));
   }, []);
 
-  const refreshInventory = () => {
-    setLoading(true);
-    apiGet<InventoryItem[]>("/inventory").then(setInventory).finally(() => setLoading(false));
-  };
+  const socket = useSocket();
 
-  const openModal = () => {
-    setForm({ productId: products[0]?.id || "", quantity: 0 });
-    setFormError("");
+  useEffect(() => {
+    if (!socket) return;
+    const handler = () => {
+      apiGet<InventoryItem[]>("/inventory").then(setInventory);
+    };
+    socket.on('inventoryUpdate', handler);
+    return () => { socket.off('inventoryUpdate', handler); };
+  }, [socket]);
+
+  // Helper: get inventory record for a product
+  function getInv(productId: string) {
+    return inventory.find(i => i.product.id === productId);
+  }
+
+  // Filtering
+  const filtered = products.filter(p => {
+    const inv = getInv(p.id);
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    if (stockFilter === "in") return matchesSearch && inv && inv.quantity > 0;
+    if (stockFilter === "out") return matchesSearch && (!inv || inv.quantity === 0);
+    return matchesSearch;
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentProducts = filtered.slice(startIndex, endIndex);
+  useEffect(() => { setCurrentPage(1); }, [search, stockFilter]);
+
+  // Modal handlers
+  function openStockModal(product: Product) {
+    setModalProduct(product);
+    setModalQuantity(getInv(product.id)?.quantity || 0);
+    setModalError("");
     setShowModal(true);
-  };
-
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  }
+  async function handleStockSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.productId || Number(form.quantity) < 0) {
-      setFormError("Please select a product and enter a valid quantity.");
-      return;
-    }
-    setSubmitting(true);
+    if (!modalProduct) return;
+    setSaving(true);
+    setModalError("");
     try {
-      await apiPost("/inventory", { productId: form.productId, quantity: Number(form.quantity) });
+      await apiPost("/inventory", { productId: modalProduct.id, quantity: Number(modalQuantity) });
       setShowModal(false);
-      refreshInventory();
+      setModalProduct(null);
+      setModalQuantity(0);
+      setTimeout(() => {
+        apiGet<InventoryItem[]>("/inventory").then(setInventory);
+      }, 300);
     } catch (err: any) {
-      setFormError(err.message || "Failed to add stock");
+      setModalError(err.message || "Failed to update stock");
     } finally {
-      setSubmitting(false);
-    }
-  };
-
-  function getUserFromToken() {
-    if (typeof window === "undefined") return null;
-    const token = localStorage.getItem("token");
-    if (!token) return null;
-    try {
-      return jwtDecode(token) as { role?: string };
-    } catch {
-      return null;
+      setSaving(false);
     }
   }
-  const user = getUserFromToken();
-  if (!user) {
-    return false;
-  }
-  const canEdit = user?.role === "owner" || user?.role === "manager";
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Inventory</h1>
-        {canEdit && <button className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700" onClick={openModal}>Add Stock</button>}
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by product name..."
+            className="border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 bg-gray-50"
+            style={{ minWidth: 220 }}
+          />
+          <select
+            value={stockFilter}
+            onChange={e => setStockFilter(e.target.value)}
+            className="border border-gray-200 rounded px-3 py-2 text-sm bg-gray-50"
+          >
+            <option value="all">All</option>
+            <option value="in">In Stock</option>
+            <option value="out">Out of Stock</option>
+          </select>
+        </div>
       </div>
       {loading ? (
         <div>Loading...</div>
@@ -93,56 +131,85 @@ export default function InventoryPage() {
               <th className="py-2 px-4 border-b">Product</th>
               <th className="py-2 px-4 border-b">Quantity</th>
               <th className="py-2 px-4 border-b">Last Updated</th>
+              <th className="py-2 px-4 border-b">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {inventory.map((item) => (
-              <tr key={item.id}>
-                <td className="py-2 px-4 border-b">{item.product.name}</td>
-                <td className="py-2 px-4 border-b">{item.quantity}</td>
-                <td className="py-2 px-4 border-b">{new Date(item.updatedAt).toLocaleString()}</td>
-              </tr>
-            ))}
+            {currentProducts.length === 0 ? (
+              <tr><td colSpan={4} className="text-center py-8 text-gray-400">No products found.</td></tr>
+            ) : (
+              currentProducts.map(product => {
+                const inv = getInv(product.id);
+                return (
+                  <tr key={product.id}>
+                    <td className="py-2 px-4 border-b">{product.name}</td>
+                    <td className="py-2 px-4 border-b">{inv ? inv.quantity : 0}</td>
+                    <td className="py-2 px-4 border-b">{inv ? new Date(inv.updatedAt).toLocaleString() : '-'}</td>
+                    <td className="py-2 px-4 border-b">
+                      <button
+                        className="px-3 py-1 rounded bg-gray-100 border border-gray-200 hover:bg-gray-200 text-xs font-medium transition"
+                        onClick={() => openStockModal(product)}
+                      >
+                        {inv ? 'Edit Stock' : 'Add Stock'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       )}
-      {/* Modal */}
-      {showModal && (
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-8">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1 border rounded disabled:opacity-50"
+          >
+            Prev
+          </button>
+          <span className="mx-2 text-sm">Page {currentPage} of {totalPages}</span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 border rounded disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
+      {/* Add/Edit Stock Modal */}
+      {showModal && modalProduct && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
           <div className="bg-white p-6 rounded shadow-lg w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Add Stock</h2>
-            <form onSubmit={handleSubmit}>
+            <h2 className="text-xl font-semibold mb-4">{getInv(modalProduct.id) ? 'Edit Stock' : 'Add Stock'}</h2>
+            <form onSubmit={handleStockSave}>
               <div className="mb-4">
                 <label className="block mb-1">Product</label>
-                <select
-                  name="productId"
-                  value={form.productId}
-                  onChange={handleFormChange}
-                  className="w-full border px-3 py-2 rounded"
-                  required
-                >
-                  <option value="" disabled>Select a product</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <input
+                  type="text"
+                  value={modalProduct.name}
+                  disabled
+                  className="w-full border px-3 py-2 rounded bg-gray-100"
+                />
               </div>
               <div className="mb-4">
                 <label className="block mb-1">Quantity</label>
                 <input
                   type="number"
-                  name="quantity"
                   min={0}
-                  value={form.quantity}
-                  onChange={handleFormChange}
+                  value={modalQuantity}
+                  onChange={e => setModalQuantity(Number(e.target.value))}
                   className="w-full border px-3 py-2 rounded"
                   required
                 />
               </div>
-              {formError && <div className="text-red-600 mb-2">{formError}</div>}
+              {modalError && <div className="text-red-600 mb-2">{modalError}</div>}
               <div className="flex justify-end gap-2">
-                <button type="button" className="px-4 py-2 rounded bg-gray-200" onClick={() => setShowModal(false)} disabled={submitting}>Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700" disabled={submitting}>{submitting ? "Adding..." : "Add Stock"}</button>
+                <button type="button" className="px-4 py-2 rounded bg-gray-200" onClick={() => setShowModal(false)} disabled={saving}>Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
               </div>
             </form>
           </div>

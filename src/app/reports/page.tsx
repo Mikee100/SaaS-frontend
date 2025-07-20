@@ -136,14 +136,14 @@ export default function ReportsPage() {
             <label className="block text-xs text-gray-600 mb-1">Product</label>
             <select value={productId} onChange={e => setProductId(e.target.value)} className="border rounded px-2 py-1">
               <option value="">All</option>
-              {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {(products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs text-gray-600 mb-1">Payment Type</label>
             <select value={paymentType} onChange={e => setPaymentType(e.target.value)} className="border rounded px-2 py-1">
               <option value="">All</option>
-              {paymentTypes.map((pt) => <option key={pt} value={pt}>{pt.charAt(0).toUpperCase() + pt.slice(1)}</option>)}
+              {(paymentTypes || []).map((pt) => <option key={pt} value={pt}>{pt.charAt(0).toUpperCase() + pt.slice(1)}</option>)}
             </select>
           </div>
           <button className="ml-auto text-xs text-gray-500 hover:underline" onClick={() => { setDateFrom(""); setDateTo(""); setProductId(""); setPaymentType(""); }}>Clear Filters</button>
@@ -201,10 +201,10 @@ export default function ReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {metrics.topProducts.length === 0 ? (
+              {(metrics.topProducts || []).length === 0 ? (
                 <tr><td colSpan={3} className="text-center text-gray-400 py-4">No data</td></tr>
               ) : (
-                metrics.topProducts.map((p: any) => (
+                (metrics.topProducts || []).map((p: any) => (
                   <tr key={p.id}>
                     <td className="py-2 px-4">{p.name}</td>
                     <td className="py-2 px-4">{p.unitsSold}</td>
