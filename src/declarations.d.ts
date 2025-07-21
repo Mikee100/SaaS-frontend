@@ -1,4 +1,11 @@
 declare module "qrcode.react" {
-  var QRCode: any;
-  export default QRCode;
+  import { FC } from 'react';
+  interface QRCodeProps {
+    value: string;
+    size?: number;
+    // Add other props as needed
+  }
+  export const QRCodeCanvas: FC<QRCodeProps>;
 }
+
+declare module 'react-qr-scanner';

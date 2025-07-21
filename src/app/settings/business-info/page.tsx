@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPut } from "@/utils/api";
 import Spinner from '../../../components/Spinner';
+import { FaBuilding } from 'react-icons/fa';
+import Link from 'next/link';
 
 const fields = [
   { name: "name", label: "Business Name" },
@@ -63,7 +65,7 @@ export default function BusinessInfoSettings() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
@@ -88,81 +90,74 @@ export default function BusinessInfoSettings() {
     }
   };
 
-  if (loading) return <Spinner size={40} className="my-12" />;
+  if (loading) return (
+    <div className="flex justify-center items-center min-h-[300px]">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  );
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 0' }}>
-      <h2 style={{ fontWeight: 700, fontSize: 28, marginBottom: 32 }}>Business Info</h2>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        {fields.map((f) => (
-          <div key={f.name} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label htmlFor={f.name} style={{ fontWeight: 500, marginBottom: 2 }}>{f.label}</label>
-            {fieldHelp[f.name] && (
-              <span style={{ color: '#888', fontSize: 13, marginBottom: 2 }}>{fieldHelp[f.name]}</span>
-            )}
-            {f.name === "invoiceFooter" ? (
-              <textarea
-                id={f.name}
-                name={f.name}
-                value={form[f.name] || ""}
-                onChange={handleChange}
-                rows={3}
-                style={{
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 6,
-                  padding: '10px 12px',
-                  fontSize: 16,
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                  background: '#f7fafd',
-                }}
-              />
-            ) : (
-              <input
-                id={f.name}
-                name={f.name}
-                type="text"
-                value={form[f.name] || ""}
-                onChange={handleChange}
-                style={{
-                  border: f.name === 'kraPin' && form.kraPin && validation.kraPin === false ? '1.5px solid #dc2626' :
-                         f.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false ? '1.5px solid #dc2626' :
-                         '1px solid #e5e7eb',
-                  borderRadius: 6,
-                  padding: '10px 12px',
-                  fontSize: 16,
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                  background: '#f7fafd',
-                  transition: 'border 0.2s',
-                }}
-              />
-            )}
-            {f.name === 'kraPin' && form.kraPin && validation.kraPin === false && (
-              <span style={{ color: '#dc2626', fontSize: 13 }}>Invalid KRA PIN format (e.g., P051234567A)</span>
-            )}
-            {f.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false && (
-              <span style={{ color: '#dc2626', fontSize: 13 }}>Invalid VAT Number format (e.g., P051234567A)</span>
-            )}
+    <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <FaBuilding className="text-blue-600 text-2xl" />
+          <h2 className="text-2xl font-bold text-gray-800">Business Info</h2>
+        </div>
+        <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
+      </div>
+      {success && <div className="mb-4 px-4 py-2 rounded bg-green-50 text-green-700 border border-green-200">Business info saved!</div>}
+      {error && <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 border border-red-200">{error}</div>}
+      <form onSubmit={handleSave} className="space-y-8">
+        <div className="bg-white rounded-xl shadow p-10 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+            {fields.map((f) => (
+              <div key={f.name} className="flex flex-col gap-2">
+                <label htmlFor={f.name} className="font-medium text-gray-700">{f.label}</label>
+                {fieldHelp[f.name] && (
+                  <span className="text-sm text-gray-500">{fieldHelp[f.name]}</span>
+                )}
+                {f.name === "invoiceFooter" ? (
+                  <textarea
+                    id={f.name}
+                    name={f.name}
+                    value={form[f.name] || ""}
+                    onChange={handleChange}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  />
+                ) : (
+                  <input
+                    id={f.name}
+                    name={f.name}
+                    type="text"
+                    value={form[f.name] || ""}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500 ${
+                      f.name === 'kraPin' && form.kraPin && validation.kraPin === false ? 'border-red-500' :
+                      f.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false ? 'border-red-500' :
+                      'border-gray-300'
+                    }`}
+                  />
+                )}
+                {f.name === 'kraPin' && form.kraPin && validation.kraPin === false && (
+                  <span className="text-red-500 text-sm">Invalid KRA PIN format (e.g., P051234567A)</span>
+                )}
+                {f.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false && (
+                  <span className="text-red-500 text-sm">Invalid VAT Number format (e.g., P051234567A)</span>
+                )}
+              </div>
+            ))}
           </div>
-        ))}
-        <button type="submit" disabled={saving} style={{
-          marginTop: 16,
-          background: '#f7fafd',
-          color: '#222',
-          border: '1px solid #e5e7eb',
-          borderRadius: 8,
-          padding: '12px 0',
-          fontWeight: 600,
-          fontSize: 17,
-          cursor: saving ? 'not-allowed' : 'pointer',
-          transition: 'background 0.15s',
-        }}>
-          {saving ? "Saving..." : "Save"}
-        </button>
-        {success && <div style={{ color: "#059669", background: '#ecfdf5', borderRadius: 6, padding: '8px 12px', marginTop: 8 }}>Saved!</div>}
-        {error && <div style={{ color: "#dc2626", background: '#fef2f2', borderRadius: 6, padding: '8px 12px', marginTop: 8 }}>{error}</div>}
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            className="px-8 py-2 rounded-lg border border-blue-200 bg-blue-600 text-white font-semibold text-base shadow hover:bg-blue-700 transition disabled:opacity-60"
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save Business Info"}
+          </button>
+        </div>
       </form>
     </div>
   );

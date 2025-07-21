@@ -28,6 +28,7 @@ export default function ProductsPage() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const [qrCodeProductId, setQrCodeProductId] = useState<string | null>(null);
 
   const socket = useSocket();
 
@@ -329,13 +330,14 @@ export default function ProductsPage() {
                 currentProducts.map((product) => {
                   const flat = flattenProduct(product);
                   return (
-                    <tr key={product.id} className="hover:bg-gray-50 transition">
-                      {Array.from(allColumnsSet).map(col => (
-                        <td key={col} className="px-4 py-2 border-b border-gray-50">{flat[col] ?? ''}</td>
+                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                      {allColumns.map(col => (
+                        <td key={col} className="px-4 py-2 whitespace-nowrap">{flat[col] ?? '-'}</td>
                       ))}
-                      <td className="px-4 py-2 border-b border-gray-50 flex gap-2">
-                        <button onClick={() => openEditModal(product)} className="px-3 py-1 rounded bg-gray-100 border border-gray-200 hover:bg-gray-200 text-xs font-medium transition">Edit</button>
-                        <button onClick={() => handleDelete(product.id)} className="px-3 py-1 rounded bg-red-50 border border-red-200 hover:bg-red-100 text-xs font-medium text-red-700 transition">Delete</button>
+                      <td className="px-4 py-2 flex gap-2">
+                        <button onClick={() => openEditModal(product)} className="text-xs font-medium text-blue-600 hover:underline">Edit</button>
+                        <button onClick={() => setQrCodeProductId(product.id)} className="text-xs font-medium text-green-600 hover:underline">QR</button>
+                        <button onClick={() => handleDelete(product.id)} className="text-xs font-medium text-red-600 hover:underline">Delete</button>
                       </td>
                     </tr>
                   );
@@ -365,7 +367,7 @@ export default function ProductsPage() {
             </div>
           )}
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">
@@ -412,6 +414,37 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+
+      {/* QR Code Modal */}
+      {qrCodeProductId && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={() => setQrCodeProductId(null)}>
+          <div className="bg-white rounded-xl shadow-xl p-8" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">Product QR Code</h3>
+            <img
+              src={`${process.env.NEXT_PUBLIC_API_URL}/products/${qrCodeProductId}/qr`}
+              alt="Product QR Code"
+              className="w-64 h-64 mx-auto"
+            />
+            <button
+              onClick={() => {
+                const printWindow = window.open('', '', 'height=400,width=400');
+                if (printWindow) {
+                  printWindow.document.write('<html><head><title>Print QR Code</title></head><body style="text-align:center;">');
+                  printWindow.document.write(`<img src="${process.env.NEXT_PUBLIC_API_URL}/products/${qrCodeProductId}/qr" />`);
+                  printWindow.document.write('</body></html>');
+                  printWindow.document.close();
+                  printWindow.focus();
+                  printWindow.print();
+                  printWindow.close();
+                }
+              }}
+              className="w-full mt-6 px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+            >
+              Print
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

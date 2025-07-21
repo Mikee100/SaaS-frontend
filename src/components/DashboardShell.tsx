@@ -3,15 +3,17 @@ import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiGet } from '@/utils/api';
 import dynamic from "next/dynamic";
-import { FaChartLine, FaDollarSign } from "react-icons/fa";
+import { FaChartLine, FaDollarSign, FaBox, FaClipboardList, FaUsers, FaCashRegister, FaHistory, FaCog, FaSignOutAlt, FaBell } from "react-icons/fa";
+import { usePathname } from "next/navigation";
 
 const AnalyticsSidebarSummary = dynamic(() => import("./AnalyticsSidebarSummary"), { ssr: false });
 
 export default function DashboardShell({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [analytics, setAnalytics] = useState<any>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -22,10 +24,6 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    apiGet('/sales/analytics').then(setAnalytics).catch(() => {});
-  }, []);
-
   function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -34,53 +32,93 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
   if (loading) return null;
 
+  const navLinks = [
+    { href: "/products", label: "Products", icon: <FaBox /> },
+    { href: "/inventory", label: "Inventory", icon: <FaClipboardList /> },
+    { href: "/users", label: "Users", icon: <FaUsers /> },
+    { href: "/sales", label: "Sales/POS", icon: <FaCashRegister /> },
+    { href: "/sales/history", label: "Sales History", icon: <FaHistory /> },
+    { href: "/reports", label: "Reports", icon: <FaClipboardList /> },
+    { href: "/analytics", label: "Analytics", icon: <FaChartLine /> },
+    { href: "/settings", label: "Settings", icon: <FaCog /> },
+  ];
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gradient-to-br from-gray-100 to-blue-50">
       {/* Sidebar */}
-      <aside className="w-64 bg-gradient-to-b from-indigo-500 to-blue-500 text-white flex flex-col p-6">
-        <div className="text-2xl font-bold mb-8">SaaS POS</div>
-        <nav className="flex-1">
-          
-          <a href="/products" className="block py-2 px-3 rounded hover:bg-blue-800">Products</a>
-          <a href="/inventory" className="block py-2 px-3 rounded hover:bg-blue-800">Inventory</a>
-          <a href="/users" className="block py-2 px-3 rounded hover:bg-blue-800">Users</a>
-          <a href="/sales" className="block py-2 px-3 rounded hover:bg-blue-800">Sales/POS</a>
-          <a href="/sales/history" className="block py-2 px-3 rounded hover:bg-blue-800">Sales History</a>
-          <a href="/reports" className="block py-2 px-3 rounded hover:bg-blue-800">Reports</a>
-          <a href="/analytics" className="block py-2 px-3 rounded hover:bg-blue-800 flex items-center gap-2">
-            <FaChartLine className="inline text-green-300" />
-            Analytics
-          </a>
-          <a href="/settings" className="block py-2 px-3 rounded hover:bg-blue-800">Settings</a>
+      <aside className={`fixed z-40 top-0 left-0 h-full w-64 bg-gradient-to-b from-indigo-600 to-blue-500 text-white flex flex-col shadow-lg transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-64'} md:translate-x-0 md:static md:shadow-none`}>
+        <div className="flex items-center justify-between px-6 py-6 mb-4 border-b border-white/10">
+          <span className="text-2xl font-extrabold tracking-tight">SaaS POS</span>
+          <button className="md:hidden" onClick={() => setSidebarOpen(false)}>
+            <span className="text-2xl">×</span>
+          </button>
+        </div>
+        <nav className="flex-1 px-2 space-y-1">
+          {navLinks.map(link => {
+            const active = pathname === link.href;
+            return (
+              <a
+                key={link.href}
+                href={link.href}
+                className={`flex items-center gap-3 px-4 py-2 rounded-lg font-medium text-base transition
+                  ${active ? 'bg-white/20 text-yellow-200 shadow border-l-4 border-yellow-300' : 'hover:bg-white/10 text-white/90'}
+                `}
+              >
+                <span className="text-lg">{link.icon}</span>
+                {link.label}
+              </a>
+            );
+          })}
         </nav>
-        {/* Removed AnalyticsSidebarSummary */}
-        <div className="mt-auto">
+        <div className="mt-auto px-6 pb-6">
           {user && (
-            <div className="flex items-center gap-2 text-xs text-white/80 mb-2">
-              <span>{user.name}</span>
-              <span className="opacity-60">@ {user.id}</span>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-lg font-bold">
+                {user.name?.[0]?.toUpperCase() || "U"}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-white/90">{user.name}</span>
+                <span className="text-xs text-white/60">{user.email}</span>
+              </div>
             </div>
           )}
           <button
             onClick={logout}
-            className="w-full py-2 px-4 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold mt-2"
+            className="w-full flex items-center gap-2 py-2 px-4 rounded bg-blue-700 hover:bg-blue-800 text-white font-semibold text-sm transition"
           >
-            Logout
+            <FaSignOutAlt /> Logout
           </button>
         </div>
       </aside>
+      {/* Overlay for mobile sidebar */}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/30 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
       {/* Main content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col md:ml-64 min-h-screen">
         {/* Topbar */}
-        <div className="flex items-center justify-between p-4 bg-white shadow-sm">
-          <div className="text-lg font-semibold">Welcome!</div>
-          {user && (
-            <div className="text-gray-600 text-sm">
-              {user.name} ({user.role})
-            </div>
-          )}
+        <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 bg-white shadow-sm border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <button className="md:hidden text-2xl text-blue-700" onClick={() => setSidebarOpen(true)}>
+              <svg width="1.5em" height="1.5em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+            </button>
+            <span className="text-lg font-semibold text-gray-700">Welcome{user ? `, ${user.name.split(' ')[0]}` : ''}!</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <button className="relative text-gray-500 hover:text-blue-600 transition">
+              <FaBell className="text-xl" />
+              {/* Notification dot */}
+              <span className="absolute top-0 right-0 block w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" style={{ right: -2, top: -2 }}></span>
+            </button>
+            {user && (
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
+                  {user.name?.[0]?.toUpperCase() || "U"}
+                </div>
+                <span className="text-sm text-gray-700 font-medium">{user.name}</span>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-100">
+        <div className="flex-1 overflow-y-auto p-8 bg-gradient-to-br from-gray-100 to-blue-50">
           {children}
         </div>
       </main>

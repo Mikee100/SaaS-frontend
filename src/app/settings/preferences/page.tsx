@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPut } from "@/utils/api";
 import Link from "next/link";
+import { FaCogs } from 'react-icons/fa';
 
 const LANGUAGES = [
   { value: "en", label: "English" },
@@ -53,60 +54,74 @@ export default function PreferencesSettings() {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return (
+    <div className="flex justify-center items-center min-h-[300px]">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  );
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '2rem 0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700 }}>Preferences</h2>
-        <Link href="/settings" style={{ color: "#2563eb", textDecoration: "underline" }}>← All Settings</Link>
+    <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <FaCogs className="text-blue-600 text-2xl" />
+          <h2 className="text-2xl font-bold text-gray-800">Preferences</h2>
+        </div>
+        <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
       </div>
-      {success && <div style={{ marginBottom: 16, color: 'green' }}>Preferences saved!</div>}
-      {error && <div style={{ marginBottom: 16, color: 'red' }}>{error}</div>}
-      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-        <div>
-          <h3 style={{ fontWeight: 600, marginBottom: 8 }}>Notifications</h3>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <input
-              type="checkbox"
-              checked={prefs.notificationPreferences.email}
-              onChange={e => setPrefs(p => ({ ...p, notificationPreferences: { ...p.notificationPreferences, email: e.target.checked } }))}
-            />
-            Email notifications
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={prefs.notificationPreferences.sms}
-              onChange={e => setPrefs(p => ({ ...p, notificationPreferences: { ...p.notificationPreferences, sms: e.target.checked } }))}
-            />
-            SMS notifications
-          </label>
+      {success && <div className="mb-4 px-4 py-2 rounded bg-green-50 text-green-700 border border-green-200">Preferences saved!</div>}
+      {error && <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 border border-red-200">{error}</div>}
+      <form onSubmit={handleSave} className="space-y-8">
+        <div className="bg-white rounded-xl shadow p-10 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+            <div className="flex flex-col gap-4">
+              <h3 className="font-semibold mb-2 text-gray-700">Notifications</h3>
+              <p className="text-xs text-gray-400 mb-4">Choose how you want to receive important updates.</p>
+              <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={prefs.notificationPreferences.email}
+                  onChange={e => setPrefs(p => ({ ...p, notificationPreferences: { ...p.notificationPreferences, email: e.target.checked } }))}
+                  className="accent-blue-600"
+                />
+                <span className="text-gray-700">Email notifications</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={prefs.notificationPreferences.sms}
+                  onChange={e => setPrefs(p => ({ ...p, notificationPreferences: { ...p.notificationPreferences, sms: e.target.checked } }))}
+                  className="accent-blue-600"
+                />
+                <span className="text-gray-700">SMS notifications</span>
+              </label>
+            </div>
+            <div className="flex flex-col gap-4">
+              <h3 className="font-semibold mb-2 text-gray-700">Language</h3>
+              <p className="text-xs text-gray-400 mb-4">Select your preferred language for the app interface.</p>
+              <select
+                value={prefs.language}
+                onChange={e => setPrefs(p => ({ ...p, language: e.target.value }))}
+                className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+              </select>
+              <h3 className="font-semibold mb-2 text-gray-700 mt-8">Region</h3>
+              <p className="text-xs text-gray-400 mb-4">Set your region to localize content and features.</p>
+              <select
+                value={prefs.region}
+                onChange={e => setPrefs(p => ({ ...p, region: e.target.value }))}
+                className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                {REGIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+            </div>
+          </div>
         </div>
-        <div>
-          <h3 style={{ fontWeight: 600, marginBottom: 8 }}>Language</h3>
-          <select
-            value={prefs.language}
-            onChange={e => setPrefs(p => ({ ...p, language: e.target.value }))}
-            style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 12px', fontSize: 15, background: '#f7fafd' }}
-          >
-            {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <h3 style={{ fontWeight: 600, marginBottom: 8 }}>Region</h3>
-          <select
-            value={prefs.region}
-            onChange={e => setPrefs(p => ({ ...p, region: e.target.value }))}
-            style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 12px', fontSize: 15, background: '#f7fafd' }}
-          >
-            {REGIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div className="flex justify-end">
           <button
             type="submit"
-            style={{ padding: '10px 28px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f7fafd', fontWeight: 600, fontSize: 16, color: '#222', cursor: 'pointer' }}
+            className="px-8 py-2 rounded-lg border border-blue-200 bg-blue-600 text-white font-semibold text-base shadow hover:bg-blue-700 transition disabled:opacity-60"
             disabled={saving}
           >
             {saving ? "Saving..." : "Save Preferences"}

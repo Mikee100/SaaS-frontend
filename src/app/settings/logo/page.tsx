@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { apiGet } from "@/utils/api";
+import { FaImage } from 'react-icons/fa';
+import Link from "next/link";
 
 export default function LogoSettings() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -10,11 +12,21 @@ export default function LogoSettings() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiGet<any>("/tenant/me").then((data) => {
-      setLogoUrl(data.logoUrl || null);
-    });
+    const fetchTenant = async () => {
+      try {
+        const data = await apiGet<any>("/tenant/me");
+        setLogoUrl(data.logoUrl || null);
+      } catch (err) {
+        console.error("Error fetching tenant:", err);
+        setError("Failed to load tenant settings.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTenant();
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,30 +73,44 @@ export default function LogoSettings() {
     }
   };
 
+  if (loading) return (
+    <div className="flex justify-center items-center min-h-[300px]">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  );
+
   return (
-    <div style={{ maxWidth: 400 }}>
-      <h2>Logo Upload</h2>
-      <form onSubmit={handleUpload}>
-        <div style={{ marginBottom: 16 }}>
-          <input ref={inputRef} type="file" accept="image/*" onChange={handleFileChange} />
+    <div className="max-w-3xl mx-auto py-10 px-4 min-h-[80vh]">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <FaImage className="text-blue-600 text-2xl" />
+          <h2 className="text-2xl font-bold text-gray-800">Logo</h2>
         </div>
-        {preview && (
+        <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
+      </div>
+      <form onSubmit={handleUpload}>
+        <div className="bg-white rounded-xl shadow p-8 w-full mb-8">
           <div style={{ marginBottom: 16 }}>
-            <div>Preview:</div>
-            <img src={preview} alt="Preview" style={{ maxWidth: 200, maxHeight: 200, border: '1px solid #eee' }} />
+            <input ref={inputRef} type="file" accept="image/*" onChange={handleFileChange} />
           </div>
-        )}
-        {logoUrl && !preview && (
-          <div style={{ marginBottom: 16 }}>
-            <div>Current Logo:</div>
-            <img src={logoUrl} alt="Current Logo" style={{ maxWidth: 200, maxHeight: 200, border: '1px solid #eee' }} />
-          </div>
-        )}
-        <button type="submit" disabled={!file || uploading} style={{ marginTop: 8 }}>
-          {uploading ? "Uploading..." : "Upload"}
-        </button>
-        {success && <div style={{ color: "green", marginTop: 8 }}>Logo uploaded!</div>}
-        {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
+          {preview && (
+            <div style={{ marginBottom: 16 }}>
+              <div>Preview:</div>
+              <img src={preview} alt="Preview" style={{ maxWidth: 200, maxHeight: 200, border: '1px solid #eee' }} />
+            </div>
+          )}
+          {logoUrl && !preview && (
+            <div style={{ marginBottom: 16 }}>
+              <div>Current Logo:</div>
+              <img src={logoUrl} alt="Current Logo" style={{ maxWidth: 200, maxHeight: 200, border: '1px solid #eee' }} />
+            </div>
+          )}
+          <button type="submit" disabled={!file || uploading} style={{ marginTop: 8 }}>
+            {uploading ? "Uploading..." : "Upload"}
+          </button>
+          {success && <div style={{ color: "green", marginTop: 8 }}>Logo uploaded!</div>}
+          {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
+        </div>
       </form>
     </div>
   );

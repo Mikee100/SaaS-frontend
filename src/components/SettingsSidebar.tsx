@@ -1,61 +1,63 @@
 "use client";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { FaBuilding, FaCogs, FaClipboardList, FaCreditCard, FaUserShield, FaUsers, FaKey, FaImage } from 'react-icons/fa';
 
 export default function SettingsSidebar() {
   const pathname = usePathname();
-  const sections = [
-    { href: "/settings", label: "Business Info" },
-    { href: "/settings/preferences", label: "Preferences" },
-    { href: "/settings/audit-logs", label: "Audit Logs" },
-    { href: "/settings/billing", label: "Billing" },
-    { href: "/settings/permissions", label: "Permissions" },
-    { href: "/settings/users", label: "Users" },
-    { href: "/settings/password", label: "Password" },
-    { href: "/settings/logo", label: "Logo" },
-    { href: "/settings/business-info", label: "Business Info (Advanced)" },
+  // Grouped sections with icons
+  const groups = [
+    {
+      header: 'Organization',
+      items: [
+        { href: "/settings/business-info", label: "Business Info", icon: <FaBuilding className="mr-2" /> },
+        { href: "/settings/logo", label: "Logo", icon: <FaImage className="mr-2" /> },
+        { href: "/settings/users", label: "Users", icon: <FaUsers className="mr-2" /> },
+        { href: "/settings/permissions", label: "Permissions", icon: <FaUserShield className="mr-2" /> },
+        { href: "/settings/billing", label: "Billing", icon: <FaCreditCard className="mr-2" /> },
+      ]
+    },
+    {
+      header: 'Account',
+      items: [
+        { href: "/settings/preferences", label: "Preferences", icon: <FaCogs className="mr-2" /> },
+        { href: "/settings/password", label: "Password", icon: <FaKey className="mr-2" /> },
+      ]
+    },
+    {
+      header: 'Audit',
+      items: [
+        { href: "/settings/audit-logs", label: "Audit Logs", icon: <FaClipboardList className="mr-2" /> },
+      ]
+    }
   ];
   return (
-    <nav
-      style={{
-        width: 240,
-        minHeight: '100vh',
-        background: '#f7fafd',
-        borderRight: '1px solid #e5e7eb',
-        padding: '2rem 0.5rem',
-        position: 'sticky',
-        top: 0,
-        left: 0,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-        {sections.map((s) => {
-          const active = pathname === s.href;
-          return (
-            <li key={s.href} style={{ margin: '0.5rem 0' }}>
-              <Link
-                href={s.href}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '0.75rem 1.25rem',
-                  borderRadius: 8,
-                  fontWeight: active ? 600 : 400,
-                  color: active ? '#2563eb' : '#222',
-                  background: active ? 'rgba(37,99,235,0.08)' : 'none',
-                  borderLeft: active ? '4px solid #2563eb' : '4px solid transparent',
-                  transition: 'background 0.15s, color 0.15s',
-                  cursor: 'pointer',
-                  textDecoration: 'none',
-                }}
-              >
-                {s.label}
-              </Link>
-            </li>
-          );
-        })}
+    <nav className="w-60 h-screen fixed top-0 left-0 z-30 bg-gradient-to-b from-blue-50 to-white border-r border-gray-200 py-8 px-2 flex flex-col">
+      <div className="mb-6 text-lg font-bold text-blue-700 px-4">Settings</div>
+      <ul className="flex-1 space-y-6">
+        {groups.map(group => (
+          <li key={group.header}>
+            <div className="text-xs uppercase tracking-wider text-gray-400 px-4 mb-2 font-semibold">{group.header}</div>
+            <ul className="space-y-1">
+              {group.items.map(s => {
+                const active = pathname === s.href;
+                return (
+                  <li key={s.href}>
+                    <Link
+                      href={s.href}
+                      className={`flex items-center px-4 py-2 rounded-lg transition font-medium text-sm
+                        ${active ? 'bg-blue-100 text-blue-700 shadow border-l-4 border-blue-600' : 'text-gray-700 hover:bg-blue-50'}
+                      `}
+                    >
+                      {s.icon}
+                      {s.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
       </ul>
     </nav>
   );
