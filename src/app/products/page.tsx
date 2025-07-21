@@ -288,7 +288,7 @@ export default function ProductsPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-8 px-2">
       <div className="w-full max-w-5xl bg-white rounded-2xl shadow p-6 border border-gray-100">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sticky top-0 z-10 bg-white rounded-t-2xl p-4 border-b border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6  top-0 z-10 bg-white rounded-t-2xl p-4 border-b border-gray-100">
           <div className="flex flex-col gap-1 w-full sm:w-auto">
             <label className="text-xs text-gray-500 mb-1">Search Products</label>
                 <input

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { apiGet } from "@/utils/api";
 import { Line, Pie, Bar } from "react-chartjs-2";
 import {
@@ -13,6 +13,7 @@ import {
   Legend,
   ArcElement,
   BarElement,
+  Filler,
 } from "chart.js";
 
 ChartJS.register(
@@ -24,197 +25,232 @@ ChartJS.register(
   Tooltip,
   Legend,
   ArcElement,
-  BarElement
+  BarElement,
+  Filler,
 );
 
 const paymentTypes = ["cash", "mpesa", "card"];
 
 type TopProduct = { id: string; name: string; unitsSold: number; revenue: number };
+type Customer = { name: string; phone: string; total: number; count: number; lastPurchase?: Date };
+type Forecast = { forecast_months: string[]; forecast_sales: number[] };
+
 type Metrics = {
   totalSales: number;
   totalRevenue: number;
+  avgSaleValue: number;
   topProducts: TopProduct[];
   lowStock: any[];
   paymentBreakdown: Record<string, number>;
+  salesByMonth: Record<string, number>;
+  topCustomers: Customer[];
+  forecast: Forecast;
+  customerSegments: any[];
 };
 
 export default function ReportsPage() {
   const [metrics, setMetrics] = useState<Metrics>({
     totalSales: 0,
     totalRevenue: 0,
+    avgSaleValue: 0,
     topProducts: [],
     lowStock: [],
     paymentBreakdown: {},
+    salesByMonth: {},
+    topCustomers: [],
+    forecast: { forecast_months: [], forecast_sales: [] },
+    customerSegments: [],
   });
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  // Filters
+  const [error, setError] = useState<string | null>(null);
+
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [productId, setProductId] = useState("");
   const [paymentType, setPaymentType] = useState("");
 
-  // Fetch product list for filter
   useEffect(() => {
-    apiGet<any[]>("/products").then(setProducts);
+    apiGet<any[]>("/products").then(setProducts).catch(() => setProducts([]));
   }, []);
 
-  // Fetch analytics with filters
   useEffect(() => {
     setLoading(true);
+    setError(null);
     const params = new URLSearchParams();
     if (dateFrom) params.append("from", dateFrom);
     if (dateTo) params.append("to", dateTo);
     if (productId) params.append("productId", productId);
     if (paymentType) params.append("paymentType", paymentType);
-    apiGet<any>(`/sales/analytics?${params.toString()}`)
+    
+    apiGet<Metrics>(`/sales/analytics?${params.toString()}`)
       .then((data) => setMetrics(data))
+      .catch((err) => setError(err.message || "An error occurred while fetching data."))
       .finally(() => setLoading(false));
   }, [dateFrom, dateTo, productId, paymentType]);
 
-  // Placeholder for sales trend (should be replaced with real trend data from backend)
-  const salesTrendData = {
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
-    datasets: [
-      {
-        label: "Sales",
-        data: [12, 19, 10, 15, 22, 30, 25],
-        borderColor: "#6366f1",
-        backgroundColor: "rgba(99,102,241,0.2)",
-        tension: 0.4,
-      },
-    ],
-  };
+  const { salesTrendData, revenueBreakdownData, paymentMethodData } = useMemo(() => {
+    const salesByMonth = metrics.salesByMonth || {};
+    const forecast = metrics.forecast || { forecast_months: [], forecast_sales: [] };
+    const actualMonths = Object.keys(salesByMonth);
+    const actualSales = Object.values(salesByMonth);
 
-  // Revenue breakdown by top products
-  const revenueBreakdownData = {
-    labels: metrics.topProducts.map((p: any) => p.name),
-    datasets: [
-      {
-        label: "Revenue",
-        data: metrics.topProducts.map((p: any) => p.revenue),
-        backgroundColor: [
-          "#6366f1",
-          "#a21caf",
-          "#f59e42",
-          "#10b981",
-          "#ef4444",
-        ],
-      },
-    ],
-  };
+    const allMonths = [...actualMonths, ...forecast.forecast_months];
+    const salesData = [...actualSales, ...Array(forecast.forecast_months.length).fill(null)];
+    const forecastData =
+      actualSales.length > 0
+        ? [...Array(actualSales.length - 1).fill(null), actualSales[actualSales.length - 1], ...forecast.forecast_sales]
+        : forecast.forecast_sales;
+    
+    const salesTrendData = {
+      labels: allMonths,
+      datasets: [
+        {
+          label: 'Actual Sales',
+          data: salesData,
+          borderColor: '#4f46e5',
+          backgroundColor: 'rgba(79, 70, 229, 0.1)',
+          fill: true,
+          tension: 0.4,
+        },
+        {
+          label: 'Forecast',
+          data: forecastData,
+          borderColor: '#f59e0b',
+          borderDash: [5, 5],
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          fill: false,
+          tension: 0.4,
+        },
+      ],
+    };
 
-  // Payment method breakdown
-  const paymentLabels = Object.keys(metrics.paymentBreakdown);
-  const paymentData = Object.values(metrics.paymentBreakdown);
-  const paymentMethodData = {
-    labels: paymentLabels,
-    datasets: [
-      {
-        label: "Payments",
-        data: paymentData,
-        backgroundColor: ["#6366f1", "#10b981", "#f59e42", "#ef4444", "#a21caf"],
-      },
-    ],
-  };
+    const revenueBreakdownData = {
+      labels: (metrics.topProducts || []).map(p => p.name),
+      datasets: [{
+        label: 'Revenue',
+        data: (metrics.topProducts || []).map(p => p.revenue),
+        backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#22c55e', '#f59e0b'],
+        borderRadius: 4,
+      }],
+    };
+    
+    const paymentMethodData = {
+      labels: Object.keys(metrics.paymentBreakdown || {}),
+      datasets: [{
+        label: 'Payments',
+        data: Object.values(metrics.paymentBreakdown || {}),
+        backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#a21caf'],
+        hoverOffset: 4,
+      }],
+    };
+
+    return { salesTrendData, revenueBreakdownData, paymentMethodData };
+  }, [metrics]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gray-50">
+        <div className="text-xl font-semibold text-gray-700">Loading Reports...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gray-50">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg shadow-md" role="alert">
+          <strong className="font-bold">Failed to load data:</strong>
+          <span className="block sm:inline ml-2">{error}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-8">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-extrabold text-blue-700 mb-8 text-center">Business Reports & Analytics</h1>
-        {/* Filters */}
-        <div className="flex flex-wrap gap-4 mb-8 items-end bg-white rounded-xl shadow p-4">
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">From</label>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border rounded px-2 py-1" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">To</label>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded px-2 py-1" />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Product</label>
-            <select value={productId} onChange={e => setProductId(e.target.value)} className="border rounded px-2 py-1">
-              <option value="">All</option>
-              {(products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Payment Type</label>
-            <select value={paymentType} onChange={e => setPaymentType(e.target.value)} className="border rounded px-2 py-1">
-              <option value="">All</option>
-              {(paymentTypes || []).map((pt) => <option key={pt} value={pt}>{pt.charAt(0).toUpperCase() + pt.slice(1)}</option>)}
-            </select>
-          </div>
-          <button className="ml-auto text-xs text-gray-500 hover:underline" onClick={() => { setDateFrom(""); setDateTo(""); setProductId(""); setPaymentType(""); }}>Clear Filters</button>
-        </div>
-        {/* Metrics Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
-            <span className="text-gray-500 text-sm mb-1">Total Sales</span>
-            <span className="text-2xl font-bold text-blue-700">{metrics.totalSales}</span>
-          </div>
-          <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
-            <span className="text-gray-500 text-sm mb-1">Total Revenue</span>
-            <span className="text-2xl font-bold text-green-700">Ksh {metrics.totalRevenue.toLocaleString()}</span>
-          </div>
-          <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
-            <span className="text-gray-500 text-sm mb-1">Top Products</span>
-            <span className="text-lg font-semibold text-purple-700">{metrics.topProducts.length > 0 ? metrics.topProducts[0]?.name : "-"}</span>
-          </div>
-          <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
-            <span className="text-gray-500 text-sm mb-1">Low Stock Alerts</span>
-            <span className="text-lg font-semibold text-red-600">{metrics.lowStock.length}</span>
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto">
+        <header className="mb-10">
+          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Business Reports</h1>
+          <p className="mt-2 text-lg text-gray-500">Dive deep into your sales, customers, and product performance.</p>
+        </header>
+
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Filters</h2>
+          <div className="flex flex-wrap gap-4 items-end">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
+              <select value={productId} onChange={e => setProductId(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                <option value="">All Products</option>
+                {(products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
+              <select value={paymentType} onChange={e => setPaymentType(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                <option value="">All Types</option>
+                {(paymentTypes || []).map((pt) => <option key={pt} value={pt}>{pt.charAt(0).toUpperCase() + pt.slice(1)}</option>)}
+              </select>
+            </div>
+            <button className="text-sm text-gray-600 hover:text-indigo-600" onClick={() => { setDateFrom(""); setDateTo(""); setProductId(""); setPaymentType(""); }}>Clear Filters</button>
           </div>
         </div>
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-          <div className="bg-white rounded-xl shadow p-6">
-            <h2 className="text-lg font-bold mb-4">Sales Trend</h2>
-            <div className="h-64">
-              <Line data={salesTrendData} options={{ responsive: true, plugins: { legend: { display: false } } }} />
+
+        {/* Key Metrics Section */}
+        <section className="mb-10">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Key Metrics</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center"><span className="text-gray-500 text-sm mb-1">Total Sales</span><span className="text-3xl font-bold text-indigo-700">{metrics.totalSales}</span></div>
+            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center"><span className="text-gray-500 text-sm mb-1">Total Revenue</span><span className="text-3xl font-bold text-green-700">Ksh {metrics.totalRevenue.toLocaleString()}</span></div>
+            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center"><span className="text-gray-500 text-sm mb-1">Avg. Sale Value</span><span className="text-3xl font-bold text-purple-700">Ksh {metrics.avgSaleValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center"><span className="text-gray-500 text-sm mb-1">Low Stock Alerts</span><span className="text-3xl font-bold text-red-600">{(metrics.lowStock || []).length}</span></div>
+          </div>
+        </section>
+
+        {/* Sales Performance Section */}
+        <section className="mb-10">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Sales Performance</h2>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            <div className="bg-white rounded-xl shadow p-6"><h3 className="text-lg font-bold mb-4 text-center">Monthly Sales & Forecast</h3><div className="h-80"><Line data={salesTrendData} options={{ responsive: true, maintainAspectRatio: false }} /></div></div>
+            <div className="bg-white rounded-xl shadow p-6"><h3 className="text-lg font-bold mb-4 text-center">Revenue by Top Products</h3><div className="h-80"><Bar data={revenueBreakdownData} options={{ responsive: true, maintainAspectRatio: false, indexAxis: 'y' }} /></div></div>
+          </div>
+        </section>
+
+        {/* Customer & Operations Section */}
+        <section>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Customer & Operations</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            <div className="lg:col-span-3 bg-white rounded-xl shadow p-6">
+              <h3 className="text-lg font-bold mb-4">Top Customers by Spend</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50"><tr><th className="py-2 px-4 text-left font-semibold text-gray-600">Customer</th><th className="py-2 px-4 text-left font-semibold text-gray-600">Purchases</th><th className="py-2 px-4 text-left font-semibold text-gray-600">Total Spent</th></tr></thead>
+                  <tbody>
+                    {(metrics.topCustomers || []).length === 0 ? (
+                      <tr><td colSpan={3} className="text-center text-gray-400 py-4">No customer data available</td></tr>
+                    ) : (
+                      (metrics.topCustomers || []).map((c) => (
+                        <tr key={c.phone || c.name} className="border-b"><td className="py-2 px-4">{c.name}</td><td className="py-2 px-4">{c.count}</td><td className="py-2 px-4">Ksh {c.total.toLocaleString()}</td></tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
+              <h3 className="text-lg font-bold mb-4 text-center">Payment Methods</h3>
+              <div className="h-80 flex items-center justify-center"><div className="w-full max-w-xs"><Pie data={paymentMethodData} options={{ responsive: true, maintainAspectRatio: false }} /></div></div>
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow p-6">
-            <h2 className="text-lg font-bold mb-4">Revenue Breakdown</h2>
-            <div className="h-64">
-              <Bar data={revenueBreakdownData} options={{ responsive: true, plugins: { legend: { display: false } } }} />
-            </div>
-          </div>
-        </div>
-        {/* Payment Method Breakdown */}
-        <div className="bg-white rounded-xl shadow p-6 mb-10">
-          <h2 className="text-lg font-bold mb-4">Payment Method Breakdown</h2>
-          <div className="h-48">
-            <Pie data={paymentMethodData} options={{ responsive: true, plugins: { legend: { position: "bottom" } } }} />
-          </div>
-        </div>
-        {/* Top Products Table */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-bold mb-4">Top Selling Products</h2>
-          <table className="min-w-full">
-            <thead>
-              <tr>
-                <th className="py-2 px-4 text-left">Product</th>
-                <th className="py-2 px-4 text-left">Units Sold</th>
-                <th className="py-2 px-4 text-left">Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(metrics.topProducts || []).length === 0 ? (
-                <tr><td colSpan={3} className="text-center text-gray-400 py-4">No data</td></tr>
-              ) : (
-                (metrics.topProducts || []).map((p: any) => (
-                  <tr key={p.id}>
-                    <td className="py-2 px-4">{p.name}</td>
-                    <td className="py-2 px-4">{p.unitsSold}</td>
-                    <td className="py-2 px-4">Ksh {p.revenue.toLocaleString()}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        </section>
       </div>
     </div>
   );

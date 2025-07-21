@@ -35,12 +35,12 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   if (loading) return null;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
       <aside className="w-64 bg-gradient-to-b from-indigo-500 to-blue-500 text-white flex flex-col p-6">
         <div className="text-2xl font-bold mb-8">SaaS POS</div>
         <nav className="flex-1">
-          <a href="/" className="block py-2 px-3 rounded hover:bg-blue-800">Dashboard</a>
+          
           <a href="/products" className="block py-2 px-3 rounded hover:bg-blue-800">Products</a>
           <a href="/inventory" className="block py-2 px-3 rounded hover:bg-blue-800">Inventory</a>
           <a href="/users" className="block py-2 px-3 rounded hover:bg-blue-800">Users</a>
@@ -70,17 +70,19 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       {/* Main content */}
-      <main className="flex-1 bg-gray-50 min-h-screen">
+      <main className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
+        <div className="flex items-center justify-between p-4 bg-white shadow-sm">
+          <div className="text-lg font-semibold">Welcome!</div>
           {user && (
             <div className="text-gray-600 text-sm">
               {user.name} ({user.role})
             </div>
           )}
         </div>
-        {children}
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-100">
+          {children}
+        </div>
       </main>
     </div>
   );

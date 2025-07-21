@@ -58,9 +58,32 @@ export default function AnalyticsPage() {
   // For chart highlighting: mark anomaly dates
   const anomalyDates = useMemo(() => new Set(anomalies.map(a => new Date(a.date).toISOString().slice(0, 10))), [anomalies]);
 
-  if (loading) return <div className="p-8">Loading analytics...</div>;
-  if (error) return <div className="p-8 text-red-500">{error}</div>;
-  if (!data) return <div className="p-8 text-gray-500">No analytics data.</div>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-lg font-semibold text-gray-600">Loading Analytics...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <strong className="font-bold">Error:</strong>
+          <span className="block sm:inline"> {error}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-lg font-semibold text-gray-500">No analytics data available.</div>
+      </div>
+    );
+  }
 
   // Prepare chart data
   const actualMonths = Object.entries(data.salesByMonth || {}).map(([month, revenue]: any) => ({
@@ -96,181 +119,207 @@ export default function AnalyticsPage() {
   }));
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-6">Sales Analytics</h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded shadow p-6 flex flex-col items-center">
-          <div className="text-xs text-gray-500 mb-1">Total Sales</div>
-          <div className="text-2xl font-bold">{data.totalSales}</div>
+    <div className="bg-gray-50 min-h-screen">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="mb-8">
+          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Sales & Customer Analytics</h1>
+          <p className="mt-2 text-lg text-gray-500">
+            An overview of your business performance, customer behavior, and sales trends.
+          </p>
         </div>
-        <div className="bg-white rounded shadow p-6 flex flex-col items-center">
-          <div className="text-xs text-gray-500 mb-1">Total Revenue</div>
-          <div className="text-2xl font-bold">${data.totalRevenue.toLocaleString()}</div>
-        </div>
-        <div className="bg-white rounded shadow p-6 flex flex-col items-center">
-          <div className="text-xs text-gray-500 mb-1">Avg. Sale Value</div>
-          <div className="text-2xl font-bold">${data.avgSaleValue.toFixed(2)}</div>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-        <div className="bg-white rounded shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Sales by Product</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={productData} margin={{ top: 16, right: 16, left: 0, bottom: 0 }}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="quantity" fill="#8884d8" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="bg-white rounded shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Sales by Month</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={monthData} margin={{ top: 16, right: 16, left: 0, bottom: 0 }}>
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="revenue" stroke="#82ca9d" strokeWidth={3} name="Actual Sales" />
-              <Line type="monotone" dataKey="forecast" stroke="#ff7300" strokeDasharray="5 5" strokeWidth={2} dot={false} name="Forecast" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-      {/* --- Anomaly Detection Section --- */}
-      <div className="bg-white rounded shadow p-6 mb-8">
-        <h2 className="text-lg font-semibold mb-4">Sales Anomalies</h2>
-        {anomalyLoading ? (
-          <div>Detecting anomalies...</div>
-        ) : anomalyError ? (
-          <div className="text-red-500">{anomalyError}</div>
-        ) : anomalies.length === 0 ? (
-          <div className="text-gray-500">No anomalies detected.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="text-left px-4 py-2">Date</th>
-                  <th className="text-right px-4 py-2">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {anomalies.map((a, i) => (
-                  <tr key={i} className="border-t bg-yellow-50">
-                    <td className="px-4 py-2">{new Date(a.date).toLocaleString()}</td>
-                    <td className="px-4 py-2 text-right font-bold">${a.value.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      {/* Customer Segmentation & Insights */}
-      {data.customerSegments && data.customerSegments.length > 0 && (
-        <div className="bg-white rounded shadow p-6 mb-8">
-          <h2 className="text-lg font-semibold mb-4">Customer Segmentation & Insights</h2>
-          <div className="overflow-x-auto mb-8">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="text-left px-4 py-2">Name</th>
-                  <th className="text-right px-4 py-2">Total Spent</th>
-                  <th className="text-right px-4 py-2">Purchases</th>
-                  <th className="text-right px-4 py-2">Predicted CLV</th>
-                  <th className="text-center px-4 py-2">Segment</th>
-                  <th className="text-center px-4 py-2">Churn Risk</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.customerSegments.map((c: any, i: number) => (
-                  <tr key={i} className="border-t">
-                    <td className="px-4 py-2">{c.name}</td>
-                    <td className="px-4 py-2 text-right">${c.total.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-right">{c.count}</td>
-                    <td className="px-4 py-2 text-right">${c.clv.toFixed(2)}</td>
-                    <td className="px-4 py-2 text-center">
-                      <span className={
-                        c.segment_label === 'VIP' ? 'text-green-600 font-bold' :
-                        c.segment_label === 'At-Risk' ? 'text-red-600 font-bold' :
-                        'text-blue-600 font-bold'
-                      }>
-                        {c.segment_label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      <span className={c.churn_risk ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>
-                        {c.churn_risk ? 'High' : 'Low'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* Visualizations */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Pie chart for segments */}
-            <div>
-              <h3 className="text-md font-semibold mb-2">Customer Segments</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={Object.entries(data.customerSegments.reduce((acc: any, c: any) => {
-                      acc[c.segment_label] = (acc[c.segment_label] || 0) + 1;
-                      return acc;
-                    }, {})).map(([name, value]) => ({ name, value }))}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    label
-                  >
-                    {Object.entries(data.customerSegments.reduce((acc: any, c: any) => {
-                      acc[c.segment_label] = (acc[c.segment_label] || 0) + 1;
-                      return acc;
-                    }, {})).map(([name], i) => (
-                      <Cell key={name} fill={
-                        name === 'VIP' ? '#22c55e' :
-                        name === 'At-Risk' ? '#ef4444' :
-                        '#3b82f6'
-                      } />
-                    ))}
-                  </Pie>
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+
+        {/* Section 1: At a Glance */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">At a Glance</h2>
+          <p className="text-gray-500 mb-6">A high-level summary of your key business metrics.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-blue-50 rounded-lg p-6 flex flex-col items-center justify-center">
+              <div className="text-sm text-blue-600 font-semibold mb-1">Total Sales</div>
+              <div className="text-3xl font-bold text-blue-800">{data.totalSales}</div>
             </div>
-            {/* Bar chart for CLV by segment */}
+            <div className="bg-green-50 rounded-lg p-6 flex flex-col items-center justify-center">
+              <div className="text-sm text-green-600 font-semibold mb-1">Total Revenue</div>
+              <div className="text-3xl font-bold text-green-800">${data.totalRevenue.toLocaleString()}</div>
+            </div>
+            <div className="bg-indigo-50 rounded-lg p-6 flex flex-col items-center justify-center">
+              <div className="text-sm text-indigo-600 font-semibold mb-1">Avg. Sale Value</div>
+              <div className="text-3xl font-bold text-indigo-800">${data.avgSaleValue.toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+
+        <hr className="my-10 border-gray-200" />
+
+        {/* Section 2: Sales Performance */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Sales Performance</h2>
+          <p className="text-gray-500 mb-6">Visualize your sales trends and identify top-performing products.</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div>
-              <h3 className="text-md font-semibold mb-2">Avg. Predicted CLV by Segment</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart
-                  data={Object.entries(
-                    data.customerSegments.reduce((acc: any, c: any) => {
-                      acc[c.segment_label] = acc[c.segment_label] || [];
-                      acc[c.segment_label].push(c.clv);
-                      return acc;
-                    }, {})
-                  ).map(([segment, clvs]: any) => ({
-                    segment,
-                    avgCLV: clvs.reduce((a: number, b: number) => a + b, 0) / clvs.length,
-                  }))}
-                  margin={{ top: 16, right: 16, left: 0, bottom: 0 }}
-                >
-                  <XAxis dataKey="segment" />
+              <h3 className="text-lg font-semibold mb-4 text-center">Sales by Product (Units Sold)</h3>
+              <ResponsiveContainer width="100%" height={350}>
+                <BarChart data={productData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <XAxis dataKey="name" />
                   <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="avgCLV" fill="#6366f1" />
+                  <Tooltip wrapperClassName="rounded-md border bg-white px-3 py-2 text-sm shadow-sm" />
+                  <Bar dataKey="quantity" fill="#6366F1" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-4 text-center">Monthly Sales & Forecast</h3>
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart data={monthData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip wrapperClassName="rounded-md border bg-white px-3 py-2 text-sm shadow-sm" />
+                  <Legend />
+                  <Line type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={3} name="Actual Sales" />
+                  <Line type="monotone" dataKey="forecast" stroke="#F59E0B" strokeDasharray="5 5" strokeWidth={2} name="Forecast" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
-      )}
+        
+        <hr className="my-10 border-gray-200" />
+
+        {/* Section 3: Customer Insights */}
+        {data.customerSegments && data.customerSegments.length > 0 && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Customer Insights</h2>
+            <p className="text-gray-500 mb-6">Understand your customer segments, their value, and churn risk.</p>
+            <div className="overflow-x-auto mb-8">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600">Name</th>
+                    <th className="text-right px-4 py-3 font-semibold text-gray-600">Total Spent</th>
+                    <th className="text-right px-4 py-3 font-semibold text-gray-600">Purchases</th>
+                    <th className="text-right px-4 py-3 font-semibold text-gray-600">Predicted CLV</th>
+                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Segment</th>
+                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Churn Risk</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.customerSegments.map((c: any, i: number) => (
+                    <tr key={i} className="border-t hover:bg-gray-50">
+                      <td className="px-4 py-3">{c.name}</td>
+                      <td className="px-4 py-3 text-right">${c.total.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right">{c.count}</td>
+                      <td className="px-4 py-3 text-right">${c.clv.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                          c.segment_label === 'VIP' ? 'bg-green-100 text-green-800' :
+                          c.segment_label === 'At-Risk' ? 'bg-red-100 text-red-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {c.segment_label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`font-bold ${c.churn_risk ? 'text-red-600' : 'text-green-600'}`}>
+                          {c.churn_risk ? 'High' : 'Low'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-lg font-semibold mb-4 text-center">Customer Segments Distribution</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={Object.entries(data.customerSegments.reduce((acc: any, c: any) => {
+                        acc[c.segment_label] = (acc[c.segment_label] || 0) + 1;
+                        return acc;
+                      }, {})).map(([name, value]) => ({ name, value }))}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      label
+                    >
+                      {Object.entries(data.customerSegments.reduce((acc: any, c: any) => {
+                        acc[c.segment_label] = (acc[c.segment_label] || 0) + 1;
+                        return acc;
+                      }, {})).map(([name], i) => (
+                        <Cell key={name} fill={
+                          name === 'VIP' ? '#22C55E' :
+                          name === 'At-Risk' ? '#EF4444' :
+                          '#3B82F6'
+                        } />
+                      ))}
+                    </Pie>
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-4 text-center">Avg. Predicted CLV by Segment</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={Object.entries(
+                      data.customerSegments.reduce((acc: any, c: any) => {
+                        acc[c.segment_label] = acc[c.segment_label] || [];
+                        acc[c.segment_label].push(c.clv);
+                        return acc;
+                      }, {})
+                    ).map(([segment, clvs]: any) => ({
+                      segment,
+                      avgCLV: clvs.reduce((a: number, b: number) => a + b, 0) / clvs.length,
+                    }))}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <XAxis dataKey="segment" />
+                    <YAxis />
+                    <Tooltip wrapperClassName="rounded-md border bg-white px-3 py-2 text-sm shadow-sm" />
+                    <Bar dataKey="avgCLV" fill="#8B5CF6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <hr className="my-10 border-gray-200" />
+
+        {/* Section 4: Anomaly Detection */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Sales Anomaly Detection</h2>
+          <p className="text-gray-500 mb-6">Identify unusual sales transactions that might require further investigation.</p>
+          {anomalyLoading ? (
+            <div className="text-center text-gray-500">Detecting anomalies...</div>
+          ) : anomalyError ? (
+            <div className="text-center text-red-500 bg-red-50 p-4 rounded-lg">{anomalyError}</div>
+          ) : anomalies.length === 0 ? (
+            <div className="text-center text-gray-500 bg-gray-50 p-4 rounded-lg">No anomalies detected in the recent sales data.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600">Date</th>
+                    <th className="text-right px-4 py-3 font-semibold text-gray-600">Anomalous Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {anomalies.map((a, i) => (
+                    <tr key={i} className="border-t bg-yellow-50 hover:bg-yellow-100">
+                      <td className="px-4 py-3">{new Date(a.date).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right font-bold text-yellow-800">${a.value.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 } 
