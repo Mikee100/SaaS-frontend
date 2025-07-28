@@ -93,7 +93,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
       {/* Overlay for mobile sidebar */}
       {sidebarOpen && <div className="fixed inset-0 bg-black/30 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
       {/* Main content */}
-      <main className="flex-1 flex flex-col md:ml-64 min-h-screen">
+      <main className="flex-1 flex flex-col  min-h-screen">
         {/* Topbar */}
         <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 bg-white shadow-sm border-b border-gray-200">
           <div className="flex items-center gap-3">

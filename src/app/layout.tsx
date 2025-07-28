@@ -1,36 +1,31 @@
-"use client";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import type { ReactNode } from "react";
-import DashboardShell from "@/components/DashboardShell";
-import { usePathname } from "next/navigation";
-import MainNavbar from '../components/MainNavbar';
-import Spinner from '../components/Spinner';
-import { Suspense } from 'react';
-import { UserProvider } from '../components/UserContext';
-import { SocketProvider } from '../components/SocketContext';
+import PlanBasedNav from "@/components/PlanBasedNav";
+import { UserProvider } from "@/components/UserContext";
+import { SocketProvider } from "@/components/SocketContext";
 
-export default function RootLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const isExternalPage =
-    pathname === "/login" ||
-    pathname === "/register" ||
-    pathname === "/forgot-password" ||
-    pathname.startsWith("/reset-password") ||
-    pathname.startsWith("/settings");
+const inter = Inter({ subsets: ["latin"] });
 
+export const metadata: Metadata = {
+  title: "SaaS Platform",
+  description: "Modern SaaS platform with plan-based access control",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 min-h-screen">
+      <body className={inter.className}>
         <SocketProvider>
           <UserProvider>
-            {isExternalPage ? (
-              // For settings, just render children directly (no centering div)
-              children
-            ) : (
-              <DashboardShell>
-                <Suspense fallback={<Spinner size={48} className="my-24" />}>{children}</Suspense>
-              </DashboardShell>
-            )}
+            <PlanBasedNav />
+            <main className="min-h-screen bg-gray-50">
+              {children}
+            </main>
           </UserProvider>
         </SocketProvider>
       </body>

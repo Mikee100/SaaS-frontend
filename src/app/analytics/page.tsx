@@ -1,325 +1,248 @@
 "use client";
-import { useEffect, useState } from "react";
-import { apiGet, apiPost } from "@/utils/api";
-import { useMemo } from "react";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend
-} from "recharts";
+import { useEffect, useState } from 'react';
+import { apiGet } from '@/utils/api';
+import PlanGuard from '@/components/PlanGuard';
+import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaShare, FaCrown, FaStar } from 'react-icons/fa';
+
+interface AnalyticsData {
+  totalSales?: number;
+  totalRevenue?: number;
+  totalProducts?: number;
+  salesByMonth?: Record<string, number>;
+  topProducts?: Array<{ name: string; sales: number; revenue: number }>;
+  customerSegments?: Array<{ segment: string; count: number; revenue: number }>;
+  realTimeData?: {
+    currentUsers: number;
+    activeSales: number;
+    revenueToday: number;
+  };
+  predictiveAnalytics?: {
+    nextMonthForecast: number;
+    churnRisk: number;
+    growthRate: number;
+  };
+  message?: string;
+}
 
 export default function AnalyticsPage() {
-  const [data, setData] = useState<any>(null);
+  const [basicData, setBasicData] = useState<AnalyticsData | null>(null);
+  const [advancedData, setAdvancedData] = useState<AnalyticsData | null>(null);
+  const [enterpriseData, setEnterpriseData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [anomalies, setAnomalies] = useState<any[]>([]);
-  const [anomalyLoading, setAnomalyLoading] = useState(false);
-  const [anomalyError, setAnomalyError] = useState("");
 
   useEffect(() => {
-    setLoading(true);
-    apiGet("/sales/analytics")
-      .then(setData)
-      .catch((err) => setError(err.message || "Failed to load analytics"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  // Fetch sales data for anomaly detection
-  useEffect(() => {
-    async function fetchAnomalies() {
-      setAnomalyLoading(true);
-      setAnomalyError("");
+    const fetchAnalytics = async () => {
       try {
-        // Get all sales (per transaction)
-        const sales = await apiGet<any[]>("/sales");
-        // Prepare data for anomaly endpoint: [{date, value}]
-        const salesForAnomaly = sales.map(s => ({ date: s.date, value: s.total }));
-        if (salesForAnomaly.length >= 5) {
-          // Call Flask anomaly endpoint (adjust URL if needed)
-          const flaskUrl = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5000";
-          const res = await fetch(`${flaskUrl}/anomalies`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sales: salesForAnomaly }),
-          });
-          if (!res.ok) throw new Error("Failed to fetch anomalies");
-          const data = await res.json();
-          setAnomalies(data);
-        } else {
-          setAnomalies([]);
-        }
-      } catch (e: any) {
-        setAnomalyError(e.message || "Failed to detect anomalies");
-      } finally {
-        setAnomalyLoading(false);
-      }
-    }
-    fetchAnomalies();
-  }, []);
+        setLoading(true);
+        
+        // Fetch basic analytics (available to all)
+        const basic = await apiGet('/analytics/basic') as AnalyticsData;
+        setBasicData(basic);
 
-  // For chart highlighting: mark anomaly dates
-  const anomalyDates = useMemo(() => new Set(anomalies.map(a => new Date(a.date).toISOString().slice(0, 10))), [anomalies]);
+        // Try to fetch advanced analytics (Pro+)
+        try {
+          const advanced = await apiGet('/analytics/advanced') as AnalyticsData;
+          setAdvancedData(advanced);
+        } catch (error) {
+          console.log('Advanced analytics not available');
+        }
+
+        // Try to fetch enterprise analytics (Enterprise only)
+        try {
+          const enterprise = await apiGet('/analytics/enterprise') as AnalyticsData;
+          setEnterpriseData(enterprise);
+        } catch (error) {
+          console.log('Enterprise analytics not available');
+        }
+      } catch (error) {
+        console.error('Error fetching analytics:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalytics();
+  }, []);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-lg font-semibold text-gray-600">Loading Analytics...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-          <strong className="font-bold">Error:</strong>
-          <span className="block sm:inline"> {error}</span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
+          <p className="text-gray-600">Loading analytics data...</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm border p-6 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded mb-4"></div>
+              <div className="h-8 bg-gray-200 rounded mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
         </div>
       </div>
     );
   }
-
-  if (!data) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-lg font-semibold text-gray-500">No analytics data available.</div>
-      </div>
-    );
-  }
-
-  // Prepare chart data
-  const actualMonths = Object.entries(data.salesByMonth || {}).map(([month, revenue]: any) => ({
-    month,
-    revenue,
-    forecast: null,
-  }));
-
-  const forecastMonths = (data.forecast?.forecast_months || []).map((month: string, i: number) => ({
-    month,
-    revenue: null,
-    forecast: data.forecast.forecast_sales[i],
-  }));
-
-  // Bridge point: repeat the last actual value as the first forecast point
-  if (actualMonths.length && forecastMonths.length) {
-    const lastActual = actualMonths[actualMonths.length - 1];
-    forecastMonths.unshift({
-      month: lastActual.month,
-      revenue: null,
-      forecast: lastActual.revenue,
-    });
-  }
-
-  const monthData = [...actualMonths, ...forecastMonths];
-  const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#8dd1e1", "#a4de6c", "#d0ed57", "#ffc0cb"];
-
-  const productData = Object.entries(data.salesByProduct || {}).map(([id, v]: any) => ({
-    id,
-    name: v.name,
-    quantity: v.quantity,
-    revenue: v.revenue,
-  }));
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Sales & Customer Analytics</h1>
-          <p className="mt-2 text-lg text-gray-500">
-            An overview of your business performance, customer behavior, and sales trends.
-          </p>
-        </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
+        <p className="text-gray-600">Track your business performance and insights</p>
+      </div>
 
-        {/* Section 1: At a Glance */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">At a Glance</h2>
-          <p className="text-gray-500 mb-6">A high-level summary of your key business metrics.</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-blue-50 rounded-lg p-6 flex flex-col items-center justify-center">
-              <div className="text-sm text-blue-600 font-semibold mb-1">Total Sales</div>
-              <div className="text-3xl font-bold text-blue-800">{data.totalSales}</div>
+      {/* Basic Analytics - Available to all plans */}
+      {basicData && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Total Sales</h3>
+              <FaChartLine className="w-5 h-5 text-blue-600" />
             </div>
-            <div className="bg-green-50 rounded-lg p-6 flex flex-col items-center justify-center">
-              <div className="text-sm text-green-600 font-semibold mb-1">Total Revenue</div>
-              <div className="text-3xl font-bold text-green-800">${data.totalRevenue.toLocaleString()}</div>
+            <p className="text-3xl font-bold text-gray-900">{basicData.totalSales?.toLocaleString() || 0}</p>
+            <p className="text-sm text-green-600">+12% from last month</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Total Revenue</h3>
+              <FaChartBar className="w-5 h-5 text-green-600" />
             </div>
-            <div className="bg-indigo-50 rounded-lg p-6 flex flex-col items-center justify-center">
-              <div className="text-sm text-indigo-600 font-semibold mb-1">Avg. Sale Value</div>
-              <div className="text-3xl font-bold text-indigo-800">${data.avgSaleValue.toFixed(2)}</div>
+            <p className="text-3xl font-bold text-gray-900">${basicData.totalRevenue?.toLocaleString() || 0}</p>
+            <p className="text-sm text-green-600">+8% from last month</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Products</h3>
+              <FaChartPie className="w-5 h-5 text-purple-600" />
             </div>
+            <p className="text-3xl font-bold text-gray-900">{basicData.totalProducts || 0}</p>
+            <p className="text-sm text-green-600">+15% from last month</p>
           </div>
         </div>
+      )}
 
-        <hr className="my-10 border-gray-200" />
-
-        {/* Section 2: Sales Performance */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Sales Performance</h2>
-          <p className="text-gray-500 mb-6">Visualize your sales trends and identify top-performing products.</p>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-center">Sales by Product (Units Sold)</h3>
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={productData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip wrapperClassName="rounded-md border bg-white px-3 py-2 text-sm shadow-sm" />
-                  <Bar dataKey="quantity" fill="#6366F1" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-center">Monthly Sales & Forecast</h3>
-              <ResponsiveContainer width="100%" height={350}>
-                <LineChart data={monthData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip wrapperClassName="rounded-md border bg-white px-3 py-2 text-sm shadow-sm" />
-                  <Legend />
-                  <Line type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={3} name="Actual Sales" />
-                  <Line type="monotone" dataKey="forecast" stroke="#F59E0B" strokeDasharray="5 5" strokeWidth={2} name="Forecast" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-        
-        <hr className="my-10 border-gray-200" />
-
-        {/* Section 3: Customer Insights */}
-        {data.customerSegments && data.customerSegments.length > 0 && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Customer Insights</h2>
-            <p className="text-gray-500 mb-6">Understand your customer segments, their value, and churn risk.</p>
-            <div className="overflow-x-auto mb-8">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600">Name</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-600">Total Spent</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-600">Purchases</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-600">Predicted CLV</th>
-                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Segment</th>
-                    <th className="text-center px-4 py-3 font-semibold text-gray-600">Churn Risk</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.customerSegments.map((c: any, i: number) => (
-                    <tr key={i} className="border-t hover:bg-gray-50">
-                      <td className="px-4 py-3">{c.name}</td>
-                      <td className="px-4 py-3 text-right">${c.total.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right">{c.count}</td>
-                      <td className="px-4 py-3 text-right">${c.clv.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          c.segment_label === 'VIP' ? 'bg-green-100 text-green-800' :
-                          c.segment_label === 'At-Risk' ? 'bg-red-100 text-red-800' :
-                          'bg-blue-100 text-blue-800'
-                        }`}>
-                          {c.segment_label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`font-bold ${c.churn_risk ? 'text-red-600' : 'text-green-600'}`}>
-                          {c.churn_risk ? 'High' : 'Low'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div>
-                <h3 className="text-lg font-semibold mb-4 text-center">Customer Segments Distribution</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={Object.entries(data.customerSegments.reduce((acc: any, c: any) => {
-                        acc[c.segment_label] = (acc[c.segment_label] || 0) + 1;
-                        return acc;
-                      }, {})).map(([name, value]) => ({ name, value }))}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                      label
-                    >
-                      {Object.entries(data.customerSegments.reduce((acc: any, c: any) => {
-                        acc[c.segment_label] = (acc[c.segment_label] || 0) + 1;
-                        return acc;
-                      }, {})).map(([name], i) => (
-                        <Cell key={name} fill={
-                          name === 'VIP' ? '#22C55E' :
-                          name === 'At-Risk' ? '#EF4444' :
-                          '#3B82F6'
-                        } />
-                      ))}
-                    </Pie>
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+      {/* Pro Plan Features */}
+      <PlanGuard requiredPlan="Pro">
+        {advancedData && (
+          <div className="bg-white rounded-xl shadow-sm border p-6 mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-800">Advanced Analytics</h2>
+              <div className="flex items-center gap-2">
+                <FaStar className="w-4 h-4 text-blue-600" />
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                  Pro Feature
+                </span>
               </div>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                <h3 className="text-lg font-semibold mb-4 text-center">Avg. Predicted CLV by Segment</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart
-                    data={Object.entries(
-                      data.customerSegments.reduce((acc: any, c: any) => {
-                        acc[c.segment_label] = acc[c.segment_label] || [];
-                        acc[c.segment_label].push(c.clv);
-                        return acc;
-                      }, {})
-                    ).map(([segment, clvs]: any) => ({
-                      segment,
-                      avgCLV: clvs.reduce((a: number, b: number) => a + b, 0) / clvs.length,
-                    }))}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <XAxis dataKey="segment" />
-                    <YAxis />
-                    <Tooltip wrapperClassName="rounded-md border bg-white px-3 py-2 text-sm shadow-sm" />
-                    <Bar dataKey="avgCLV" fill="#8B5CF6" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <h3 className="text-lg font-medium text-gray-800 mb-4">Monthly Sales Trend</h3>
+                <div className="space-y-3">
+                  {advancedData.salesByMonth && Object.entries(advancedData.salesByMonth).map(([month, sales]) => (
+                    <div key={month} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <span className="font-medium text-gray-800">{month}</span>
+                      <span className="font-semibold text-green-600">${sales.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="text-lg font-medium text-gray-800 mb-4">Top Products</h3>
+                <div className="space-y-3">
+                  {advancedData.topProducts?.map((product, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-800">{product.name}</p>
+                        <p className="text-sm text-gray-500">{product.sales} sales</p>
+                      </div>
+                      <p className="font-semibold text-green-600">${product.revenue}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         )}
+      </PlanGuard>
 
-        <hr className="my-10 border-gray-200" />
-
-        {/* Section 4: Anomaly Detection */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Sales Anomaly Detection</h2>
-          <p className="text-gray-500 mb-6">Identify unusual sales transactions that might require further investigation.</p>
-          {anomalyLoading ? (
-            <div className="text-center text-gray-500">Detecting anomalies...</div>
-          ) : anomalyError ? (
-            <div className="text-center text-red-500 bg-red-50 p-4 rounded-lg">{anomalyError}</div>
-          ) : anomalies.length === 0 ? (
-            <div className="text-center text-gray-500 bg-gray-50 p-4 rounded-lg">No anomalies detected in the recent sales data.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600">Date</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-600">Anomalous Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {anomalies.map((a, i) => (
-                    <tr key={i} className="border-t bg-yellow-50 hover:bg-yellow-100">
-                      <td className="px-4 py-3">{new Date(a.date).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right font-bold text-yellow-800">${a.value.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* Enterprise Plan Features */}
+      <PlanGuard requiredPlan="Enterprise">
+        {enterpriseData && (
+          <div className="bg-white rounded-xl shadow-sm border p-6 mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-800">Enterprise Analytics</h2>
+              <div className="flex items-center gap-2">
+                <FaCrown className="w-4 h-4 text-yellow-600" />
+                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
+                  Enterprise Feature
+                </span>
+              </div>
             </div>
-          )}
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-800">Real-time Data</h3>
+                <div className="space-y-3">
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <p className="text-sm text-gray-600">Current Users</p>
+                    <p className="text-2xl font-bold text-green-600">{enterpriseData.realTimeData?.currentUsers || 0}</p>
+                  </div>
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-gray-600">Active Sales</p>
+                    <p className="text-2xl font-bold text-blue-600">{enterpriseData.realTimeData?.activeSales || 0}</p>
+                  </div>
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <p className="text-sm text-gray-600">Revenue Today</p>
+                    <p className="text-2xl font-bold text-purple-600">${enterpriseData.realTimeData?.revenueToday?.toLocaleString() || 0}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="lg:col-span-2">
+                <h3 className="text-lg font-medium text-gray-800 mb-4">Predictive Analytics</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+                    <p className="text-sm text-gray-600">Next Month Forecast</p>
+                    <p className="text-2xl font-bold text-blue-600">${enterpriseData.predictiveAnalytics?.nextMonthForecast?.toLocaleString() || 0}</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg">
+                    <p className="text-sm text-gray-600">Growth Rate</p>
+                    <p className="text-2xl font-bold text-green-600">{((enterpriseData.predictiveAnalytics?.growthRate || 0) * 100).toFixed(1)}%</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-lg">
+                    <p className="text-sm text-gray-600">Churn Risk</p>
+                    <p className="text-2xl font-bold text-red-600">{((enterpriseData.predictiveAnalytics?.churnRisk || 0) * 100).toFixed(1)}%</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </PlanGuard>
+
+      {/* Feature-based Protection */}
+      <PlanGuard requiredFeature="advanced_reports">
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">Advanced Reports</h2>
+          <p className="text-gray-600 mb-4">
+            Generate detailed reports with custom filters and advanced analytics.
+          </p>
+          <div className="flex gap-3">
+            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <FaDownload className="w-4 h-4" />
+              Generate Report
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+              <FaShare className="w-4 h-4" />
+              Share Report
+            </button>
+          </div>
         </div>
-      </div>
+      </PlanGuard>
     </div>
   );
 } 

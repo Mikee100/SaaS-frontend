@@ -1,3 +1,5 @@
+"use client";
+
 // Usage example:
 // import { useSocket } from './SocketContext';
 // const socket = useSocket();
