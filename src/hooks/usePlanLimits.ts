@@ -13,30 +13,83 @@ export function usePlanLimits() {
     // Don't fetch if user is not loaded yet
     if (!userContext || userContext.loading) return;
 
+    // If no user, set default limits and don't make API call
+    if (!userContext.user) {
+      setLimits({
+        currentPlan: 'Basic',
+        usage: {
+          users: { current: 1, limit: 1 },
+          products: { current: 0, limit: 10 },
+          sales: { current: 0, limit: 100 }
+        },
+        features: {
+          analytics: false,
+          advanced_reports: false,
+          custom_branding: false,
+          api_access: false
+        }
+      });
+      setLoading(false);
+      return;
+    }
+
     const fetchLimits = async () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await apiGet('/billing/limits');
-        setLimits(data);
+        
+        // Fetch both billing limits and usage stats
+        const [billingData, usageData] = await Promise.all([
+          apiGet('/billing/limits') as Promise<any>,
+          apiGet('/usage/stats') as Promise<any>
+        ]);
+        
+        // Combine the data
+        const combinedData = {
+          ...billingData,
+          usage: usageData
+        };
+        
+        setLimits(combinedData);
       } catch (err: any) {
         console.error('Error fetching plan limits:', err);
-        setError(err.message || 'Failed to fetch plan limits');
-        // Set default limits if there's an error
-        setLimits({
-          currentPlan: 'Basic',
-          usage: {
-            users: { current: 1, limit: 1 },
-            products: { current: 0, limit: 10 },
-            sales: { current: 0, limit: 100 }
-          },
-          features: {
-            analytics: false,
-            advanced_reports: false,
-            custom_branding: false,
-            api_access: false
-          }
-        });
+        
+        // Handle unauthorized error
+        if (err?.message?.includes('Unauthorized') || err?.status === 401) {
+          setError('Please log in to view plan limits');
+          // Set default limits for unauthorized users
+          setLimits({
+            currentPlan: 'Basic',
+            usage: {
+              users: { current: 1, limit: 1 },
+              products: { current: 0, limit: 10 },
+              sales: { current: 0, limit: 100 }
+            },
+            features: {
+              analytics: false,
+              advanced_reports: false,
+              custom_branding: false,
+              api_access: false
+            }
+          });
+        } else {
+          setError(err.message || 'Failed to fetch plan limits');
+          // Set default limits if there's an error
+          setLimits({
+            currentPlan: 'Basic',
+            usage: {
+              users: { current: 1, limit: 1 },
+              products: { current: 0, limit: 10 },
+              sales: { current: 0, limit: 100 }
+            },
+            features: {
+              analytics: false,
+              advanced_reports: false,
+              custom_branding: false,
+              api_access: false
+            }
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -66,7 +119,7 @@ export function usePlanLimits() {
 
   const isPlanAtLeast = (plan: 'Basic' | 'Pro' | 'Enterprise') => {
     if (!limits) return false;
-    const planHierarchy = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
+    const planHierarchy: Record<string, number> = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
     const currentPlan = limits.currentPlan || 'Basic';
     const currentLevel = planHierarchy[currentPlan] || 0;
     const requiredLevel = planHierarchy[plan] || 0;

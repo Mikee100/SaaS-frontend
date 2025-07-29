@@ -70,7 +70,15 @@ export default function BillingSettings() {
   const handleUpgrade = async (plan: Plan) => {
     try {
       setUpgrading(true);
-      await apiPost('/billing/subscribe', { planId: plan.id });
+      
+      // Check if user has an active subscription
+      if (currentSubscription && currentSubscription.status === 'active') {
+        // Use updateSubscription for existing subscribers
+        await apiPut('/billing/subscription', { planId: plan.id });
+      } else {
+        // Use createSubscription for new subscribers
+        await apiPost('/billing/subscribe', { planId: plan.id });
+      }
       
       // Refresh data
       const subscriptionData = await apiGet('/billing') as Subscription;

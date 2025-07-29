@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/utils/api";
-import { useSocket } from '@/components/SocketContext';
 
 interface Product {
   id: string;
@@ -31,24 +30,13 @@ export default function InventoryPage() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      apiGet<Product[]>("/products"),
-      apiGet<InventoryItem[]>("/inventory"),
-    ]).then(([prods, invs]) => {
-      setProducts(prods);
-      setInventory(invs);
+      apiGet("/products"),
+      apiGet("/inventory"),
+    ]).then(([products, inventory]) => {
+      setProducts(products);
+      setInventory(inventory);
     }).finally(() => setLoading(false));
   }, []);
-
-  const socket = useSocket();
-
-  useEffect(() => {
-    if (!socket) return;
-    const handler = () => {
-      apiGet<InventoryItem[]>("/inventory").then(setInventory);
-    };
-    socket.on('inventoryUpdate', handler);
-    return () => { socket.off('inventoryUpdate', handler); };
-  }, [socket]);
 
   // Helper: get inventory record for a product
   function getInv(productId: string) {

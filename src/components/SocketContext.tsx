@@ -1,3 +1,5 @@
+// Paused: WebSocket logic temporarily disabled for user consistency debugging.
+/*
 "use client";
 
 // Usage example:
@@ -36,4 +38,5 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       {children}
     </SocketContext.Provider>
   );
-}; 
+};
+*/ 

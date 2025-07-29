@@ -5,7 +5,7 @@ import { useUser } from './UserContext';
 
 export default function MainNavbar() {
   const { user } = useUser();
-  const isAdmin = user?.role === 'owner' || user?.role === 'manager';
+  const isAdmin = user?.roles?.includes('owner') || user?.roles?.includes('manager');
   return (
     <nav style={{ width: '100%', padding: '1rem', background: '#fff', borderBottom: '1px solid #eee', display: 'flex', gap: 24, alignItems: 'center' }}>
       <span style={{ fontWeight: 'bold' }}>My SaaS Platform</span>

@@ -1,3 +1,5 @@
+// Paused: Analytics logic temporarily disabled for user consistency debugging.
+/*
 "use client";
 import { useEffect, useState } from 'react';
 import { FaChartLine, FaChartBar, FaChartPie } from 'react-icons/fa';
@@ -145,4 +147,5 @@ export default function AnalyticsCharts({ salesData, productData, customerData }
       )}
     </div>
   );
-} 
+}
+*/ 

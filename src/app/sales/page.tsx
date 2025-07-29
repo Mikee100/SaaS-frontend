@@ -6,7 +6,6 @@ import Spinner from '@/components/Spinner';
 import { v4 as uuidv4 } from 'uuid';
 import { QRCodeCanvas } from 'qrcode.react';
 import Barcode from 'react-barcode';
-import { useSocket } from '@/components/SocketContext';
 import { Scanner } from '@yudiel/react-qr-scanner';
 
 type Product = { id: string; name: string; price: number; stock: number; }; // Changed id to string
@@ -51,26 +50,20 @@ export default function SalesPage() {
   const [mpesaPollCancelled, setMpesaPollCancelled] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [businessInfo, setBusinessInfo] = useState<any>(null);
-  const socket = useSocket();
   const [showScanner, setShowScanner] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [selectedProductForQR, setSelectedProductForQR] = useState<Product | null>(null);
   const [showScannerInModal, setShowScannerInModal] = useState(false);
 
   useEffect(() => {
-    async function fetchProducts() {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await apiGet<Product[]>("/products");
-        setProducts(data);
-      } catch (err: any) {
-        setError(err.message || "Failed to load products");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchProducts();
+    setLoading(true);
+    Promise.all([
+      apiGet("/products"),
+      apiGet("/tenant/me"),
+    ]).then(([products, businessInfo]) => {
+      setProducts(products);
+      setBusinessInfo(businessInfo);
+    }).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -101,20 +94,17 @@ export default function SalesPage() {
   }, []);
 
   useEffect(() => {
-    if (!socket) return;
     const handleSales = () => {
-      apiGet<Product[]>("/products").then(setProducts);
+      apiGet("/products").then(setProducts);
     };
     const handleInventory = () => {
-      apiGet<Product[]>("/products").then(setProducts);
+      apiGet("/products").then(setProducts);
     };
-    socket.on('salesUpdate', handleSales);
-    socket.on('inventoryUpdate', handleInventory);
     return () => {
-      socket.off('salesUpdate', handleSales);
-      socket.off('inventoryUpdate', handleInventory);
+      // socket.off('salesUpdate', handleSales); // Paused for user consistency debugging
+      // socket.off('inventoryUpdate', handleInventory); // Paused for user consistency debugging
     };
-  }, [socket]);
+  }, []); // Paused for user consistency debugging
 
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -289,7 +279,18 @@ export default function SalesPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">Point of Sale System</h1>
+                    <div className="flex justify-between items-center mb-6">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Point of Sale System</h1>
+              <a
+                href="/sales/history"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Sales History
+              </a>
+            </div>
         
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Product List */}

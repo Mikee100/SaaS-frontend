@@ -1,3 +1,5 @@
+// Paused: Analytics logic temporarily disabled for user consistency debugging.
+/*
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
@@ -35,4 +37,5 @@ export default function AnalyticsSidebarSummary() {
       </div>
     </div>
   );
-} 
+}
+*/ 
