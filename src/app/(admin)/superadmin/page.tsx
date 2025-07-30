@@ -10,10 +10,11 @@ interface PlatformStats {
   totalUsers: number;
   totalProducts: number;
   totalSales: number;
-  activeTenants: number;
-  superadminUsers: number;
-  averageUsersPerTenant: string;
-  averageProductsPerTenant: string;
+  totalRevenue: number;
+  activeSubscriptions: number;
+  totalStorage: number;
+  nearCapacityTenants: number;
+  totalMRR: number;
 }
 
 export default function SuperadminDashboard() {
@@ -63,25 +64,49 @@ export default function SuperadminDashboard() {
           <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
             <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Total Tenants</h3>
             <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937" }}>{stats.totalTenants}</p>
-            <p style={{ fontSize: 14, color: "#6b7280" }}>{stats.activeTenants} active</p>
+            <p style={{ fontSize: 14, color: "#6b7280" }}>{stats.activeSubscriptions} active subscriptions</p>
+          </div>
+          
+          <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Total MRR</h3>
+            <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937" }}>${stats.totalMRR.toFixed(2)}</p>
+            <p style={{ fontSize: 14, color: "#6b7280" }}>Monthly recurring revenue</p>
+          </div>
+          
+          <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Total Revenue</h3>
+            <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937" }}>${stats.totalRevenue.toFixed(2)}</p>
+            <p style={{ fontSize: 14, color: "#6b7280" }}>All-time revenue</p>
+          </div>
+          
+          <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Storage Used</h3>
+            <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937" }}>{(stats.totalStorage / (1024 * 1024 * 1024)).toFixed(1)} GB</p>
+            <p style={{ fontSize: 14, color: "#6b7280" }}>Total platform storage</p>
           </div>
           
           <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
             <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Total Users</h3>
             <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937" }}>{stats.totalUsers}</p>
-            <p style={{ fontSize: 14, color: "#6b7280" }}>~{stats.averageUsersPerTenant} per tenant</p>
+            <p style={{ fontSize: 14, color: "#6b7280" }}>Across all tenants</p>
           </div>
           
           <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
             <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Total Products</h3>
             <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937" }}>{stats.totalProducts}</p>
-            <p style={{ fontSize: 14, color: "#6b7280" }}>~{stats.averageProductsPerTenant} per tenant</p>
+            <p style={{ fontSize: 14, color: "#6b7280" }}>Across all tenants</p>
           </div>
           
           <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
             <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Total Sales</h3>
             <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937" }}>{stats.totalSales}</p>
-            <p style={{ fontSize: 14, color: "#6b7280" }}>Across all tenants</p>
+            <p style={{ fontSize: 14, color: "#6b7280" }}>All-time transactions</p>
+          </div>
+          
+          <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Near Capacity</h3>
+            <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937" }}>{stats.nearCapacityTenants}</p>
+            <p style={{ fontSize: 14, color: "#6b7280" }}>Tenants over 80% usage</p>
           </div>
         </div>
       ) : (

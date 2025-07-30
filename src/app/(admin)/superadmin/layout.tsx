@@ -31,6 +31,9 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
           <div>
             <h3 style={{ fontSize: 12, fontWeight: "600", color: "#9ca3af", marginBottom: 8, textTransform: "uppercase" }}>Management</h3>
             <Link href="/superadmin/tenants" style={{ color: "#fff", textDecoration: "none", fontWeight: "500", display: "block", padding: "0.5rem 0" }}>Tenants</Link>
+            <Link href="/superadmin/tenants/analytics" style={{ color: "#fff", textDecoration: "none", fontWeight: "500", display: "block", padding: "0.5rem 0" }}>Tenant Analytics</Link>
+            <Link href="/superadmin/tenants/migration" style={{ color: "#fff", textDecoration: "none", fontWeight: "500", display: "block", padding: "0.5rem 0" }}>Migration & Backup</Link>
+            <Link href="/superadmin/tenants/resources" style={{ color: "#fff", textDecoration: "none", fontWeight: "500", display: "block", padding: "0.5rem 0" }}>Resource Management</Link>
             <Link href="/superadmin/users" style={{ color: "#fff", textDecoration: "none", fontWeight: "500", display: "block", padding: "0.5rem 0" }}>Users</Link>
           </div>
           

@@ -7,8 +7,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { QRCodeCanvas } from 'qrcode.react';
 import Barcode from 'react-barcode';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import FeatureGuard from '@/components/FeatureGuard';
+import { useRouter } from "next/navigation";
+import { FaLock, FaArrowUp, FaQrcode, FaBarcode, FaDownload, FaUpload, FaSearch, FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaPrint, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 
-type Product = { id: string; name: string; price: number; stock: number; }; // Changed id to string
+type Product = { id: string; name: string; price: number; stock: number; };
 type CartItem = Product & { quantity: number };
 
 type Receipt = {
@@ -24,466 +27,365 @@ type Receipt = {
 };
 
 export default function SalesPage() {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [amountReceived, setAmountReceived] = useState(0);
-  const [showReceipt, setShowReceipt] = useState(false);
+  const [amountReceived, setAmountReceived] = useState<number>(0);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  const [receipt, setReceipt] = useState<Receipt | null>(null);
-  const [saleError, setSaleError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const productsPerPage = 8;
-  const pageCount = Math.ceil(products.length / productsPerPage);
-  const paginatedProducts = products.slice((currentPage - 1) * productsPerPage, currentPage * productsPerPage);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [mpesaPhone, setMpesaPhone] = useState("");
-  const [mpesaStatus, setMpesaStatus] = useState<null | { success: boolean; message: string }>(null);
-  const [mpesaLoading, setMpesaLoading] = useState(false);
-  const [saleLoading, setSaleLoading] = useState(false);
-  const [idempotencyKey, setIdempotencyKey] = useState(() => uuidv4());
-  const [mpesaPolling, setMpesaPolling] = useState(false);
-  const [mpesaPollProgress, setMpesaPollProgress] = useState(0);
-  const [mpesaPollCancelled, setMpesaPollCancelled] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [businessInfo, setBusinessInfo] = useState<any>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
-  const [selectedProductForQR, setSelectedProductForQR] = useState<Product | null>(null);
-  const [showScannerInModal, setShowScannerInModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      apiGet("/products"),
-      apiGet("/tenant/me"),
-    ]).then(([products, businessInfo]) => {
-      setProducts(products);
-      setBusinessInfo(businessInfo);
-    }).finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (scanResult) {
-      const product = products.find(p => p.id === scanResult);
-      if (product) {
-        addToCart(product);
-        setSelectedProductForQR(null); // Close modal after scan
-        setShowScannerInModal(false); // Reset scanner state
-      } else {
-        console.error(`Product with ID ${scanResult} not found.`);
-      }
-      setShowScanner(false);
-      setScanResult(null);
-    }
-  }, [scanResult, products]);
-
-  useEffect(() => {
-    async function fetchBusinessInfo() {
-      try {
-        const info = await apiGet('/tenant/me');
-        setBusinessInfo(info);
-      } catch (e) {
-        // Optionally handle error
-      }
-    }
-    fetchBusinessInfo();
-  }, []);
-
-  useEffect(() => {
-    const handleSales = () => {
-      apiGet("/products").then(setProducts);
-    };
-    const handleInventory = () => {
-      apiGet("/products").then(setProducts);
-    };
-    return () => {
-      // socket.off('salesUpdate', handleSales); // Paused for user consistency debugging
-      // socket.off('inventoryUpdate', handleInventory); // Paused for user consistency debugging
-    };
-  }, []); // Paused for user consistency debugging
-
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.id.toString().includes(searchTerm)
+  // Constants
+  const productsPerPage = 12;
+  const filteredProducts = products.filter(product => 
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const pageCount = Math.ceil(filteredProducts.length / productsPerPage);
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * productsPerPage, 
+    currentPage * productsPerPage
+  );
+  const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  function addToCart(product: Product) {
-    if (product.stock <= 0) return;
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [products, businessInfo] = await Promise.all([
+          apiGet("/products"),
+          apiGet("/tenant/me"),
+        ]);
+        setProducts(products);
+        setBusinessInfo(businessInfo);
+      } catch (err) {
+        setError("Failed to load data. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
-      if (existing) {
-        if (existing.quantity >= product.stock) return prev;
-        return prev.map((item) =>
+    fetchData();
+  }, []);
+
+  // Cart management functions
+  const addToCart = (product: Product) => {
+    setCart(prevCart => {
+      const existingItem = prevCart.find(item => item.id === product.id);
+      if (existingItem) {
+        return prevCart.map(item =>
           item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: Math.min(item.quantity + 1, product.stock) }
             : item
         );
+      } else {
+        return [...prevCart, { ...product, quantity: 1 }];
       }
-      return [...prev, { ...product, quantity: 1 }];
     });
-  }
+  };
 
-  function removeFromCart(productId: string) { // Changed id to string
-    setCart((prev) => prev.filter((item) => item.id !== productId));
-  }
+  const removeFromCart = (productId: string) => {
+    setCart(prevCart => prevCart.filter(item => item.id !== productId));
+  };
 
-  function updateQuantity(productId: string, quantity: number) { // Changed id to string
-    if (quantity < 1) return;
-    
-    setCart((prev) =>
-      prev.map((item) => {
-        if (item.id === productId) {
-          const product = products.find(p => p.id === productId);
-          const maxQuantity = product?.stock || 1;
-          return { ...item, quantity: Math.min(quantity, maxQuantity) };
-        }
-        return item;
-      })
-    );
-  }
-
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const changeDue = paymentMethod === "cash" ? amountReceived - total : 0;
-
-  function handleCheckout() {
-    setCheckoutOpen(true);
-    setAmountReceived(total); // Auto-fill amount received with total
-    setPaymentMethod("cash");
-    setSaleError(null);
-    setMpesaStatus(null);
-    setIdempotencyKey(uuidv4()); // Generate a new key for each checkout
-  }
-
-  async function getMpesaTransactionWithRetry(checkoutRequestId: string, retries = 5, delay = 2000): Promise<{ id: string }> {
-    setMpesaPolling(true);
-    setMpesaPollProgress(0);
-    setMpesaPollCancelled(false);
-    for (let i = 0; i < retries; i++) {
-      if (mpesaPollCancelled) throw new Error('Payment confirmation cancelled');
-      try {
-        const tx = await apiGet<{ id: string }>(`/mpesa/by-checkout-id/${checkoutRequestId}`);
-        if (tx && tx.id) {
-          setMpesaPolling(false);
-          setMpesaStatus({ success: true, message: 'Payment confirmed!' });
-          return tx;
-        }
-      } catch (err) {
-        // ignore 404
-      }
-      setMpesaStatus({ success: false, message: `Waiting for payment confirmation... (${i + 1}/${retries})` });
-      setMpesaPollProgress(((i + 1) / retries) * 100);
-      await new Promise(res => setTimeout(res, delay));
-    }
-    setMpesaPolling(false);
-    throw new Error('Payment not confirmed after several attempts');
-  }
-
-  async function handleConfirmSale() {
-    setSaleError(null);
-    setMpesaStatus(null);
-    setMpesaPollCancelled(false);
-    
-    if (paymentMethod === "mpesa") {
-      // Validate phone
-      if (!mpesaPhone.match(/^(07|2547|25407|\+2547)\d{8}$/)) {
-        setMpesaStatus({ success: false, message: "Invalid phone number format. Use 07XXXXXXXX, 2547XXXXXXXX, or +2547XXXXXXXX" });
-        return;
-      }
-      
-      setMpesaLoading(true);
-      try {
-        const mpesaRes = await apiPost<any>("/mpesa", { phoneNumber: mpesaPhone, amount: total });
-        
-        if (!mpesaRes.success) {
-          throw new Error(mpesaRes.message || "Failed to initiate payment");
-        }
-        
-        setMpesaStatus({ 
-          success: true, 
-          message: "Payment request sent to your phone. Please complete the transaction." 
-        });
-        
-        if (mpesaRes.data?.CheckoutRequestID) {
-          const tx = await getMpesaTransactionWithRetry(mpesaRes.data.CheckoutRequestID);
-          await completeSale(tx.id);
-        }
-      } catch (err: any) {
-        setMpesaStatus({ success: false, message: err.message || "Payment failed" });
-        setMpesaLoading(false);
-      }
+  const updateQuantity = (productId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeFromCart(productId);
       return;
     }
     
-    await completeSale();
-  }
+    setCart(prevCart => prevCart.map(item => {
+      if (item.id === productId) {
+        const product = products.find(p => p.id === productId);
+        return { ...item, quantity: Math.min(newQuantity, product?.stock || 0) };
+      }
+      return item;
+    }));
+  };
 
-  async function completeSale(mpesaTransactionId?: string) {
-    setSaleLoading(true);
+  const handleCheckout = () => {
+    setCheckoutOpen(true);
+  };
+
+  const handleConfirmSale = async () => {
+    setIsProcessing(true);
+    setError(null);
+    
     try {
-      const salePayload = {
-        items: cart.map(item => ({ productId: item.id, quantity: item.quantity })),
+      if (paymentMethod === "cash" && amountReceived < cartTotal) {
+        throw new Error("Amount received must cover the total");
+      }
+
+      const saleData = {
+        items: cart.map(item => ({
+          productId: item.id,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        total: cartTotal,
         paymentMethod,
-        amountReceived: paymentMethod === "cash" ? amountReceived : total,
+        amountReceived,
+        change: amountReceived - cartTotal,
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
-        mpesaTransactionId,
-        idempotencyKey,
+        idempotencyKey: uuidv4()
       };
-      const receiptData = await apiPost<Receipt>("/sales", salePayload);
-      setReceipt(receiptData);
+
+            const sale = await apiPost("/sales", saleData);
+      
+      // Reset and redirect to receipt
       setCart([]);
       setCheckoutOpen(false);
-      setShowReceipt(true);
       setCustomerName("");
       setCustomerPhone("");
-      setMpesaPhone("");
-      setMpesaLoading(false);
-      setTimeout(() => setShowReceipt(false), 10000);
+      setAmountReceived(0);
+      
+      // Refresh products
+      apiGet("/products").then(setProducts);
+      
+      // Redirect to receipt page - use saleId or sale.id
+      const saleId = sale.id || sale.saleId || sale._id;
+      if (saleId) {
+        router.push(`/sales/receipt/${saleId}`);
+      } else {
+        // Fallback: show success message and stay on page
+        alert("Sale completed successfully!");
+      }
     } catch (err: any) {
-      setSaleError(err.message || "Sale failed");
-      setMpesaLoading(false);
+      setError(err.message || "Failed to complete sale");
     } finally {
-      setSaleLoading(false);
+      setIsProcessing(false);
     }
-  }
+  };
 
   if (loading) return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-    </div>
-  );
-  
-  if (error) return (
-    <div className="p-8 text-center">
-      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative max-w-md mx-auto">
-        <strong className="font-bold">Error!</strong>
-        <span className="block sm:inline"> {error}</span>
-      </div>
-      <button 
-        onClick={() => window.location.reload()}
-        className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-      >
-        Retry
-      </button>
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <Spinner size="lg" />
     </div>
   );
 
-  // Digital receipt URL
-  const digitalReceiptUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com') + `/receipt/${receipt?.saleId}`;
+  if (error) return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="text-center p-6 bg-white rounded-xl shadow-sm max-w-md">
+        <h1 className="text-xl font-bold text-red-600 mb-2">Error</h1>
+        <p className="text-gray-700 mb-4">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-                    <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Point of Sale System</h1>
-              <a
-                href="/sales/history"
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Sales History
-              </a>
-            </div>
-        
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Product List */}
-          <div className="lg:w-2/3">
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-                <h2 className="text-xl font-bold text-gray-800">Products</h2>
-                <div className="flex items-center gap-2">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Point of Sale</h1>
+            <p className="text-sm text-gray-500">Welcome back, {businessInfo?.name || 'User'}</p>
+          </div>
+          
+          <div className="flex gap-3">
+            <FeatureGuard requiredFeature="data_export" fallback={
+              <button disabled className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm cursor-not-allowed">
+                <FaDownload className="w-4 h-4" />
+                Export
+                <FaLock className="w-3 h-3" />
+              </button>
+            }>
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition">
+                <FaDownload className="w-4 h-4" />
+                Export
+              </button>
+            </FeatureGuard>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Products Section */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Search and Actions */}
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search products..."
-                    className="w-full pl-4 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <button onClick={() => setShowScanner(true)} className="p-2 border rounded-lg hover:bg-gray-100">
-                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" transform="rotate(45 12 12) scale(0.6) translate(0, -16)" /><path d="M3 8V4h4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/><path d="M21 8V4h-4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/><path d="M3 16v4h4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/><path d="M21 16v4h-4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></svg>
-                  </button>
                 </div>
+                
+                <FeatureGuard requiredFeature="api_access" fallback={
+                  <button disabled className="p-2 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed">
+                    <FaQrcode className="w-5 h-5" />
+                  </button>
+                }>
+                  <button
+                    onClick={() => setShowScanner(true)}
+                    className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition"
+                    title="Scan QR Code"
+                  >
+                    <FaQrcode className="w-5 h-5" />
+                  </button>
+                </FeatureGuard>
+              </div>
+            </div>
+
+            {/* Products Grid */}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-gray-200">
+                <h2 className="font-semibold text-gray-800">Available Products</h2>
               </div>
               
-              {filteredProducts.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  No products found
+              {paginatedProducts.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  {searchTerm ? "No products match your search" : "No products available"}
                 </div>
               ) : (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filteredProducts
-                      .slice((currentPage - 1) * productsPerPage, currentPage * productsPerPage)
-                      .map((product) => (
-                      <div
-                        key={product.id}
-                        className={`border rounded-lg p-4 flex flex-col transition-all ${product.stock > 0 ? 
-                          'hover:shadow-md hover:border-blue-300 bg-white' : 
-                          'bg-gray-50 opacity-70'}`}
-                        onClick={() => setSelectedProductForQR(product)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                            #{product.id}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                            product.stock > 5 ? 'bg-green-100 text-green-800' :
-                            product.stock > 0 ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-200 text-gray-600'
-                          }`}>
-                            {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
-                          </span>
-                        </div>
-                        <div className="font-bold text-lg text-gray-800 mb-1 truncate">{product.name}</div>
-                        <div className="text-xl font-extrabold text-blue-600 mb-3">
-                          ${product.price.toFixed(2)}
-                        </div>
-                        <button
-                          className={`mt-auto w-full py-2 rounded-lg font-medium transition-colors ${
-                            product.stock > 0 ?
-                            'bg-blue-600 hover:bg-blue-700 text-white' :
-                            'bg-gray-200 text-gray-500 cursor-not-allowed'
-                          }`}
-                          onClick={() => addToCart(product)}
-                          disabled={product.stock === 0}
-                        >
-                          {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4">
+                  {paginatedProducts.map(product => (
+                    <button
+                      key={product.id}
+                      onClick={() => addToCart(product)}
+                      disabled={product.stock <= 0}
+                      className={`relative p-3 rounded-lg border transition-all ${product.stock <= 0 ? 
+                        'bg-gray-100 border-gray-200 cursor-not-allowed' : 
+                        'bg-white border-gray-200 hover:border-blue-300 hover:shadow-md hover:transform hover:-translate-y-0.5'
+                      }`}
+                    >
+                      {product.stock <= 0 && (
+                        <span className="absolute top-2 right-2 bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                          Out of stock
+                        </span>
+                      )}
+                      <h3 className="font-medium text-gray-800 text-sm mb-1 truncate">{product.name}</h3>
+                      <p className="text-lg font-bold text-blue-600">${product.price.toFixed(2)}</p>
+                      <p className="text-xs text-gray-500">Stock: {product.stock}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Pagination */}
+              {pageCount > 1 && (
+                <div className="px-4 py-3 border-t border-gray-200 flex justify-between items-center">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-1 px-3 py-1 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <FaChevronLeft className="w-3 h-3" />
+                    Previous
+                  </button>
                   
-                  {filteredProducts.length > productsPerPage && (
-                    <div className="flex justify-between items-center mt-6">
-                      <button
-                        className={`px-4 py-2 rounded-lg border ${currentPage === 1 ? 
-                          'text-gray-400 cursor-not-allowed' : 
-                          'text-gray-700 hover:bg-gray-100'}`}
-                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                      >
-                        Previous
-                      </button>
-                      <span className="text-sm text-gray-600">
-                        Page {currentPage} of {Math.ceil(filteredProducts.length / productsPerPage)}
-                      </span>
-                      <button
-                        className={`px-4 py-2 rounded-lg border ${currentPage === Math.ceil(filteredProducts.length / productsPerPage) ? 
-                          'text-gray-400 cursor-not-allowed' : 
-                          'text-gray-700 hover:bg-gray-100'}`}
-                        onClick={() => setCurrentPage((p) => Math.min(Math.ceil(filteredProducts.length / productsPerPage), p + 1))}
-                        disabled={currentPage === Math.ceil(filteredProducts.length / productsPerPage)}
-                      >
-                        Next
-                      </button>
-                    </div>
-                  )}
-                </>
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} of {pageCount}
+                  </span>
+                  
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
+                    disabled={currentPage === pageCount}
+                    className="flex items-center gap-1 px-3 py-1 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  >
+                    Next
+                    <FaChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
               )}
             </div>
           </div>
-          
-          {/* Cart */}
-          <div className="lg:w-1/3">
-            <div className="bg-white rounded-xl shadow-sm p-6 sticky top-4">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-800">Your Cart</h2>
-                <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                  {cart.length} {cart.length === 1 ? 'item' : 'items'}
+
+          {/* Cart Section */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-sm h-full flex flex-col">
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                  <FaShoppingCart className="text-blue-600" />
+                  Order Summary
+                </h2>
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                  {cart.reduce((sum, item) => sum + item.quantity, 0)} items
                 </span>
               </div>
               
               {cart.length === 0 ? (
-                <div className="text-center py-8">
-                  <svg
-                    className="mx-auto h-12 w-12 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1}
-                      d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
-                    />
-                  </svg>
-                  <p className="mt-2 text-gray-500">Your cart is empty</p>
-                  <p className="text-sm text-gray-400">Add products to get started</p>
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-gray-500">
+                  <FaShoppingCart className="w-10 h-10 mb-3 text-gray-300" />
+                  <p>Your cart is empty</p>
+                  <p className="text-sm">Add products to get started</p>
                 </div>
               ) : (
                 <>
-                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                    {cart.map((item) => (
-                      <div key={item.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-gray-900 truncate">{item.name}</div>
-                          <div className="text-sm text-gray-500">${item.price.toFixed(2)} each</div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {cart.map(item => (
+                      <div key={item.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-gray-800 text-sm">{item.name}</h3>
+                          <p className="text-xs text-gray-600">${item.price.toFixed(2)} each</p>
                         </div>
+                        
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded hover:bg-gray-300"
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                           >
                             -
                           </button>
-                          <input
-                            type="number"
-                            min={1}
-                            max={item.stock}
-                            value={item.quantity}
-                            onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
-                            className="w-12 text-center border rounded py-1 text-sm"
-                          />
+                          <span className="w-8 text-center font-medium">{item.quantity}</span>
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded hover:bg-gray-300"
-                            disabled={item.quantity >= item.stock}
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
                           >
                             +
                           </button>
                         </div>
-                        <div className="font-medium text-right min-w-[60px]">
-                          ${(item.price * item.quantity).toFixed(2)}
-                        </div>
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="text-red-500 hover:text-red-700 p-1"
-                          title="Remove item"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
                       </div>
                     ))}
                   </div>
                   
-                  <div className="mt-6 border-t pt-4 space-y-3">
-                    <div className="flex justify-between font-medium">
-                      <span>Subtotal:</span>
-                      <span>${total.toFixed(2)}</span>
+                  <div className="p-4 border-t border-gray-200">
+                    <div className="space-y-3 mb-4">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Subtotal:</span>
+                        <span className="font-medium">${cartTotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Tax:</span>
+                        <span className="font-medium">$0.00</span>
+                      </div>
+                      <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
+                        <span>Total:</span>
+                        <span className="text-blue-600">${cartTotal.toFixed(2)}</span>
+                      </div>
                     </div>
                     
                     <button
-                      className={`w-full py-3 rounded-lg font-bold text-white transition-colors ${
-                        cart.length > 0 ? 
-                        'bg-green-600 hover:bg-green-700' : 
-                        'bg-gray-300 cursor-not-allowed'
-                      }`}
-                      disabled={cart.length === 0}
                       onClick={handleCheckout}
+                      className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                     >
-                      Proceed to Checkout
+                      <FaMoneyBillWave />
+                      Checkout
                     </button>
                   </div>
                 </>
@@ -491,259 +393,226 @@ export default function SalesPage() {
             </div>
           </div>
         </div>
-      </div>
-      
-      {/* QR Code Scanner Modal */}
+      </main>
+
+      {/* QR Scanner Modal */}
       {showScanner && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowScanner(false)}></div>
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-4">
-            <h3 className="text-lg font-bold text-center mb-4">Scan Product QR Code</h3>
-            <Scanner
-              onScan={(result) => {
-                if (result && result.length > 0) {
-                  setScanResult(result[0].rawValue);
-                }
-              }}
-              onError={(error) => {
-                if (error instanceof Error) {
-                  console.error(error.message);
-                } else {
-                  console.error(error);
-                }
-              }}
-            />
-            <button
-              onClick={() => setShowScanner(false)}
-              className="mt-4 w-full py-2 bg-gray-200 hover:bg-gray-300 rounded-lg"
-            >
-              Cancel
-            </button>
+        <div className="fixed inset-0 bg-white bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl overflow-hidden w-full max-w-md">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="font-semibold text-lg">Scan Product QR Code</h3>
+              <button 
+                onClick={() => {
+                  setShowScanner(false);
+                  setScanResult(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 text-center">
+              <div className="bg-black p-4 rounded-lg mb-4">
+                <div className="aspect-square bg-white/10 rounded relative overflow-hidden">
+                  {/* Scanner placeholder - would be replaced with actual scanner */}
+                  <div className="absolute inset-0 flex items-center justify-center text-white">
+                    <div className="text-center">
+                      <FaQrcode className="w-16 h-16 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Scanner View</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-gray-600 mb-4">Point your camera at a product QR code</p>
+              
+              <button
+                onClick={() => setShowScanner(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Checkout Modal */}
       {checkoutOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-            onClick={() => !mpesaPolling && setCheckoutOpen(false)}
-          ></div>
-          
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <button
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10"
-              onClick={() => !mpesaPolling && setCheckoutOpen(false)}
-              disabled={mpesaPolling}
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+        <div className="fixed inset-0 bg-white bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="font-semibold text-lg">Complete Order</h3>
+              <button 
+                onClick={() => setCheckoutOpen(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
+            </div>
             
-            <div className="p-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">Complete Your Order</h2>
-              
-              <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600">Order Total:</span>
-                  <span className="text-2xl font-bold text-blue-600">${total.toFixed(2)}</span>
-                </div>
-                {cart.length > 0 && (
-                  <div className="text-sm text-gray-500">
-                    {cart.length} {cart.length === 1 ? 'item' : 'items'} in cart
+            <div className="p-6 space-y-6">
+              {/* Customer Info */}
+              <div>
+                <h4 className="font-medium text-gray-800 mb-3">Customer Information</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Name (Optional)</label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="John Doe"
+                    />
                   </div>
-                )}
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Phone (Optional)</label>
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="254700000000"
+                    />
+                  </div>
+                </div>
               </div>
               
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      className={`py-2 px-3 rounded-lg border ${
-                        paymentMethod === "cash" ? 
-                        'border-blue-500 bg-blue-50 text-blue-700' : 
-                        'border-gray-300 hover:bg-gray-50'
-                      }`}
-                      onClick={() => setPaymentMethod("cash")}
-                      disabled={mpesaLoading || mpesaPolling}
-                    >
-                      Cash
-                    </button>
-                    <button
-                      className={`py-2 px-3 rounded-lg border ${
-                        paymentMethod === "card" ? 
-                        'border-blue-500 bg-blue-50 text-blue-700' : 
-                        'border-gray-300 hover:bg-gray-50'
-                      }`}
-                      onClick={() => setPaymentMethod("card")}
-                      disabled={mpesaLoading || mpesaPolling}
-                    >
-                      Card
-                    </button>
-                    <button
-                      className={`py-2 px-3 rounded-lg border ${
-                        paymentMethod === "mpesa" ? 
-                        'border-blue-500 bg-blue-50 text-blue-700' : 
-                        'border-gray-300 hover:bg-gray-50'
-                      }`}
-                      onClick={() => setPaymentMethod("mpesa")}
-                      disabled={mpesaLoading || mpesaPolling}
-                    >
-                      M-Pesa
-                    </button>
-                  </div>
+              {/* Payment Method */}
+              <div>
+                <h4 className="font-medium text-gray-800 mb-3">Payment Method</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setPaymentMethod("cash")}
+                    className={`p-3 border rounded-lg flex items-center justify-center gap-2 transition-colors ${
+                      paymentMethod === "cash" 
+                        ? 'border-blue-500 bg-blue-50 text-blue-600' 
+                        : 'border-gray-300 hover:border-blue-300'
+                    }`}
+                  >
+                    <FaMoneyBillWave />
+                    Cash
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod("mpesa")}
+                    className={`p-3 border rounded-lg flex items-center justify-center gap-2 transition-colors ${
+                      paymentMethod === "mpesa" 
+                        ? 'border-blue-500 bg-blue-50 text-blue-600' 
+                        : 'border-gray-300 hover:border-blue-300'
+                    }`}
+                  >
+                    <FaMobileAlt />
+                    M-Pesa
+                  </button>
                 </div>
-                
-                {paymentMethod === "cash" && (
+              </div>
+              
+              {/* Payment Details */}
+              <div>
+                <h4 className="font-medium text-gray-800 mb-3">Payment Details</h4>
+                {paymentMethod === "cash" ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Amount Received
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-600">Amount Due:</span>
+                      <span className="font-bold">${cartTotal.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">Amount Received</label>
                       <input
                         type="number"
-                        min={total}
                         value={amountReceived}
-                        onChange={(e) => setAmountReceived(Number(e.target.value))}
-                        className="w-full pl-8 pr-3 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          setAmountReceived(isNaN(value) ? 0 : value);
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="0.00"
+                        min={cartTotal}
+                        step="0.01"
                       />
                     </div>
                     {amountReceived > 0 && (
-                      <div className={`mt-2 text-sm font-medium ${
-                        changeDue >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        Change Due: ${Math.max(0, changeDue).toFixed(2)}
-                        {changeDue < 0 && (
-                          <span className="block text-xs text-red-500">Amount received is less than total</span>
-                        )}
+                      <div className="mt-2 text-right">
+                        <span className="text-sm text-gray-600">Change: </span>
+                        <span className="font-medium">
+                          ${(amountReceived - cartTotal).toFixed(2)}
+                        </span>
                       </div>
                     )}
                   </div>
-                )}
-                
-                {paymentMethod === "mpesa" && (
+                ) : (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      M-Pesa Phone Number
-                    </label>
-                    <input
-                      type="text"
-                      value={mpesaPhone}
-                      onChange={(e) => setMpesaPhone(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="07XXXXXXXX or 2547XXXXXXXX"
-                      disabled={mpesaLoading || mpesaPolling}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      Enter your M-Pesa registered phone number
-                    </p>
-                    
-                    {mpesaPolling && (
-                      <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                        <div className="flex flex-col items-center">
-                          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
-                          <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                              style={{ width: `${mpesaPollProgress}%` }}
-                            ></div>
-                          </div>
-                          <p className="text-sm text-center text-blue-700 mb-2">
-                            {mpesaStatus?.message || "Waiting for payment confirmation..."}
-                          </p>
-                          <button
-                            className="text-xs text-red-600 hover:underline"
-                            onClick={() => setMpesaPollCancelled(true)}
-                          >
-                            Cancel Payment
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {mpesaStatus && !mpesaPolling && (
-                      <div className={`mt-2 p-2 rounded text-sm ${
-                        mpesaStatus.success ? 
-                        'bg-green-100 text-green-700' : 
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {mpesaStatus.message}
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer Name (optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Customer name"
-                    disabled={mpesaLoading || mpesaPolling}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer Phone (optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Customer phone"
-                    disabled={mpesaLoading || mpesaPolling}
-                  />
-                </div>
-                
-                {saleError && (
-                  <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
-                    {saleError}
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-gray-600">Amount Due:</span>
+                      <span className="font-bold">${cartTotal.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">M-Pesa Phone Number</label>
+                      <input
+                        type="tel"
+                        value={mpesaPhone}
+                        onChange={(e) => setMpesaPhone(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="254700000000"
+                      />
+                    </div>
+                    <button className="w-full mt-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                      Request M-Pesa Payment
+                    </button>
                   </div>
                 )}
               </div>
               
-              <div className="mt-6 flex justify-end gap-3">
+              {/* Error Message */}
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+              
+              {/* Order Summary */}
+              <div className="border-t border-gray-200 pt-4">
+                <h4 className="font-medium text-gray-800 mb-2">Order Summary</h4>
+                <div className="space-y-2 mb-3">
+                  {cart.map(item => (
+                    <div key={item.id} className="flex justify-between text-sm">
+                      <span>{item.name} × {item.quantity}</span>
+                      <span>${(item.price * item.quantity).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between font-bold border-t border-gray-200 pt-2">
+                  <span>Total</span>
+                  <span>${cartTotal.toFixed(2)}</span>
+                </div>
+              </div>
+              
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
                 <button
-                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
-                  onClick={() => !mpesaPolling && setCheckoutOpen(false)}
-                  disabled={mpesaPolling}
+                  onClick={() => setCheckoutOpen(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-lg text-white font-medium ${
-                    (paymentMethod === "cash" && amountReceived < total) ||
-                    (paymentMethod === "mpesa" && (mpesaLoading || mpesaPolling || !mpesaPhone)) ?
-                    'bg-gray-400 cursor-not-allowed' :
-                    'bg-green-600 hover:bg-green-700'
-                  }`}
-                  disabled={
-                    (paymentMethod === "cash" && amountReceived < total) ||
-                    (paymentMethod === "mpesa" && (mpesaLoading || mpesaPolling || !mpesaPhone))
-                  }
                   onClick={handleConfirmSale}
+                  disabled={isProcessing || (paymentMethod === "cash" && amountReceived < cartTotal)}
+                  className={`flex-1 px-4 py-3 rounded-lg text-white transition-colors ${
+                    isProcessing ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                  } flex items-center justify-center gap-2`}
                 >
-                  {mpesaLoading || saleLoading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
+                  {isProcessing ? (
+                    <>
+                      <Spinner size="sm" />
                       Processing...
-                    </span>
+                    </>
                   ) : (
-                    'Confirm Payment'
+                    <>
+                      Complete Sale
+                    </>
                   )}
                 </button>
               </div>
@@ -751,177 +620,8 @@ export default function SalesPage() {
           </div>
         </div>
       )}
-      
-      {/* Receipt Notification */}
-      {showReceipt && receipt && (
-        <div className="fixed bottom-6 right-6 z-50 animate-fade-in-up print-receipt max-w-sm mx-auto p-6 bg-white rounded shadow-none border-none font-mono text-xs" style={{ width: 340 }}>
-          {/* Header */}
-          <div className="text-center mb-2">
-            {businessInfo?.logoUrl && (
-              <img src={businessInfo.logoUrl} alt="Business Logo" className="mx-auto mb-2 max-h-16" style={{ objectFit: 'contain' }} />
-            )}
-            {businessInfo && (
-              <>
-                <div className="font-bold text-lg tracking-wide">{businessInfo.name}</div>
-                <div className="text-xs">{businessInfo.businessType}</div>
-                {businessInfo.address && <div className="text-xs">{businessInfo.address}</div>}
-                {businessInfo.contactPhone && <div className="text-xs">Phone: {businessInfo.contactPhone}</div>}
-                {businessInfo.contactEmail && <div className="text-xs mb-1">Email: {businessInfo.contactEmail}</div>}
-              </>
-            )}
-            {/* Barcode for receipt number */}
-            <div className="flex justify-center my-2">
-              <Barcode value={receipt.saleId} width={1.2} height={32} fontSize={10} />
-            </div>
-            <div className="border-t border-dashed my-2"></div>
-            <div className="flex justify-between">
-              <span>Receipt:</span>
-              <span className="font-bold">#{receipt.saleId.slice(0, 8)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Date:</span>
-              <span>{new Date(receipt.date).toLocaleString()}</span>
-            </div>
-            {receipt.customerName && (
-              <div className="flex justify-between">
-                <span>Customer:</span>
-                <span>{receipt.customerName}</span>
-              </div>
-            )}
-            {receipt.customerPhone && (
-              <div className="flex justify-between">
-                <span>Phone:</span>
-                <span>{receipt.customerPhone}</span>
-              </div>
-            )}
-            <div className="border-t border-dashed my-2"></div>
-          </div>
 
-          {/* Items */}
-          <div>
-            {receipt.items.map((item) => (
-              <div key={item.productId} className="flex justify-between mb-1">
-                <span>
-                  {item.quantity} x {item.name}
-                </span>
-                <span>${(item.price * item.quantity).toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="border-t border-dashed my-2"></div>
 
-          {/* Totals */}
-          <div className="flex justify-between font-bold">
-            <span>Total:</span>
-            <span>${receipt.total.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Payment:</span>
-            <span className="capitalize">{receipt.paymentMethod}</span>
-          </div>
-          {receipt.paymentMethod === "cash" && (
-            <>
-              <div className="flex justify-between">
-                <span>Received:</span>
-                <span>${receipt.amountReceived.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Change:</span>
-                <span>${receipt.change.toFixed(2)}</span>
-              </div>
-            </>
-          )}
-
-          {/* Footer */}
-          <div className="border-t border-dashed my-2"></div>
-          <div className="text-center mt-2">
-            <div className="font-semibold">Thank you for your business!</div>
-            <div className="text-xs mt-1">No returns without receipt. Earn loyalty points with every purchase!</div>
-            <div className="text-xs mt-1">Return policy: Items can be returned within 14 days with receipt.</div>
-            {/* QR Code for digital receipt at the bottom */}
-            <div className="flex justify-center my-4">
-              <QRCodeCanvas value={(typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com') + `/receipt/${receipt.saleId}`} size={64} />
-            </div>
-          </div>
-
-          {/* Print/Close Buttons (hidden in print) */}
-          <div className="mt-4 flex gap-2 no-print">
-            <button
-              onClick={() => window.print()}
-              className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
-            >
-              Print Receipt
-            </button>
-            <a
-              href={digitalReceiptUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium text-center"
-              style={{ display: 'inline-block', lineHeight: '2.25rem' }}
-            >
-              View Digital Receipt
-            </a>
-            <button
-              onClick={() => setShowReceipt(false)}
-              className="flex-1 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg text-sm font-medium"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Product QR + Scanner Modal */}
-      {selectedProductForQR && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { setSelectedProductForQR(null); setShowScannerInModal(false); }}></div>
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-4 flex flex-col items-center">
-            <h3 className="text-lg font-bold text-center mb-2">Product QR Code</h3>
-            <img
-              src={`${process.env.NEXT_PUBLIC_API_URL}/products/${selectedProductForQR.id}/qr`}
-              alt="Product QR Code"
-              className="w-48 h-48 mx-auto mb-4 border p-2 bg-white"
-              style={{ objectFit: 'contain' }}
-            />
-            <div className="text-center text-gray-700 mb-2">
-              <div className="font-semibold">{selectedProductForQR.name}</div>
-              <div className="text-sm">Ksh {selectedProductForQR.price}</div>
-              <div className="text-xs text-gray-500">Stock: {selectedProductForQR.stock}</div>
-            </div>
-            {!showScannerInModal ? (
-              <button
-                onClick={() => setShowScannerInModal(true)}
-                className="mt-2 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-              >
-                Start Scanning
-              </button>
-            ) : (
-              <div className="w-full mb-4">
-                <Scanner
-                  onScan={(result) => {
-                    if (result && result.length > 0) {
-                      setScanResult(result[0].rawValue);
-                    }
-                  }}
-                  onError={(error) => {
-                    if (error instanceof Error) {
-                      console.error(error.message);
-                    } else {
-                      console.error(error);
-                    }
-                  }}
-                />
-              </div>
-            )}
-            <button
-              onClick={() => { setSelectedProductForQR(null); setShowScannerInModal(false); }}
-              className="mt-2 w-full py-2 bg-gray-200 hover:bg-gray-300 rounded-lg"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

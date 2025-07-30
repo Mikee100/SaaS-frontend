@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '@/utils/api';
 import PlanGuard from '@/components/PlanGuard';
-import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaShare, FaCrown, FaStar } from 'react-icons/fa';
+import FeatureGuard from '@/components/FeatureGuard';
+import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaShare, FaCrown, FaStar, FaLock, FaArrowUp } from 'react-icons/fa';
 
 interface AnalyticsData {
   totalSales?: number;
@@ -99,8 +100,8 @@ export default function AnalyticsPage() {
               <h3 className="text-lg font-semibold text-gray-800">Total Sales</h3>
               <FaChartLine className="w-5 h-5 text-blue-600" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{basicData.totalSales?.toLocaleString() || 0}</p>
-            <p className="text-sm text-green-600">+12% from last month</p>
+            <p className="text-3xl font-bold text-gray-900">{basicData.totalSales?.toLocaleString() || '0'}</p>
+            <p className="text-sm text-gray-600">All time sales</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border p-6">
@@ -108,8 +109,8 @@ export default function AnalyticsPage() {
               <h3 className="text-lg font-semibold text-gray-800">Total Revenue</h3>
               <FaChartBar className="w-5 h-5 text-green-600" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">${basicData.totalRevenue?.toLocaleString() || 0}</p>
-            <p className="text-sm text-green-600">+8% from last month</p>
+            <p className="text-3xl font-bold text-gray-900">${basicData.totalRevenue?.toLocaleString() || '0'}</p>
+            <p className="text-sm text-gray-600">All time revenue</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border p-6">
@@ -117,132 +118,205 @@ export default function AnalyticsPage() {
               <h3 className="text-lg font-semibold text-gray-800">Products</h3>
               <FaChartPie className="w-5 h-5 text-purple-600" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{basicData.totalProducts || 0}</p>
-            <p className="text-sm text-green-600">+15% from last month</p>
+            <p className="text-3xl font-bold text-gray-900">{basicData.totalProducts?.toLocaleString() || '0'}</p>
+            <p className="text-sm text-gray-600">Active products</p>
           </div>
         </div>
       )}
 
-      {/* Pro Plan Features */}
-      <PlanGuard requiredPlan="Pro">
+      {/* Advanced Analytics - Pro+ Plans Only */}
+      <FeatureGuard requiredFeature="analytics" fallback={
+        <div className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <FaStar className="w-6 h-6 text-blue-600" />
+            <h2 className="text-xl font-semibold text-gray-800">Advanced Analytics</h2>
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Pro+</span>
+          </div>
+          <p className="text-gray-600 mb-4">
+            Unlock advanced analytics with detailed insights, customer segmentation, and predictive analytics.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <h4 className="font-medium text-gray-800 mb-2">Customer Segmentation</h4>
+              <p className="text-sm text-gray-600">Analyze customer behavior and segments</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <h4 className="font-medium text-gray-800 mb-2">Predictive Analytics</h4>
+              <p className="text-sm text-gray-600">Forecast sales and growth trends</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <h4 className="font-medium text-gray-800 mb-2">Advanced Reports</h4>
+              <p className="text-sm text-gray-600">Detailed reports and insights</p>
+            </div>
+          </div>
+          <a
+            href="/settings/billing"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <FaArrowUp className="w-4 h-4" />
+            Upgrade to Pro
+          </a>
+        </div>
+      }>
         {advancedData && (
-          <div className="bg-white rounded-xl shadow-sm border p-6 mb-8">
-            <div className="flex items-center justify-between mb-6">
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-6">
+              <FaStar className="w-6 h-6 text-blue-600" />
               <h2 className="text-xl font-semibold text-gray-800">Advanced Analytics</h2>
-              <div className="flex items-center gap-2">
-                <FaStar className="w-4 h-4 text-blue-600" />
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                  Pro Feature
-                </span>
-              </div>
+              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Pro+</span>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-800 mb-4">Monthly Sales Trend</h3>
+              {/* Customer Segments */}
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Customer Segments</h3>
                 <div className="space-y-3">
-                  {advancedData.salesByMonth && Object.entries(advancedData.salesByMonth).map(([month, sales]) => (
-                    <div key={month} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-gray-800">{month}</span>
-                      <span className="font-semibold text-green-600">${sales.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-lg font-medium text-gray-800 mb-4">Top Products</h3>
-                <div className="space-y-3">
-                  {advancedData.topProducts?.map((product, index) => (
+                  {advancedData.customerSegments?.map((segment, index) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div>
-                        <p className="font-medium text-gray-800">{product.name}</p>
-                        <p className="text-sm text-gray-500">{product.sales} sales</p>
+                        <p className="font-medium text-gray-800">{segment.segment}</p>
+                        <p className="text-sm text-gray-600">{segment.count} customers</p>
                       </div>
-                      <p className="font-semibold text-green-600">${product.revenue}</p>
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-900">${segment.revenue.toLocaleString()}</p>
+                        <p className="text-sm text-gray-600">Revenue</p>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* Predictive Analytics */}
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Predictive Analytics</h3>
+                <div className="space-y-4">
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <h4 className="font-medium text-blue-800 mb-1">Next Month Forecast</h4>
+                    <p className="text-2xl font-bold text-blue-900">${advancedData.predictiveAnalytics?.nextMonthForecast.toLocaleString() || '0'}</p>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <h4 className="font-medium text-green-800 mb-1">Growth Rate</h4>
+                    <p className="text-2xl font-bold text-green-900">{(advancedData.predictiveAnalytics?.growthRate || 0).toFixed(1)}%</p>
+                  </div>
+                  <div className="p-4 bg-orange-50 rounded-lg">
+                    <h4 className="font-medium text-orange-800 mb-1">Churn Risk</h4>
+                    <p className="text-2xl font-bold text-orange-900">{(advancedData.predictiveAnalytics?.churnRisk || 0).toFixed(1)}%</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
-      </PlanGuard>
+      </FeatureGuard>
 
-      {/* Enterprise Plan Features */}
-      <PlanGuard requiredPlan="Enterprise">
+      {/* Enterprise Analytics - Enterprise Only */}
+      <FeatureGuard requiredFeature="advanced_analytics" fallback={
+        <div className="mb-8 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <FaCrown className="w-6 h-6 text-yellow-600" />
+            <h2 className="text-xl font-semibold text-gray-800">Enterprise Analytics</h2>
+            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Enterprise</span>
+          </div>
+          <p className="text-gray-600 mb-4">
+            Access enterprise-grade analytics with real-time data, custom reports, and advanced insights.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <div className="bg-white rounded-lg p-4 border border-yellow-200">
+              <h4 className="font-medium text-gray-800 mb-2">Real-Time Data</h4>
+              <p className="text-sm text-gray-600">Live analytics and monitoring</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-yellow-200">
+              <h4 className="font-medium text-gray-800 mb-2">Custom Reports</h4>
+              <p className="text-sm text-gray-600">Build custom analytics reports</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-yellow-200">
+              <h4 className="font-medium text-gray-800 mb-2">API Access</h4>
+              <p className="text-sm text-gray-600">Integrate with external tools</p>
+            </div>
+          </div>
+          <a
+            href="/settings/billing"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+          >
+            <FaArrowUp className="w-4 h-4" />
+            Upgrade to Enterprise
+          </a>
+        </div>
+      }>
         {enterpriseData && (
-          <div className="bg-white rounded-xl shadow-sm border p-6 mb-8">
-            <div className="flex items-center justify-between mb-6">
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-6">
+              <FaCrown className="w-6 h-6 text-yellow-600" />
               <h2 className="text-xl font-semibold text-gray-800">Enterprise Analytics</h2>
-              <div className="flex items-center gap-2">
-                <FaCrown className="w-4 h-4 text-yellow-600" />
-                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
-                  Enterprise Feature
-                </span>
-              </div>
+              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Enterprise</span>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-800">Real-time Data</h3>
-                <div className="space-y-3">
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Current Users</p>
-                    <p className="text-2xl font-bold text-green-600">{enterpriseData.realTimeData?.currentUsers || 0}</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Real-Time Data */}
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Real-Time Data</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-green-800">Current Users</p>
+                      <p className="text-sm text-green-600">Active right now</p>
+                    </div>
+                    <p className="text-2xl font-bold text-green-900">{enterpriseData.realTimeData?.currentUsers || 0}</p>
                   </div>
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Active Sales</p>
-                    <p className="text-2xl font-bold text-blue-600">{enterpriseData.realTimeData?.activeSales || 0}</p>
+                  <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-blue-800">Active Sales</p>
+                      <p className="text-sm text-blue-600">In progress</p>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-900">{enterpriseData.realTimeData?.activeSales || 0}</p>
                   </div>
-                  <div className="p-4 bg-purple-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Revenue Today</p>
-                    <p className="text-2xl font-bold text-purple-600">${enterpriseData.realTimeData?.revenueToday?.toLocaleString() || 0}</p>
+                  <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-purple-800">Revenue Today</p>
+                      <p className="text-sm text-purple-600">Today's earnings</p>
+                    </div>
+                    <p className="text-2xl font-bold text-purple-900">${enterpriseData.realTimeData?.revenueToday.toLocaleString() || '0'}</p>
                   </div>
                 </div>
               </div>
-              
-              <div className="lg:col-span-2">
-                <h3 className="text-lg font-medium text-gray-800 mb-4">Predictive Analytics</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Next Month Forecast</p>
-                    <p className="text-2xl font-bold text-blue-600">${enterpriseData.predictiveAnalytics?.nextMonthForecast?.toLocaleString() || 0}</p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Growth Rate</p>
-                    <p className="text-2xl font-bold text-green-600">{((enterpriseData.predictiveAnalytics?.growthRate || 0) * 100).toFixed(1)}%</p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Churn Risk</p>
-                    <p className="text-2xl font-bold text-red-600">{((enterpriseData.predictiveAnalytics?.churnRisk || 0) * 100).toFixed(1)}%</p>
-                  </div>
+
+              {/* Export & Share Options */}
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Export & Share</h3>
+                <div className="space-y-3">
+                  <button className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <FaDownload className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-700">Export Analytics Report</span>
+                  </button>
+                  <button className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <FaShare className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-700">Share Dashboard</span>
+                  </button>
+                  <button className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <FaChartLine className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-700">Schedule Reports</span>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
         )}
-      </PlanGuard>
+      </FeatureGuard>
 
-      {/* Feature-based Protection */}
-      <PlanGuard requiredFeature="advanced_reports">
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Advanced Reports</h2>
-          <p className="text-gray-600 mb-4">
-            Generate detailed reports with custom filters and advanced analytics.
-          </p>
-          <div className="flex gap-3">
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-              <FaDownload className="w-4 h-4" />
-              Generate Report
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-              <FaShare className="w-4 h-4" />
-              Share Report
-            </button>
-          </div>
-        </div>
-      </PlanGuard>
+      {/* Plan Upgrade CTA */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 text-center">
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">Unlock More Analytics</h3>
+        <p className="text-gray-600 mb-4">
+          Upgrade your plan to access advanced analytics, real-time data, and custom reports.
+        </p>
+        <a
+          href="/settings/billing"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+                      <FaArrowUp className="w-4 h-4" />
+            View Plans
+        </a>
+      </div>
     </div>
   );
 } 

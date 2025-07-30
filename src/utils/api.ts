@@ -28,16 +28,33 @@ class EnhancedAPI {
       ...options.headers,
     };
     try {
+      console.log('Making request to:', url);
+      console.log('Headers:', headers);
+      
       const response = await fetch(url, {
         ...options,
         headers,
       });
+      
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Response error text:', errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
-      return await response.json();
+      
+      const responseText = await response.text();
+      console.log('Response text:', responseText);
+      
+      if (!responseText) {
+        throw new Error('Empty response from server');
+      }
+      
+      return JSON.parse(responseText);
     } catch (error) {
+      console.error('API request failed:', error);
       throw error;
     }
   }

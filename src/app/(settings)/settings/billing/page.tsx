@@ -16,6 +16,17 @@ interface Plan {
   prioritySupport: boolean;
   customBranding: boolean;
   apiAccess: boolean;
+  // New granular features
+  bulkOperations?: boolean;
+  dataExport?: boolean;
+  customFields?: boolean;
+  advancedSecurity?: boolean;
+  whiteLabel?: boolean;
+  dedicatedSupport?: boolean;
+  ssoEnabled?: boolean;
+  auditLogs?: boolean;
+  backupRestore?: boolean;
+  customIntegrations?: boolean;
 }
 
 interface Subscription {
@@ -338,6 +349,24 @@ export default function BillingSettings() {
                     <span className="text-sm text-gray-700">Advanced Reports</span>
                   </div>
                 )}
+                {plan.bulkOperations && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">Bulk Operations</span>
+                  </div>
+                )}
+                {plan.dataExport && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">Data Export</span>
+                  </div>
+                )}
+                {plan.customFields && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">Custom Fields</span>
+                  </div>
+                )}
                 {plan.prioritySupport && (
                   <div className="flex items-center gap-2">
                     <FaCheck className="w-4 h-4 text-green-600" />
@@ -354,6 +383,48 @@ export default function BillingSettings() {
                   <div className="flex items-center gap-2">
                     <FaCheck className="w-4 h-4 text-green-600" />
                     <span className="text-sm text-gray-700">API Access</span>
+                  </div>
+                )}
+                {plan.advancedSecurity && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">Advanced Security</span>
+                  </div>
+                )}
+                {plan.whiteLabel && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">White Label</span>
+                  </div>
+                )}
+                {plan.dedicatedSupport && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">Dedicated Support</span>
+                  </div>
+                )}
+                {plan.ssoEnabled && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">Single Sign-On</span>
+                  </div>
+                )}
+                {plan.auditLogs && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">Audit Logs</span>
+                  </div>
+                )}
+                {plan.backupRestore && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">Backup & Restore</span>
+                  </div>
+                )}
+                {plan.customIntegrations && (
+                  <div className="flex items-center gap-2">
+                    <FaCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-gray-700">Custom Integrations</span>
                   </div>
                 )}
               </div>
