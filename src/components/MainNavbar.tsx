@@ -13,6 +13,7 @@ export default function MainNavbar() {
       <Link href="/receipts">Receipts</Link>
       {hasPermission(user, 'manage_settings') && <Link href="/settings">Settings</Link>}
       {isAdmin && <Link href="/users">User Management</Link>}
+      {user?.isSuperadmin && <Link href="/superadmin">Superadmin</Link>}
     </nav>
   );
 } 

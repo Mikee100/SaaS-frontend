@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import PlanBasedNav from "@/components/PlanBasedNav";
-import { UserProvider } from "@/components/UserContext";
+import LayoutWrapper from "@/components/LayoutWrapper";
 // import OfflineStatus from "@/components/OfflineStatus";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -28,6 +27,8 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false
 };
+
+
 
 export default function RootLayout({
   children,
@@ -63,13 +64,9 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        <UserProvider>
-          <PlanBasedNav />
-          <main className="lg:ml-64 min-h-screen bg-gray-50">
-            {children}
-          </main>
-          {/* <OfflineStatus /> */}
-        </UserProvider>
+        <LayoutWrapper>
+          {children}
+        </LayoutWrapper>
       </body>
     </html>
   );

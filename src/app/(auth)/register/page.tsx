@@ -31,26 +31,25 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
     try {
-      // 1. Create tenant
-      const tenant = await apiPost<{ id: string }>("/tenant", {
+      // Send all required fields in one request
+      const res = await apiPost<{ tenant: any }>("/tenant", {
         name: businessName,
         businessType,
         contactEmail,
         contactPhone,
+        ownerName: name,
+        ownerEmail: email,
+        ownerPassword: password,
       });
-      // 2. Create user
-      await apiPost("/user", {
-        name,
-        email,
-        password,
-        role,
-        tenantId: tenant.id,
-      });
-      // 3. Auto-login
+      // 2. Auto-login
       const loginRes = await apiPost<{ access_token: string; user: any }>("/auth/login", { email, password });
       localStorage.setItem("token", loginRes.access_token);
       localStorage.setItem("user", JSON.stringify(loginRes.user));
-      router.push("/");
+      if (loginRes.user.isSuperadmin) {
+        router.push("/superadmin");
+      } else {
+        router.push("/");
+      }
     } catch (err: any) {
       setError(err.message || "Registration failed");
     } finally {

@@ -16,7 +16,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      router.push("/");
+      if (user.isSuperadmin) {
+        router.push("/superadmin");
+      } else {
+        router.push("/");
+      }
     }
   }, [user, router]);
 

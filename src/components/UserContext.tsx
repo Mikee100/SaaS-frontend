@@ -8,6 +8,7 @@ export interface User {
   email: string;
   name?: string;
   roles?: string[]; // Added for RBAC
+  isSuperadmin?: boolean; // <-- Add this line
   // Add more fields as needed
 }
 
