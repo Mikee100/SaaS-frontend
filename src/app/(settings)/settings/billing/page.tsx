@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import { FaCrown, FaCheck, FaTimes, FaCreditCard, FaReceipt, FaHistory, FaSpinner, FaExclamationTriangle, FaInfoCircle } from "react-icons/fa";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
-import { PlanGuard } from "@/components/PlanGuard";
 import { getPriceIdForPlan, validateStripeConfig } from "@/config/stripe";
 
 interface Plan {
@@ -68,6 +67,10 @@ export default function BillingPage() {
 
   // Check if Stripe is configured
   const isStripeConfigured = () => {
+    // For development, always allow payments for testing
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      return true;
+    }
     return !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
   };
 
@@ -90,7 +93,7 @@ export default function BillingPage() {
     }
   }
 
-  async function handleUpgrade(planId: string) {
+    async function handleUpgrade(planId: string) {
     try {
       setLoadingCheckout(true);
       setError("");
@@ -100,10 +103,17 @@ export default function BillingPage() {
       if (!plan) throw new Error("Plan not found");
 
       // Check if Stripe is configured
-      if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
-        setError("Payment processing is not available. Please contact support.");
+      if (!isStripeConfigured()) {
+        setError("Payment processing is not available. Please configure Stripe first. See STRIPE_SETUP_GUIDE.md for instructions.");
         return;
       }
+
+             // For development mode without Stripe, simulate success
+       if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+         setSuccess(`Development mode: Successfully upgraded to ${plan.name} plan!`);
+         await fetchBillingData(); // Refresh data
+         return;
+       }
 
       // Create checkout session
       const response = await apiPost("/billing/create-checkout-session", {
@@ -131,10 +141,10 @@ export default function BillingPage() {
       setError("");
       setSuccess("");
 
-      if (!stripeEnabled) {
-        setError("Stripe is not configured. Please contact support.");
-        return;
-      }
+             if (!isStripeConfigured()) {
+         setError("Stripe is not configured. Please configure Stripe first.");
+         return;
+       }
 
       const response = await apiPost("/billing/create-portal-session", {
         returnUrl: `${window.location.origin}/settings/billing`,
@@ -160,11 +170,36 @@ export default function BillingPage() {
     try {
       setError("");
       setSuccess("");
-      await apiPost("/billing/cancel-subscription");
+      await apiPost("/billing/cancel-subscription", {});
       setSuccess("Subscription will be canceled at the end of the current billing period.");
       await fetchBillingData(); // Refresh data
     } catch (err: any) {
-      setError(err.message || "Failed to cancel subscription");
+      // Handle specific error messages from the backend
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError(err.message || "Failed to cancel subscription");
+      }
+    }
+  }
+
+  async function handleCleanupOrphanedSubscriptions() {
+    if (!confirm("This will clean up any orphaned subscriptions that don't have proper Stripe IDs. Continue?")) {
+      return;
+    }
+
+    try {
+      setError("");
+      setSuccess("");
+      await apiPost("/billing/cleanup-orphaned-subscriptions", {});
+      setSuccess("Orphaned subscriptions cleaned up successfully.");
+      await fetchBillingData(); // Refresh data
+    } catch (err: any) {
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError(err.message || "Failed to cleanup orphaned subscriptions");
+      }
     }
   }
 
@@ -292,9 +327,11 @@ export default function BillingPage() {
                 <p className="text-gray-600 mb-4">
                   Status: <span className={`font-semibold ${
                     subscription.status === 'active' ? 'text-green-600' : 
-                    subscription.status === 'canceled' ? 'text-red-600' : 'text-yellow-600'
+                    subscription.status === 'canceled' ? 'text-red-600' : 
+                    subscription.status === 'none' ? 'text-gray-600' : 'text-yellow-600'
                   }`}>
-                    {subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)}
+                    {subscription.status === 'none' ? 'No Active Subscription' : 
+                     subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)}
                   </span>
                 </p>
                 
@@ -307,7 +344,11 @@ export default function BillingPage() {
                 )}
 
                 <div className="text-sm text-gray-600">
-                  <p>Current period: {formatDate(subscription.currentPeriodStart)} - {formatDate(subscription.currentPeriodEnd)}</p>
+                  {subscription.currentPeriodStart && subscription.currentPeriodEnd ? (
+                    <p>Current period: {formatDate(subscription.currentPeriodStart)} - {formatDate(subscription.currentPeriodEnd)}</p>
+                  ) : (
+                    <p>No active billing period</p>
+                  )}
                 </div>
               </div>
 
@@ -325,14 +366,16 @@ export default function BillingPage() {
                   {loadingPortal ? 'Loading...' : 'Manage Billing'}
                 </button>
 
-                {subscription.status === 'active' && !subscription.cancelAtPeriodEnd && (
-                  <button
-                    onClick={handleCancelSubscription}
-                    className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
-                  >
-                    Cancel Subscription
-                  </button>
-                )}
+                                 {subscription.status === 'active' && !subscription.cancelAtPeriodEnd && subscription.id && (
+                   <button
+                     onClick={handleCancelSubscription}
+                     className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
+                   >
+                     Cancel Subscription
+                   </button>
+                 )}
+
+
               </div>
             </div>
           </div>
@@ -341,6 +384,21 @@ export default function BillingPage() {
         {/* Plan Comparison */}
         <div className="mb-10">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Available Plans</h2>
+          
+          {!isStripeConfigured() && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <FaInfoCircle className="h-5 w-5 text-yellow-600" />
+                <div>
+                  <h3 className="text-sm font-medium text-yellow-800">Payment Setup Required</h3>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    To enable payments, configure Stripe in your environment variables. 
+                    See the STRIPE_SETUP.md file for instructions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {plans.map((plan) => (
               <div key={plan.id} className="bg-white rounded-xl shadow-md p-6 relative">
@@ -433,7 +491,7 @@ export default function BillingPage() {
                   }`}
                 >
                   {subscription?.plan.id === plan.id ? 'Current Plan' : 
-                   !isStripeConfigured() ? 'Payment Unavailable' :
+                   !isStripeConfigured() ? 'Setup Required' :
                    loadingCheckout ? (
                      <span className="flex items-center justify-center gap-2">
                        <FaSpinner className="h-4 w-4 animate-spin" />

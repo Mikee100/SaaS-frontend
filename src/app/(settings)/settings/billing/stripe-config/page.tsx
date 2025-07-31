@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { apiGet, apiPost } from "@/utils/api";
-import { FaCreditCard, FaKey, FaEye, FaEyeSlash, FaSave, FaCheck, FaTimes, FaInfoCircle } from "react-icons/fa";
+import { FaCreditCard, FaKey, FaEye, FaEyeSlash, FaSave, FaCheck, FaTimes, FaInfoCircle, FaMagic, FaDollarSign } from "react-icons/fa";
 
 interface StripeKeys {
   secretKey: string;
@@ -10,10 +10,10 @@ interface StripeKeys {
   webhookSecret: string;
 }
 
-interface StripePriceIds {
-  basicPriceId: string;
-  proPriceId: string;
-  enterprisePriceId: string;
+interface StripePrices {
+  basicPrice: number;
+  proPrice: number;
+  enterprisePrice: number;
 }
 
 export default function StripeConfigPage() {
@@ -22,10 +22,10 @@ export default function StripeConfigPage() {
     publishableKey: '',
     webhookSecret: '',
   });
-  const [priceIds, setPriceIds] = useState<StripePriceIds>({
-    basicPriceId: '',
-    proPriceId: '',
-    enterprisePriceId: '',
+  const [prices, setPrices] = useState<StripePrices>({
+    basicPrice: 0,
+    proPrice: 29,
+    enterprisePrice: 99,
   });
   const [isConfigured, setIsConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -34,6 +34,7 @@ export default function StripeConfigPage() {
   const [success, setSuccess] = useState("");
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
+  const [autoCreateProducts, setAutoCreateProducts] = useState(true);
 
   useEffect(() => {
     fetchStripeConfig();
@@ -44,22 +45,16 @@ export default function StripeConfigPage() {
       setLoading(true);
       setError("");
       
-      const [statusResponse, keysResponse, priceIdsResponse] = await Promise.all([
+      const [statusResponse, keysResponse] = await Promise.all([
         apiGet("/tenant/configurations/stripe/status"),
         apiGet("/tenant/configurations/stripe/keys"),
-        apiGet("/tenant/configurations/stripe/price-ids"),
       ]);
 
       setIsConfigured(statusResponse.isConfigured);
       setStripeKeys({
-        secretKey: keysResponse.secretKey === '[CONFIGURED]' ? '' : (keysResponse.secretKey || ''),
+        secretKey: keysResponse.secretKey === '[CONFIGURED]' ? '' : keysResponse.secretKey || '',
         publishableKey: keysResponse.publishableKey || '',
-        webhookSecret: keysResponse.webhookSecret === '[CONFIGURED]' ? '' : (keysResponse.webhookSecret || ''),
-      });
-      setPriceIds({
-        basicPriceId: priceIdsResponse.basicPriceId || '',
-        proPriceId: priceIdsResponse.proPriceId || '',
-        enterprisePriceId: priceIdsResponse.enterprisePriceId || '',
+        webhookSecret: keysResponse.webhookSecret === '[CONFIGURED]' ? '' : keysResponse.webhookSecret || '',
       });
     } catch (err: any) {
       setError(err.message || "Failed to load Stripe configuration");
@@ -78,15 +73,48 @@ export default function StripeConfigPage() {
         secretKey: stripeKeys.secretKey,
         publishableKey: stripeKeys.publishableKey,
         webhookSecret: stripeKeys.webhookSecret || undefined,
-        basicPriceId: priceIds.basicPriceId || undefined,
-        proPriceId: priceIds.proPriceId || undefined,
-        enterprisePriceId: priceIds.enterprisePriceId || undefined,
+        autoCreateProducts,
+        prices: autoCreateProducts ? prices : undefined,
       });
 
       setSuccess("Stripe configuration saved successfully!");
       await fetchStripeConfig(); // Refresh status
     } catch (err: any) {
       setError(err.message || "Failed to save Stripe configuration");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateProducts() {
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      const response = await apiPost("/tenant/configurations/stripe/create-products", {});
+      
+      setSuccess("Stripe products and prices created successfully!");
+      await fetchStripeConfig(); // Refresh status
+    } catch (err: any) {
+      setError(err.message || "Failed to create Stripe products");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUpdatePrices() {
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      await apiPost("/tenant/configurations/stripe/update-prices", prices);
+      
+      setSuccess("Stripe prices updated successfully!");
+      await fetchStripeConfig(); // Refresh status
+    } catch (err: any) {
+      setError(err.message || "Failed to update Stripe prices");
     } finally {
       setSaving(false);
     }
@@ -102,18 +130,13 @@ export default function StripeConfigPage() {
     }
   }
 
-  function validatePriceId(priceId: string): boolean {
-    if (!priceId) return true; // Optional
-    return priceId.startsWith('price_');
-  }
-
   const isFormValid = () => {
     return (
       validateStripeKey(stripeKeys.secretKey, 'secret') &&
       validateStripeKey(stripeKeys.publishableKey, 'publishable') &&
-      validatePriceId(priceIds.basicPriceId) &&
-      validatePriceId(priceIds.proPriceId) &&
-      validatePriceId(priceIds.enterprisePriceId)
+      prices.basicPrice >= 0 &&
+      prices.proPrice >= 0 &&
+      prices.enterprisePrice >= 0
     );
   };
 
@@ -280,80 +303,97 @@ export default function StripeConfigPage() {
             </div>
           </div>
 
-          {/* Price IDs */}
+          {/* Auto-Create Products */}
           <div className="bg-white rounded-xl shadow-md p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <FaCreditCard className="h-6 w-6 text-indigo-600" />
-              Stripe Price IDs
+              <FaMagic className="h-6 w-6 text-indigo-600" />
+              Auto-Create Products
             </h2>
             
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Basic Plan */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Basic Plan Price ID
-                  </label>
-                  <input
-                    type="text"
-                    value={priceIds.basicPriceId}
-                    onChange={(e) => setPriceIds(prev => ({ ...prev, basicPriceId: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                      priceIds.basicPriceId && !validatePriceId(priceIds.basicPriceId)
-                        ? 'border-red-300'
-                        : 'border-gray-300'
-                    }`}
-                    placeholder="price_basic_monthly"
-                  />
-                  {priceIds.basicPriceId && !validatePriceId(priceIds.basicPriceId) && (
-                    <p className="mt-1 text-sm text-red-600">Invalid price ID format</p>
-                  )}
-                </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="autoCreateProducts"
+                  checked={autoCreateProducts}
+                  onChange={(e) => setAutoCreateProducts(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="autoCreateProducts" className="ml-2 block text-sm text-gray-900">
+                  Automatically create products and prices in Stripe
+                </label>
+              </div>
+              
+              <p className="text-sm text-gray-600">
+                When enabled, we'll automatically create the Basic, Pro, and Enterprise products in your Stripe account with the prices below.
+              </p>
+            </div>
+          </div>
 
-                {/* Pro Plan */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Pro Plan Price ID
-                  </label>
-                  <input
-                    type="text"
-                    value={priceIds.proPriceId}
-                    onChange={(e) => setPriceIds(prev => ({ ...prev, proPriceId: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                      priceIds.proPriceId && !validatePriceId(priceIds.proPriceId)
-                        ? 'border-red-300'
-                        : 'border-gray-300'
-                    }`}
-                    placeholder="price_pro_monthly"
-                  />
-                  {priceIds.proPriceId && !validatePriceId(priceIds.proPriceId) && (
-                    <p className="mt-1 text-sm text-red-600">Invalid price ID format</p>
-                  )}
-                </div>
+          {/* Pricing Configuration */}
+          {autoCreateProducts && (
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <FaDollarSign className="h-6 w-6 text-indigo-600" />
+                Plan Pricing
+              </h2>
+              
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Basic Plan */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Basic Plan Price ($)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={prices.basicPrice}
+                      onChange={(e) => setPrices(prev => ({ ...prev, basicPrice: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="0.00"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">Monthly price for Basic plan</p>
+                  </div>
 
-                {/* Enterprise Plan */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Enterprise Plan Price ID
-                  </label>
-                  <input
-                    type="text"
-                    value={priceIds.enterprisePriceId}
-                    onChange={(e) => setPriceIds(prev => ({ ...prev, enterprisePriceId: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                      priceIds.enterprisePriceId && !validatePriceId(priceIds.enterprisePriceId)
-                        ? 'border-red-300'
-                        : 'border-gray-300'
-                    }`}
-                    placeholder="price_enterprise_monthly"
-                  />
-                  {priceIds.enterprisePriceId && !validatePriceId(priceIds.enterprisePriceId) && (
-                    <p className="mt-1 text-sm text-red-600">Invalid price ID format</p>
-                  )}
+                  {/* Pro Plan */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pro Plan Price ($)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={prices.proPrice}
+                      onChange={(e) => setPrices(prev => ({ ...prev, proPrice: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="29.00"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">Monthly price for Pro plan</p>
+                  </div>
+
+                  {/* Enterprise Plan */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Enterprise Plan Price ($)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={prices.enterprisePrice}
+                      onChange={(e) => setPrices(prev => ({ ...prev, enterprisePrice: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="99.00"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">Monthly price for Enterprise plan</p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Help Section */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
@@ -366,12 +406,23 @@ export default function StripeConfigPage() {
               <p>2. Navigate to Developers → API keys</p>
               <p>3. Copy your Publishable key and Secret key</p>
               <p>4. For webhook secret, go to Developers → Webhooks and copy the signing secret</p>
-              <p>5. For price IDs, go to Products and copy the price IDs for each plan</p>
+              <p>5. Enable "Auto-Create Products" to automatically create your pricing plans in Stripe</p>
             </div>
           </div>
 
-          {/* Save Button */}
-          <div className="flex justify-end">
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4">
+            {autoCreateProducts && (
+              <button
+                onClick={handleCreateProducts}
+                disabled={!isFormValid() || saving}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FaMagic className="h-4 w-4" />
+                Create Products Only
+              </button>
+            )}
+            
             <button
               onClick={handleSave}
               disabled={!isFormValid() || saving}
