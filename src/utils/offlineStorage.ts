@@ -24,6 +24,11 @@ class OfflineStorage {
 
   // Initialize IndexedDB
   async init(): Promise<void> {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || typeof indexedDB === 'undefined') {
+      return;
+    }
+
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
 
@@ -69,7 +74,12 @@ class OfflineStorage {
 
   // Store data locally
   async storeData(storeName: string, data: any): Promise<void> {
+    if (typeof window === 'undefined' || typeof indexedDB === 'undefined') {
+      return;
+    }
+    
     if (!this.db) await this.init();
+    if (!this.db) return; // Still not available after init
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([storeName], 'readwrite');
@@ -83,7 +93,12 @@ class OfflineStorage {
 
   // Get data from local storage
   async getData(storeName: string, key?: string): Promise<any> {
+    if (typeof window === 'undefined' || typeof indexedDB === 'undefined') {
+      return null;
+    }
+    
     if (!this.db) await this.init();
+    if (!this.db) return null; // Still not available after init
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([storeName], 'readonly');
@@ -186,28 +201,25 @@ class OfflineStorage {
           body: operation.type !== 'DELETE' ? JSON.stringify(operation.data) : undefined
         });
 
-        if (response.ok) {
-          await this.removeOfflineOperation(operation.id);
-          console.log('Synced operation:', operation.id);
-        } else {
-          // Increment retry count
-          operation.retryCount++;
-          if (operation.retryCount < 3) {
-            await this.storeData('offlineOperations', operation);
-          } else {
-            await this.removeOfflineOperation(operation.id);
-            console.error('Failed to sync operation after 3 retries:', operation);
-          }
-        }
-      } catch (error) {
-        console.error('Error syncing operation:', operation.id, error);
-        operation.retryCount++;
-        if (operation.retryCount < 3) {
-          await this.storeData('offlineOperations', operation);
-        } else {
-          await this.removeOfflineOperation(operation.id);
-        }
-      }
+                 if (response.ok) {
+           await this.removeOfflineOperation(operation.id);
+         } else {
+           // Increment retry count
+           operation.retryCount++;
+           if (operation.retryCount < 3) {
+             await this.storeData('offlineOperations', operation);
+           } else {
+             await this.removeOfflineOperation(operation.id);
+           }
+         }
+       } catch (error) {
+         operation.retryCount++;
+         if (operation.retryCount < 3) {
+           await this.storeData('offlineOperations', operation);
+         } else {
+           await this.removeOfflineOperation(operation.id);
+         }
+       }
     }
   }
 
@@ -250,7 +262,7 @@ class OfflineStorage {
 const offlineStorage = new OfflineStorage();
 
 // Initialize on module load
-offlineStorage.init().catch(console.error);
+offlineStorage.init().catch(() => {});
 
 export default offlineStorage;
 

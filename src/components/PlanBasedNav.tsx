@@ -1,7 +1,7 @@
 "use client";
 import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
-import { FaHome, FaBox, FaShoppingCart, FaChartLine, FaCog, FaCrown, FaUsers, FaSignOutAlt, FaUser, FaCaretDown, FaBars, FaTimes } from 'react-icons/fa';
+import { FaHome, FaBox, FaShoppingCart, FaChartLine, FaCog, FaCrown, FaUsers, FaSignOutAlt, FaUser, FaCaretDown, FaBars, FaTimes, FaFileAlt } from 'react-icons/fa';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 
@@ -61,7 +61,7 @@ export default function PlanBasedNav() {
     { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null },
     { name: 'Sales History', href: '/sales/history', icon: FaShoppingCart, requiredPlan: null },
     { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan: 'Pro' },
-    { name: 'Reports', href: '/reports', icon: FaChartLine, requiredPlan: 'Enterprise' },
+    { name: 'Reports', href: '/reports', icon: FaFileAlt, requiredPlan: null },
     { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null },
   ];
 

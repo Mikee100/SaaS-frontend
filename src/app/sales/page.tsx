@@ -168,7 +168,7 @@ export default function SalesPage() {
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
-      <Spinner size="lg" />
+      <Spinner size={48} />
     </div>
   );
 
@@ -606,7 +606,7 @@ export default function SalesPage() {
                 >
                   {isProcessing ? (
                     <>
-                      <Spinner size="sm" />
+                      <Spinner size={24} />
                       Processing...
                     </>
                   ) : (

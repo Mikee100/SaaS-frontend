@@ -142,7 +142,7 @@ export default function ProductsPage() {
       // Use XMLHttpRequest for upload progress
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${process.env.NEXT_PUBLIC_API_URL}/products/bulk-upload`);
+        xhr.open("POST", `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/products/bulk-upload`);
         xhr.setRequestHeader("Authorization", `Bearer ${localStorage.getItem("token")}`);
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
@@ -186,7 +186,7 @@ export default function ProductsPage() {
     let finished = false;
     while (!finished) {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/bulk-upload-progress/${uploadId}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/products/bulk-upload-progress/${uploadId}`);
         if (!res.ok) break;
         const progress = await res.json();
         if (progress && progress.total) {
@@ -225,7 +225,7 @@ export default function ProductsPage() {
     if (!confirm("Are you sure you want to delete ALL products? This cannot be undone.")) return;
     setClearMsg("");
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/clear-all`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/products/clear-all`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
       });
@@ -729,7 +729,7 @@ export default function ProductsPage() {
           <div className="bg-white rounded-xl shadow-xl p-8" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">Product QR Code</h3>
             <img
-              src={`${process.env.NEXT_PUBLIC_API_URL}/products/${qrCodeProductId}/qr`}
+              src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/products/${qrCodeProductId}/qr`}
               alt="Product QR Code"
               className="w-64 h-64 mx-auto"
             />
@@ -738,7 +738,7 @@ export default function ProductsPage() {
                 const printWindow = window.open('', '', 'height=400,width=400');
                 if (printWindow) {
                   printWindow.document.write('<html><head><title>Print QR Code</title></head><body style="text-align:center;">');
-                  printWindow.document.write(`<img src="${process.env.NEXT_PUBLIC_API_URL}/products/${qrCodeProductId}/qr" />`);
+                  printWindow.document.write(`<img src="${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/products/${qrCodeProductId}/qr" />`);
                   printWindow.document.write('</body></html>');
                   printWindow.document.close();
                   printWindow.focus();

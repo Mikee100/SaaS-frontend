@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiGet } from "@/utils/api";
 import { FaPrint, FaArrowLeft, FaDownload } from "react-icons/fa";
+import { isAuthenticated } from '@/utils/auth';
 
 type ReceiptItem = {
   productId: string;
@@ -45,11 +46,27 @@ export default function ReceiptPage() {
           setLoading(false);
           return;
         }
+
+        // Check if user is authenticated
+        if (!isAuthenticated()) {
+          setError("Please log in to view this receipt");
+          setLoading(false);
+          return;
+        }
         
+        console.log('Fetching receipt for ID:', params.id);
         const data = await apiGet(`/sales/${params.id}/receipt`);
+        console.log('Receipt data received:', data);
         setReceipt(data);
       } catch (err: any) {
-        setError(err.message || "Failed to load receipt");
+        console.error('Error fetching receipt:', err);
+        if (err.message.includes('401')) {
+          setError("Please log in to view this receipt");
+        } else if (err.message.includes('404')) {
+          setError("Receipt not found. The sale may not exist or you may not have permission to view it.");
+        } else {
+          setError(err.message || "Failed to load receipt");
+        }
       } finally {
         setLoading(false);
       }

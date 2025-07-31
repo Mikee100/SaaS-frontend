@@ -15,6 +15,8 @@ import {
   BarElement,
   Filler,
 } from "chart.js";
+import { usePlanLimits } from '@/hooks/usePlanLimits';
+import { FaCrown, FaLock, FaArrowUp } from 'react-icons/fa';
 
 ChartJS.register(
   CategoryScale,
@@ -49,6 +51,7 @@ type Metrics = {
 };
 
 export default function ReportsPage() {
+  const { limits, hasFeature } = usePlanLimits();
   const [metrics, setMetrics] = useState<Metrics>({
     totalSales: 0,
     totalRevenue: 0,
@@ -69,6 +72,11 @@ export default function ReportsPage() {
   const [dateTo, setDateTo] = useState("");
   const [productId, setProductId] = useState("");
   const [paymentType, setPaymentType] = useState("");
+
+  // Plan-based access control
+  const canAccessBasicReports = !limits?.currentPlan || limits.currentPlan === 'Basic' || limits.currentPlan === 'Pro' || limits.currentPlan === 'Enterprise';
+  const canAccessAdvancedReports = limits?.currentPlan === 'Pro' || limits?.currentPlan === 'Enterprise';
+  const canAccessEnterpriseReports = limits?.currentPlan === 'Enterprise';
 
   useEffect(() => {
     apiGet<any[]>("/products").then(setProducts).catch(() => setProducts([]));
@@ -175,82 +183,191 @@ export default function ReportsPage() {
           <p className="mt-2 text-lg text-gray-500">Dive deep into your sales, customers, and product performance.</p>
         </header>
 
-        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Filters</h2>
-          <div className="flex flex-wrap gap-4 items-end">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
-              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
-              <select value={productId} onChange={e => setProductId(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                <option value="">All Products</option>
-                {(products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
-              <select value={paymentType} onChange={e => setPaymentType(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                <option value="">All Types</option>
-                {(paymentTypes || []).map((pt) => <option key={pt} value={pt}>{pt.charAt(0).toUpperCase() + pt.slice(1)}</option>)}
-              </select>
-            </div>
-            <button className="text-sm text-gray-600 hover:text-indigo-600" onClick={() => { setDateFrom(""); setDateTo(""); setProductId(""); setPaymentType(""); }}>Clear Filters</button>
-          </div>
-        </div>
-
-        {/* Key Metrics Section */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Key Metrics</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center"><span className="text-gray-500 text-sm mb-1">Total Sales</span><span className="text-3xl font-bold text-indigo-700">{metrics.totalSales}</span></div>
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center"><span className="text-gray-500 text-sm mb-1">Total Revenue</span><span className="text-3xl font-bold text-green-700">Ksh {metrics.totalRevenue.toLocaleString()}</span></div>
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center"><span className="text-gray-500 text-sm mb-1">Avg. Sale Value</span><span className="text-3xl font-bold text-purple-700">Ksh {metrics.avgSaleValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center"><span className="text-gray-500 text-sm mb-1">Low Stock Alerts</span><span className="text-3xl font-bold text-red-600">{(metrics.lowStock || []).length}</span></div>
-          </div>
-        </section>
-
-        {/* Sales Performance Section */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Sales Performance</h2>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-            <div className="bg-white rounded-xl shadow p-6"><h3 className="text-lg font-bold mb-4 text-center">Monthly Sales & Forecast</h3><div className="h-80"><Line data={salesTrendData} options={{ responsive: true, maintainAspectRatio: false }} /></div></div>
-            <div className="bg-white rounded-xl shadow p-6"><h3 className="text-lg font-bold mb-4 text-center">Revenue by Top Products</h3><div className="h-80"><Bar data={revenueBreakdownData} options={{ responsive: true, maintainAspectRatio: false, indexAxis: 'y' }} /></div></div>
-          </div>
-        </section>
-
-        {/* Customer & Operations Section */}
-        <section>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Customer & Operations</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            <div className="lg:col-span-3 bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-bold mb-4">Top Customers by Spend</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="bg-gray-50"><tr><th className="py-2 px-4 text-left font-semibold text-gray-600">Customer</th><th className="py-2 px-4 text-left font-semibold text-gray-600">Purchases</th><th className="py-2 px-4 text-left font-semibold text-gray-600">Total Spent</th></tr></thead>
-                  <tbody>
-                    {(metrics.topCustomers || []).length === 0 ? (
-                      <tr><td colSpan={3} className="text-center text-gray-400 py-4">No customer data available</td></tr>
-                    ) : (
-                      (metrics.topCustomers || []).map((c) => (
-                        <tr key={c.phone || c.name} className="border-b"><td className="py-2 px-4">{c.name}</td><td className="py-2 px-4">{c.count}</td><td className="py-2 px-4">Ksh {c.total.toLocaleString()}</td></tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+        {/* Basic Reports - Available to all plans */}
+        {canAccessBasicReports && (
+          <>
+            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Basic Filters</h2>
+              <div className="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                </div>
+                <button className="text-sm text-gray-600 hover:text-indigo-600" onClick={() => { setDateFrom(""); setDateTo(""); setProductId(""); setPaymentType(""); }}>Clear Filters</button>
               </div>
             </div>
-            <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-bold mb-4 text-center">Payment Methods</h3>
-              <div className="h-80 flex items-center justify-center"><div className="w-full max-w-xs"><Pie data={paymentMethodData} options={{ responsive: true, maintainAspectRatio: false }} /></div></div>
+
+            {/* Key Metrics Section */}
+            <section className="mb-10">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Key Metrics</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
+                  <span className="text-gray-500 text-sm mb-1">Total Sales</span>
+                  <span className="text-3xl font-bold text-indigo-700">{metrics.totalSales}</span>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
+                  <span className="text-gray-500 text-sm mb-1">Total Revenue</span>
+                  <span className="text-3xl font-bold text-green-700">Ksh {metrics.totalRevenue.toLocaleString()}</span>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
+                  <span className="text-gray-500 text-sm mb-1">Avg. Sale Value</span>
+                  <span className="text-3xl font-bold text-purple-700">Ksh {metrics.avgSaleValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
+                  <span className="text-gray-500 text-sm mb-1">Low Stock Alerts</span>
+                  <span className="text-3xl font-bold text-red-600">{(metrics.lowStock || []).length}</span>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
+
+        {/* Advanced Reports - Pro and Enterprise */}
+        {canAccessAdvancedReports ? (
+          <>
+            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Advanced Filters</h2>
+              <div className="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                  <select value={productId} onChange={e => setProductId(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <option value="">All Products</option>
+                    {(products || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
+                  <select value={paymentType} onChange={e => setPaymentType(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <option value="">All Types</option>
+                    {(paymentTypes || []).map((pt) => <option key={pt} value={pt}>{pt.charAt(0).toUpperCase() + pt.slice(1)}</option>)}
+                  </select>
+                </div>
+                <button className="text-sm text-gray-600 hover:text-indigo-600" onClick={() => { setDateFrom(""); setDateTo(""); setProductId(""); setPaymentType(""); }}>Clear Filters</button>
+              </div>
+            </div>
+
+            {/* Sales Performance Section */}
+            <section className="mb-10">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Sales Performance</h2>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                <div className="bg-white rounded-xl shadow p-6">
+                  <h3 className="text-lg font-bold mb-4 text-center">Monthly Sales & Forecast</h3>
+                  <div className="h-80">
+                    <Line data={salesTrendData} options={{ responsive: true, maintainAspectRatio: false }} />
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow p-6">
+                  <h3 className="text-lg font-bold mb-4 text-center">Revenue by Top Products</h3>
+                  <div className="h-80">
+                    <Bar data={revenueBreakdownData} options={{ responsive: true, maintainAspectRatio: false, indexAxis: 'y' }} />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Customer & Operations Section */}
+            <section>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Customer & Operations</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <div className="lg:col-span-3 bg-white rounded-xl shadow p-6">
+                  <h3 className="text-lg font-bold mb-4">Top Customers by Spend</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="py-2 px-4 text-left font-semibold text-gray-600">Customer</th>
+                          <th className="py-2 px-4 text-left font-semibold text-gray-600">Purchases</th>
+                          <th className="py-2 px-4 text-left font-semibold text-gray-600">Total Spent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(metrics.topCustomers || []).length === 0 ? (
+                          <tr><td colSpan={3} className="text-center text-gray-400 py-4">No customer data available</td></tr>
+                        ) : (
+                          (metrics.topCustomers || []).map((c) => (
+                            <tr key={c.phone || c.name} className="border-b">
+                              <td className="py-2 px-4">{c.name}</td>
+                              <td className="py-2 px-4">{c.count}</td>
+                              <td className="py-2 px-4">Ksh {c.total.toLocaleString()}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
+                  <h3 className="text-lg font-bold mb-4 text-center">Payment Methods</h3>
+                  <div className="h-80 flex items-center justify-center">
+                    <div className="w-full max-w-xs">
+                      <Pie data={paymentMethodData} options={{ responsive: true, maintainAspectRatio: false }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : (
+          <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div className="text-center py-8">
+              <FaLock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Advanced Reports</h3>
+              <p className="text-gray-600 mb-4">Upgrade to Pro plan to access detailed sales performance, customer insights, and advanced analytics.</p>
+              <a href="/settings/billing" className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                <FaArrowUp className="w-4 h-4" />
+                Upgrade to Pro
+              </a>
             </div>
           </div>
-        </section>
+        )}
+
+        {/* Enterprise Reports - Enterprise only */}
+        {canAccessEnterpriseReports ? (
+          <section className="mt-10">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <FaCrown className="w-6 h-6 text-yellow-500" />
+              Enterprise Analytics
+            </h2>
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h3 className="text-lg font-bold mb-4">Customer Segmentation</h3>
+              <p className="text-gray-600 mb-4">Advanced customer analysis and segmentation insights available for Enterprise users.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-2">Customer Segments</h4>
+                  <p className="text-sm text-gray-600">AI-powered customer segmentation and behavior analysis.</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-2">Predictive Analytics</h4>
+                  <p className="text-sm text-gray-600">Advanced forecasting and trend prediction models.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : (
+          <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div className="text-center py-8">
+              <FaCrown className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Enterprise Analytics</h3>
+              <p className="text-gray-600 mb-4">Get access to advanced AI-powered analytics, customer segmentation, and predictive insights.</p>
+              <a href="/settings/billing" className="inline-flex items-center gap-2 px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition">
+                <FaCrown className="w-4 h-4" />
+                Upgrade to Enterprise
+              </a>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
