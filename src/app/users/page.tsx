@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { jwtDecode } from "jwt-decode";
+import AuthGuard from '@/components/AuthGuard';
 
 interface User {
   id: string;
@@ -41,14 +42,14 @@ export default function UsersPage() {
   useEffect(() => {
     if (!user?.tenantId) return;
     setLoading(true);
-    apiGet<User[]>(`/user?tenantId=${user.tenantId}`)
+    apiGet(`/user?tenantId=${user.tenantId}`)
       .then(setUsers)
       .finally(() => setLoading(false));
   }, [user?.tenantId]);
 
   const refreshUsers = () => {
     setLoading(true);
-    apiGet<User[]>(`/user?tenantId=${user.tenantId}`)
+    apiGet(`/user?tenantId=${user.tenantId}`)
       .then(setUsers)
       .finally(() => setLoading(false));
   };
@@ -140,7 +141,8 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <AuthGuard>
+      <div className="p-8 max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Users</h1>
         {canManage && (
@@ -296,6 +298,7 @@ export default function UsersPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </AuthGuard>
   );
 } 

@@ -4,6 +4,7 @@ import { apiGet, apiPost, apiDelete, apiPut } from "@/utils/api";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import PlanGuard from '@/components/PlanGuard';
 import FeatureGuard from '@/components/FeatureGuard';
+import AuthGuard from '@/components/AuthGuard';
 import { FaPlus, FaBox, FaExclamationTriangle, FaSearch, FaDownload, FaTrash, FaEdit, FaQrcode, FaUpload, FaLock, FaArrowUp } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 
@@ -282,7 +283,8 @@ export default function ProductsPage() {
   const isAtLimit = usagePercentage >= 100;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <AuthGuard>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Products</h1>
@@ -753,6 +755,7 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </AuthGuard>
   );
 } 

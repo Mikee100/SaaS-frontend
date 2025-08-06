@@ -3,25 +3,62 @@ import { useEffect, useState } from 'react';
 import { apiGet } from '@/utils/api';
 import PlanGuard from '@/components/PlanGuard';
 import FeatureGuard from '@/components/FeatureGuard';
-import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaShare, FaCrown, FaStar, FaLock, FaArrowUp } from 'react-icons/fa';
+import AuthGuard from '@/components/AuthGuard';
+import PerformanceMetrics from '@/components/PerformanceMetrics';
+import InventoryAnalytics from '@/components/InventoryAnalytics';
+import AIInsights from '@/components/AIInsights';
+import AdvancedSegments from '@/components/AdvancedSegments';
+import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaShare, FaCrown, FaStar, FaLock, FaArrowUp, FaBrain, FaUsers, FaBox } from 'react-icons/fa';
 
 interface AnalyticsData {
   totalSales?: number;
   totalRevenue?: number;
   totalProducts?: number;
+  totalCustomers?: number;
+  averageOrderValue?: number;
+  conversionRate?: number;
   salesByMonth?: Record<string, number>;
-  topProducts?: Array<{ name: string; sales: number; revenue: number }>;
-  customerSegments?: Array<{ segment: string; count: number; revenue: number }>;
+  salesByCategory?: Record<string, number>;
+  topProducts?: Array<{ name: string; sales: number; revenue: number; growth?: number; margin?: number }>;
+  customerSegments?: Array<{ segment: string; count: number; revenue: number; avgOrderValue?: number; retention?: number }>;
   realTimeData?: {
     currentUsers: number;
     activeSales: number;
     revenueToday: number;
+    ordersInProgress?: number;
+    averageSessionDuration?: number;
+    bounceRate?: number;
   };
   predictiveAnalytics?: {
     nextMonthForecast: number;
     churnRisk: number;
     growthRate: number;
+    seasonalTrend?: number;
+    marketTrend?: number;
+    demandForecast?: Record<string, number>;
   };
+  performanceMetrics?: {
+    customerLifetimeValue: number;
+    customerAcquisitionCost: number;
+    returnOnInvestment: number;
+    netPromoterScore: number;
+  };
+  inventoryAnalytics?: {
+    lowStockItems: number;
+    overstockItems: number;
+    inventoryTurnover: number;
+    stockoutRate: number;
+  };
+  advancedSegments?: {
+    byLocation: Array<{ location: string; revenue: number; customers: number }>;
+    byAge: Array<{ age: string; revenue: number; customers: number }>;
+    byDevice: Array<{ device: string; revenue: number; customers: number }>;
+  };
+  aiInsights?: {
+    recommendations: string[];
+    anomalies: string[];
+  };
+  customReports?: Array<{ name: string; data: string; lastUpdated?: string }>;
   message?: string;
 }
 
@@ -86,7 +123,8 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <AuthGuard>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
         <p className="text-gray-600">Track your business performance and insights</p>
@@ -94,34 +132,75 @@ export default function AnalyticsPage() {
 
       {/* Basic Analytics - Available to all plans */}
       {basicData && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm border p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">Total Sales</h3>
-              <FaChartLine className="w-5 h-5 text-blue-600" />
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Total Sales</h3>
+                <FaChartLine className="w-5 h-5 text-blue-600" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">{basicData.totalSales?.toLocaleString() || '0'}</p>
+              <p className="text-sm text-gray-600">All time sales</p>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{basicData.totalSales?.toLocaleString() || '0'}</p>
-            <p className="text-sm text-gray-600">All time sales</p>
+
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Total Revenue</h3>
+                <FaChartBar className="w-5 h-5 text-green-600" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">${basicData.totalRevenue?.toLocaleString() || '0'}</p>
+              <p className="text-sm text-gray-600">All time revenue</p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Products</h3>
+                <FaChartPie className="w-5 h-5 text-purple-600" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">{basicData.totalProducts?.toLocaleString() || '0'}</p>
+              <p className="text-sm text-gray-600">Active products</p>
+            </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">Total Revenue</h3>
-              <FaChartBar className="w-5 h-5 text-green-600" />
+          {/* Enhanced Basic Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Customers</h3>
+                <FaUsers className="w-5 h-5 text-indigo-600" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">{basicData.totalCustomers?.toLocaleString() || '0'}</p>
+              <p className="text-sm text-gray-600">Total customers</p>
             </div>
-            <p className="text-3xl font-bold text-gray-900">${basicData.totalRevenue?.toLocaleString() || '0'}</p>
-            <p className="text-sm text-gray-600">All time revenue</p>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-sm border p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">Products</h3>
-              <FaChartPie className="w-5 h-5 text-purple-600" />
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Avg Order Value</h3>
+                <FaBox className="w-5 h-5 text-orange-600" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">${basicData.averageOrderValue?.toFixed(2) || '0'}</p>
+              <p className="text-sm text-gray-600">Per transaction</p>
             </div>
-            <p className="text-3xl font-bold text-gray-900">{basicData.totalProducts?.toLocaleString() || '0'}</p>
-            <p className="text-sm text-gray-600">Active products</p>
+
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Conversion Rate</h3>
+                <FaBrain className="w-5 h-5 text-red-600" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">{((basicData.conversionRate || 0) * 100).toFixed(1)}%</p>
+              <p className="text-sm text-gray-600">Visitor to customer</p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Growth Rate</h3>
+                <FaChartLine className="w-5 h-5 text-green-600" />
+              </div>
+              <p className="text-3xl font-bold text-gray-900">+15.2%</p>
+              <p className="text-sm text-gray-600">Month over month</p>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Advanced Analytics - Pro+ Plans Only */}
@@ -166,7 +245,7 @@ export default function AnalyticsPage() {
               <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Pro+</span>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               {/* Customer Segments */}
               <div className="bg-white rounded-xl shadow-sm border p-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Customer Segments</h3>
@@ -205,6 +284,20 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Performance Metrics */}
+            {advancedData.performanceMetrics && (
+              <div className="mb-6">
+                <PerformanceMetrics metrics={advancedData.performanceMetrics} />
+              </div>
+            )}
+
+            {/* Inventory Analytics */}
+            {advancedData.inventoryAnalytics && (
+              <div className="mb-6">
+                <InventoryAnalytics analytics={advancedData.inventoryAnalytics} />
+              </div>
+            )}
           </div>
         )}
       </FeatureGuard>
@@ -251,7 +344,7 @@ export default function AnalyticsPage() {
               <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Enterprise</span>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               {/* Real-Time Data */}
               <div className="bg-white rounded-xl shadow-sm border p-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Real-Time Data</h3>
@@ -299,6 +392,20 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Advanced Customer Segments */}
+            {enterpriseData.advancedSegments && (
+              <div className="mb-6">
+                <AdvancedSegments segments={enterpriseData.advancedSegments} />
+              </div>
+            )}
+
+            {/* AI Insights */}
+            {enterpriseData.aiInsights && (
+              <div className="mb-6">
+                <AIInsights insights={enterpriseData.aiInsights} />
+              </div>
+            )}
           </div>
         )}
       </FeatureGuard>
@@ -317,6 +424,7 @@ export default function AnalyticsPage() {
             View Plans
         </a>
       </div>
-    </div>
+      </div>
+    </AuthGuard>
   );
 } 

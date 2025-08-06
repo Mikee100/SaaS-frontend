@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { apiGet, apiPost } from "@/utils/api";
-import { FaCrown, FaCheck, FaTimes, FaCreditCard, FaReceipt, FaHistory, FaSpinner, FaExclamationTriangle, FaInfoCircle } from "react-icons/fa";
+import { FaCrown, FaCheck, FaTimes, FaCreditCard, FaReceipt, FaHistory, FaSpinner, FaExclamationTriangle, FaInfoCircle, FaChartLine } from "react-icons/fa";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { getPriceIdForPlan, validateStripeConfig } from "@/config/stripe";
+import PaymentProcessor from "@/components/PaymentProcessor";
+import BillingDashboard from "@/components/BillingDashboard";
 
 interface Plan {
   id: string;
@@ -108,12 +110,20 @@ export default function BillingPage() {
         return;
       }
 
-             // For development mode without Stripe, simulate success
-       if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-         setSuccess(`Development mode: Successfully upgraded to ${plan.name} plan!`);
-         await fetchBillingData(); // Refresh data
-         return;
-       }
+      // For development mode without Stripe, create subscription directly
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        try {
+          // Create subscription directly in development mode
+          await apiPost("/billing/create-subscription", {
+            planId: planId,
+          });
+          setSuccess(`Development mode: Successfully upgraded to ${plan.name} plan!`);
+          await fetchBillingData(); // Refresh data
+        } catch (err: any) {
+          setError(err.message || "Failed to create subscription in development mode");
+        }
+        return;
+      }
 
       // Create checkout session
       const response = await apiPost("/billing/create-checkout-session", {
@@ -313,49 +323,64 @@ export default function BillingPage() {
           <div className="bg-white rounded-xl shadow-md p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-900">Current Plan</h2>
-              {subscription.plan.name === 'Enterprise' && (
+              {subscription.plan.name === 'Enterprise' && subscription.status !== 'none' && (
                 <FaCrown className="h-6 w-6 text-yellow-500" />
               )}
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">{subscription.plan.name} Plan</h3>
-                <p className="text-3xl font-bold text-indigo-600 mb-2">
-                  {subscription.plan.price === 0 ? 'Free' : `$${subscription.plan.price}/month`}
-                </p>
-                <p className="text-gray-600 mb-4">
-                  Status: <span className={`font-semibold ${
-                    subscription.status === 'active' ? 'text-green-600' : 
-                    subscription.status === 'canceled' ? 'text-red-600' : 
-                    subscription.status === 'none' ? 'text-gray-600' : 'text-yellow-600'
-                  }`}>
-                    {subscription.status === 'none' ? 'No Active Subscription' : 
-                     subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)}
-                  </span>
-                </p>
-                
-                {subscription.cancelAtPeriodEnd && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                    <p className="text-sm text-yellow-800">
-                      Your subscription will be canceled at the end of the current billing period.
+                {subscription.status === 'none' ? (
+                  <>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Basic Plan</h3>
+                    <p className="text-3xl font-bold text-indigo-600 mb-2">Free</p>
+                    <p className="text-gray-600 mb-4">
+                      Status: <span className="font-semibold text-gray-600">No Active Subscription</span>
                     </p>
-                  </div>
-                )}
+                    <div className="text-sm text-gray-600">
+                      <p>No active billing period</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">{subscription.plan.name} Plan</h3>
+                    <p className="text-3xl font-bold text-indigo-600 mb-2">
+                      {subscription.plan.price === 0 ? 'Free' : `$${subscription.plan.price}/month`}
+                    </p>
+                    <p className="text-gray-600 mb-4">
+                      Status: <span className={`font-semibold ${
+                        subscription.status === 'active' ? 'text-green-600' : 
+                        subscription.status === 'canceled' ? 'text-red-600' : 
+                        subscription.status === 'none' ? 'text-gray-600' : 'text-yellow-600'
+                      }`}>
+                        {subscription.status === 'none' ? 'No Active Subscription' : 
+                         subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)}
+                      </span>
+                    </p>
+                    
+                    {subscription.cancelAtPeriodEnd && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                        <p className="text-sm text-yellow-800">
+                          Your subscription will be canceled at the end of the current billing period.
+                        </p>
+                      </div>
+                    )}
 
-                <div className="text-sm text-gray-600">
-                  {subscription.currentPeriodStart && subscription.currentPeriodEnd ? (
-                    <p>Current period: {formatDate(subscription.currentPeriodStart)} - {formatDate(subscription.currentPeriodEnd)}</p>
-                  ) : (
-                    <p>No active billing period</p>
-                  )}
-                </div>
+                    <div className="text-sm text-gray-600">
+                      {subscription.currentPeriodStart && subscription.currentPeriodEnd ? (
+                        <p>Current period: {formatDate(subscription.currentPeriodStart)} - {formatDate(subscription.currentPeriodEnd)}</p>
+                      ) : (
+                        <p>No active billing period</p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="flex flex-col gap-3">
                 <button
                   onClick={handleManageBilling}
-                  disabled={loadingPortal || !isStripeConfigured()}
+                  disabled={loadingPortal || !isStripeConfigured() || subscription.status === 'none'}
                   className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loadingPortal ? (
@@ -366,16 +391,14 @@ export default function BillingPage() {
                   {loadingPortal ? 'Loading...' : 'Manage Billing'}
                 </button>
 
-                                 {subscription.status === 'active' && !subscription.cancelAtPeriodEnd && subscription.id && (
-                   <button
-                     onClick={handleCancelSubscription}
-                     className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
-                   >
-                     Cancel Subscription
-                   </button>
-                 )}
-
-
+                {subscription.status === 'active' && !subscription.cancelAtPeriodEnd && subscription.id && (
+                  <button
+                    onClick={handleCancelSubscription}
+                    className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
+                  >
+                    Cancel Subscription
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -419,15 +442,21 @@ export default function BillingPage() {
                 <div className="space-y-3 mb-6">
                   <div className="flex items-center">
                     <FaCheck className="h-4 w-4 text-green-500 mr-2" />
-                    <span className="text-sm">{plan.maxUsers} users</span>
+                    <span className="text-sm">
+                      {plan.maxUsers === null || plan.maxUsers === undefined ? 'Unlimited' : plan.maxUsers} users
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <FaCheck className="h-4 w-4 text-green-500 mr-2" />
-                    <span className="text-sm">{plan.maxProducts} products</span>
+                    <span className="text-sm">
+                      {plan.maxProducts === null || plan.maxProducts === undefined ? 'Unlimited' : plan.maxProducts} products
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <FaCheck className="h-4 w-4 text-green-500 mr-2" />
-                    <span className="text-sm">{plan.maxSalesPerMonth} sales/month</span>
+                    <span className="text-sm">
+                      {plan.maxSalesPerMonth === null || plan.maxSalesPerMonth === undefined ? 'Unlimited' : plan.maxSalesPerMonth} sales/month
+                    </span>
                   </div>
                   {plan.analyticsEnabled && (
                     <div className="flex items-center">
@@ -481,16 +510,16 @@ export default function BillingPage() {
 
                 <button
                   onClick={() => handleUpgrade(plan.id)}
-                  disabled={loadingCheckout || (subscription?.plan.id === plan.id) || !isStripeConfigured()}
+                  disabled={loadingCheckout || (subscription?.status !== 'none' && subscription?.plan.id === plan.id) || !isStripeConfigured()}
                   className={`w-full py-2 px-4 rounded-lg font-medium transition ${
-                    subscription?.plan.id === plan.id
+                    (subscription?.status !== 'none' && subscription?.plan.id === plan.id)
                       ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
                       : !isStripeConfigured()
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-indigo-600 text-white hover:bg-indigo-700'
                   }`}
                 >
-                  {subscription?.plan.id === plan.id ? 'Current Plan' : 
+                  {(subscription?.status !== 'none' && subscription?.plan.id === plan.id) ? 'Current Plan' : 
                    !isStripeConfigured() ? 'Setup Required' :
                    loadingCheckout ? (
                      <span className="flex items-center justify-center gap-2">
@@ -501,6 +530,41 @@ export default function BillingPage() {
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Payment Analytics Dashboard */}
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <FaChartLine className="h-6 w-6" />
+            Payment Analytics
+          </h2>
+          <BillingDashboard tenantId="current" />
+        </div>
+
+        {/* One-Time Payment Section */}
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <FaCreditCard className="h-6 w-6" />
+            One-Time Payment
+          </h2>
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="max-w-md mx-auto">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Test Payment</h3>
+              <PaymentProcessor
+                amount={29.99}
+                currency="usd"
+                description="Test payment for SaaS platform"
+                onSuccess={(paymentId) => {
+                  setSuccess(`Payment successful! Payment ID: ${paymentId}`);
+                  fetchBillingData();
+                }}
+                onError={(error) => {
+                  setError(`Payment failed: ${error}`);
+                }}
+                metadata={{ type: 'test_payment' }}
+              />
+            </div>
           </div>
         </div>
 

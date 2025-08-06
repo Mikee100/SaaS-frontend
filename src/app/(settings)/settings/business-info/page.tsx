@@ -5,25 +5,62 @@ import Spinner from '../../../components/Spinner';
 import { FaBuilding } from 'react-icons/fa';
 import Link from 'next/link';
 
-const fields = [
-  { name: "name", label: "Business Name" },
-  { name: "businessType", label: "Business Type" },
-  { name: "contactEmail", label: "Contact Email" },
+// Basic business information
+const basicFields = [
+  { name: "name", label: "Business Name", required: true },
+  { name: "businessType", label: "Business Type", required: true },
+  { name: "contactEmail", label: "Contact Email", required: true },
   { name: "contactPhone", label: "Contact Phone" },
+  { name: "website", label: "Website" },
+];
+
+// Enhanced business information
+const businessDetailsFields = [
+  { name: "businessCategory", label: "Business Category" },
+  { name: "businessSubcategory", label: "Business Subcategory" },
+  { name: "businessDescription", label: "Business Description", type: "textarea" },
+  { name: "foundedYear", label: "Founded Year", type: "number" },
+  { name: "employeeCount", label: "Number of Employees" },
+  { name: "annualRevenue", label: "Annual Revenue" },
+];
+
+// Location information
+const locationFields = [
   { name: "address", label: "Address" },
-  { name: "currency", label: "Currency" },
-  { name: "timezone", label: "Timezone" },
-  { name: "invoiceFooter", label: "Invoice Footer" },
-  { name: "logoUrl", label: "Logo URL" },
+  { name: "city", label: "City" },
+  { name: "state", label: "State/Province" },
+  { name: "country", label: "Country" },
+  { name: "postalCode", label: "Postal Code" },
+];
+
+// Legal and compliance
+const legalFields = [
   { name: "kraPin", label: "KRA PIN" },
   { name: "vatNumber", label: "VAT Number" },
+  { name: "businessLicense", label: "Business License" },
+  { name: "taxId", label: "Tax ID" },
   { name: "etimsQrUrl", label: "KRA eTIMS QR Code URL" },
+];
+
+// Financial settings
+const financialFields = [
+  { name: "currency", label: "Currency" },
+  { name: "timezone", label: "Timezone" },
+  { name: "invoiceFooter", label: "Invoice Footer", type: "textarea" },
+  { name: "logoUrl", label: "Logo URL" },
 ];
 
 const fieldHelp: Record<string, string> = {
   kraPin: 'Your KRA PIN (e.g., P051234567A)',
   vatNumber: 'Your VAT registration number (if applicable)',
   etimsQrUrl: 'URL to your KRA eTIMS QR code image (optional)',
+  businessLicense: 'Your business license number',
+  taxId: 'Your tax identification number',
+  currency: 'Default currency for transactions (e.g., KES, USD)',
+  timezone: 'Your business timezone (e.g., Africa/Nairobi)',
+  foundedYear: 'Year your business was established',
+  employeeCount: 'Number of employees (e.g., 1-10, 11-50, 50+)',
+  annualRevenue: 'Annual revenue range (e.g., <1M, 1M-10M, >10M)',
 };
 
 function validateKraPin(pin: string) {
@@ -56,7 +93,15 @@ export default function BusinessInfoSettings() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
+    
+    // Convert number fields to integers
+    if (e.target.type === 'number') {
+      const numValue = value === '' ? null : parseInt(value, 10);
+      setForm({ ...form, [name]: numValue });
+    } else {
+      setForm({ ...form, [name]: value });
+    }
+    
     if (name === 'kraPin') {
       setValidation((v) => ({ ...v, kraPin: validateKraPin(value) }));
     }
@@ -90,6 +135,73 @@ export default function BusinessInfoSettings() {
     }
   };
 
+  const renderField = (field: any) => {
+    const isRequired = field.required;
+    const hasError = (field.name === 'kraPin' && form.kraPin && validation.kraPin === false) ||
+                    (field.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false);
+    
+    // Get the value for the field, handling null/undefined for number fields
+    const getFieldValue = (fieldName: string, fieldType?: string) => {
+      const value = form[fieldName];
+      if (fieldType === 'number') {
+        return value !== null && value !== undefined ? value.toString() : '';
+      }
+      return value || '';
+    };
+    
+    return (
+      <div key={field.name} className="flex flex-col gap-2">
+        <label htmlFor={field.name} className="font-medium text-gray-700">
+          {field.label}
+          {isRequired && <span className="text-red-500 ml-1">*</span>}
+        </label>
+        {fieldHelp[field.name] && (
+          <span className="text-sm text-gray-500">{fieldHelp[field.name]}</span>
+        )}
+        {field.type === "textarea" ? (
+          <textarea
+            id={field.name}
+            name={field.name}
+            value={getFieldValue(field.name)}
+            onChange={handleChange}
+            rows={3}
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500 ${
+              hasError ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        ) : field.type === "number" ? (
+          <input
+            id={field.name}
+            name={field.name}
+            type="number"
+            value={getFieldValue(field.name, 'number')}
+            onChange={handleChange}
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500 ${
+              hasError ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        ) : (
+          <input
+            id={field.name}
+            name={field.name}
+            type="text"
+            value={getFieldValue(field.name)}
+            onChange={handleChange}
+            className={`w-full px-4 py-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500 ${
+              hasError ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        )}
+        {field.name === 'kraPin' && form.kraPin && validation.kraPin === false && (
+          <span className="text-red-500 text-sm">Invalid KRA PIN format (e.g., P051234567A)</span>
+        )}
+        {field.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false && (
+          <span className="text-red-500 text-sm">Invalid VAT Number format (e.g., P051234567A)</span>
+        )}
+      </div>
+    );
+  };
+
   if (loading) return (
     <div className="flex justify-center items-center min-h-[300px]">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -108,47 +220,46 @@ export default function BusinessInfoSettings() {
       {success && <div className="mb-4 px-4 py-2 rounded bg-green-50 text-green-700 border border-green-200">Business info saved!</div>}
       {error && <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 border border-red-200">{error}</div>}
       <form onSubmit={handleSave} className="space-y-8">
+        {/* Basic Business Information */}
         <div className="bg-white rounded-xl shadow p-10 w-full">
+          <h3 className="text-lg font-semibold text-gray-800 mb-6">Basic Business Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-            {fields.map((f) => (
-              <div key={f.name} className="flex flex-col gap-2">
-                <label htmlFor={f.name} className="font-medium text-gray-700">{f.label}</label>
-                {fieldHelp[f.name] && (
-                  <span className="text-sm text-gray-500">{fieldHelp[f.name]}</span>
-                )}
-                {f.name === "invoiceFooter" ? (
-                  <textarea
-                    id={f.name}
-                    name={f.name}
-                    value={form[f.name] || ""}
-                    onChange={handleChange}
-                    rows={3}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  <input
-                    id={f.name}
-                    name={f.name}
-                    type="text"
-                    value={form[f.name] || ""}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500 ${
-                      f.name === 'kraPin' && form.kraPin && validation.kraPin === false ? 'border-red-500' :
-                      f.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false ? 'border-red-500' :
-                      'border-gray-300'
-                    }`}
-                  />
-                )}
-                {f.name === 'kraPin' && form.kraPin && validation.kraPin === false && (
-                  <span className="text-red-500 text-sm">Invalid KRA PIN format (e.g., P051234567A)</span>
-                )}
-                {f.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false && (
-                  <span className="text-red-500 text-sm">Invalid VAT Number format (e.g., P051234567A)</span>
-                )}
-              </div>
-            ))}
+            {basicFields.map(renderField)}
           </div>
         </div>
+
+        {/* Business Details */}
+        <div className="bg-white rounded-xl shadow p-10 w-full">
+          <h3 className="text-lg font-semibold text-gray-800 mb-6">Business Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+            {businessDetailsFields.map(renderField)}
+          </div>
+        </div>
+
+        {/* Location Information */}
+        <div className="bg-white rounded-xl shadow p-10 w-full">
+          <h3 className="text-lg font-semibold text-gray-800 mb-6">Location Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+            {locationFields.map(renderField)}
+          </div>
+        </div>
+
+        {/* Legal and Compliance */}
+        <div className="bg-white rounded-xl shadow p-10 w-full">
+          <h3 className="text-lg font-semibold text-gray-800 mb-6">Legal and Compliance</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+            {legalFields.map(renderField)}
+          </div>
+        </div>
+
+        {/* Financial Settings */}
+        <div className="bg-white rounded-xl shadow p-10 w-full">
+          <h3 className="text-lg font-semibold text-gray-800 mb-6">Financial Settings</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+            {financialFields.map(renderField)}
+          </div>
+        </div>
+
         <div className="flex justify-end">
           <button
             type="submit"

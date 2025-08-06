@@ -3,9 +3,11 @@
 import { usePathname } from "next/navigation";
 import PlanBasedNav from "@/components/PlanBasedNav";
 import { UserProvider } from "@/components/UserContext";
+import { SidebarProvider, useSidebar } from "@/components/SidebarContext";
 
-export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
+function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { sidebarCollapsed } = useSidebar();
   
   // Check if current path is in a route group (auth, admin, settings)
   const isInRouteGroup = pathname.startsWith('/login') || 
@@ -16,11 +18,27 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                         pathname.startsWith('/settings');
 
   return (
-    <UserProvider>
+    <>
       {!isInRouteGroup && <PlanBasedNav />}
-      <main className={!isInRouteGroup ? "lg:ml-64 min-h-screen bg-gray-50" : "min-h-screen bg-gray-50"}>
+      <main className={`min-h-screen bg-gray-50 transition-all duration-300 ${
+        !isInRouteGroup 
+          ? sidebarCollapsed 
+            ? 'lg:ml-16' 
+            : 'lg:ml-64'
+          : ''
+      }`}>
         {children}
       </main>
+    </>
+  );
+}
+
+export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <UserProvider>
+      <SidebarProvider>
+        <LayoutContent>{children}</LayoutContent>
+      </SidebarProvider>
     </UserProvider>
   );
 } 

@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/components/UserContext";
+import { FaSpinner } from "react-icons/fa";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -9,18 +10,27 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [year, setYear] = useState<number | null>(null);
+  const [showLoginAnimation, setShowLoginAnimation] = useState(false);
+  const animationStartedRef = useRef(false);
 
   useEffect(() => {
     setYear(new Date().getFullYear());
   }, []);
 
   useEffect(() => {
-    if (user) {
-      if (user.isSuperadmin) {
-        router.push("/superadmin");
-      } else {
-        router.push("/");
-      }
+    if (user && !animationStartedRef.current) {
+      // Show login animation for 3 seconds before redirecting
+      animationStartedRef.current = true;
+      setShowLoginAnimation(true);
+      const timer = setTimeout(() => {
+        if (user.isSuperadmin) {
+          router.push("/superadmin");
+        } else {
+          router.push("/");
+        }
+      }, 3000);
+
+      return () => clearTimeout(timer);
     }
   }, [user, router]);
 
@@ -39,6 +49,21 @@ export default function LoginPage() {
     setPassword(e.target.value);
     if (error) clearError();
   };
+
+  // Show loading animation overlay
+  if (showLoginAnimation) {
+    return (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+        <div className="text-center text-white">
+          <div className="flex justify-center mb-6">
+            <FaSpinner className="w-12 h-12 animate-spin" />
+          </div>
+          <h2 className="text-2xl font-semibold mb-2">Welcome back!</h2>
+          <p className="text-gray-300">Setting up your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
