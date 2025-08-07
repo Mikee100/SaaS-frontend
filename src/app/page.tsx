@@ -370,17 +370,23 @@ export default function AnalyticsPage() {
             <div className="lg:col-span-2 space-y-6">
               {/* Charts */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <SalesBreakdownChart salesData={basicData?.topProducts?.map(p => ({ label: p.name, value: p.sales })) || []} />
-                </div>
-                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <CustomerGrowthChart growthData={basicData?.customerGrowth || {}} />
-                </div>
+                {basicData?.topProducts && (
+                  <>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <SalesBreakdownChart salesData={basicData.topProducts.map(p => ({ label: p.name, value: p.sales }))} />
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <CustomerGrowthChart growthData={basicData.customerGrowth || {}} />
+                    </div>
+                  </>
+                )}
               </div>
               
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <TopProductsChart products={basicData?.topProducts?.map(p => ({ name: p.name, sales: p.sales })) || []} />
-              </div>
+              {basicData?.topProducts && (
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <TopProductsChart products={basicData.topProducts.map(p => ({ name: p.name, sales: p.sales }))} />
+                </div>
+              )}
 
               {/* Customer Segments */}
               {basicData?.customerSegments && (

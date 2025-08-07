@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import React from "react";
 import Spinner from '@/components/Spinner';
@@ -17,6 +17,11 @@ import {
   FaStar, FaClock, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaTimesCircle
 } from 'react-icons/fa';
 import MpesaPayment from '@/components/MpesaPayment';
+import { hasPermission } from '@/utils/permissions';
+import { useUser } from '@/components/UserContext';
+import Tooltip from '@/components/Tooltip';
+import debounce from '@/utils/debounce';
+import ProductSkeleton from '@/components/ProductSkeleton';
 
 type Product = { 
   id: string; 
@@ -51,6 +56,7 @@ type QuickAction = {
 };
 
 export default function SalesPage() {
+  const { user } = useUser();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -68,6 +74,7 @@ export default function SalesPage() {
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   
   // New state for enhanced features
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -80,6 +87,12 @@ export default function SalesPage() {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [favoriteProducts, setFavoriteProducts] = useState<string[]>([]);
   const [showMpesaPayment, setShowMpesaPayment] = useState(false);
+
+  // Permission checks
+  const canViewSales = hasPermission(user, 'view_sales');
+  const canCreateSales = hasPermission(user, 'create_sales');
+  const canEditSales = hasPermission(user, 'edit_sales');
+  const canDeleteSales = hasPermission(user, 'delete_sales');
 
   // Constants
   const productsPerPage = 12;
@@ -302,29 +315,70 @@ export default function SalesPage() {
     }
   };
 
-  const handleMpesaSuccess = (transactionId: string) => {
-    // M-Pesa payment was successful, the sale was created via webhook
-    clearCart();
-    setCheckoutOpen(false);
-    setShowMpesaPayment(false);
-    setCustomerName("");
-    setCustomerPhone("");
-    setAmountReceived(0);
-    
-    // Refresh products
-    apiGet("/products").then(setProducts);
-    
+  // M-Pesa payment handlers
+  const handleMpesaSuccess = useCallback((transactionId: string) => {
     // Show success message
-    alert("M-Pesa payment successful! Your order has been processed.");
-  };
+    setStatusMessage('M-Pesa payment successful! Processing your order...');
+    
+    // Complete the sale with M-Pesa details
+    const completeMpesaSale = async () => {
+      try {
+        const saleData = {
+          items: cart.map(item => ({
+            productId: item.id,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          total: cartTotal,
+          paymentMethod: 'mpesa',
+          mpesaTransactionId: transactionId,
+          customerName: customerName || undefined,
+          customerPhone: customerPhone || undefined,
+          idempotencyKey: uuidv4(),
+          tenantId: businessInfo?.id,
+          userId: user?.id
+        };
 
-  const handleMpesaError = (error: string) => {
-    setError(error);
-  };
+        const sale = await apiPost("/sales", saleData);
+        
+        // Reset cart and close modals
+        clearCart();
+        setCheckoutOpen(false);
+        setShowMpesaPayment(false);
+        setCustomerName("");
+        setCustomerPhone("");
+        
+        // Show success message
+        alert('Payment successful! Your order has been processed.');
+        
+        // Refresh products
+        apiGet("/products").then(setProducts);
+        
+        // Redirect to receipt if available
+        const saleId = sale.id || sale.saleId || sale._id;
+        if (saleId) {
+          router.push(`/sales/receipt/${saleId}`);
+        }
+      } catch (err: any) {
+        console.error('Error completing M-Pesa sale:', err);
+        setError('Payment was successful but there was an error processing your order. Please contact support.');
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+    
+    completeMpesaSale();
+  }, [cart, cartTotal, customerName, customerPhone, businessInfo, user, clearCart, router]);
 
-  const handleMpesaCancel = () => {
+  const handleMpesaError = useCallback((error: string) => {
+    setError(`M-Pesa payment failed: ${error}`);
+    setIsProcessing(false);
+  }, []);
+
+  const handleMpesaCancel = useCallback(() => {
     setShowMpesaPayment(false);
-  };
+    setIsProcessing(false);
+  }, []);
 
   const quickActions: QuickAction[] = [
     {
@@ -357,11 +411,49 @@ export default function SalesPage() {
     }
   ];
 
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50">
-      <Spinner size={48} />
-    </div>
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Debounced search function
+  const debouncedSearch = useMemo(
+    () =>
+      debounce((searchValue: string) => {
+        setSearchTerm(searchValue);
+        setCurrentPage(1);
+        setIsSearching(false);
+      }, 300),
+    []
   );
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setIsSearching(true);
+    debouncedSearch(value);
+  };
+
+  // Loading state for initial data load or search
+  const isLoading = loading || isSearching;
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[300px]">
+        <Spinner />
+      </div>
+    );
+  }
+
+  // Check if user has permission to view sales
+  if (!canViewSales) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-12">
+          <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-4">You don't have permission to view sales.</p>
+          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (error) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -499,13 +591,15 @@ export default function SalesPage() {
                       id="search-input"
                       type="text"
                       placeholder="Search products... (Ctrl+F)"
-                      value={searchTerm}
-                      onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setCurrentPage(1);
-                      }}
+                      defaultValue={searchTerm}
+                      onChange={handleSearchChange}
                       className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
+                    {isSearching && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    )}
                   </div>
                   
                   <FeatureGuard requiredFeature="api_access" fallback={
@@ -515,7 +609,7 @@ export default function SalesPage() {
                   }>
                     <button
                       onClick={() => setShowScanner(true)}
-                      className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition"
+                      className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
                       title="Scan QR Code"
                     >
                       <FaQrcode className="w-5 h-5" />
@@ -584,116 +678,75 @@ export default function SalesPage() {
                 </div>
               </div>
 
-              {/* Products Display */}
-              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-                  <h2 className="font-semibold text-gray-800">Available Products ({filteredProducts.length})</h2>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span>Page {currentPage} of {pageCount}</span>
-                  </div>
-                </div>
-                
-                {paginatedProducts.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">
-                    {searchTerm ? "No products match your search" : "No products available"}
+              {/* Products Grid */}
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                {isLoading ? (
+                  <ProductSkeleton count={8} />
+                ) : filteredProducts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FaSearch className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900">No products found</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {searchTerm ? 'Try a different search term' : 'No products available'}
+                    </p>
                   </div>
                 ) : (
-                  <>
-                    {viewMode === "grid" ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4">
-                        {paginatedProducts.map(product => (
-                          <div
-                            key={product.id}
-                            className={`relative p-3 rounded-lg border transition-all cursor-pointer ${
-                              product.stock <= 0 
-                                ? 'bg-gray-100 border-gray-200' 
-                                : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-md hover:transform hover:-translate-y-0.5'
-                            }`}
-                            onClick={() => product.stock > 0 && addToCart(product)}
-                          >
-                            {/* Favorite Button */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {paginatedProducts.map((product) => (
+                      <div 
+                        key={product.id}
+                        className="group relative bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-100"
+                      >
+                        <div className="aspect-square bg-gray-50 flex items-center justify-center p-4">
+                          {/* Product image placeholder */}
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
+                            <FaShoppingCart className="w-8 h-8" />
+                          </div>
+                        </div>
+                        <div className="p-3">
+                          <h3 className="text-sm font-medium text-gray-900 truncate">
+                            {product.name}
+                          </h3>
+                          <p className="mt-1 text-sm font-medium text-blue-600">
+                            ${product.price.toFixed(2)}
+                          </p>
+                          <div className="mt-2 flex justify-between items-center">
+                            <span className="text-xs text-gray-500">
+                              {product.stock} in stock
+                            </span>
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFavorite(product.id);
-                              }}
-                              className={`absolute top-2 right-2 p-1 rounded-full transition-colors ${
-                                favoriteProducts.includes(product.id)
-                                  ? 'text-yellow-500 bg-yellow-50'
-                                  : 'text-gray-400 hover:text-yellow-500'
+                              onClick={() => addToCart(product)}
+                              disabled={product.stock <= 0}
+                              className={`px-2 py-1 text-xs font-medium rounded ${
+                                product.stock > 0
+                                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                               }`}
                             >
-                              <FaStar className="w-3 h-3" />
+                              {product.stock > 0 ? 'Add' : 'Out of stock'}
                             </button>
-
-                            {/* Stock Status */}
-                            {product.stock <= 0 && (
-                              <div className="absolute top-2 left-2 bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
-                                Out of stock
-                              </div>
-                            )}
-
-                            <div className="text-center">
-                              <h3 className="font-medium text-gray-800 text-sm mb-1 truncate">{product.name}</h3>
-                              <p className="text-lg font-bold text-blue-600">${product.price.toFixed(2)}</p>
-                              <div className="flex items-center justify-center gap-1 mt-1">
-                                {product.stock > 10 ? (
-                                  <FaCheckCircle className="w-3 h-3 text-green-600" />
-                                ) : product.stock > 0 ? (
-                                  <FaExclamationTriangle className="w-3 h-3 text-orange-600" />
-                                ) : (
-                                  <FaTimesCircle className="w-3 h-3 text-red-600" />
-                                )}
-                                <p className={`text-xs ${
-                                  product.stock > 10 ? 'text-green-600' : 
-                                  product.stock > 0 ? 'text-orange-600' : 'text-red-600'
-                                }`}>
-                                  {product.stock} in stock
-                                </p>
-                              </div>
-                            </div>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-gray-200">
-                        {paginatedProducts.map(product => (
-                          <div
-                            key={product.id}
-                            className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                              product.stock <= 0 ? 'opacity-50' : ''
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(product.id);
+                          }}
+                          className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full hover:bg-gray-100 transition-colors"
+                          aria-label={favoriteProducts.includes(product.id) ? 'Remove from favorites' : 'Add to favorites'}
+                        >
+                          <FaStar
+                            className={`w-4 h-4 ${
+                              favoriteProducts.includes(product.id)
+                                ? 'text-yellow-400 fill-current'
+                                : 'text-gray-300 hover:text-yellow-400'
                             }`}
-                            onClick={() => product.stock > 0 && addToCart(product)}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-medium text-gray-800">{product.name}</h3>
-                                  {favoriteProducts.includes(product.id) && (
-                                    <FaStar className="w-3 h-3 text-yellow-500" />
-                                  )}
-                                </div>
-                                {product.sku && (
-                                  <p className="text-xs text-gray-500">SKU: {product.sku}</p>
-                                )}
-                              </div>
-                              <div className="text-right">
-                                <p className="text-lg font-bold text-blue-600">${product.price.toFixed(2)}</p>
-                                <p className={`text-xs ${
-                                  product.stock > 10 ? 'text-green-600' : 
-                                  product.stock > 0 ? 'text-orange-600' : 'text-red-600'
-                                }`}>
-                                  {product.stock} in stock
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                          />
+                        </button>
                       </div>
-                    )}
-                  </>
+                    ))}
+                  </div>
                 )}
-
                 {/* Enhanced Pagination */}
                 {pageCount > 1 && (
                   <div className="px-4 py-3 border-t border-gray-200 flex justify-between items-center">
@@ -1065,6 +1118,7 @@ export default function SalesPage() {
                 <button 
                   onClick={() => setShowMpesaPayment(false)}
                   className="text-gray-500 hover:text-gray-700"
+                  disabled={isProcessing}
                 >
                   <FaTimes className="w-5 h-5" />
                 </button>
@@ -1076,8 +1130,10 @@ export default function SalesPage() {
                   saleData={{
                     items: cart.map(item => ({
                       productId: item.id,
+                      name: item.name,
                       quantity: item.quantity,
-                      price: item.price
+                      price: item.price,
+                      sku: item.sku
                     })),
                     total: cartTotal,
                     paymentMethod: 'mpesa',
@@ -1085,7 +1141,8 @@ export default function SalesPage() {
                     customerPhone: customerPhone || undefined,
                     idempotencyKey: uuidv4(),
                     tenantId: businessInfo?.id,
-                    userId: businessInfo?.userId
+                    userId: user?.id,
+                    timestamp: new Date().toISOString()
                   }}
                   onSuccess={handleMpesaSuccess}
                   onError={handleMpesaError}

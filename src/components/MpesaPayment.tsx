@@ -29,50 +29,125 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onError, onC
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
 
-  // Status polling
+  // Status polling with exponential backoff
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let attempt = 0;
+    const maxAttempts = 15;
+    const baseDelay = 3000;
+    let isMounted = true;
     
-    if (currentTransaction && currentTransaction.status === 'pending') {
-      interval = setInterval(async () => {
-        try {
-          const response = await apiGet(`/mpesa/status/${currentTransaction.checkoutRequestId}`);
-          if (response.success && response.data) {
-            const updatedTransaction = response.data;
+    const checkPaymentStatus = async () => {
+      if (!currentTransaction?.checkoutRequestId || !isMounted) {
+        console.log('Skipping status check: No checkoutRequestId or component unmounted');
+        return;
+      }
+      
+      console.log(`Checking payment status (attempt ${attempt + 1}/${maxAttempts})`);
+      
+      try {
+        const response = await apiGet(`/mpesa/status/${currentTransaction.checkoutRequestId}`);
+        console.log('Payment status response:', response);
+        
+        if (response.success && response.data) {
+          const updatedTransaction = response.data;
+          console.log('Updated transaction status:', updatedTransaction.status);
+          
+          if (currentTransaction.status !== updatedTransaction.status) {
+            console.log('Status changed from', currentTransaction.status, 'to', updatedTransaction.status);
             setCurrentTransaction(updatedTransaction);
-            
-            if (updatedTransaction.status === 'success') {
+          }
+          
+          switch (updatedTransaction.status) {
+            case 'success':
+              console.log('Payment successful, preparing success flow...');
               setStatusMessage('Payment successful! Processing your order...');
+              if (interval) clearTimeout(interval);
               setTimeout(() => {
-                onSuccess(updatedTransaction.id);
-              }, 2000);
-            } else if (updatedTransaction.status === 'failed') {
-              setError(updatedTransaction.message || 'Payment failed');
+                if (isMounted) {
+                  console.log('Calling onSuccess callback with transaction ID:', updatedTransaction.id);
+                  onSuccess(updatedTransaction.id);
+                }
+              }, 1000);
+              return;
+              
+            case 'failed':
+              console.log('Payment failed:', updatedTransaction.message);
+              setError(updatedTransaction.message || 'Payment was not completed');
               setIsProcessing(false);
-            } else if (updatedTransaction.status === 'cancelled') {
+              return;
+              
+            case 'cancelled':
+              console.log('Payment was cancelled');
               setError('Payment was cancelled');
               setIsProcessing(false);
-            } else if (updatedTransaction.status === 'timeout') {
-              setError('Payment request timed out');
+              return;
+              
+            case 'timeout':
+              console.log('Payment request timed out');
+              setError('Payment request timed out. Please try again.');
               setIsProcessing(false);
-            } else if (updatedTransaction.status === 'stock_unavailable') {
-              setError('Stock unavailable for one or more items');
+              return;
+              
+            case 'stock_unavailable':
+              console.log('Stock unavailable for items');
+              setError('Some items in your cart are no longer available. Please try again.');
               setIsProcessing(false);
-            }
+              return;
+              
+            case 'pending':
+              console.log('Payment still pending...');
+              break;
+              
+            default:
+              console.warn('Unknown status received:', updatedTransaction.status);
+              break;
           }
-        } catch (err) {
-          console.error('Error checking payment status:', err);
+        } else {
+          console.warn('Unexpected response format:', response);
         }
-      }, 3000); // Check every 3 seconds
+      } catch (err) {
+        console.error('Error checking payment status:', err);
+      }
+      
+      attempt++;
+      
+      if (attempt >= maxAttempts) {
+        console.log('Max attempts reached, stopping polling');
+        if (isMounted) {
+          setError('Payment verification is taking longer than expected. Please check your M-Pesa statement and contact support if needed.');
+          setIsProcessing(false);
+        }
+        return;
+      }
+      
+      const delay = Math.min(baseDelay * Math.pow(2, Math.floor(attempt / 2)), 30000);
+      console.log(`Next check in ${delay}ms`);
+      
+      if (isMounted) {
+        interval = setTimeout(checkPaymentStatus, delay);
+      }
+    };
+    
+    if (currentTransaction?.status === 'pending' && isMounted) {
+      console.log('Starting payment status polling...');
+      checkPaymentStatus();
     }
-
+    
     return () => {
-      if (interval) clearInterval(interval);
+      console.log('Cleaning up payment status polling');
+      isMounted = false;
+      if (interval) clearTimeout(interval);
     };
   }, [currentTransaction, onSuccess]);
 
   const validatePhoneNumber = (phone: string) => {
-    const phoneRegex = /^(07|2547|25407|\+2547)\d{8}$/;
+    // Accepts:
+    // - 07XXXXXXXX (10 digits starting with 07)
+    // - 7XXXXXXXX (9 digits starting with 7)
+    // - 2547XXXXXXXX (12 digits starting with 254)
+    // - +2547XXXXXXXX (13 digits starting with +254)
+    const phoneRegex = /^(?:07\d{8}|7\d{8}|2547\d{8}|\+2547\d{8})$/;
     return phoneRegex.test(phone);
   };
 
@@ -81,63 +156,98 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onError, onC
     let cleaned = phone.replace(/\D/g, '');
     
     // Handle different formats
-    if (cleaned.startsWith('07')) {
+    if (cleaned.startsWith('0')) {
+      // Convert 07... to 2547...
       return '254' + cleaned.substring(1);
     } else if (cleaned.startsWith('254')) {
+      // Already in 254 format
       return cleaned;
-    } else if (cleaned.length === 9) {
+    } else if (cleaned.startsWith('7') && cleaned.length === 9) {
+      // Convert 7... to 2547...
       return '254' + cleaned;
+    } else if (cleaned.startsWith('+254')) {
+      // Convert +254... to 254...
+      return cleaned.substring(1);
     }
     
+    // If we get here, the format isn't recognized, but we'll try to use it as is
     return cleaned;
   };
 
   const handleInitiatePayment = async () => {
+    console.log('Initiating M-Pesa payment...');
     if (!phoneNumber.trim()) {
+      console.log('Validation failed: No phone number');
       setError('Please enter a phone number');
       return;
     }
 
     if (!validatePhoneNumber(phoneNumber)) {
+      console.log('Validation failed: Invalid phone number format');
       setError('Please enter a valid phone number (07XXXXXXXX, 2547XXXXXXXX, or +2547XXXXXXXX)');
       return;
     }
 
     if (amount < 10) {
+      console.log('Validation failed: Amount too low');
       setError('Minimum amount is 10 KES');
       return;
     }
 
+    console.log('Setting up payment request...');
     setIsProcessing(true);
     setError(null);
     setStatusMessage('Initiating payment request...');
 
     try {
       const formattedPhone = formatPhoneNumber(phoneNumber);
+      const reference = `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
+      console.log('Sending payment request to server...', {
+        phoneNumber: formattedPhone,
+        amount: Math.ceil(amount),
+        reference,
+        saleData: {
+          ...saleData,
+          reference,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
       const response = await apiPost('/mpesa/initiate', {
         phoneNumber: formattedPhone,
-        amount: Math.floor(amount),
-        saleData: saleData
+        amount: Math.ceil(amount),
+        accountReference: reference,
+        transactionDesc: `Payment for order ${reference}`,
+        saleData: {
+          ...saleData,
+          reference,
+          timestamp: new Date().toISOString()
+        }
       });
 
+      console.log('Payment initiation response:', response);
+
       if (response.success) {
+        console.log('Payment initiated successfully, starting polling...');
         setCurrentTransaction({
           id: response.data.transactionId,
           phoneNumber: formattedPhone,
-          amount: Math.floor(amount),
+          amount: Math.ceil(amount),
           status: 'pending',
           checkoutRequestId: response.data.checkoutRequestId,
           message: 'Payment request sent to your phone',
           createdAt: new Date().toISOString()
         });
+        
         setStatusMessage('Payment request sent to your phone. Please check your M-Pesa app and enter your PIN.');
       } else {
-        setError(response.error || 'Failed to initiate payment');
-        setIsProcessing(false);
+        console.error('Payment initiation failed:', response.error);
+        throw new Error(response.error || 'Failed to initiate payment');
       }
     } catch (err: any) {
-      console.error('M-Pesa payment error:', err);
-      setError(err.message || 'Failed to initiate payment');
+      console.error('Error in handleInitiatePayment:', err);
+      setError(err.message || 'Failed to initiate payment. Please try again.');
       setIsProcessing(false);
     }
   };
@@ -193,68 +303,130 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onError, onC
           <FaMobile className="w-6 h-6 text-green-600" />
           <h3 className="text-lg font-semibold text-gray-800">M-Pesa Payment</h3>
         </div>
-        <p className="text-sm text-gray-600">Enter your M-Pesa phone number to receive payment request</p>
+        <p className="text-sm text-gray-600">
+          {currentTransaction?.status === 'pending' 
+            ? 'Waiting for payment confirmation...' 
+            : 'Enter your M-Pesa phone number to receive payment request'}
+        </p>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <FaTimesCircle className="h-5 w-5 text-red-600" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Message */}
+      {statusMessage && (
+        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              {isProcessing ? (
+                <FaSpinner className="h-5 w-5 text-blue-600 animate-spin" />
+              ) : (
+                <FaCheckCircle className="h-5 w-5 text-blue-600" />
+              )}
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-700">{statusMessage}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Payment Form */}
-      {!currentTransaction && (
+      {!currentTransaction?.checkoutRequestId && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
               M-Pesa Phone Number
             </label>
-            <input
-              type="tel"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              placeholder="07XXXXXXXX or 2547XXXXXXXX"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              disabled={isProcessing}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Enter the phone number registered with M-Pesa
+            <div className="mt-1 relative rounded-md shadow-sm">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span className="text-gray-500 sm:text-sm">+254</span>
+              </div>
+              <input
+                type="tel"
+                name="phoneNumber"
+                id="phoneNumber"
+                value={phoneNumber}
+                onChange={(e) => {
+                  // Remove all non-digit characters
+                  const value = e.target.value.replace(/\D/g, '');
+                  
+                  // Auto-format as user types
+                  let formatted = '';
+                  if (value.startsWith('0')) {
+                    // If starts with 0, keep it but limit to 10 digits total
+                    formatted = value.substring(0, 10);
+                  } else if (value.startsWith('254')) {
+                    // If starts with 254, limit to 12 digits total
+                    formatted = value.substring(0, 12);
+                  } else if (value.startsWith('7')) {
+                    // If starts with 7, limit to 9 digits
+                    formatted = value.substring(0, 9);
+                  } else {
+                    // Otherwise just take the first 12 digits
+                    formatted = value.substring(0, 12);
+                  }
+                  
+                  setPhoneNumber(formatted);
+                }}
+                className="pl-12 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                placeholder="7XXXXXXXX"
+                disabled={isProcessing}
+                autoComplete="tel"
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Enter your M-Pesa registered phone number
             </p>
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Amount to pay:</span>
-              <span className="font-bold text-lg text-gray-800">KES {amount.toFixed(2)}</span>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="flex justify-between text-sm text-gray-600 mb-1">
+              <span>Amount to pay:</span>
+              <span className="font-semibold">KES {amount.toLocaleString()}</span>
+            </div>
+            <div className="text-xs text-gray-500">
+              A payment request will be sent to your phone
             </div>
           </div>
 
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <FaTimesCircle className="w-4 h-4 text-red-600" />
-                <span className="text-sm text-red-700">{error}</span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3">
+          <div className="flex space-x-3 pt-2">
             <button
+              type="button"
               onClick={onCancel}
               disabled={isProcessing}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="flex-1 bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
+              type="button"
               onClick={handleInitiatePayment}
               disabled={isProcessing || !phoneNumber.trim()}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className={`flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                isProcessing || !phoneNumber.trim()
+                  ? 'bg-blue-400 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+              }`}
             >
               {isProcessing ? (
                 <>
-                  <FaSpinner className="w-4 h-4 animate-spin" />
+                  <FaSpinner className="animate-spin -ml-1 mr-2 h-4 w-4" />
                   Processing...
                 </>
               ) : (
-                <>
-                  <FaMobile className="w-4 h-4" />
-                  Send Payment Request
-                </>
+                'Pay Now'
               )}
             </button>
           </div>
@@ -262,78 +434,65 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onError, onC
       )}
 
       {/* Payment Status */}
-      {currentTransaction && (
-        <div className="space-y-4">
-          <div className="text-center">
-            {getStatusIcon(currentTransaction.status)}
-            <h4 className={`font-semibold mt-2 ${getStatusColor(currentTransaction.status)}`}>
-              {currentTransaction.status === 'pending' && 'Payment Request Sent'}
-              {currentTransaction.status === 'success' && 'Payment Successful'}
-              {currentTransaction.status === 'failed' && 'Payment Failed'}
-              {currentTransaction.status === 'cancelled' && 'Payment Cancelled'}
-              {currentTransaction.status === 'timeout' && 'Payment Timed Out'}
-              {currentTransaction.status === 'stock_unavailable' && 'Stock Unavailable'}
-            </h4>
-            <p className="text-sm text-gray-600 mt-1">
-              {currentTransaction.message || statusMessage}
-            </p>
+      {currentTransaction?.checkoutRequestId && (
+        <div className="text-center py-4">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+            {currentTransaction.status === 'pending' ? (
+              <FaSpinner className="h-6 w-6 text-blue-600 animate-spin" />
+            ) : currentTransaction.status === 'success' ? (
+              <FaCheckCircle className="h-6 w-6 text-green-600" />
+            ) : (
+              <FaTimesCircle className="h-6 w-6 text-red-600" />
+            )}
           </div>
-
+          <h3 className="mt-2 text-lg font-medium text-gray-900">
+            {currentTransaction.status === 'pending' 
+              ? 'Waiting for Payment...' 
+              : currentTransaction.status === 'success'
+              ? 'Payment Successful!'
+              : 'Payment Failed'}
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">
+            {currentTransaction.message || 'Processing your payment...'}
+          </p>
+          
           {currentTransaction.status === 'pending' && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h5 className="font-medium text-blue-800 mb-2">Next Steps:</h5>
-              <ol className="text-sm text-blue-700 space-y-1">
-                <li>1. Check your phone for the M-Pesa prompt</li>
-                <li>2. Enter your M-Pesa PIN when prompted</li>
-                <li>3. Wait for payment confirmation</li>
-                <li>4. Your order will be processed automatically</li>
-              </ol>
-            </div>
-          )}
-
-          {currentTransaction.status === 'success' && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <FaCheckCircle className="w-4 h-4 text-green-600" />
-                <span className="font-medium text-green-800">Payment Details</span>
+            <div className="mt-4">
+              <div className="text-xs text-gray-500 mb-2">
+                Haven't received the request?
               </div>
-              <div className="text-sm text-green-700 space-y-1">
-                <div>Receipt: {currentTransaction.mpesaReceipt || 'N/A'}</div>
-                <div>Amount: KES {currentTransaction.amount.toFixed(2)}</div>
-                <div>Phone: {currentTransaction.phoneNumber}</div>
-              </div>
-            </div>
-          )}
-
-          {(currentTransaction.status === 'failed' || currentTransaction.status === 'cancelled' || currentTransaction.status === 'timeout' || currentTransaction.status === 'stock_unavailable') && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <FaTimesCircle className="w-4 h-4 text-red-600" />
-                <span className="font-medium text-red-800">Payment Failed</span>
-              </div>
-              <p className="text-sm text-red-700 mb-3">
-                {currentTransaction.message || 'The payment could not be completed. Please try again or use a different payment method.'}
-              </p>
               <button
-                onClick={() => {
-                  setCurrentTransaction(null);
-                  setError(null);
-                  setStatusMessage('');
-                }}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                type="button"
+                onClick={handleInitiatePayment}
+                disabled={isProcessing}
+                className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                Try Again
+                {isProcessing ? (
+                  <>
+                    <FaSpinner className="animate-spin -ml-1 mr-1 h-3 w-3" />
+                    Resending...
+                  </>
+                ) : (
+                  'Resend Payment Request'
+                )}
               </button>
             </div>
           )}
-
-          {currentTransaction.status === 'pending' && (
-            <div className="flex gap-3">
+          
+          {currentTransaction.status !== 'pending' && (
+            <div className="mt-5">
               <button
-                onClick={handleCancelPayment}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                type="button"
+                onClick={() => {
+                  if (currentTransaction.status === 'success') {
+                    onSuccess(currentTransaction.id);
+                  } else {
+                    onCancel();
+                  }
+                }}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                Cancel Payment
+                {currentTransaction.status === 'success' ? 'Continue' : 'Try Again'}
               </button>
             </div>
           )}
@@ -341,4 +500,4 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onError, onC
       )}
     </div>
   );
-} 
+}

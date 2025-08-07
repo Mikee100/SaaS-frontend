@@ -6,6 +6,7 @@ import Tooltip from './Tooltip';
 import { FaHome, FaBox, FaShoppingCart, FaChartLine, FaCog, FaCrown, FaUsers, FaSignOutAlt, FaUser, FaCaretDown, FaBars, FaTimes, FaFileAlt, FaChevronLeft, FaChevronRight, FaMobile } from 'react-icons/fa';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { hasPermission } from '@/utils/permissions';
 
 export default function PlanBasedNav() {
   const userContext = useUser();
@@ -60,27 +61,37 @@ export default function PlanBasedNav() {
   console.log('🔍 PlanBasedNav: Rendering full sidebar with user:', userContext.user);
 
   const navigationItems = [
-    { name: 'Dashboard', href: '/', icon: FaHome, requiredPlan: null },
-    { name: 'Products', href: '/products', icon: FaBox, requiredPlan: 'Basic' },
-    { name: 'Inventory', href: '/inventory', icon: FaBox, requiredPlan: 'Basic' },
-    { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null },
-    { name: 'Sales History', href: '/sales/history', icon: FaShoppingCart, requiredPlan: null },
-    { name: 'M-Pesa Transactions', href: '/mpesa-transactions', icon: FaMobile, requiredPlan: null },
-    { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan: 'Pro' },
-    { name: 'Reports', href: '/reports', icon: FaFileAlt, requiredPlan: null },
-    { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null },
+    { name: 'Dashboard', href: '/', icon: FaHome, requiredPlan: null, requiredPermission: null },
+    { name: 'Products', href: '/products', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_products' },
+    { name: 'Inventory', href: '/inventory', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_inventory' },
+    { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
+    { name: 'Sales History', href: '/sales/history', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
+    { name: 'M-Pesa Transactions', href: '/mpesa-transactions', icon: FaMobile, requiredPlan: null, requiredPermission: 'view_sales' },
+    { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan: 'Pro', requiredPermission: 'view_analytics' },
+    { name: 'Reports', href: '/reports', icon: FaFileAlt, requiredPlan: null, requiredPermission: 'view_reports' },
+    { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
+    { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
   ];
 
   const canAccess = (item: any) => {
-    if (!item.requiredPlan) return true;
-    if (!limits) return true; // Default to allowing if limits not loaded
-    
-    const planHierarchy: Record<string, number> = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
-    const currentPlan = limits.currentPlan || 'Basic';
-    const currentLevel = planHierarchy[currentPlan] || 0;
-    const requiredLevel = planHierarchy[item.requiredPlan] || 0;
-    
-    return currentLevel >= requiredLevel;
+    // Check plan requirements
+    if (item.requiredPlan) {
+      if (!limits) return true; // Default to allowing if limits not loaded
+      
+      const planHierarchy: Record<string, number> = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
+      const currentPlan = limits.currentPlan || 'Basic';
+      const currentLevel = planHierarchy[currentPlan] || 0;
+      const requiredLevel = planHierarchy[item.requiredPlan] || 0;
+      
+      if (currentLevel < requiredLevel) return false;
+    }
+
+    // Check permission requirements
+    if (item.requiredPermission && userContext?.user) {
+      return hasPermission(userContext.user, item.requiredPermission);
+    }
+
+    return true;
   };
 
   const accessibleItems = navigationItems.filter(canAccess);

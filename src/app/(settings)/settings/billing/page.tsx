@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { apiGet, apiPost } from "@/utils/api";
-import { FaCrown, FaCheck, FaTimes, FaCreditCard, FaReceipt, FaHistory, FaSpinner, FaExclamationTriangle, FaInfoCircle, FaChartLine } from "react-icons/fa";
+import { FaCrown, FaCheck, FaTimes, FaCreditCard, FaReceipt, FaHistory, FaSpinner, FaExclamationTriangle, FaInfoCircle, FaChartLine, FaLock } from "react-icons/fa";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { getPriceIdForPlan, validateStripeConfig } from "@/config/stripe";
 import PaymentProcessor from "@/components/PaymentProcessor";
 import BillingDashboard from "@/components/BillingDashboard";
+import { hasPermission } from '@/utils/permissions';
+import { useUser } from '@/components/UserContext';
+import Tooltip from '@/components/Tooltip';
 
 interface Plan {
   id: string;
@@ -53,6 +56,7 @@ interface Invoice {
 }
 
 export default function BillingPage() {
+  const { user } = useUser();
   const { limits, hasFeature } = usePlanLimits();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -243,6 +247,9 @@ export default function BillingPage() {
     }
   }, []);
 
+  // Permission checks
+  const canViewBilling = hasPermission(user, 'view_billing');
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
@@ -261,6 +268,20 @@ export default function BillingPage() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if user has permission to view billing
+  if (!canViewBilling) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-12">
+          <FaLock className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-4">You don't have permission to view billing information.</p>
+          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>
     );

@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
 import { FaBox, FaSearch, FaFilter, FaDownload, FaPlus, FaMinus, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaChartBar, FaHistory, FaEdit, FaEye } from 'react-icons/fa';
+import { hasPermission } from '@/utils/permissions';
+import { useUser } from '@/components/UserContext';
+import Tooltip from '@/components/Tooltip';
 
 interface Product {
   id: string;
@@ -27,6 +30,7 @@ interface InventoryStats {
 }
 
 export default function InventoryPage() {
+  const { user } = useUser();
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,9 +140,9 @@ export default function InventoryPage() {
   }
 
   function getStockStatus(quantity: number) {
-    if (quantity === 0) return { status: "out", color: "text-red-600", bg: "bg-red-50", icon: <FaTimesCircle /> };
-    if (quantity <= 5) return { status: "low", color: "text-orange-600", bg: "bg-orange-50", icon: <FaExclamationTriangle /> };
-    return { status: "in", color: "text-green-600", bg: "bg-green-50", icon: <FaCheckCircle /> };
+    if (quantity === 0) return { status: "out", color: "text-red-600", bg: "bg-red-50", icon: <FaTimesCircle />, text: "Out of Stock" };
+    if (quantity <= 5) return { status: "low", color: "text-orange-600", bg: "bg-orange-50", icon: <FaExclamationTriangle />, text: "Low Stock" };
+    return { status: "in", color: "text-green-600", bg: "bg-green-50", icon: <FaCheckCircle />, text: "In Stock" };
   }
 
   function StatCard({ title, value, icon, color, bg }: { title: string; value: string | number; icon: React.ReactNode; color: string; bg: string }) {
@@ -159,56 +163,54 @@ export default function InventoryPage() {
 
   function ProductCard({ product }: { product: Product }) {
     const inv = getInv(product.id);
-    const quantity = inv?.quantity || 0;
-    const stockStatus = getStockStatus(quantity);
-    const lastUpdated = inv ? new Date(inv.updatedAt).toLocaleDateString() : 'Never';
-
+    const stockStatus = getStockStatus(inv?.quantity || 0);
+    const canEditInventory = hasPermission(user, 'edit_inventory');
+    
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
-            {product.category && (
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                {product.category}
-              </span>
-            )}
+            <p className="text-sm text-gray-600">{product.category || 'Uncategorized'}</p>
           </div>
-          <div className={`p-2 rounded-full ${stockStatus.bg}`}>
-            <div className={`${stockStatus.color}`}>
-              {stockStatus.icon}
-            </div>
+          <div className={`px-2 py-1 rounded-full text-xs font-medium ${stockStatus.color} ${stockStatus.bg}`}>
+            {stockStatus.text}
           </div>
         </div>
         
-        <div className="space-y-2 mb-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Quantity</span>
-            <span className={`font-semibold ${stockStatus.color}`}>{quantity}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Last Updated</span>
-            <span className="text-xs text-gray-500">{lastUpdated}</span>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Stock:</span>
+            <span className="font-medium">{inv?.quantity || 0}</span>
           </div>
           {product.price && (
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Value</span>
-              <span className="text-sm font-medium">${(quantity * product.price).toLocaleString()}</span>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Value:</span>
+              <span className="font-medium">${((inv?.quantity || 0) * product.price).toFixed(2)}</span>
             </div>
           )}
         </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => openStockModal(product)}
-            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-          >
-            <FaEdit className="inline w-3 h-3 mr-1" />
-            {inv ? 'Edit' : 'Add'}
-          </button>
-          <button className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm">
-            <FaEye className="w-3 h-3" />
-          </button>
+        
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          {canEditInventory ? (
+            <button
+              onClick={() => openStockModal(product)}
+              className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              <FaEdit className="w-3 h-3 inline mr-1" />
+              Update Stock
+            </button>
+          ) : (
+            <Tooltip content="You don't have permission to edit inventory. Contact your administrator.">
+              <button
+                disabled
+                className="w-full px-3 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed text-sm font-medium"
+              >
+                <FaEdit className="w-3 h-3 inline mr-1" />
+                Update Stock
+              </button>
+            </Tooltip>
+          )}
         </div>
       </div>
     );
@@ -216,19 +218,21 @@ export default function InventoryPage() {
 
   if (loading) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Inventory Management</h1>
-          <p className="text-gray-600">Loading inventory data...</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded mb-3"></div>
-              <div className="h-6 bg-gray-200 rounded mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-            </div>
-          ))}
+      <div className="flex justify-center items-center min-h-[300px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Check if user has permission to view inventory
+  if (!hasPermission(user, 'view_inventory')) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-12">
+          <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-4">You don't have permission to view inventory.</p>
+          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>
     );
@@ -236,25 +240,23 @@ export default function InventoryPage() {
 
   return (
     <AuthGuard>
-      <div className="p-6 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Inventory Management</h1>
-              <p className="text-gray-600">Manage your product stock levels</p>
-            </div>
-            <div className="flex gap-2">
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium">
-                <FaDownload className="inline w-4 h-4 mr-1" />
-                Export
-              </button>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                <FaPlus className="inline w-4 h-4 mr-1" />
-                Add Product
-              </button>
-            </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Inventory</h1>
+            <p className="text-gray-600">Manage stock levels and inventory</p>
           </div>
+          
+          {hasPermission(user, 'create_inventory') && (
+            <button
+              onClick={() => setShowBulkModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <FaPlus className="w-4 h-4 inline mr-2" />
+              Bulk Update
+            </button>
+          )}
+        </div>
 
           {/* Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

@@ -7,6 +7,9 @@ import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
 import { FaPlus, FaBox, FaExclamationTriangle, FaSearch, FaDownload, FaTrash, FaEdit, FaQrcode, FaUpload, FaLock, FaArrowUp } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
+import { hasPermission } from '@/utils/permissions';
+import { useUser } from '@/components/UserContext';
+import Tooltip from '@/components/Tooltip';
 
 
 interface Product {
@@ -20,6 +23,7 @@ interface Product {
 }
 
 export default function ProductsPage() {
+  const { user } = useUser();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,6 +42,12 @@ export default function ProductsPage() {
   const itemsPerPage = 20;
   
   const { limits, canCreate, getUsagePercentage } = usePlanLimits();
+
+  // Permission checks
+  const canViewProducts = hasPermission(user, 'view_products');
+  const canCreateProducts = hasPermission(user, 'create_products');
+  const canEditProducts = hasPermission(user, 'edit_products');
+  const canDeleteProducts = hasPermission(user, 'delete_products');
 
   useEffect(() => {
     fetchProducts();
@@ -278,6 +288,20 @@ export default function ProductsPage() {
     );
   }
 
+  // Check if user has permission to view products
+  if (!canViewProducts) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-12">
+          <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-4">You don't have permission to view products.</p>
+          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
+        </div>
+      </div>
+    );
+  }
+
   const usagePercentage = getUsagePercentage('products');
   const isNearLimit = usagePercentage >= 80;
   const isAtLimit = usagePercentage >= 100;
@@ -303,18 +327,30 @@ export default function ProductsPage() {
             >
               {viewMode === 'grid' ? 'Table View' : 'Grid View'}
             </button>
-            <button
-              onClick={() => setShowAddForm(true)}
-              disabled={!canCreate('products')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                canCreate('products')
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              <FaPlus className="w-4 h-4" />
-              Add Product
-            </button>
+            {canCreateProducts ? (
+              <button
+                onClick={() => setShowAddForm(true)}
+                disabled={!canCreate('products')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                  canCreate('products')
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                <FaPlus className="w-4 h-4" />
+                Add Product
+              </button>
+            ) : (
+              <Tooltip content="You don't have permission to create products. Contact your administrator.">
+                <button
+                  disabled
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gray-300 text-gray-500 cursor-not-allowed"
+                >
+                  <FaPlus className="w-4 h-4" />
+                  Add Product
+                </button>
+              </Tooltip>
+            )}
           </div>
         </PlanGuard>
       </div>
@@ -585,13 +621,25 @@ export default function ProductsPage() {
               )}
 
               <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-                <button 
-                  onClick={() => openEditModal(product)} 
-                  className="flex items-center gap-1 px-3 py-1 rounded bg-gray-100 border border-gray-200 hover:bg-gray-200 text-xs font-medium transition"
-                >
-                  <FaEdit className="w-3 h-3" />
-                  Edit
-                </button>
+                {canEditProducts ? (
+                  <button 
+                    onClick={() => openEditModal(product)} 
+                    className="flex items-center gap-1 px-3 py-1 rounded bg-gray-100 border border-gray-200 hover:bg-gray-200 text-xs font-medium transition"
+                  >
+                    <FaEdit className="w-3 h-3" />
+                    Edit
+                  </button>
+                ) : (
+                  <Tooltip content="You don't have permission to edit products. Contact your administrator.">
+                    <button 
+                      disabled
+                      className="flex items-center gap-1 px-3 py-1 rounded bg-gray-100 border border-gray-200 text-gray-400 text-xs font-medium cursor-not-allowed"
+                    >
+                      <FaEdit className="w-3 h-3" />
+                      Edit
+                    </button>
+                  </Tooltip>
+                )}
                 <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
                   <button disabled className="flex items-center gap-1 px-3 py-1 rounded bg-green-50 border border-green-200 text-green-300 text-xs font-medium cursor-not-allowed">
                     <FaQrcode className="w-3 h-3" />
@@ -607,13 +655,25 @@ export default function ProductsPage() {
                     QR
                   </button>
                 </FeatureGuard>
-                <button 
-                  onClick={() => handleDelete(product.id)} 
-                  className="flex items-center gap-1 px-3 py-1 rounded bg-red-50 border border-red-200 hover:bg-red-100 text-xs font-medium text-red-700 transition"
-                >
-                  <FaTrash className="w-3 h-3" />
-                  Delete
-                </button>
+                {canDeleteProducts ? (
+                  <button 
+                    onClick={() => handleDelete(product.id)} 
+                    className="flex items-center gap-1 px-3 py-1 rounded bg-red-50 border border-red-200 hover:bg-red-100 text-xs font-medium text-red-700 transition"
+                  >
+                    <FaTrash className="w-3 h-3" />
+                    Delete
+                  </button>
+                ) : (
+                  <Tooltip content="You don't have permission to delete products. Contact your administrator.">
+                    <button 
+                      disabled
+                      className="flex items-center gap-1 px-3 py-1 rounded bg-red-50 border border-red-200 text-red-300 text-xs font-medium cursor-not-allowed"
+                    >
+                      <FaTrash className="w-3 h-3" />
+                      Delete
+                    </button>
+                  </Tooltip>
+                )}
               </div>
             </div>
           ))}
@@ -652,12 +712,23 @@ export default function ProductsPage() {
                         ))}
                         <td className="px-4 py-3 border-b border-gray-50">
                           <div className="flex gap-2">
-                            <button 
-                              onClick={() => openEditModal(product)} 
-                              className="text-xs font-medium text-blue-600 hover:underline"
-                            >
-                              Edit
-                            </button>
+                            {canEditProducts ? (
+                              <button 
+                                onClick={() => openEditModal(product)} 
+                                className="text-xs font-medium text-blue-600 hover:underline"
+                              >
+                                Edit
+                              </button>
+                            ) : (
+                              <Tooltip content="You don't have permission to edit products. Contact your administrator.">
+                                <button 
+                                  disabled
+                                  className="text-xs font-medium text-gray-400 cursor-not-allowed"
+                                >
+                                  Edit
+                                </button>
+                              </Tooltip>
+                            )}
                             <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
                               <button disabled className="text-xs font-medium text-gray-400 cursor-not-allowed">
                                 QR
@@ -671,12 +742,23 @@ export default function ProductsPage() {
                                 QR
                               </button>
                             </FeatureGuard>
-                            <button 
-                              onClick={() => handleDelete(product.id)} 
-                              className="text-xs font-medium text-red-600 hover:underline"
-                            >
-                              Delete
-                            </button>
+                            {canDeleteProducts ? (
+                              <button 
+                                onClick={() => handleDelete(product.id)} 
+                                className="text-xs font-medium text-red-600 hover:underline"
+                              >
+                                Delete
+                              </button>
+                            ) : (
+                              <Tooltip content="You don't have permission to delete products. Contact your administrator.">
+                                <button 
+                                  disabled
+                                  className="text-xs font-medium text-gray-400 cursor-not-allowed"
+                                >
+                                  Delete
+                                </button>
+                              </Tooltip>
+                            )}
                           </div>
                         </td>
                       </tr>

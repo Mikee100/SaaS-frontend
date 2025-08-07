@@ -16,7 +16,10 @@ import {
   Filler,
 } from "chart.js";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
-import { FaCrown, FaLock, FaArrowUp } from 'react-icons/fa';
+import { FaCrown, FaLock, FaArrowUp, FaChartBar, FaDownload } from 'react-icons/fa';
+import { hasPermission } from '@/utils/permissions';
+import { useUser } from '@/components/UserContext';
+
 
 ChartJS.register(
   CategoryScale,
@@ -51,6 +54,7 @@ type Metrics = {
 };
 
 export default function ReportsPage() {
+  const { user } = useUser();
   const { limits, hasFeature } = usePlanLimits();
   const [metrics, setMetrics] = useState<Metrics>({
     totalSales: 0,
@@ -77,6 +81,9 @@ export default function ReportsPage() {
   const canAccessBasicReports = !limits?.currentPlan || limits.currentPlan === 'Basic' || limits.currentPlan === 'Pro' || limits.currentPlan === 'Enterprise';
   const canAccessAdvancedReports = limits?.currentPlan === 'Pro' || limits?.currentPlan === 'Enterprise';
   const canAccessEnterpriseReports = limits?.currentPlan === 'Enterprise';
+
+  // Permission checks
+  const canViewReports = hasPermission(user, 'view_reports');
 
   useEffect(() => {
     apiGet<any[]>("/products").then(setProducts).catch(() => setProducts([]));
@@ -158,8 +165,22 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gray-50">
-        <div className="text-xl font-semibold text-gray-700">Loading Reports...</div>
+      <div className="flex justify-center items-center min-h-[300px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Check if user has permission to view reports
+  if (!canViewReports) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-12">
+          <FaChartBar className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-4">You don't have permission to view reports.</p>
+          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
+        </div>
       </div>
     );
   }

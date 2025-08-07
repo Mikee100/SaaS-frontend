@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { FaShieldAlt, FaUsers, FaEdit, FaTrash, FaPlus, FaUserShield, FaCog } from 'react-icons/fa';
+import { FaShieldAlt, FaUsers, FaEdit, FaTrash, FaPlus, FaUserShield, FaCog, FaLock } from 'react-icons/fa';
 import Link from "next/link";
+import { hasPermission } from '@/utils/permissions';
+import { useUser } from '@/components/UserContext';
+import Tooltip from '@/components/Tooltip';
 
 interface Role {
   id: string;
@@ -26,6 +29,7 @@ interface User {
 }
 
 export default function PermissionsSettings() {
+  const { user } = useUser();
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -42,6 +46,9 @@ export default function PermissionsSettings() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserPermissions, setShowUserPermissions] = useState(false);
   const [userPermissions, setUserPermissions] = useState<Array<{ key: string; note?: string }>>([]);
+
+  // Permission checks
+  const canEditUsers = hasPermission(user, 'edit_users');
 
   useEffect(() => {
     loadData();
@@ -135,11 +142,27 @@ export default function PermissionsSettings() {
     return "Other";
   };
 
-  if (loading) return (
-    <div className="flex justify-center items-center min-h-[300px]">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[300px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Check if user has permission to manage permissions
+  if (!canEditUsers) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-12">
+          <FaLock className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-4">You don't have permission to manage permissions.</p>
+          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
@@ -200,10 +223,10 @@ export default function PermissionsSettings() {
               <div className="space-y-3">
                 <h5 className="font-medium text-gray-700 text-sm">Permissions:</h5>
                 <div className="space-y-2">
-                  {role.rolePermissions.length === 0 ? (
+                  {(Array.isArray(role.rolePermissions) && role.rolePermissions.length === 0) ? (
                     <p className="text-gray-500 text-sm">No permissions assigned</p>
                   ) : (
-                    role.rolePermissions.map((rp, index) => (
+                    (Array.isArray(role.rolePermissions) ? role.rolePermissions : []).map((rp, index) => (
                       <div key={index} className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                         <span className="text-sm text-gray-600">{rp.permission.key}</span>
@@ -252,7 +275,7 @@ export default function PermissionsSettings() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex flex-wrap gap-1">
-                      {user.userRoles.map((ur, index) => (
+                      {(Array.isArray(user.userRoles) ? user.userRoles : []).map((ur, index) => (
                         <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           {ur.role.name}
                         </span>
@@ -295,8 +318,8 @@ export default function PermissionsSettings() {
             <div key={category} className="border border-gray-200 rounded-lg p-4">
               <h4 className="font-semibold text-gray-900 mb-3">{category}</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {perms.map(permKey => {
-                  const permission = permissions.find(p => p.key === permKey);
+                {(Array.isArray(perms) ? perms : []).map(permKey => {
+                  const permission = Array.isArray(permissions) ? permissions.find(p => p.key === permKey) : undefined;
                   return (
                     <div key={permKey} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
                       <div className="w-2 h-2 bg-blue-500 rounded-full"></div>

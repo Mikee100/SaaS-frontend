@@ -1,9 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
-import { FaCrown, FaPalette, FaCode, FaShieldAlt, FaHeadset, FaCheck, FaTimes, FaArrowRight } from 'react-icons/fa';
+import { FaCrown, FaPalette, FaCode, FaShieldAlt, FaHeadset, FaCheck, FaTimes, FaArrowRight, FaLock } from 'react-icons/fa';
 import EnterpriseFeatures from '@/components/EnterpriseFeatures';
 import PlanGuard from '@/components/PlanGuard';
+import { hasPermission } from '@/utils/permissions';
+import { useUser } from '@/components/UserContext';
+import Tooltip from '@/components/Tooltip';
 
 interface EnterpriseStatus {
   customBranding: boolean;
@@ -18,6 +21,7 @@ interface EnterpriseStatus {
 }
 
 export default function EnterprisePage() {
+  const { user } = useUser();
   const [enterpriseStatus, setEnterpriseStatus] = useState<EnterpriseStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -47,10 +51,27 @@ export default function EnterprisePage() {
     }
   };
 
+  // Permission checks
+  const canViewSettings = hasPermission(user, 'view_settings');
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
+      <div className="flex justify-center items-center min-h-[300px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Check if user has permission to view enterprise features
+  if (!canViewSettings) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-12">
+          <FaLock className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-4">You don't have permission to view enterprise features.</p>
+          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
+        </div>
       </div>
     );
   }
