@@ -15,8 +15,9 @@ export default function ForgotPasswordPage() {
     try {
       await apiPost("/auth/forgot-password", { email });
       setSubmitted(true);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Something went wrong");
     } finally {
       setLoading(false);
     }

@@ -43,7 +43,7 @@ export default function AnalyticsPage() {
         try {
           const advanced = await apiGet('/analytics/advanced') as AnalyticsData;
           setAdvancedData(advanced);
-        } catch (error) {
+        } catch {
           console.log('Advanced analytics not available');
         }
 
@@ -51,7 +51,7 @@ export default function AnalyticsPage() {
         try {
           const enterprise = await apiGet('/analytics/enterprise') as AnalyticsData;
           setEnterpriseData(enterprise);
-        } catch (error) {
+        } catch {
           console.log('Enterprise analytics not available');
         }
       } catch (error) {

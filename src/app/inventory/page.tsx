@@ -91,8 +91,9 @@ export default function InventoryPage() {
       setTimeout(() => {
         apiGet<InventoryItem[]>("/inventory").then(setInventory);
       }, 300);
-    } catch (err: any) {
-      setModalError(err.message || "Failed to update stock");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setModalError(error.message || "Failed to update stock");
     } finally {
       setSaving(false);
     }

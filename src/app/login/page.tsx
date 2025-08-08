@@ -26,12 +26,23 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await apiPost<{ access_token: string; user: any }>("/auth/login", { email, password });
+      interface LoginResponse {
+        access_token: string;
+        user: {
+          id: string;
+          email: string;
+          name: string;
+          role: string;
+        };
+      }
+      
+      const res = await apiPost<LoginResponse>("/auth/login", { email, password });
       localStorage.setItem("token", res.access_token);
       localStorage.setItem("user", JSON.stringify(res.user));
       router.push("/");
-    } catch (err: any) {
-      setError(err.message || "Login failed");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Login failed");
     } finally {
       setLoading(false);
     }
