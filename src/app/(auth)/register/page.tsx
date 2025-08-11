@@ -97,8 +97,11 @@ export default function RegisterPage() {
     setError("");
     
     try {
-      // Send all required fields in one request
-      const res = await apiPost<{ tenant: any }>("/tenant", {
+      // Log the current form state
+      console.log('Current form data:', JSON.stringify(formData, null, 2));
+      
+      // Prepare the request data with the correct field mappings
+      const requestData = {
         name: formData.businessName,
         businessType: formData.businessType,
         businessCategory: formData.businessCategory,
@@ -123,23 +126,89 @@ export default function RegisterPage() {
         ownerName: formData.ownerName,
         ownerEmail: formData.ownerEmail,
         ownerPassword: formData.ownerPassword,
-      });
+      };
       
+      console.log('Sending registration data:', JSON.stringify(requestData, null, 2));
+      
+      // Log each field individually for debugging
+      console.log('Field values being sent:');
+      console.log('ownerName:', requestData.ownerName);
+      console.log('ownerEmail:', requestData.ownerEmail);
+      console.log('ownerPassword:', requestData.ownerPassword ? '***' : 'MISSING');
+      
+      // Check for empty strings
+      const requiredFields = [
+        { key: 'name', value: requestData.name, label: 'Business Name' },
+        { key: 'businessType', value: requestData.businessType, label: 'Business Type' },
+        { key: 'contactEmail', value: requestData.contactEmail, label: 'Contact Email' },
+        { key: 'ownerName', value: requestData.ownerName, label: 'Owner Name' },
+        { key: 'ownerEmail', value: requestData.ownerEmail, label: 'Owner Email' },
+        { key: 'ownerPassword', value: requestData.ownerPassword, label: 'Owner Password' },
+      ];
+      
+      const missingFields = requiredFields
+        .filter(({ value }) => !value || (typeof value === 'string' && value.trim() === ''))
+        .map(({ label }) => label);
+      
+      if (missingFields.length > 0) {
+        const errorMessage = `Missing required fields: ${missingFields.join(', ')}`;
+        console.error('Validation failed:', errorMessage);
+        setError(errorMessage);
+        return;
+      }
+      
+      // Send the request with the properly formatted data
+      const res = await apiPost<{ tenant: any }>('/tenant', requestData);
+      console.log('Tenant created successfully:', res);
+
+      // Ensure a valid tenant was returned before proceeding
+      if (!res || !res.tenant || !res.tenant.id) {
+        setError('Registration failed: No tenant was created. Please try again.');
+        setLoading(false);
+        return;
+      }
+
       // Auto-login
-      const loginRes = await apiPost<{ access_token: string; user: any }>("/auth/login", { 
-        email: formData.ownerEmail, 
-        password: formData.ownerPassword 
-      });
-      localStorage.setItem("token", loginRes.access_token);
-      localStorage.setItem("user", JSON.stringify(loginRes.user));
-      
-      if (loginRes.user.isSuperadmin) {
-        router.push("/superadmin");
-      } else {
-        router.push("/");
+      try {
+        const loginRes = await apiPost<{ access_token: string; user: any }>('/auth/login', { 
+          email: formData.ownerEmail, 
+          password: formData.ownerPassword 
+        });
+        localStorage.setItem('token', loginRes.access_token);
+        localStorage.setItem('user', JSON.stringify(loginRes.user));
+        if (loginRes.user.isSuperadmin) {
+          router.push('/superadmin');
+        } else {
+          router.push('/');
+        }
+      } catch (loginError: any) {
+        console.error('Auto-login failed:', loginError);
+        // Even if auto-login fails, the account was created successfully
+        router.push('/login');
       }
     } catch (err: any) {
-      setError(err.message || "Registration failed");
+      console.error('Registration error:', err);
+      
+      // Extract and display the error message from the response if available
+      let errorMessage = "Registration failed. Please try again.";
+      
+      try {
+        // Try to parse the error response for more details
+        if (err.message && err.message.includes('{')) {
+          const errorObj = JSON.parse(err.message.split(' - ')[1] || '{}');
+          if (errorObj.message) {
+            errorMessage = errorObj.message;
+          }
+        } else if (err.response?.data?.message) {
+          errorMessage = err.response.data.message;
+        } else {
+          errorMessage = err.message || errorMessage;
+        }
+      } catch (parseError) {
+        console.error('Error parsing error message:', parseError);
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
