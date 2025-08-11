@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { SessionProvider } from "@/components/providers/SessionProvider";
 import LayoutWrapper from "@/components/LayoutWrapper";
 // import OfflineStatus from "@/components/OfflineStatus";
 
@@ -28,15 +29,13 @@ export const viewport: Viewport = {
   userScalable: false
 };
 
-
-
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -64,9 +63,11 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        <LayoutWrapper>
-          {children}
-        </LayoutWrapper>
+        <SessionProvider>
+          <LayoutWrapper>
+            {children}
+          </LayoutWrapper>
+        </SessionProvider>
       </body>
     </html>
   );

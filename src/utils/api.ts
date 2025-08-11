@@ -81,8 +81,7 @@ class EnhancedAPI {
 
 const enhancedAPI = new EnhancedAPI();
 export const apiGet = (endpoint: string) => enhancedAPI.get(endpoint);
-export const apiPost = (endpoint: string, data: any) => enhancedAPI.post(endpoint, data);
+export const apiPost = <T = any>(endpoint: string, data: any): Promise<T> => enhancedAPI.post(endpoint, data);
 export const apiPut = (endpoint: string, data: any) => enhancedAPI.put(endpoint, data);
 export const apiDelete = (endpoint: string) => enhancedAPI.delete(endpoint);
 export default enhancedAPI; 
-

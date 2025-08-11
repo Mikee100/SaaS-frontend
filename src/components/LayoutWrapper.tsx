@@ -10,10 +10,11 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   const { sidebarCollapsed } = useSidebar();
   
   // Check if current path is in a route group (auth, admin, settings)
-  const isInRouteGroup = pathname.startsWith('/login') || 
-                        pathname.startsWith('/register') || 
-                        pathname.startsWith('/forgot-password') || 
-                        pathname.startsWith('/reset-password') ||
+  const isInRouteGroup = pathname.startsWith('/(auth)') || 
+                        pathname === '/login' || 
+                        pathname === '/register' || 
+                        pathname === '/forgot-password' || 
+                        pathname === '/reset-password' ||
                         pathname.startsWith('/superadmin') ||
                         pathname.startsWith('/settings');
 

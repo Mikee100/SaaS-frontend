@@ -41,15 +41,19 @@ export default function UsersPage() {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [canManage, setCanManage] = useState(false);
 
   // Permission checks
   const canViewUsers = hasPermission(user, 'view_users');
   const canEditUsers = hasPermission(user, 'edit_users');
   const canDeleteUsers = hasPermission(user, 'delete_users');
 
-  if (!user) return null;
-  // Check if user has any role that allows management
-  const canManage = user.roles?.includes("owner") || user.roles?.includes("manager");
+  // Set canManage after user is loaded
+  useEffect(() => {
+    if (user) {
+      setCanManage(user.roles?.includes("owner") || user.roles?.includes("manager"));
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -59,6 +63,14 @@ export default function UsersPage() {
       .finally(() => setLoading(false));
   }, [user?.id]);
 
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
+
+  // Refresh users
   const refreshUsers = () => {
     if (!user?.id) return;
     setLoading(true);
@@ -66,14 +78,6 @@ export default function UsersPage() {
       .then(setUsers)
       .finally(() => setLoading(false));
   };
-
-  // Toast auto-hide
-  useEffect(() => {
-    if (toast) {
-      const t = setTimeout(() => setToast(null), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [toast]);
 
   // Invite User
   const openInvite = () => {
@@ -151,6 +155,8 @@ export default function UsersPage() {
       setSubmitting(false);
     }
   };
+
+  if (!user) return null;
 
   if (loading) {
     return (

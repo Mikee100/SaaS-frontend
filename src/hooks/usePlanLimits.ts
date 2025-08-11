@@ -26,7 +26,10 @@ export function usePlanLimits() {
           analytics: false,
           advanced_reports: false,
           custom_branding: false,
-          api_access: false
+          api_access: false,
+          bulk_operations: true,
+          data_export: false,
+          custom_fields: false
         }
       });
       setLoading(false);
@@ -69,7 +72,10 @@ export function usePlanLimits() {
               analytics: false,
               advanced_reports: false,
               custom_branding: false,
-              api_access: false
+              api_access: false,
+              bulk_operations: true,
+              data_export: false,
+              custom_fields: false
             }
           });
         } else {
@@ -86,7 +92,10 @@ export function usePlanLimits() {
               analytics: false,
               advanced_reports: false,
               custom_branding: false,
-              api_access: false
+              api_access: false,
+              bulk_operations: true,
+              data_export: false,
+              custom_fields: false
             }
           });
         }
