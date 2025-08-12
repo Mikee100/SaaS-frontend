@@ -100,10 +100,12 @@ export default function PermissionsSettings() {
 
   const handleUpdateUserPermissions = async () => {
     if (!selectedUser) return;
-    
     setLoading(true);
     try {
-      await apiPut(`/user/${selectedUser.id}/permissions`, { permissions: userPermissions });
+      // Convert userPermissions [{key, note}] to [{name, note}]
+  const formattedPermissions = userPermissions.map(up => ({ name: up.key, note: up.note }));
+  console.log('Sending permissions to backend:', formattedPermissions);
+  await apiPut(`/user/${selectedUser.id}/permissions`, { permissions: formattedPermissions });
       await loadData();
       setShowUserPermissions(false);
       setSelectedUser(null);
