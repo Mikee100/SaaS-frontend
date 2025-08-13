@@ -16,23 +16,16 @@ export default function PlanBasedNav() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
 
-  console.log('🔍 PlanBasedNav: Current state:', {
-    user: !!userContext?.user,
-    loading: userContext?.loading,
-    pathname,
-    isSettingsPage: pathname?.startsWith('/settings')
-  });
+
 
   // Hide sidebar on settings pages
   const isSettingsPage = pathname?.startsWith('/settings');
   if (isSettingsPage) {
-    console.log('🔍 PlanBasedNav: On settings page, hiding sidebar');
     return null;
   }
 
   // Show loading sidebar if user is loading
   if (userContext?.loading) {
-    console.log('🔍 PlanBasedNav: User is loading, showing loading sidebar');
     return (
       <div className={`fixed top-0 left-0 h-full bg-white shadow-lg border-r z-50 transition-all duration-300 ${
         sidebarCollapsed ? 'w-16' : 'w-64'
@@ -54,12 +47,10 @@ export default function PlanBasedNav() {
 
   // Don't render navigation if no user (for public pages)
   if (!userContext?.user) {
-    console.log('🔍 PlanBasedNav: No user, not rendering sidebar');
     return null;
   }
 
-  console.log('🔍 PlanBasedNav: Rendering full sidebar with user:', userContext.user);
-
+ 
   const navigationItems = [
     { name: 'Dashboard', href: '/', icon: FaHome, requiredPlan: null, requiredPermission: null },
     { name: 'Products', href: '/products', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_products' },
