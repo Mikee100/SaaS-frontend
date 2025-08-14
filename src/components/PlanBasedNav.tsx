@@ -1,4 +1,5 @@
 "use client";
+import React from 'react';
 import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useSidebar } from './SidebarContext';
@@ -10,22 +11,60 @@ import { hasPermission } from '@/utils/permissions';
 
 export default function PlanBasedNav() {
   const userContext = useUser();
-  const { limits, hasFeature } = usePlanLimits();
+  const { limits, hasFeature, loading: limitsLoading } = usePlanLimits();
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
+  // Debug logs
+  console.log('userContext:', userContext);
+  console.log('limits:', limits);
 
+  // Always call hooks at top level!
+  const navigationItems = [
+    { name: 'Dashboard', href: '/', icon: FaHome, requiredPlan: null, requiredPermission: null },
+    { name: 'Products', href: '/products', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_products' },
+    { name: 'Inventory', href: '/inventory', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_inventory' },
+    { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
+    { name: 'Sales History', href: '/sales/history', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
+    { name: 'M-Pesa Transactions', href: '/mpesa-transactions', icon: FaMobile, requiredPlan: null, requiredPermission: 'view_sales' },
+    { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan:null, requiredPermission: 'view_analytics' },
+    { name: 'Reports', href: '/reports', icon: FaFileAlt, requiredPlan: null, requiredPermission: 'view_reports' },
+    { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
+    { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
+  ];
 
-
+  const planHierarchy: Record<string, number> = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
+  const currentPlan = limits?.currentPlan || 'Basic';
+  const currentLevel = planHierarchy[currentPlan] || 0;
+  const accessibleItems = React.useMemo(() => {
+    return navigationItems.filter((item) => {
+      // Check plan requirements
+      if (item.requiredPlan) {
+        const requiredLevel = planHierarchy[item.requiredPlan] || 0;
+        if (currentLevel < requiredLevel) return false;
+      }
+      // Check permission requirements
+      if (item.requiredPermission && userContext?.user) {
+        const hasPerm = hasPermission(userContext.user, item.requiredPermission);
+        console.log('Checking permission for', item.name, '->', item.requiredPermission, ':', hasPerm);
+        return hasPerm;
+      }
+      return true;
+    });
+  }, [limits, userContext.user, currentLevel]);
+{console.log('Accessible navigation items:', accessibleItems)}
   // Hide sidebar on settings pages
   const isSettingsPage = pathname?.startsWith('/settings');
   if (isSettingsPage) {
+    console.log('Sidebar hidden on settings page');
     return null;
   }
 
-  // Show loading sidebar if user is loading
-  if (userContext?.loading) {
+  // Use a regular variable for loading skeleton
+  const isLoading = userContext?.loading || limitsLoading || !userContext?.user || !limits;
+  if (isLoading) {
+    console.log('Sidebar loading:', { userLoading: userContext?.loading, limitsLoading, user: userContext?.user, limits });
     return (
       <div className={`fixed top-0 left-0 h-full bg-white shadow-lg border-r z-50 transition-all duration-300 ${
         sidebarCollapsed ? 'w-16' : 'w-64'
@@ -44,50 +83,6 @@ export default function PlanBasedNav() {
       </div>
     );
   }
-
-  // Don't render navigation if no user (for public pages)
-  if (!userContext?.user) {
-    return null;
-  }
-
- 
-  const navigationItems = [
-    { name: 'Dashboard', href: '/', icon: FaHome, requiredPlan: null, requiredPermission: null },
-    { name: 'Products', href: '/products', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_products' },
-    { name: 'Inventory', href: '/inventory', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_inventory' },
-    { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'Sales History', href: '/sales/history', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'M-Pesa Transactions', href: '/mpesa-transactions', icon: FaMobile, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan:null, requiredPermission: 'view_analytics' },
-    { name: 'Reports', href: '/reports', icon: FaFileAlt, requiredPlan: null, requiredPermission: 'view_reports' },
-    { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
-    { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
-  ];
-
-  const canAccess = (item: any) => {
-    // Check plan requirements
-    if (item.requiredPlan) {
-      if (!limits) return true; // Default to allowing if limits not loaded
-      
-      const planHierarchy: Record<string, number> = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
-      const currentPlan = limits.currentPlan || 'Basic';
-      const currentLevel = planHierarchy[currentPlan] || 0;
-      const requiredLevel = planHierarchy[item.requiredPlan] || 0;
-      
-      if (currentLevel < requiredLevel) return false;
-    }
-
-    // Check permission requirements
-    if (item.requiredPermission && userContext?.user) {
-      return hasPermission(userContext.user, item.requiredPermission);
-    }
-
-    return true;
-  };
-
-  const accessibleItems = navigationItems.filter(canAccess);
-
-  console.log("can access?: ",accessibleItems)
 
   const handleLogout = () => {
     if (userContext.logout) {
@@ -135,6 +130,24 @@ export default function PlanBasedNav() {
               )}
             </div>
           </div>
+
+          {/* Permissions Summary */}
+          {!sidebarCollapsed && userContext?.user && (
+            <div className="px-6 py-3 border-b border-gray-100 bg-blue-50">
+              <div className="text-xs font-semibold text-blue-700 mb-1">Assigned Permissions</div>
+              <div className="flex flex-wrap gap-2">
+                {(userContext.user.permissions && userContext.user.permissions.length > 0) ? (
+                  userContext.user.permissions.map((perm: any, idx: number) => (
+                    <span key={idx} className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[11px]">
+                      {typeof perm === 'string' ? perm : perm.name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-gray-400">No permissions assigned</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Navigation */}
           <nav className="flex-1 p-2 overflow-y-auto">
