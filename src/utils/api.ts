@@ -28,17 +28,12 @@ class EnhancedAPI {
       ...options.headers,
     };
     try {
-      console.log('Making request to:', url);
-      console.log('Headers:', headers);
-      
       const response = await fetch(url, {
         ...options,
         headers,
       });
       
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
+     
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Response error text:', errorText);
@@ -46,7 +41,7 @@ class EnhancedAPI {
       }
       
       const responseText = await response.text();
-      console.log('Response text:', responseText);
+    
       
       if (!responseText) {
         throw new Error('Empty response from server');

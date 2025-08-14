@@ -1,5 +1,5 @@
 "use client";
-import { FaChartLine, FaUsers, FaDollarSign, FaHeart, FaShieldAlt, FaRocket, FaTarget } from 'react-icons/fa';
+import { FaChartLine, FaUsers, FaDollarSign, FaHeart, FaShieldAlt, FaRocket } from 'react-icons/fa';
 
 interface PerformanceMetricsProps {
   metrics: {
@@ -43,7 +43,7 @@ export default function PerformanceMetrics({ metrics }: PerformanceMetricsProps)
       color: "text-red-600"
     },
     {
-      icon: <FaTarget className="w-5 h-5 text-orange-600" />,
+
       label: "Conversion Rate",
       value: `${((metrics.conversionRate || 0) * 100).toFixed(1)}%`,
       description: "Visitor to customer rate",

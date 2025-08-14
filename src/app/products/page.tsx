@@ -410,7 +410,7 @@ export default function ProductsPage() {
               </button>
             </FeatureGuard>
             
-            <FeatureGuard requiredFeature="bulk_operations" showUpgradePrompt={false} fallback={
+           
               <div className="inline-block">
                 <input type="file" name="file" accept=".xlsx,.xls,.csv" className="text-xs" disabled />
                 <button disabled className="ml-2 flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 border border-gray-200 text-gray-400 font-medium text-sm cursor-not-allowed">
@@ -419,7 +419,9 @@ export default function ProductsPage() {
                   <FaLock className="w-3 h-3" />
                 </button>
               </div>
-            }>
+            
+
+              
               <form onSubmit={handleBulkUpload} className="inline-block">
                 <input type="file" name="file" accept=".xlsx,.xls,.csv" className="text-xs" />
                 <button type="submit" className="ml-2 flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 border border-gray-200 hover:bg-gray-200 font-medium text-sm transition">
@@ -427,7 +429,7 @@ export default function ProductsPage() {
                   Bulk Upload
                 </button>
               </form>
-            </FeatureGuard>
+         
             
             <FeatureGuard requiredFeature="bulk_operations" showUpgradePrompt={false} fallback={
               <button disabled className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 border border-red-200 text-red-300 font-medium text-sm cursor-not-allowed">

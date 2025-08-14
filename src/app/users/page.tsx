@@ -6,7 +6,7 @@ import AuthGuard from '@/components/AuthGuard';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
-import { FaUsers, FaUserPlus } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaShieldAlt, FaEdit } from 'react-icons/fa';
 
 interface User {
   id: string;
@@ -14,6 +14,7 @@ interface User {
   email: string;
   role: string;
   tenantId?: string;
+  permissions?: string[];
 }
 
 function getUserFromToken() {
@@ -32,6 +33,9 @@ const ROLES = ["owner", "manager", "cashier"];
 export default function UsersPage() {
   const { user } = useUser();
   const [users, setUsers] = useState<User[]>([]);
+  const [showPermissions, setShowPermissions] = useState<null | User>(null);
+  const [editPermissions, setEditPermissions] = useState<string[]>([]);
+  const [allPermissions, setAllPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [showEdit, setShowEdit] = useState<null | User>(null);
@@ -51,15 +55,21 @@ export default function UsersPage() {
   // Set canManage after user is loaded
   useEffect(() => {
     if (user) {
-      setCanManage(user.roles?.includes("owner") || user.roles?.includes("manager"));
+      setCanManage(Boolean(user.roles?.includes("owner") || user.roles?.includes("manager")));
     }
   }, [user]);
 
   useEffect(() => {
     if (!user?.id) return;
     setLoading(true);
-    apiGet(`/user`)
-      .then(setUsers)
+    Promise.all([
+      apiGet(`/user/permissions`), // get all users with permissions
+      apiGet(`/user/permissions/all`) // get all possible permissions
+    ])
+      .then(([usersWithPerms, perms]) => {
+        setUsers(usersWithPerms);
+        setAllPermissions(perms.map((p: any) => p.name));
+      })
       .finally(() => setLoading(false));
   }, [user?.id]);
 
@@ -74,8 +84,14 @@ export default function UsersPage() {
   const refreshUsers = () => {
     if (!user?.id) return;
     setLoading(true);
-    apiGet(`/user`)
-      .then(setUsers)
+    Promise.all([
+      apiGet(`/user/permissions`),
+      apiGet(`/user/permissions/all`)
+    ])
+      .then(([usersWithPerms, perms]) => {
+        setUsers(usersWithPerms);
+        setAllPermissions(perms.map((p: any) => p.name));
+      })
       .finally(() => setLoading(false));
   };
 
@@ -114,6 +130,40 @@ export default function UsersPage() {
     setEditForm({ name: u.name, role: u.role });
     setShowEdit(u);
     setFormError("");
+  };
+
+  // Edit Permissions
+  const openPermissions = (u: User) => {
+    setShowPermissions(u);
+    setEditPermissions(u.permissions || []);
+  };
+  const handlePermissionToggle = (perm: string) => {
+    setEditPermissions(prev =>
+      prev.includes(perm)
+        ? prev.filter(p => p !== perm)
+        : [...prev, perm]
+    );
+  };
+  const handlePermissionsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showPermissions) return;
+    try {
+      await apiPut(`/user/${showPermissions.id}/permissions`, {
+        permissions: editPermissions.map(name => ({ name }))
+      });
+      setShowPermissions(null);
+      setToast({ type: "success", message: "Permissions updated!" });
+      refreshUsers();
+      if (showPermissions.id === user?.id) {
+        // If editing current user, refresh context
+        if (typeof window !== 'undefined') {
+          // Use UserContext refreshUser
+          window.location.reload(); // fallback if context not available
+        }
+      }
+    } catch (err: any) {
+      setToast({ type: "error", message: err.message || "Failed to update permissions" });
+    }
   };
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setEditForm({ ...editForm, [e.target.name]: e.target.value });
@@ -222,6 +272,7 @@ export default function UsersPage() {
                 <th className="py-2 px-4 border-b">Name</th>
                 <th className="py-2 px-4 border-b">Email</th>
                 <th className="py-2 px-4 border-b">Role</th>
+                <th className="py-2 px-4 border-b">Permissions</th>
                 {canManage && <th className="py-2 px-4 border-b">Actions</th>}
               </tr>
             </thead>
@@ -231,12 +282,48 @@ export default function UsersPage() {
                   <td className="py-2 px-4 border-b">{u.name}</td>
                   <td className="py-2 px-4 border-b">{u.email}</td>
                   <td className="py-2 px-4 border-b">{u.role}</td>
+                  <td className="py-2 px-4 border-b">
+                    <div className="flex flex-wrap gap-1">
+                      {(u.permissions || []).map(p => (
+                        <span key={p} className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">
+                          <FaShieldAlt className="mr-1 text-blue-500" />{p}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
                   {canManage && (
                     <td className="py-2 px-4 border-b">
                       {canEditUsers && <button className="text-blue-600 hover:underline mr-2" onClick={() => openEdit(u)}>Edit</button>}
+                      {canEditUsers && <button className="text-purple-600 hover:underline mr-2" onClick={() => openPermissions(u)}><FaEdit className="inline mr-1" />Permissions</button>}
                       {canDeleteUsers && <button className="text-red-600 hover:underline" onClick={() => setShowDelete(u)}>Delete</button>}
                     </td>
                   )}
+      {/* Permissions Modal */}
+      {showPermissions && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Edit Permissions for {showPermissions.name}</h2>
+            <form onSubmit={handlePermissionsSubmit}>
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                {allPermissions.map(perm => (
+                  <label key={perm} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={editPermissions.includes(perm)}
+                      onChange={() => handlePermissionToggle(perm)}
+                    />
+                    <span>{perm}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="px-4 py-2 bg-gray-300 rounded" onClick={() => setShowPermissions(null)}>Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
                 </tr>
               ))}
             </tbody>

@@ -58,7 +58,7 @@ export default function PlanBasedNav() {
     { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
     { name: 'Sales History', href: '/sales/history', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
     { name: 'M-Pesa Transactions', href: '/mpesa-transactions', icon: FaMobile, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan: 'Pro', requiredPermission: 'view_analytics' },
+    { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan:null, requiredPermission: 'view_analytics' },
     { name: 'Reports', href: '/reports', icon: FaFileAlt, requiredPlan: null, requiredPermission: 'view_reports' },
     { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
     { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
@@ -86,6 +86,8 @@ export default function PlanBasedNav() {
   };
 
   const accessibleItems = navigationItems.filter(canAccess);
+
+  console.log("can access?: ",accessibleItems)
 
   const handleLogout = () => {
     if (userContext.logout) {

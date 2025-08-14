@@ -211,15 +211,17 @@ export default function AnalyticsPage() {
           totalSales: stats.totalSales,
           totalRevenue: stats.totalRevenue,
           totalProducts: stats.totalProducts,
-          totalCustomers: stats.totalCustomers,
-          averageOrderValue: stats.averageOrderValue,
-          conversionRate: stats.conversionRate,
-          customerSegments: [{ segment: 'All', count: stats.totalCustomers, revenue: stats.totalRevenue }],
-          customerGrowth: stats.customerGrowth,
+          salesByMonth: stats.salesByMonth,
           topProducts: stats.topProducts,
+          customerSegments: stats.customerSegments,
+          realTimeData: stats.realTimeData,
+          predictiveAnalytics: stats.predictiveAnalytics,
+          message: stats.message,
+          recentActivity: stats.recentActivity,
+          customerGrowth: stats.customerGrowth,
         });
         
-        // Process recent activities
+        // Process recent activities from API only
         const activities: Array<{ type: string; description: string; date: string; icon?: React.ReactNode }> = [];
         if (stats.recentActivity?.sales) {
           stats.recentActivity.sales.forEach((sale: any) => {
@@ -241,43 +243,22 @@ export default function AnalyticsPage() {
             });
           });
         }
-        activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // Add more activity types if available from API
         setRecentActivities(activities);
         
         // Fetch subscription data (with error handling)
         try {
-          console.log('Fetching subscription data...');
           const sub = await apiGet('/billing/subscription') as Subscription;
-          console.log('Subscription data received:', sub);
           setSubscription(sub);
         } catch (billingError) {
-          console.warn('Billing data not available:', billingError);
-          // Try the test endpoint to debug
-          try {
-            const testResult = await apiGet('/billing/test-subscription');
-            console.log('Test subscription result:', testResult);
-          } catch (testError) {
-            console.error('Test subscription also failed:', testError);
-          }
-          // Set a default subscription or leave as null
           setSubscription(null);
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
-        // Set default data or show error state
-        setBasicData({
-          totalSales: 0,
-          totalRevenue: 0,
-          totalProducts: 0,
-          totalCustomers: 0,
-          averageOrderValue: 0,
-          conversionRate: 0,
-          customerSegments: [],
-          customerGrowth: {},
-          topProducts: [],
-        });
-        setRecentActivities([]);
-        setSubscription(null);
+  // Show error state only if API fails
+  setBasicData(null);
+  setRecentActivities([]);
+  setSubscription(null);
       } finally {
         setLoading(false);
       }
@@ -291,15 +272,6 @@ export default function AnalyticsPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard</h1>
           <p className="text-gray-600">Loading data...</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded mb-3"></div>
-              <div className="h-6 bg-gray-200 rounded mb-2"></div>
-              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-            </div>
-          ))}
         </div>
       </div>
     );
@@ -332,29 +304,21 @@ export default function AnalyticsPage() {
                 icon={<FaDollarSign className="w-5 h-5" />} 
                 label="Total Sales" 
                 value={basicData.totalSales?.toLocaleString() || 0} 
-                trend="+12%" 
-                trendDirection="up"
               />
               <StatCard 
                 icon={<FaChartBar className="w-5 h-5" />} 
                 label="Total Revenue" 
                 value={`$${basicData.totalRevenue?.toLocaleString() || 0}`} 
-                trend="+8%" 
-                trendDirection="up"
               />
               <StatCard 
                 icon={<FaBox className="w-5 h-5" />} 
                 label="Products" 
                 value={basicData.totalProducts || 0} 
-                trend="+15%" 
-                trendDirection="up"
               />
               <StatCard 
                 icon={<FaUsers className="w-5 h-5" />} 
                 label="Customers" 
                 value={basicData.customerSegments?.reduce((a, c) => a + (c.count || 0), 0) || 0} 
-                trend="+5%" 
-                trendDirection="up"
               />
             </div>
           )}
