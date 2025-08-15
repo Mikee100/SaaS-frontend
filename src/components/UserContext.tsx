@@ -9,6 +9,8 @@ export interface User {
   name?: string;
   roles?: string[]; // Added for RBAC
   isSuperadmin?: boolean; // <-- Add this line
+  permissions?: string[]; // Add permissions property for RBAC
+  receiptLogo?: string;
   // Add more fields as needed
 }
 
@@ -134,7 +136,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   );
 };
 
-export function useUser() {
+export function useUser(p0: never[]) {
   const ctx = useContext(UserContext);
   if (!ctx) throw new Error("useUser must be used within a UserProvider");
   return ctx;

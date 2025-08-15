@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
-import { FaImage } from 'react-icons/fa';
+import { FaImage, FaSpinner } from 'react-icons/fa';
+import { useUser } from "./UserContext";
 
 interface LogoUsageProps {
-  type: 'main' | 'favicon' | 'receiptLogo' | 'etimsQrCode' | 'watermark';
+  type?: 'main' | 'favicon' | 'receiptLogo' | 'etimsQrCode' | 'watermark';
+  section?: 'login' | 'dashboard' | 'email' | 'mobile' | string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   fallback?: React.ReactNode;
@@ -18,25 +20,34 @@ interface LogoData {
   receiptLogo: string | null;
   etimsQrCode: string | null;
   watermark: string | null;
+  sectionLogos?: {
+    [key: string]: {
+      url: string;
+      altText?: string;
+      width?: number;
+      height?: number;
+    } | null;
+  };
 }
 
 const sizeClasses = {
-  sm: 'w-8 h-8',
-  md: 'w-12 h-12',
-  lg: 'w-16 h-16',
-  xl: 'w-24 h-24'
-};
+  sm: 'w-6 h-6',
+  md: 'w-8 h-8',
+  lg: 'w-12 h-12',
+  xl: 'w-16 h-16',
+} as const;
 
 const logoTypeMap = {
   main: 'mainLogo',
   favicon: 'favicon',
   receiptLogo: 'receiptLogo',
   etimsQrCode: 'etimsQrCode',
-  watermark: 'watermark'
+  watermark: 'watermark',
 } as const;
 
 export default function LogoUsage({ 
   type, 
+  section,
   size = 'md', 
   className = "", 
   fallback,
@@ -46,38 +57,65 @@ export default function LogoUsage({
   const [logoData, setLogoData] = useState<LogoData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const { user } = useUser();
+
+  console.log("User dets: ",user)
 
   useEffect(() => {
-    const fetchLogos = async () => {
+    const fetchLogo = async () => {
       try {
-        const data = await apiGet<LogoData>("/tenant/logo/usage");
+        let url = '/api/tenant/logo/usage';
+        if (section) {
+          url = `/api/tenant/section-logos/${section}`;
+        }
+        const data = await apiGet<LogoData>(url);
         setLogoData(data);
       } catch (err) {
-        console.error("Error fetching logo usage:", err);
+        console.error('Error fetching logo:', err);
         setError(true);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchLogos();
-  }, []);
+    fetchLogo();
+  }, [section, user?.tenantId]);
 
   if (loading) {
-    return (
-      <div className={`${sizeClasses[size]} bg-gray-200 rounded animate-pulse ${className}`} />
+    return fallback || (
+      <div className={`${sizeClasses[size]} bg-gray-100 rounded flex items-center justify-center ${className}`}>
+        <FaSpinner className="animate-spin text-gray-400" />
+      </div>
     );
   }
 
-  if (error || !logoData) {
-    return fallback || (
+  if (error) {
+    return (
       <div className={`${sizeClasses[size]} bg-gray-100 rounded flex items-center justify-center ${className}`}>
         <FaImage className="text-gray-400 w-4 h-4" />
       </div>
     );
   }
 
-  const logoUrl = logoData[logoTypeMap[type]];
+  // Handle section-based logos
+  if (section && logoData?.sectionLogos?.[section]?.url) {
+    const sectionLogo = logoData.sectionLogos[section];
+    return (
+      <img
+        src={sectionLogo.url}
+        alt={sectionLogo.altText || alt || `${section} logo`}
+        className={`${sizeClasses[size]} object-contain ${className}`}
+        style={{
+          width: sectionLogo.width ? `${sectionLogo.width}px` : undefined,
+          height: sectionLogo.height ? `${sectionLogo.height}px` : undefined,
+        }}
+        onError={() => setError(true)}
+      />
+    );
+  }
+
+  // Fall back to type-based logo if section logo not found
+  const logoUrl = type && logoData ? logoData[logoTypeMap[type]] : null;
   
   if (!logoUrl) {
     if (showPlaceholder) {
@@ -106,7 +144,7 @@ export function MainLogo({ size = 'md', className = "" }: { size?: 'sm' | 'md' |
 }
 
 export function ReceiptLogo({ size = 'md', className = "" }: { size?: 'sm' | 'md' | 'lg' | 'xl'; className?: string }) {
-  return <LogoUsage type="receiptLogo" size={size} className={className} alt="Receipt logo" />;
+  return <LogoUsage section="receipt" size={size} className={className} alt="Receipt logo" />;
 }
 
 export function EtimsQrCode({ size = 'md', className = "" }: { size?: 'sm' | 'md' | 'lg' | 'xl'; className?: string }) {

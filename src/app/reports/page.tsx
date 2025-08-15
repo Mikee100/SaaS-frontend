@@ -104,6 +104,8 @@ export default function ReportsPage() {
   const [dateTo, setDateTo] = useState("");
   const [productId, setProductId] = useState("");
   const [paymentType, setPaymentType] = useState("");
+  // Grouping selector for sales trend
+  const [grouping, setGrouping] = useState<'day' | 'week' | 'month'>('month');
 
   // Plan-based access control
   const canAccessBasicReports = !limits?.currentPlan || limits.currentPlan === 'Basic' || limits.currentPlan === 'Pro' || limits.currentPlan === 'Enterprise';
@@ -129,15 +131,67 @@ export default function ReportsPage() {
 
   // Map backend dashboard data to frontend chart formats
   const { salesTrendData, revenueBreakdownData, paymentMethodData } = useMemo(() => {
-    const salesByMonth = metrics.salesByMonth || {};
-    const actualMonths = Object.keys(salesByMonth);
-    const actualSales = Object.values(salesByMonth);
+    // Support grouping by day, week, or month
+    const salesRaw = metrics.salesByMonth || {};
+    let labels: string[] = Object.keys(salesRaw);
+    let values: number[] = Object.values(salesRaw);
+    // Helper to get week string from date
+    function getWeekStr(date: Date) {
+      const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+      const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
+      const weekNum = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+      return `${date.getFullYear()}-W${weekNum.toString().padStart(2, '0')}`;
+    }
+  // Only use real analytics data. If empty, show message in chart section.
+    let filtered: { label: string, value: number, date: Date }[] = labels.map((label, idx) => {
+      let date: Date;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(label)) {
+        // YYYY-MM-DD
+        date = new Date(label);
+      } else if (/^[A-Za-z]{3,} \d{4}$/.test(label)) {
+        // Month format (e.g., Jan 2025)
+        const [monStr, yearStr] = label.split(' ');
+        const monthNum = new Date(Date.parse(monStr + ' 1, 2000')).getMonth();
+        date = new Date(parseInt(yearStr, 10), monthNum, 1);
+      } else if (/^\d{4}-W\d{2}$/.test(label)) {
+        // Week format
+        const [year, week] = label.split('-W');
+        date = new Date(parseInt(year, 10), 0, 1 + (parseInt(week, 10) - 1) * 7);
+      } else {
+        date = new Date(label);
+      }
+      return { label, value: values[idx], date };
+    });
+    // Filter by date range
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      filtered = filtered.filter(f => f.date >= from);
+    }
+    if (dateTo) {
+      const to = new Date(dateTo);
+      filtered = filtered.filter(f => f.date <= to);
+    }
+    // Regroup by selected grouping
+    let grouped: Record<string, number> = {};
+    filtered.forEach(({ date, value }) => {
+      let key = '';
+      if (grouping === 'day') {
+        key = date.toISOString().slice(0, 10);
+      } else if (grouping === 'week') {
+        key = getWeekStr(date);
+      } else {
+        key = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+      }
+      grouped[key] = (grouped[key] || 0) + value;
+    });
+    const finalLabels = Object.keys(grouped).sort();
+    const finalValues = finalLabels.map(l => grouped[l]);
     const salesTrendData = {
-      labels: actualMonths,
+      labels: finalLabels,
       datasets: [
         {
           label: 'Sales',
-          data: actualSales,
+          data: finalValues,
           borderColor: '#4f46e5',
           backgroundColor: 'rgba(79, 70, 229, 0.1)',
           fill: true,
@@ -145,26 +199,32 @@ export default function ReportsPage() {
         }
       ],
     };
+    // Revenue chart fallback
+  let revenueLabels = (metrics.topProducts || []).map(p => p.name);
+  let revenueData = (metrics.topProducts || []).map(p => p.revenue);
     const revenueBreakdownData = {
-      labels: (metrics.topProducts || []).map(p => p.name),
+      labels: revenueLabels,
       datasets: [{
         label: 'Revenue',
-        data: (metrics.topProducts || []).map(p => p.revenue),
+        data: revenueData,
         backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#22c55e', '#f59e0b'],
         borderRadius: 4,
       }],
     };
+    // Payment chart fallback
+  let paymentLabels = Object.keys(metrics.paymentBreakdown || {});
+  let paymentData = Object.values(metrics.paymentBreakdown || {});
     const paymentMethodData = {
-      labels: Object.keys(metrics.paymentBreakdown || {}),
+      labels: paymentLabels,
       datasets: [{
         label: 'Payments',
-        data: Object.values(metrics.paymentBreakdown || {}),
+        data: paymentData,
         backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#a21caf'],
         hoverOffset: 4,
       }],
     };
     return { salesTrendData, revenueBreakdownData, paymentMethodData };
-  }, [metrics]);
+  }, [metrics, dateFrom, dateTo, grouping]);
 
     // Find low stock products (stock <= 10)
   const LOW_STOCK_THRESHOLD = 10;
@@ -255,6 +315,14 @@ export default function ReportsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Group By</label>
+              <select value={grouping} onChange={e => setGrouping(e.target.value as 'day' | 'week' | 'month')} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                <option value="day">Day</option>
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+              </select>
+            </div>
             <button className="text-sm text-gray-600 hover:text-indigo-600" onClick={() => { setDateFrom(""); setDateTo(""); setProductId(""); setPaymentType(""); }}>Clear Filters</button>
           </div>
         </div>
@@ -340,6 +408,63 @@ export default function ReportsPage() {
                   <Pie data={paymentMethodData} options={{ responsive: true, maintainAspectRatio: false }} />
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Profitability (Margin %) Section */}
+        <section className="mb-10">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Profitability (Margin %)</h2>
+          <div className="bg-white rounded-xl shadow p-6">
+            <h3 className="text-lg font-bold mb-4 text-center">Product Margin %</h3>
+            <div className="h-80">
+              {metrics.topProducts && metrics.topProducts.length > 0 ? (
+                <Bar
+                  data={{
+                    labels: metrics.topProducts.map(p => p.name),
+                    datasets: [
+                      {
+                        label: 'Margin %',
+                        data: metrics.topProducts.map(p => {
+                          // Use margin if provided, else calculate from cost and revenue if available
+                          if (typeof p.margin === 'number' && !isNaN(p.margin)) {
+                            return Math.round(p.margin * 100) / 100;
+                          } else if (typeof p.revenue === 'number' && typeof p.cost === 'number' && p.revenue > 0) {
+                            // Margin % = ((revenue - cost) / revenue) * 100
+                            return Math.round(((p.revenue - p.cost) / p.revenue) * 10000) / 100;
+                          } else {
+                            return 0;
+                          }
+                        }),
+                        backgroundColor: '#22c55e',
+                        borderRadius: 4,
+                      }
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: { display: true, text: 'Margin (%)' }
+                      }
+                    },
+                    plugins: {
+                      tooltip: {
+                        callbacks: {
+                          label: function(context) {
+                            return `${context.parsed.y}%`;
+                          }
+                        }
+                      }
+                    }
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-400">No margin data available</div>
+              )}
             </div>
           </div>
         </section>

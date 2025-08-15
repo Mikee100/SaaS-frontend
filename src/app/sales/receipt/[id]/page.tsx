@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { apiGet } from "@/utils/api";
 import { FaPrint, FaArrowLeft, FaDownload } from "react-icons/fa";
 import { isAuthenticated } from '@/utils/auth';
+import { ReceiptLogo } from '@/components/LogoUsage';
 
 type ReceiptItem = {
   productId: string;
@@ -167,6 +168,9 @@ export default function ReceiptPage() {
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           {/* Receipt Header */}
           <div className="p-8 border-b border-gray-200 text-center">
+            <div className="flex justify-center mb-4">
+              <ReceiptLogo size="lg" className="h-16 w-auto" />
+            </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               {receipt.businessInfo?.name || 'Business Name'}
             </h1>

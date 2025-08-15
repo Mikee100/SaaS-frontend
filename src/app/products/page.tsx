@@ -41,8 +41,11 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const itemsPerPage = 20;
   
+  
   const { limits, canCreate, getUsagePercentage } = usePlanLimits();
 
+
+  console.log("my user",user)
   // Permission checks
   const canViewProducts = hasPermission(user, 'view_products');
   const canCreateProducts = hasPermission(user, 'create_products');

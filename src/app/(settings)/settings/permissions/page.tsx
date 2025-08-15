@@ -7,6 +7,7 @@ import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
 
+
 interface Role {
   id: string;
   name: string;
@@ -25,7 +26,7 @@ interface User {
   name: string;
   email: string;
   userRoles: Array<{ role: { name: string } }>;
-  permissions?: Array<{ permission: { key: string; description?: string }; note?: string }>;
+  userPermissions?: Array<{ permission: string;  note?: string }>;
 }
 
 export default function PermissionsSettings() {
@@ -117,10 +118,11 @@ export default function PermissionsSettings() {
     }
   };
 
+
   const openUserPermissions = async (user: User) => {
     setSelectedUser(user);
-    setUserPermissions(user.permissions?.map(up => ({ 
-      key: up.permission.key, 
+    setUserPermissions(user.userPermissions?.map(up => ({ 
+      key: up.permission, 
       note: up.note 
     })) || []);
     setShowUserPermissions(true);
@@ -286,10 +288,10 @@ export default function PermissionsSettings() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex flex-wrap gap-1">
-                      {user.permissions?.map((up, index) => (
-                        <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          {up.permission.key}
-                        </span>
+                      {user.userPermissions?.map((up, index) => (
+                        <li key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {up.permission}
+                        </li>
                       ))}
                     </div>
                   </td>

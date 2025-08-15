@@ -4,10 +4,14 @@ import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
-import { FaHome, FaBox, FaShoppingCart, FaChartLine, FaCog, FaCrown, FaUsers, FaSignOutAlt, FaUser, FaCaretDown, FaBars, FaTimes, FaFileAlt, FaChevronLeft, FaChevronRight, FaMobile } from 'react-icons/fa';
+import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaUser, FaCaretDown, FaBars, FaTimes, FaFileAlt, FaChevronLeft, FaChevronRight, FaMobile } from 'react-icons/fa';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
+import dynamic from 'next/dynamic';
+
+// Dynamically import LogoUsage with no SSR to avoid hydration issues
+const LogoUsage = dynamic(() => import('@/components/LogoUsage'), { ssr: false });
 
 export default function PlanBasedNav() {
   const userContext = useUser();
@@ -22,7 +26,7 @@ export default function PlanBasedNav() {
 
   // Always call hooks at top level!
   const navigationItems = [
-    { name: 'Dashboard', href: '/', icon: FaHome, requiredPlan: null, requiredPermission: null },
+    { name: 'Dashboard', href: '/', icon: LogoUsage, requiredPlan: null, requiredPermission: null },
     { name: 'Products', href: '/products', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_products' },
     { name: 'Inventory', href: '/inventory', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_inventory' },
     { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
@@ -71,7 +75,7 @@ export default function PlanBasedNav() {
       }`}>
         <div className="p-4">
           <div className="flex items-center space-x-2 mb-8">
-            <FaCrown className="w-6 h-6 text-blue-600" />
+         
             {!sidebarCollapsed && <span className="text-xl font-bold text-gray-900">SaaS Platform</span>}
           </div>
           <div className="animate-pulse space-y-4">
@@ -124,8 +128,14 @@ export default function PlanBasedNav() {
             sidebarCollapsed ? 'p-4' : 'p-6'
           }`}>
             <div className="flex items-center space-x-2">
-              <FaCrown className="w-6 h-6 text-blue-600 flex-shrink-0" />
-              {!sidebarCollapsed && (
+              <div className={sidebarCollapsed ? "w-6 h-6 flex items-center justify-center" : "w-32 h-8"}>
+                <LogoUsage 
+                  section="dashboard" 
+                  className={sidebarCollapsed ? "w-6 h-6" : "w-32 h-8 object-contain"} 
+                  showPlaceholder={false}
+                />
+              </div>
+              {!sidebarCollapsed && !sidebarOpen && (
                 <span className="text-xl font-bold text-gray-900 whitespace-nowrap">SaaS Platform</span>
               )}
             </div>
@@ -167,7 +177,15 @@ export default function PlanBasedNav() {
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                   >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
+                    {Icon === LogoUsage ? (
+                      <LogoUsage 
+                        section="dashboard" 
+                        className={sidebarCollapsed ? "w-6 h-6" : "w-32 h-8 object-contain"} 
+                        showPlaceholder={false}
+                      />
+                    ) : (
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                    )}
                     {!sidebarCollapsed && (
                       <span className="whitespace-nowrap">{item.name}</span>
                     )}

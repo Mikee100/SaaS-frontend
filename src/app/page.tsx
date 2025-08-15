@@ -5,32 +5,94 @@ import PlanGuard from '@/components/PlanGuard';
 import AuthGuard from '@/components/AuthGuard';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import LogoEnforcement from '@/components/LogoEnforcement';
-import { 
-  FiTrendingUp, FiDollarSign, FiPackage, FiUsers, 
-  FiAlertCircle, FiClock, FiRefreshCw, FiArrowUp, FiArrowDown,
-  FiBarChart2, FiPieChart, FiShoppingCart, FiUser, FiPlus
-} from 'react-icons/fi';
+import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaShare, FaCrown, FaStar, FaArrowUp, FaArrowDown, FaUser, FaBox, FaUsers, FaExclamationTriangle, FaBell, FaPlus, FaUserPlus, FaFileAlt, FaEye, FaShoppingCart, FaDollarSign } from 'react-icons/fa';
 import AnalyticsCharts from '@/components/AnalyticsCharts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Tooltip } from '@/components/Tooltip';
+import { FiTrendingUp, FiDollarSign, FiPackage, FiUsers, FiAlertCircle, FiClock, FiRefreshCw } from 'react-icons/fi';
 
 interface AnalyticsData {
-  // ... (keep your existing interface)
+  totalSales?: number;
+  totalRevenue?: number;
+  totalProducts?: number;
+  totalCustomers?: number;
+  averageOrderValue?: number;
+  conversionRate?: number;
+  salesByMonth?: Record<string, number>;
+  topProducts?: Array<{ name: string; sales: number; revenue: number }>;
+  customerSegments?: Array<{ segment: string; count: number; revenue: number }>;
+  realTimeData?: {
+    currentUsers: number;
+    activeSales: number;
+    revenueToday: number;
+    ordersInProgress?: number;
+    averageSessionDuration?: number;
+    bounceRate?: number;
+  };
+  predictiveAnalytics?: {
+    nextMonthForecast: number;
+    churnRisk: number;
+    growthRate: number;
+    seasonalTrend?: number;
+    marketTrend?: number;
+    demandForecast?: Record<string, number>;
+  };
+  inventoryAnalytics?: {
+    lowStockItems: number;
+    overstockItems: number;
+    inventoryTurnover: number;
+    stockoutRate: number;
+  };
+  performanceMetrics?: {
+    customerLifetimeValue: number;
+    customerAcquisitionCost: number;
+    returnOnInvestment: number;
+    netPromoterScore: number;
+  };
+  advancedSegments?: {
+    byLocation: Array<{ location: string; revenue: number; customers: number }>;
+    byAge: Array<{ age: string; revenue: number; customers: number }>;
+    byDevice: Array<{ device: string; revenue: number; customers: number }>;
+  };
+  customReports?: Array<{ name: string; data: string; lastUpdated: string }>;
+  aiInsights?: {
+    recommendations: string[];
+    anomalies: string[];
+  };
+  message?: string;
+  recentActivity?: {
+    sales?: Array<{ amount: number; customer: string; date: string }>;
+    products?: Array<{ name: string; date: string }>;
+  };
+  customerGrowth?: Record<string, number>;
 }
 
-// Improved StatCard component
-function StatCard({ icon, label, value, trend, trendDirection, loading = false, onClick }: { 
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: number;
+  interval: string;
+  features: string[];
+}
+
+interface Subscription {
+  id: string;
+  status: string;
+  plan: SubscriptionPlan;
+  startDate: string;
+  endDate: string;
+}
+
+function StatCard({ icon, label, value, trend, trendDirection, loading = false }: { 
   icon: React.ReactNode; 
   label: string; 
   value: string | number; 
   trend?: string; 
   trendDirection?: 'up' | 'down';
   loading?: boolean;
-  onClick?: () => void;
 }) {
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-xs border border-gray-100 p-5 h-full">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-all duration-300 h-full">
         <div className="animate-pulse space-y-3">
           <div className="h-6 w-6 bg-gray-200 rounded-full"></div>
           <div className="h-4 bg-gray-200 rounded w-3/4"></div>
@@ -42,11 +104,8 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false, 
 
   return (
     <motion.div 
-      whileHover={{ y: -4 }}
-      onClick={onClick}
-      className={`bg-white rounded-xl shadow-xs border border-gray-100 p-5 h-full transition-all duration-200 ${
-        onClick ? 'cursor-pointer hover:shadow-sm hover:border-gray-200' : ''
-      }`}
+      whileHover={{ y: -2, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+      className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-all duration-300 h-full"
     >
       <div className="flex items-center justify-between mb-4">
         <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
@@ -58,7 +117,7 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false, 
               ? 'text-green-600 bg-green-50' 
               : 'text-red-600 bg-red-50'
           }`}>
-            {trendDirection === 'up' ? <FiArrowUp className="w-3 h-3" /> : <FiArrowDown className="w-3 h-3" />}
+            {trendDirection === 'up' ? <FiTrendingUp className="w-3 h-3" /> : ""}
             {trend}
           </span>
         )}
@@ -71,79 +130,55 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false, 
   );
 }
 
-// Enhanced UsageLimitCard with tooltip
-function UsageLimitCard({ label, value, limit, color, description }: { 
-  label: string; 
-  value: number; 
-  limit: number; 
-  color: string;
-  description?: string;
-}) {
+function UsageLimitCard({ label, value, limit, color }: { label: string; value: number; limit: number; color: string }) {
   const percent = Math.min(100, (value / limit) * 100);
   const over = value > limit;
-  
   return (
-    <Tooltip content={description || `${label} usage`}>
-      <div className="flex flex-col gap-2 p-3 bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
-        <div className="flex justify-between items-center">
-          <span className="text-xs text-gray-500 font-medium">{label}</span>
-          <span className={`text-xs font-medium ${over ? 'text-red-600' : 'text-gray-700'}`}>
-            {value}/{limit}
-          </span>
-        </div>
-        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div 
-            className={`h-1.5 rounded-full transition-all duration-500 ${
-              over ? 'bg-red-400' : color
-            }`} 
-            style={{ width: `${percent}%` }} 
-          />
-        </div>
-        {over && (
-          <span className="text-xs text-red-600 flex items-center gap-1">
-            <FiAlertCircle className="w-3 h-3" />
-            Limit exceeded
-          </span>
-        )}
+    <div className="flex flex-col gap-2 p-3 bg-white rounded-lg border border-gray-200">
+      <div className="flex justify-between items-center">
+        <span className="text-xs text-gray-500 font-medium">{label}</span>
+        <span className={`text-xs font-medium ${over ? 'text-red-600' : 'text-gray-700'}`}>{value}/{limit}</span>
       </div>
-    </Tooltip>
+      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-1.5 rounded-full ${over ? 'bg-red-400' : color}`} style={{ width: `${percent}%` }} />
+      </div>
+      {over && <span className="text-xs text-red-600 flex items-center gap-1"><FaExclamationTriangle className="w-3 h-3" />Limit exceeded</span>}
+    </div>
   );
 }
 
-// Improved QuickActions with better hover effects
 function QuickActions() {
   const actions = [
     { 
-      icon: <FiPlus className="w-5 h-5" />,
+    
       label: "Add Product", 
       href: "/products", 
-      color: "bg-blue-500 hover:bg-blue-600" 
+      color: "from-blue-500 to-blue-600" 
     },
     { 
-      icon: <FiUser className="w-5 h-5" />,
+    
       label: "Add Customer", 
       href: "/users", 
-      color: "bg-green-500 hover:bg-green-600" 
+      color: "from-green-500 to-green-600" 
     },
     { 
-      icon: <FiShoppingCart className="w-5 h-5" />,
+      
       label: "New Sale", 
       href: "/sales", 
-      color: "bg-purple-500 hover:bg-purple-600" 
+      color: "from-purple-500 to-purple-600" 
     },
     { 
-      icon: <FiBarChart2 className="w-5 h-5" />,
+     
       label: "Generate Report", 
       href: "/reports", 
-      color: "bg-orange-500 hover:bg-orange-600" 
+      color: "from-orange-500 to-orange-600" 
     },
   ];
 
   return (
-    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl shadow-xs p-6 border border-blue-100">
+    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl shadow-sm p-6 border border-blue-50">
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 rounded-lg bg-white shadow-xs">
-          <FiTrendingUp className="w-5 h-5 text-indigo-600" />
+        <div className="p-2 rounded-lg bg-white shadow-sm">
         </div>
         <h2 className="text-xl font-semibold text-gray-800">Quick Actions</h2>
       </div>
@@ -152,7 +187,7 @@ function QuickActions() {
           <a
             key={i}
             href={action.href}
-            className={`${action.color} text-white p-4 rounded-xl flex flex-col items-center gap-3 transition-all duration-300 hover:shadow-sm transform hover:-translate-y-0.5`}
+            className={`bg-gradient-to-r ${action.color} text-white p-4 rounded-xl flex flex-col items-center gap-3 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5`}
           >
             <div className="p-2 bg-white/20 rounded-lg">
               {action.icon}
@@ -165,166 +200,121 @@ function QuickActions() {
   );
 }
 
-// Enhanced RecentActivities with better animations
 function RecentActivities({ activities }: { activities: Array<{ type: string; description: string; date: string; icon?: React.ReactNode }> }) {
-  if (!activities || activities.length === 0) {
-    return (
-      <div className="bg-white rounded-lg border border-gray-100 p-4">
-        <div className="flex items-center gap-2 mb-4">
-          <FiClock className="w-5 h-5 text-gray-600" />
-          <h2 className="text-lg font-semibold text-gray-800">Recent Activities</h2>
-        </div>
-        <p className="text-sm text-gray-500">No recent activities to show</p>
-      </div>
-    );
-  }
-
+  if (!activities || activities.length === 0) return null;
   return (
-    <div className="bg-white rounded-lg border border-gray-100 p-4">
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-center gap-2 mb-4">
-        <FiClock className="w-5 h-5 text-gray-600" />
+        <FaBell className="w-5 h-5 text-gray-600" />
         <h2 className="text-lg font-semibold text-gray-800">Recent Activities</h2>
       </div>
       <div className="space-y-3">
-        <AnimatePresence>
-          {activities.slice(0, 5).map((a, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-              className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <div className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-gray-600 shadow-xs">
-                {a.icon || <FiClock className="w-4 h-4" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{a.description}</p>
-                <p className="text-xs text-gray-500 flex items-center gap-1">
-                  {new Date(a.date).toLocaleString()}
-                </p>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        {activities.slice(0, 5).map((a, i) => (
+          <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-gray-600">
+              {a.icon || <FaBell className="w-4 h-4" />}
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-800">{a.description}</p>
+              <p className="text-xs text-gray-500 flex items-center gap-1">
+                <FaEye className="w-3 h-3" />
+                {new Date(a.date).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// Enhanced SubscriptionCard with better visual cues
 function SubscriptionCard({ subscription }: { subscription: Subscription | null }) {
-  if (!subscription) {
-    return (
-      <div className="bg-white rounded-lg border border-gray-100 p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <FiTrendingUp className="w-5 h-5 text-gray-600" />
-          <span className="text-lg font-semibold text-gray-800">Subscription</span>
-        </div>
-        <p className="text-sm text-gray-500 mb-4">No active subscription found</p>
-        <button className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-          Subscribe Now
-        </button>
-      </div>
-    );
-  }
-
-  const isPro = subscription.plan.name.includes('Pro');
-  const isEnterprise = subscription.plan.name.includes('Enterprise');
-  
+  if (!subscription) return null;
   return (
-    <div className="bg-white rounded-lg border border-gray-100 p-4">
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-center gap-2 mb-3">
-        {isEnterprise ? (
-          <div className="text-yellow-600 bg-yellow-50 p-1 rounded-full">
-            <FiTrendingUp className="w-5 h-5" />
-          </div>
-        ) : isPro ? (
-          <div className="text-purple-600 bg-purple-50 p-1 rounded-full">
-            <FiTrendingUp className="w-5 h-5" />
-          </div>
-        ) : (
-          <div className="text-blue-600 bg-blue-50 p-1 rounded-full">
-            <FiTrendingUp className="w-5 h-5" />
-          </div>
-        )}
+        {subscription.plan.name === 'Enterprise' ? <FaCrown className="w-5 h-5 text-yellow-600" /> : subscription.plan.name === 'Pro' ? <FaStar className="w-5 h-5 text-purple-600" /> : <FaStar className="w-5 h-5 text-blue-600" />}
         <span className="text-lg font-semibold text-gray-800">Current Plan: {subscription.plan.name}</span>
-        <span className={`ml-auto px-2 py-1 rounded-full text-xs font-medium capitalize ${
-          subscription.status === 'active' 
-            ? 'bg-green-100 text-green-800' 
-            : 'bg-yellow-100 text-yellow-800'
-        }`}>
-          {subscription.status}
-        </span>
+        <span className="ml-auto px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium capitalize">{subscription.status}</span>
       </div>
       <div className="grid grid-cols-2 gap-4 mb-3">
         <div>
           <p className="text-xs text-gray-500">Price</p>
-          <p className="text-sm font-semibold text-gray-900">
-            ${subscription.plan.price}/{subscription.plan.interval}
-          </p>
+          <p className="text-sm font-semibold text-gray-900">${subscription.plan.price}/{subscription.plan.interval}</p>
         </div>
         <div>
           <p className="text-xs text-gray-500">Next Billing</p>
-          <p className="text-sm font-semibold text-gray-900">
-            {subscription.endDate ? new Date(subscription.endDate).toLocaleDateString() : 'N/A'}
-          </p>
+          <p className="text-sm font-semibold text-gray-900">{subscription.endDate ? new Date(subscription.endDate).toLocaleDateString() : 'N/A'}</p>
         </div>
       </div>
-      <button className="w-full px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all text-sm font-medium shadow-xs hover:shadow-sm">
+      <button className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
         Upgrade Plan
       </button>
     </div>
   );
 }
 
-// Improved AnalyticsPage with better layout
+function SkeletonLoader() {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <StatCard key={i} loading={true} icon={null} label="" value="" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse h-64"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[1, 2].map((i) => (
+              <div key={i} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse h-48"></div>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse h-64"></div>
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse h-64"></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsPage() {
+  // Low stock notification state for dashboard
   const [showLowStockAlert, setShowLowStockAlert] = useState(true);
   const [basicData, setBasicData] = useState<AnalyticsData | null>(null);
+  const [advancedData, setAdvancedData] = useState<AnalyticsData | null>(null);
+  const [enterpriseData, setEnterpriseData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const { limits, loading: limitsLoading } = usePlanLimits();
 
+  // Find low stock products (stock <= 10)
   const LOW_STOCK_THRESHOLD = 10;
-  const lowStockProducts = (basicData?.topProducts || []).filter(
-    (p: { name: string; sales: number; revenue: number }) => 
-      (p.sales ?? 0) <= LOW_STOCK_THRESHOLD && (p.sales ?? 0) > 0
-  );
+  const lowStockProducts = (basicData?.topProducts || []).filter((p: { name: string; sales: number; revenue: number }) => (p.sales ?? 0) <= LOW_STOCK_THRESHOLD && (p.sales ?? 0) > 0);
 
+  // Show notification alert automatically when low stock detected
+  useEffect(() => {
+    if (lowStockProducts.length > 0) {
+      setShowLowStockAlert(true);
+    }
+  }, [lowStockProducts.length]);
+  
   const usageLimits = [
-    { 
-      label: 'Users', 
-      value: limits?.usage?.users?.current || 0, 
-      limit: limits?.usage?.users?.limit || 1, 
-      color: 'bg-blue-500',
-      description: 'Number of active users in your account'
-    },
-    { 
-      label: 'Products', 
-      value: limits?.usage?.products?.current || 0, 
-      limit: limits?.usage?.products?.limit || 1, 
-      color: 'bg-green-500',
-      description: 'Number of products in your inventory'
-    },
-    { 
-      label: 'Sales', 
-      value: limits?.usage?.sales?.current || 0, 
-      limit: limits?.usage?.sales?.limit || 1, 
-      color: 'bg-purple-500',
-      description: 'Monthly sales transactions'
-    },
+    { label: 'Users', value: limits?.usage?.users?.current || 0, limit: limits?.usage?.users?.limit || 1, color: 'bg-blue-500' },
+    { label: 'Products', value: limits?.usage?.products?.current || 0, limit: limits?.usage?.products?.limit || 1, color: 'bg-green-500' },
+    { label: 'Sales', value: limits?.usage?.sales?.current || 0, limit: limits?.usage?.sales?.limit || 1, color: 'bg-purple-500' },
   ];
 
-  const [recentActivities, setRecentActivities] = useState<
-    Array<{ type: string; description: string; date: string; icon?: React.ReactNode }>
-  >([]);
+  const [recentActivities, setRecentActivities] = useState<Array<{ type: string; description: string; date: string; icon?: React.ReactNode }>>([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
         setLoading(true);
         
+        // Fetch analytics data
         const stats = await apiGet('/analytics/dashboard');
         setBasicData({
           totalSales: stats.totalSales,
@@ -340,6 +330,7 @@ export default function AnalyticsPage() {
           customerGrowth: stats.customerGrowth,
         });
         
+        // Process recent activities from API only
         const activities: Array<{ type: string; description: string; date: string; icon?: React.ReactNode }> = [];
         if (stats.recentActivity?.sales) {
           stats.recentActivity.sales.forEach((sale: any) => {
@@ -347,7 +338,7 @@ export default function AnalyticsPage() {
               type: 'sale',
               description: `Sale completed: $${sale.amount.toLocaleString()} to ${sale.customer}`,
               date: sale.date,
-              icon: <FiShoppingCart className="w-4 h-4" />
+            
             });
           });
         }
@@ -357,12 +348,14 @@ export default function AnalyticsPage() {
               type: 'product',
               description: `New product added: ${product.name}`,
               date: product.date,
-              icon: <FiPackage className="w-4 h-4" />
+           
             });
           });
         }
+        // Add more activity types if available from API
         setRecentActivities(activities);
         
+        // Fetch subscription data (with error handling)
         try {
           const sub = await apiGet('/billing/subscription') as Subscription;
           setSubscription(sub);
@@ -371,9 +364,10 @@ export default function AnalyticsPage() {
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
-        setBasicData(null);
-        setRecentActivities([]);
-        setSubscription(null);
+  // Show error state only if API fails
+  setBasicData(null);
+  setRecentActivities([]);
+  setSubscription(null);
       } finally {
         setLoading(false);
       }
@@ -381,6 +375,10 @@ export default function AnalyticsPage() {
     fetchDashboard();
   }, []);
 
+  // Find low stock products (stock <= 10)
+  // (removed duplicate declaration)
+
+  // Show notification alert automatically when low stock detected
   useEffect(() => {
     if (lowStockProducts.length > 0) {
       setShowLowStockAlert(true);
@@ -393,8 +391,8 @@ export default function AnalyticsPage() {
         <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">
             <div className="mb-8">
-              <div className="h-8 bg-gray-200 rounded w-64 mb-2 animate-pulse"></div>
-              <div className="h-4 bg-gray-200 rounded w-80 animate-pulse"></div>
+              <div className="h-8 bg-gray-200 rounded w-64 mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded w-80"></div>
             </div>
             <SkeletonLoader />
           </div>
@@ -405,7 +403,7 @@ export default function AnalyticsPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
         {/* Low Stock Notification */}
         <AnimatePresence>
           {showLowStockAlert && lowStockProducts.length > 0 && (
@@ -415,9 +413,9 @@ export default function AnalyticsPage() {
               exit={{ opacity: 0, y: -20 }}
               className="px-4 sm:px-6 lg:px-8 pt-6"
             >
-              <div className="bg-gradient-to-r from-red-500 to-amber-500 text-white px-6 py-4 rounded-xl shadow-sm flex items-center justify-between max-w-7xl mx-auto">
+              <div className="bg-gradient-to-r from-red-500 to-amber-500 text-white px-6 py-4 rounded-xl shadow-lg flex items-center justify-between max-w-7xl mx-auto">
                 <div className="flex items-center gap-3">
-                  <FiAlertCircle className="w-5 h-5 text-white" />
+                  <FiAlertCircle className="w-6 h-6 text-white" />
                   <div>
                     <p className="font-bold">Low Stock Alert!</p>
                     <p className="text-sm opacity-90">
@@ -454,6 +452,7 @@ export default function AnalyticsPage() {
                 </p>
                 {basicData?.message && (
                   <div className="mt-2 text-blue-700 text-sm font-medium flex items-center gap-2">
+                    
                     {basicData.message}
                   </div>
                 )}
@@ -505,108 +504,162 @@ export default function AnalyticsPage() {
               />
             </div>
 
+            {/* Rest of your dashboard content */}
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Main Content Area */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Charts & Visualizations */}
-                <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-xs">
+                <div className="mb-6">
                   <AnalyticsCharts 
-                    salesData={basicData?.salesByMonth}
+                    salesData={basicData?.salesTrendMonth}
+                    dailySalesData={basicData?.salesTrendDay}
+                    weeklySalesData={basicData?.salesTrendWeek}
                     productData={basicData?.topProducts?.map(p => ({
                       name: p.name,
-                      unitsSold: p.sales,
-                      revenue: p.revenue
+                      unitsSold: p.unitsSold,
+                      revenue: p.revenue,
+                      margin: p.margin ?? 0,
+                      cost: p.cost ?? 0
                     }))}
+                    inventoryAnalytics={basicData?.inventoryAnalytics}
+                    customerRetention={basicData?.customerRetention}
                   />
                 </div>
 
                 {/* Inventory Analytics */}
                 {basicData?.inventoryAnalytics && (
-                  <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-xs">
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
                     <h2 className="text-lg font-semibold text-gray-800 mb-4">Inventory Analytics</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <StatCard 
-                        icon={<FiPackage className="w-5 h-5 text-red-600" />}
-                        label="Low Stock Items"
-                        value={basicData.inventoryAnalytics.lowStockItems}
-                      />
-                      <StatCard 
-                        icon={<FiPackage className="w-5 h-5 text-yellow-600" />}
-                        label="Overstock Items"
-                        value={basicData.inventoryAnalytics.overstockItems}
-                      />
-                      <StatCard 
-                        icon={<FiTrendingUp className="w-5 h-5 text-blue-600" />}
-                        label="Inventory Turnover"
-                        value={basicData.inventoryAnalytics.inventoryTurnover}
-                      />
-                      <StatCard 
-                        icon={<FiAlertCircle className="w-5 h-5 text-purple-600" />}
-                        label="Stockout Rate"
-                        value={`${(basicData.inventoryAnalytics.stockoutRate * 100).toFixed(2)}%`}
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500">Low Stock Items</p>
+                        <p className="text-xl font-bold text-red-600">{basicData.inventoryAnalytics.lowStockItems}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Overstock Items</p>
+                        <p className="text-xl font-bold text-yellow-600">{basicData.inventoryAnalytics.overstockItems}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Inventory Turnover</p>
+                        <p className="text-xl font-bold text-blue-600">{basicData.inventoryAnalytics.inventoryTurnover}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Stockout Rate</p>
+                        <p className="text-xl font-bold text-purple-600">{(basicData.inventoryAnalytics.stockoutRate * 100).toFixed(2)}%</p>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {/* Performance Metrics */}
                 {basicData?.performanceMetrics && (
-                  <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-xs">
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
                     <h2 className="text-lg font-semibold text-gray-800 mb-4">Performance Metrics</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <StatCard 
-                        icon={<FiDollarSign className="w-5 h-5 text-green-600" />}
-                        label="Customer Lifetime Value"
-                        value={`$${basicData.performanceMetrics.customerLifetimeValue.toLocaleString()}`}
-                      />
-                      <StatCard 
-                        icon={<FiDollarSign className="w-5 h-5 text-red-600" />}
-                        label="Customer Acquisition Cost"
-                        value={`$${basicData.performanceMetrics.customerAcquisitionCost.toLocaleString()}`}
-                      />
-                      <StatCard 
-                        icon={<FiTrendingUp className="w-5 h-5 text-blue-600" />}
-                        label="Return on Investment"
-                        value={`${(basicData.performanceMetrics.returnOnInvestment * 100).toFixed(2)}%`}
-                      />
-                      <StatCard 
-                        icon={<FiUsers className="w-5 h-5 text-purple-600" />}
-                        label="Net Promoter Score"
-                        value={basicData.performanceMetrics.netPromoterScore}
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500">Customer Lifetime Value</p>
+                        <p className="text-xl font-bold text-green-600">${basicData.performanceMetrics.customerLifetimeValue}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Customer Acquisition Cost</p>
+                        <p className="text-xl font-bold text-red-600">${basicData.performanceMetrics.customerAcquisitionCost}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Return on Investment</p>
+                        <p className="text-xl font-bold text-blue-600">{(basicData.performanceMetrics.returnOnInvestment * 100).toFixed(2)}%</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Net Promoter Score</p>
+                        <p className="text-xl font-bold text-purple-600">{basicData.performanceMetrics.netPromoterScore}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Advanced Segments */}
+                {basicData?.advancedSegments && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Advanced Segments</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-2">By Location</h3>
+                        {basicData.advancedSegments.byLocation.map((loc, i) => (
+                          <div key={i} className="mb-1 flex justify-between">
+                            <span>{loc.location}</span>
+                            <span className="font-bold">${loc.revenue}</span>
+                            <span className="text-xs text-gray-500">{loc.customers} customers</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-2">By Age</h3>
+                        {basicData.advancedSegments.byAge.map((age, i) => (
+                          <div key={i} className="mb-1 flex justify-between">
+                            <span>{age.age}</span>
+                            <span className="font-bold">${age.revenue}</span>
+                            <span className="text-xs text-gray-500">{age.customers} customers</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-2">By Device</h3>
+                        {basicData.advancedSegments.byDevice.map((dev, i) => (
+                          <div key={i} className="mb-1 flex justify-between">
+                            <span>{dev.device}</span>
+                            <span className="font-bold">${dev.revenue}</span>
+                            <span className="text-xs text-gray-500">{dev.customers} customers</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Insights */}
+                {basicData?.aiInsights && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">AI Insights</h2>
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2">Recommendations</h3>
+                      <ul className="list-disc pl-5">
+                        {basicData.aiInsights.recommendations.map((rec, i) => (
+                          <li key={i} className="text-green-700">{rec}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2">Anomalies</h3>
+                      <ul className="list-disc pl-5">
+                        {basicData.aiInsights.anomalies.map((anom, i) => (
+                          <li key={i} className="text-red-700">{anom}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Reports */}
+                {basicData?.customReports && (
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Custom Reports</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {basicData.customReports.map((report, i) => (
+                        <div key={i} className="border rounded-lg p-3 bg-gray-50">
+                          <h3 className="text-sm font-semibold text-gray-700 mb-1">{report.name}</h3>
+                          <p className="text-xs text-gray-500">Last Updated: {report.lastUpdated}</p>
+                          <p className="text-sm text-gray-800 mt-2">{report.data}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Sidebar */}
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <RecentActivities activities={recentActivities} />
                 <SubscriptionCard subscription={subscription} />
-                
-                {/* Customer Segments */}
-                {basicData?.customerSegments && (
-                  <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-xs">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Customer Segments</h2>
-                    <div className="space-y-4">
-                      {basicData.customerSegments.map((segment, i) => (
-                        <div key={i} className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
-                              <FiUser className="w-4 h-4" />
-                            </div>
-                            <span className="font-medium">{segment.segment}</span>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold">${segment.revenue.toLocaleString()}</p>
-                            <p className="text-xs text-gray-500">{segment.count} customers</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
