@@ -1,3 +1,5 @@
+// import LogoEnforcement from '@/components/LogoEnforcement';
+
 "use client";
 import { useEffect, useState } from 'react';
 import { apiGet } from '@/utils/api';
@@ -18,7 +20,9 @@ interface AnalyticsData {
   averageOrderValue?: number;
   conversionRate?: number;
   salesByMonth?: Record<string, number>;
-  topProducts?: Array<{ name: string; sales: number; revenue: number }>;
+  salesByWeek?: Record<string, number>;
+  salesByDay?: Record<string, number>;
+  topProducts?: Array<{ name: string; sales: number; revenue: number; margin?: number; cost?: number }>;
   customerSegments?: Array<{ segment: string; count: number; revenue: number }>;
   realTimeData?: {
     currentUsers: number;
@@ -64,6 +68,11 @@ interface AnalyticsData {
     products?: Array<{ name: string; date: string }>;
   };
   customerGrowth?: Record<string, number>;
+  customerRetention?: {
+    totalCustomers: number;
+    repeatCustomers: number;
+    retentionRate: number;
+  };
 }
 
 interface SubscriptionPlan {
@@ -149,37 +158,36 @@ function UsageLimitCard({ label, value, limit, color }: { label: string; value: 
 
 function QuickActions() {
   const actions = [
-    { 
-    
-      label: "Add Product", 
-      href: "/products", 
-      color: "from-blue-500 to-blue-600" 
+    {
+      label: "Add Product",
+      href: "/products",
+      color: "from-blue-500 to-blue-600",
+      icon: <FaBox className="w-5 h-5" />,
     },
-    { 
-    
-      label: "Add Customer", 
-      href: "/users", 
-      color: "from-green-500 to-green-600" 
+    {
+      label: "Add Customer",
+      href: "/users",
+      color: "from-green-500 to-green-600",
+      icon: <FaUserPlus className="w-5 h-5" />,
     },
-    { 
-      
-      label: "New Sale", 
-      href: "/sales", 
-      color: "from-purple-500 to-purple-600" 
+    {
+      label: "New Sale",
+      href: "/sales",
+      color: "from-purple-500 to-purple-600",
+      icon: <FaDollarSign className="w-5 h-5" />,
     },
-    { 
-     
-      label: "Generate Report", 
-      href: "/reports", 
-      color: "from-orange-500 to-orange-600" 
+    {
+      label: "Generate Report",
+      href: "/reports",
+      color: "from-orange-500 to-orange-600",
+      icon: <FaFileAlt className="w-5 h-5" />,
     },
   ];
 
   return (
     <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl shadow-sm p-6 border border-blue-50">
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 rounded-lg bg-white shadow-sm">
-        </div>
+        <div className="p-2 rounded-lg bg-white shadow-sm" />
         <h2 className="text-xl font-semibold text-gray-800">Quick Actions</h2>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -199,6 +207,7 @@ function QuickActions() {
     </div>
   );
 }
+
 
 function RecentActivities({ activities }: { activities: Array<{ type: string; description: string; date: string; icon?: React.ReactNode }> }) {
   if (!activities || activities.length === 0) return null;
@@ -281,8 +290,13 @@ function SkeletonLoader() {
 }
 
 export default function AnalyticsPage() {
+  // ...existing code...
+  // Place this after all state and lowStockProducts declarations
   // Low stock notification state for dashboard
   const [showLowStockAlert, setShowLowStockAlert] = useState(true);
+  const [showLowStockForm, setShowLowStockForm] = useState(false);
+  const [restockProduct, setRestockProduct] = useState<{ name: string; stock: number } | null>(null);
+  const [restockAmount, setRestockAmount] = useState(0);
   const [basicData, setBasicData] = useState<AnalyticsData | null>(null);
   const [advancedData, setAdvancedData] = useState<AnalyticsData | null>(null);
   const [enterpriseData, setEnterpriseData] = useState<AnalyticsData | null>(null);
@@ -290,9 +304,22 @@ export default function AnalyticsPage() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const { limits, loading: limitsLoading } = usePlanLimits();
 
-  // Find low stock products (stock <= 10)
-  const LOW_STOCK_THRESHOLD = 10;
-  const lowStockProducts = (basicData?.topProducts || []).filter((p: { name: string; sales: number; revenue: number }) => (p.sales ?? 0) <= LOW_STOCK_THRESHOLD && (p.sales ?? 0) > 0);
+  // Dynamic low stock threshold from tenant config
+  const [stockThreshold, setStockThreshold] = useState<number>(15);
+  // Use sales as stock value for notification (API does not provide stock field)
+  const lowStockProducts = (basicData?.topProducts || []).filter((p: { name: string; sales: number; revenue: number }) => (p.sales ?? 0) < stockThreshold);
+
+  // Prevent background scroll when modal is open
+  useEffect(() => {
+    if (showLowStockAlert && lowStockProducts.length > 0) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showLowStockAlert, lowStockProducts.length]);
 
   // Show notification alert automatically when low stock detected
   useEffect(() => {
@@ -313,7 +340,9 @@ export default function AnalyticsPage() {
     const fetchDashboard = async () => {
       try {
         setLoading(true);
-        
+        // Fetch stock threshold from tenant config
+        const config = await apiGet('/tenant/configurations/stockThreshold');
+        setStockThreshold(config?.value ? Number(config.value) : 15);
         // Fetch analytics data
         const stats = await apiGet('/analytics/dashboard');
         setBasicData({
@@ -321,15 +350,23 @@ export default function AnalyticsPage() {
           totalRevenue: stats.totalRevenue,
           totalProducts: stats.totalProducts,
           salesByMonth: stats.salesByMonth,
-          topProducts: stats.topProducts,
+          salesByWeek: stats.salesByWeek,
+          salesByDay: stats.salesByDay,
+          topProducts: stats.topProducts?.map((p: any) => ({
+            name: p.name,
+            sales: p.sales,
+            revenue: p.revenue,
+            margin: p.margin,
+            cost: p.cost
+          })),
           customerSegments: stats.customerSegments,
           realTimeData: stats.realTimeData,
           predictiveAnalytics: stats.predictiveAnalytics,
           message: stats.message,
           recentActivity: stats.recentActivity,
           customerGrowth: stats.customerGrowth,
+          customerRetention: stats.customerRetention,
         });
-        
         // Process recent activities from API only
         const activities: Array<{ type: string; description: string; date: string; icon?: React.ReactNode }> = [];
         if (stats.recentActivity?.sales) {
@@ -338,7 +375,6 @@ export default function AnalyticsPage() {
               type: 'sale',
               description: `Sale completed: $${sale.amount.toLocaleString()} to ${sale.customer}`,
               date: sale.date,
-            
             });
           });
         }
@@ -348,13 +384,11 @@ export default function AnalyticsPage() {
               type: 'product',
               description: `New product added: ${product.name}`,
               date: product.date,
-           
             });
           });
         }
         // Add more activity types if available from API
         setRecentActivities(activities);
-        
         // Fetch subscription data (with error handling)
         try {
           const sub = await apiGet('/billing/subscription') as Subscription;
@@ -364,10 +398,10 @@ export default function AnalyticsPage() {
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
-  // Show error state only if API fails
-  setBasicData(null);
-  setRecentActivities([]);
-  setSubscription(null);
+        // Show error state only if API fails
+        setBasicData(null);
+        setRecentActivities([]);
+        setSubscription(null);
       } finally {
         setLoading(false);
       }
@@ -404,31 +438,101 @@ export default function AnalyticsPage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-        {/* Low Stock Notification */}
+        {/* Low Stock Notification Bell */}
+        <div className="fixed top-6 right-8 z-50">
+          <button
+            className="relative p-3 bg-white rounded-full shadow-lg border hover:bg-gray-50"
+            onClick={() => setShowLowStockAlert(true)}
+            title="Low Stock Notifications"
+          >
+            <FaBell className="w-6 h-6 text-red-500" />
+            {lowStockProducts.length > 0 && (
+              <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>
+            )}
+          </button>
+        </div>
+        {/* Low Stock Notification Modal */}
         <AnimatePresence>
           {showLowStockAlert && lowStockProducts.length > 0 && (
             <motion.div 
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="px-4 sm:px-6 lg:px-8 pt-6"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+              onClick={e => {
+                if (e.target === e.currentTarget) setShowLowStockAlert(false);
+              }}
             >
-              <div className="bg-gradient-to-r from-red-500 to-amber-500 text-white px-6 py-4 rounded-xl shadow-lg flex items-center justify-between max-w-7xl mx-auto">
-                <div className="flex items-center gap-3">
-                  <FiAlertCircle className="w-6 h-6 text-white" />
-                  <div>
-                    <p className="font-bold">Low Stock Alert!</p>
-                    <p className="text-sm opacity-90">
-                      {lowStockProducts.length} product{lowStockProducts.length > 1 ? 's' : ''} need{lowStockProducts.length === 1 ? 's' : ''} restocking.
-                    </p>
+              <div className="bg-gradient-to-r from-red-500 to-amber-500 text-white px-6 py-6 rounded-xl shadow-2xl flex flex-col gap-2 max-w-2xl w-full mx-auto" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-3 justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <FiAlertCircle className="w-6 h-6 text-white" />
+                    <div>
+                      <p className="font-bold">Low Stock Alert!</p>
+                      <p className="text-sm opacity-90">
+                        {lowStockProducts.length} product{lowStockProducts.length > 1 ? 's' : ''} below {stockThreshold} in stock.
+                      </p>
+                    </div>
                   </div>
+                  <button 
+                    onClick={() => setShowLowStockAlert(false)}
+                    className="ml-4 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Dismiss
+                  </button>
                 </div>
-                <button 
-                  onClick={() => setShowLowStockAlert(false)}
-                  className="ml-4 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Dismiss
-                </button>
+                <div className="mt-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-white/80">
+                        <th className="py-2 text-left">Product</th>
+                        <th className="py-2 text-left">Current Stock</th>
+                        <th className="py-2 text-left">Restock</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lowStockProducts.map((p, idx) => (
+                        <tr key={idx} className="border-t border-white/20">
+                          <td className="py-2 font-semibold">{p.name}</td>
+                          <td className="py-2">{p.sales ?? 0}</td>
+                          <td className="py-2">
+                            <button
+                              className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-xs font-medium"
+                              onClick={() => { setShowLowStockForm(true); setRestockProduct({ name: p.name, stock: p.sales ?? 0 }); }}
+                            >
+                              Restock
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Restock Form Modal */}
+                {showLowStockForm && restockProduct && (
+                  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={e => { if (e.target === e.currentTarget) setShowLowStockForm(false); }}>
+                    <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
+                      <h2 className="text-xl font-bold mb-4 text-gray-800">Restock Product</h2>
+                      <p className="mb-2 text-gray-700">Product: <span className="font-semibold">{restockProduct.name}</span></p>
+                      <p className="mb-4 text-gray-700">Current Stock: <span className="font-semibold">{restockProduct.stock}</span></p>
+                      <form onSubmit={e => { e.preventDefault(); /* TODO: Add API call to restock */ setShowLowStockForm(false); }}>
+                        <input
+                          type="number"
+                          min={1}
+                          className="border border-gray-300 rounded px-3 py-2 w-full mb-4"
+                          placeholder="Enter restock amount"
+                          value={restockAmount}
+                          onChange={e => setRestockAmount(Number(e.target.value))}
+                          required
+                        />
+                        <div className="flex gap-2">
+                          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Submit</button>
+                          <button type="button" className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300" onClick={() => setShowLowStockForm(false)}>Cancel</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -511,20 +615,35 @@ export default function AnalyticsPage() {
               <div className="lg:col-span-2 space-y-6">
                 {/* Charts & Visualizations */}
                 <div className="mb-6">
+                  {/* Monthly Sales Chart */}
                   <AnalyticsCharts 
-                    salesData={basicData?.salesTrendMonth}
-                    dailySalesData={basicData?.salesTrendDay}
-                    weeklySalesData={basicData?.salesTrendWeek}
+                    salesData={basicData?.salesByMonth}
                     productData={basicData?.topProducts?.map(p => ({
                       name: p.name,
-                      unitsSold: p.unitsSold,
-                      revenue: p.revenue,
+                      unitsSold: p.sales ?? 0,
+                      revenue: p.revenue ?? 0,
                       margin: p.margin ?? 0,
                       cost: p.cost ?? 0
                     }))}
                     inventoryAnalytics={basicData?.inventoryAnalytics}
                     customerRetention={basicData?.customerRetention}
                   />
+                  {/* Weekly Sales Chart */}
+                  {basicData?.salesByWeek && (
+                    <div className="mt-8">
+                      <AnalyticsCharts 
+                        salesData={basicData.salesByWeek}
+                      />
+                    </div>
+                  )}
+                  {/* Daily Sales Chart */}
+                  {basicData?.salesByDay && (
+                    <div className="mt-8">
+                      <AnalyticsCharts 
+                        salesData={basicData.salesByDay}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Inventory Analytics */}

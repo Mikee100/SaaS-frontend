@@ -1,6 +1,6 @@
 "use client";
 import PlanGuard from '@/components/PlanGuard';
-// import UsageDashboard from '@/components/UsageDashboard';
+import UsageDashboard from '@/components/UsageDashboard';
 import { FaCog, FaUsers, FaChartLine, FaCrown, FaDownload, FaShare } from 'react-icons/fa';
 
 export default function SettingsPage() {
@@ -182,7 +182,7 @@ export default function SettingsPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* <UsageDashboard /> // Paused for user consistency debugging */}
+          <UsageDashboard />
           
           {/* Quick Actions */}
           <div className="bg-white rounded-xl shadow-sm border p-6">

@@ -8,13 +8,10 @@ import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaUse
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
-import dynamic from 'next/dynamic';
-
-// Dynamically import LogoUsage with no SSR to avoid hydration issues
-const LogoUsage = dynamic(() => import('@/components/LogoUsage'), { ssr: false });
+import { FaTachometerAlt } from 'react-icons/fa';
 
 export default function PlanBasedNav() {
-  const userContext = useUser();
+  const userContext = useUser([]);
   const { limits, hasFeature, loading: limitsLoading } = usePlanLimits();
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -26,7 +23,7 @@ export default function PlanBasedNav() {
 
   // Always call hooks at top level!
   const navigationItems = [
-    { name: 'Dashboard', href: '/', icon: LogoUsage, requiredPlan: null, requiredPermission: null },
+  { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
     { name: 'Products', href: '/products', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_products' },
     { name: 'Inventory', href: '/inventory', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_inventory' },
     { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
@@ -157,15 +154,7 @@ export default function PlanBasedNav() {
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                   >
-                   {Icon === LogoUsage ? (
-                      <LogoUsage 
-                        section="dashboard" 
-                        className={sidebarCollapsed ? "w-6 h-6" : "w-32 h-8 object-contain"} 
-                        showPlaceholder={false}
-                      />
-                    ) : ( 
-                      <Icon className="w-5 h-5 flex-shrink-0" />
-                    )}
+                    <Icon className="w-5 h-5 flex-shrink-0" />
                     {!sidebarCollapsed && (
                       <span className="whitespace-nowrap">{item.name}</span>
                     )}

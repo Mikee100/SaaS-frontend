@@ -50,13 +50,13 @@ export default function BillingSettings() {
         setLoading(true);
         const [plansData, subscriptionData] = await Promise.all([
           apiGet('/billing/plans') as Promise<Plan[]>,
-          apiGet('/billing/subscription').catch(() => null) as Promise<Subscription | null>,
+          apiGet('/billing') as Promise<Subscription>,
+          // apiGet('/billing/invoices') as Promise<Invoice[]>, // Temporarily commented out
         ]);
         
         setPlans(plansData);
         setCurrentSubscription(subscriptionData);
-        // Initialize invoices as empty for now since we're not using them yet
-        setInvoices([]);
+        setInvoices([]); // Set empty array for now
       } catch (error) {
         console.error('Error fetching billing data:', error);
       } finally {
@@ -70,10 +70,10 @@ export default function BillingSettings() {
   const handleUpgrade = async (plan: Plan) => {
     try {
       setUpgrading(true);
-      await apiPost('/billing/create-subscription', { planId: plan.id });
+      await apiPost('/billing/subscribe', { planId: plan.id });
       
-      // Refresh subscription data
-      const subscriptionData = await apiGet('/billing/subscription') as Subscription;
+      // Refresh data
+      const subscriptionData = await apiGet('/billing') as Subscription;
       setCurrentSubscription(subscriptionData);
       setShowUpgradeModal(false);
       setSelectedPlan(null);
@@ -111,7 +111,7 @@ export default function BillingSettings() {
       await apiDelete('/billing/subscription');
       alert('Subscription cancelled successfully.');
       // Refresh data
-      const subscriptionData = await apiGet('/billing/subscription') as Subscription;
+      const subscriptionData = await apiGet('/billing') as Subscription;
       setCurrentSubscription(subscriptionData);
     } catch (error) {
       console.error('Error cancelling subscription:', error);

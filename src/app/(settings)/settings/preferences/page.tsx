@@ -23,10 +23,15 @@ export default function PreferencesSettings() {
     notificationPreferences: { email: true, sms: false },
     language: "en",
     region: "ke",
+    stockThreshold: 15,
   });
 
   useEffect(() => {
-    apiGet("/user/me").then((user: any) => {
+    // Load preferences from user and tenant config
+    Promise.all([
+      apiGet("/user/me"),
+      apiGet("/tenant/configurations/stockThreshold")
+    ]).then(([user, config]: [any, any]) => {
       setPrefs({
         notificationPreferences: {
           email: user.notificationPreferences?.email ?? true,
@@ -34,6 +39,7 @@ export default function PreferencesSettings() {
         },
         language: user.language || "en",
         region: user.region || "ke",
+        stockThreshold: config?.value ? Number(config.value) : 15,
       });
     }).catch(() => setError("Failed to load preferences"))
       .finally(() => setLoading(false));
@@ -45,7 +51,12 @@ export default function PreferencesSettings() {
     setError("");
     setSuccess(false);
     try {
-      await apiPut("/user/me/preferences", prefs);
+      // Only send user preferences fields to /user/me/preferences
+      const { stockThreshold, ...userPrefs } = prefs;
+      await Promise.all([
+        apiPut("/user/me/preferences", userPrefs),
+        apiPut("/tenant/configurations/stockThreshold", { value: String(prefs.stockThreshold), category: "general" })
+      ]);
       setSuccess(true);
     } catch (err: any) {
       setError(err.message || "Failed to save preferences");
@@ -95,6 +106,17 @@ export default function PreferencesSettings() {
                 />
                 <span className="text-gray-700">SMS notifications</span>
               </label>
+              <div className="mt-6">
+                <h3 className="font-semibold mb-2 text-gray-700">Low Stock Threshold</h3>
+                <p className="text-xs text-gray-400 mb-2">Set the minimum stock level before a low stock alert is triggered.</p>
+                <input
+                  type="number"
+                  min={1}
+                  value={prefs.stockThreshold}
+                  onChange={e => setPrefs(p => ({ ...p, stockThreshold: Number(e.target.value) }))}
+                  className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200 w-32"
+                />
+              </div>
             </div>
             <div className="flex flex-col gap-4">
               <h3 className="font-semibold mb-2 text-gray-700">Language</h3>
