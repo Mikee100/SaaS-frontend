@@ -3,7 +3,10 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import LayoutWrapper from "@/components/LayoutWrapper";
-// import OfflineStatus from "@/components/OfflineStatus";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { DashboardProvider } from "@/contexts/DashboardContext";
+import OfflineIndicator from '@/components/ui/OfflineIndicator';
+import { Toaster } from '@/components/ui/toaster';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -64,9 +67,15 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <SessionProvider>
-          <LayoutWrapper>
-            {children}
-          </LayoutWrapper>
+          <DashboardProvider>
+            <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+              <LayoutWrapper>
+                {children}
+              </LayoutWrapper>
+              <Toaster />
+              
+            </ThemeProvider>
+          </DashboardProvider>
         </SessionProvider>
       </body>
     </html>

@@ -142,14 +142,16 @@ export default function AnalyticsCharts({ salesData, dailySalesData, weeklySales
   const summaryCards = [
     {
       title: 'Total Sales',
-      value: `$${Object.values(salesData || {}).reduce((a, b) => a + b, 0).toLocaleString()}`,
+  value: `$${Object.values(salesData || {}).reduce((a, b) => a + b, 0).toLocaleString()}`,
       change: 12.5,
       icon: <FaDollarSign className="text-indigo-500" />,
       trend: 'up'
     },
     {
       title: 'Top Product',
-      value: productData?.reduce((prev, current) => (prev.revenue > current.revenue) ? prev : current).name || 'N/A',
+      value: (Array.isArray(productData) && productData.length > 0)
+        ? productData.reduce((prev, current) => (prev.revenue > current.revenue) ? prev : current, productData[0]).name
+        : 'N/A',
       change: 8.2,
       icon: <FaBoxes className="text-green-500" />,
       trend: 'up'

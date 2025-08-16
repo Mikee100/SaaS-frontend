@@ -2,8 +2,69 @@
 import PlanGuard from '@/components/PlanGuard';
 import UsageDashboard from '@/components/UsageDashboard';
 import { FaCog, FaUsers, FaChartLine, FaCrown, FaDownload, FaShare } from 'react-icons/fa';
+import { useEffect, useState } from 'react';
+import { apiGet, apiPut } from '@/utils/api';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: { name: string };
+}
+
+interface Tenant {
+  name: string;
+  email: string;
+  phone: string;
+}
 
 export default function SettingsPage() {
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [tenantData, usersData] = await Promise.all([
+          apiGet('/tenant/me'),
+          apiGet('/user')
+        ]);
+        setTenant(tenantData);
+        setUsers(usersData);
+      } catch (err) {
+        setError('Failed to load settings data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleSave = async () => {
+    if (!tenant) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await apiPut('/tenant/me', tenant);
+    } catch (err) {
+      setError('Failed to save changes.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center py-10">Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-10 text-red-500">{error}</div>;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
@@ -26,7 +87,8 @@ export default function SettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
                 <input
                   type="text"
-                  defaultValue="My Business"
+                  value={tenant?.name || ''}
+                  onChange={(e) => setTenant(t => t ? { ...t, name: e.target.value } : null)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -35,7 +97,8 @@ export default function SettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input
                   type="email"
-                  defaultValue="contact@mybusiness.com"
+                  value={tenant?.email || ''}
+                  onChange={(e) => setTenant(t => t ? { ...t, email: e.target.value } : null)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -44,15 +107,20 @@ export default function SettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                 <input
                   type="tel"
-                  defaultValue="+1234567890"
+                  value={tenant?.phone || ''}
+                  onChange={(e) => setTenant(t => t ? { ...t, phone: e.target.value } : null)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
             
             <div className="mt-6">
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                Save Changes
+              <button 
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
@@ -69,25 +137,17 @@ export default function SettingsPage() {
               </div>
               
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-800">John Doe</p>
-                    <p className="text-sm text-gray-500">john@example.com</p>
+                {users.map(user => (
+                  <div key={user.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-800">{user.name}</p>
+                      <p className="text-sm text-gray-500">{user.email}</p>
+                    </div>
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                      {user.role?.name || 'User'}
+                    </span>
                   </div>
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                    Admin
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-800">Jane Smith</p>
-                    <p className="text-sm text-gray-500">jane@example.com</p>
-                  </div>
-                  <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
-                    User
-                  </span>
-                </div>
+                ))}
               </div>
               
               <div className="mt-6">

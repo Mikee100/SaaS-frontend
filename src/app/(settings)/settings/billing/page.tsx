@@ -2,7 +2,11 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { FaCrown, FaStar, FaCheck, FaTimes, FaCreditCard, FaDownload, FaHistory, FaArrowUp, FaArrowDown } from 'react-icons/fa';
+import { Suspense } from "react";
+import dynamic from "next/dynamic";
 
+const SubscriptionPage = dynamic(() => import("./subscription/page"), { ssr: false });
+const InvoicesPage = dynamic(() => import("./invoices/page"), { ssr: false });
 interface Plan {
   id: string;
   name: string;
