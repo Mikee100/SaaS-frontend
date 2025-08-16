@@ -59,7 +59,6 @@ export default function LogoUsage({
   const [error, setError] = useState(false);
   const { user } = useUser();
 
-  console.log("User dets: ",user)
 
   useEffect(() => {
     const fetchLogo = async () => {

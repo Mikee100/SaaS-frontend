@@ -129,11 +129,7 @@ export default function PlanBasedNav() {
           }`}>
             <div className="flex items-center space-x-2">
               <div className={sidebarCollapsed ? "w-6 h-6 flex items-center justify-center" : "w-32 h-8"}>
-                <LogoUsage 
-                  section="dashboard" 
-                  className={sidebarCollapsed ? "w-6 h-6" : "w-32 h-8 object-contain"} 
-                  showPlaceholder={false}
-                />
+              
               </div>
               {!sidebarCollapsed && !sidebarOpen && (
                 <span className="text-xl font-bold text-gray-900 whitespace-nowrap">SaaS Platform</span>
@@ -141,23 +137,7 @@ export default function PlanBasedNav() {
             </div>
           </div>
 
-          {/* Permissions Summary */}
-          {!sidebarCollapsed && userContext?.user && (
-            <div className="px-6 py-3 border-b border-gray-100 bg-blue-50">
-              <div className="text-xs font-semibold text-blue-700 mb-1">Assigned Permissions</div>
-              <div className="flex flex-wrap gap-2">
-                {(userContext.user.permissions && userContext.user.permissions.length > 0) ? (
-                  userContext.user.permissions.map((perm: any, idx: number) => (
-                    <span key={idx} className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[11px]">
-                      {typeof perm === 'string' ? perm : perm.name}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-gray-400">No permissions assigned</span>
-                )}
-              </div>
-            </div>
-          )}
+         
 
           {/* Navigation */}
           <nav className="flex-1 p-2 overflow-y-auto">
@@ -177,13 +157,13 @@ export default function PlanBasedNav() {
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                   >
-                    {Icon === LogoUsage ? (
+                   {Icon === LogoUsage ? (
                       <LogoUsage 
                         section="dashboard" 
                         className={sidebarCollapsed ? "w-6 h-6" : "w-32 h-8 object-contain"} 
                         showPlaceholder={false}
                       />
-                    ) : (
+                    ) : ( 
                       <Icon className="w-5 h-5 flex-shrink-0" />
                     )}
                     {!sidebarCollapsed && (
