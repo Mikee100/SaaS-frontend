@@ -216,9 +216,15 @@ export default function SuperadminDashboard() {
               textAlign: "left"
             }}
           >
+
+            
+
+            
+
             <div style={{ fontSize: 16, fontWeight: "600", marginBottom: "0.25rem" }}>Audit Logs</div>
             <div style={{ fontSize: 12, opacity: 0.8 }}>View system activity logs</div>
           </button>
+          
         </div>
       </div>
     </main>

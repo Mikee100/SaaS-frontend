@@ -110,6 +110,8 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
               </NavLink>
               <NavLink href="/superadmin/users" icon={<FiUsers />} active={isActive('/superadmin/users')}>
                 Users
+              </NavLink><NavLink href="/superadmin/billing" icon={<FiUsers />} active={isActive('/superadmin/billing')}>
+                Billing
               </NavLink>
             </div>
             

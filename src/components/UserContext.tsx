@@ -38,26 +38,43 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const router = useRouter();
 
   // Helper to fetch user
-  const fetchUser = async () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const userData = await apiGet('/user/me');
-      setUser(userData);
-      setError(null);
-    } catch {
-      setUser(null);
-      setError('Authentication failed. Please log in again.');
-      localStorage.removeItem('token');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // In UserContext.tsx
+const fetchUser = async () => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  if (!token) {
+    setUser(null);
+    setLoading(false);
+    return;
+  }
+  setLoading(true);
+  try {
+    const userData = await apiGet('/user/me');
+    console.log('Fetched user data:', userData); // Debug log
+    
+    // Ensure roles is always an array and handle different role formats
+    const roles = Array.isArray(userData.roles) 
+      ? userData.roles 
+      : (userData.role ? [userData.role] : []);
+    
+    // Create normalized user object
+    const normalizedUser = {
+      ...userData,
+      roles,
+      isSuperadmin: userData.isSuperadmin || roles.includes('superadmin') || roles.includes('admin')
+    };
+    
+    console.log('Normalized user:', normalizedUser); // Debug log
+    setUser(normalizedUser);
+    setError(null);
+  } catch (err) {
+    console.error('Error fetching user:', err);
+    setUser(null);
+    setError('Authentication failed. Please log in again.');
+    localStorage.removeItem('token');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Initial fetch and storage event listener
   useEffect(() => {

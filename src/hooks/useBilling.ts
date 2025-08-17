@@ -33,7 +33,7 @@ export function useBilling(): UseBillingReturn {
       
       const [plans, subscription, invoices] = await Promise.all([
         apiGet('/billing/plans'),
-        apiGet('/billing/subscription'),
+        apiGet('/billing/subscription-with-permissions'),
         apiGet('/billing/invoices'),
       ]);
 

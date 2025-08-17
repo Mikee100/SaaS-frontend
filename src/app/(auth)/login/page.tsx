@@ -19,17 +19,21 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user && !animationStartedRef.current) {
-      // Show login animation for 3 seconds before redirecting
+      console.log('user or admin: ', user);
       animationStartedRef.current = true;
       setShowLoginAnimation(true);
       const timer = setTimeout(() => {
-        if (user.isSuperadmin) {
-          router.push("/superadmin");
+        // Check both roles array and isSuperadmin flag
+        const isAdmin = user.roles?.includes('admin') || 
+                       user.roles?.includes('superadmin') || 
+                       user.isSuperadmin;
+        
+        if (isAdmin) {
+          router.push("/superadmin");  // Try without the (admin) group
         } else {
-          router.push("/");
+          router.push("/");  // Regular user dashboard
         }
-      }, 3000);
-
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [user, router]);

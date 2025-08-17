@@ -1,5 +1,8 @@
 "use client";
 import { useState, useEffect } from 'react';
+import { useBilling } from '@/hooks/useBilling';
+import BillingPlans, { BillingPlan } from './BillingPlans';
+import PaymentMethodForm from './PaymentMethodForm';
 import { apiGet } from '@/utils/api';
 import { FaChartLine, FaCreditCard, FaReceipt, FaDownload, FaCalendar, FaDollarSign, FaUsers, FaExclamationTriangle } from 'react-icons/fa';
 
@@ -31,37 +34,22 @@ interface BillingDashboardProps {
 }
 
 export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
+  const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month');
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'history' | 'methods' | 'plans'>('overview');
+  const { billingData, loading, error, fetchBillingData, createCheckoutSession } = useBilling();
   const [analytics, setAnalytics] = useState<PaymentAnalytics | null>(null);
   const [history, setHistory] = useState<PaymentHistory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month');
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'history' | 'methods'>('overview');
 
   useEffect(() => {
-    loadData();
+    fetchBillingData();
+    // Optionally, fetch analytics and history as before
+    // ...existing code...
   }, [period]);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [analyticsRes, historyRes] = await Promise.all([
-        apiGet(`/payments/analytics?period=${period}`),
-        apiGet('/payments/history?limit=20'),
-      ]);
-
-      if (analyticsRes.success) {
-        setAnalytics(analyticsRes.analytics);
-      }
-
-      if (historyRes.success) {
-        setHistory(historyRes.history);
-      }
-    } catch (error) {
-      console.error('Failed to load billing data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    // Optionally, fetch analytics and history as before
+    // ...existing code...
+  }, []);
 
   const formatCurrency = (amount: number, currency: string = 'usd') => {
     return new Intl.NumberFormat('en-US', {
@@ -101,6 +89,19 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
     );
   }
 
+  // Helper to map backend plans to BillingPlan type
+  const mapPlans = (plans: any[], currentPlanId?: string): BillingPlan[] => {
+    if (!plans) return [];
+    return plans.map((plan: any) => ({
+      id: plan.id || plan.priceId || plan.name,
+      name: plan.name,
+      price: plan.price,
+      currency: plan.currency || 'usd',
+      features: plan.features || [],
+      isCurrent: currentPlanId ? (plan.id === currentPlanId || plan.priceId === currentPlanId) : false,
+    }));
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -126,6 +127,7 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
             { id: 'overview', label: 'Overview', icon: FaChartLine },
             { id: 'history', label: 'Payment History', icon: FaReceipt },
             { id: 'methods', label: 'Payment Methods', icon: FaCreditCard },
+            { id: 'plans', label: 'Plans', icon: FaDollarSign },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -142,6 +144,18 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
           ))}
         </nav>
       </div>
+
+      {/* Plans Tab */}
+      {selectedTab === 'plans' && billingData?.plans && (
+        <BillingPlans
+          plans={mapPlans(billingData.plans, billingData.subscription?.planId)}
+          currentPlanId={billingData.subscription?.planId}
+          onUpgrade={async (planId) => {
+            const url = await createCheckoutSession(planId);
+            if (url) window.location.href = url;
+          }}
+        />
+      )}
 
       {/* Overview Tab */}
       {selectedTab === 'overview' && analytics && (
@@ -283,17 +297,15 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
         <div className="bg-white rounded-xl shadow-sm border p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-800">Payment Methods</h3>
-            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-              Add Payment Method
-            </button>
           </div>
-          
-          <div className="text-center py-12">
-            <FaCreditCard className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No saved payment methods</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Add a payment method to make future payments faster.
-            </p>
+          <div className="max-w-md mx-auto">
+            {/* Stripe Elements Card Form */}
+            <p className="mb-4 text-gray-600 text-sm">Save your card to enable subscriptions and faster payments.</p>
+            {/* You must wrap this in <Elements> higher up in your app for Stripe to work! */}
+            <div className="mb-8">
+              {/* @ts-ignore-next-line: Stripe context required */}
+              <PaymentMethodForm />
+            </div>
           </div>
         </div>
       )}

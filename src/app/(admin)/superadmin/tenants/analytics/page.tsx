@@ -301,31 +301,48 @@ export default function TenantAnalyticsPage() {
           <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
             <h3 style={{ margin: "0 0 1rem 0", fontSize: 20, fontWeight: "bold" }}>Tenant Comparison</h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1.5rem" }}>
-              {comparisonData.map((metric) => (
-                <div key={metric.metric} style={{ padding: "1rem", border: "1px solid #e5e7eb", borderRadius: "6px" }}>
-                  <h4 style={{ margin: "0 0 0.5rem 0", fontSize: 14, fontWeight: "600", textTransform: "uppercase" }}>
-                    {metric.metric.replace(/_/g, ' ')}
-                  </h4>
-                  <div style={{ display: "grid", gap: "0.5rem", fontSize: "12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Average:</span>
-                      <span>{metric.average.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Median:</span>
-                      <span>{metric.median.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Top:</span>
-                      <span>{metric.topTenant.name} ({metric.topTenant.value.toFixed(2)})</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Bottom:</span>
-                      <span>{metric.bottomTenant.name} ({metric.bottomTenant.value.toFixed(2)})</span>
+              {Array.isArray(comparisonData) && comparisonData.map((metric) => {
+                if (!metric) return null;
+                const safeMetric = {
+                  metric: metric.metric || 'N/A',
+                  average: typeof metric.average === 'number' ? metric.average : 0,
+                  median: typeof metric.median === 'number' ? metric.median : 0,
+                  topTenant: {
+                    name: metric.topTenant?.name || 'N/A',
+                    value: typeof metric.topTenant?.value === 'number' ? metric.topTenant.value : 0
+                  },
+                  bottomTenant: {
+                    name: metric.bottomTenant?.name || 'N/A',
+                    value: typeof metric.bottomTenant?.value === 'number' ? metric.bottomTenant.value : 0
+                  }
+                };
+                
+                return (
+                  <div key={safeMetric.metric} style={{ padding: "1rem", border: "1px solid #e5e7eb", borderRadius: "6px" }}>
+                    <h4 style={{ margin: "0 0 0.5rem 0", fontSize: 14, fontWeight: "600", textTransform: "uppercase" }}>
+                      {String(safeMetric.metric).replace(/_/g, ' ')}
+                    </h4>
+                    <div style={{ display: "grid", gap: "0.5rem", fontSize: "12px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span>Average:</span>
+                        <span>{safeMetric.average.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span>Median:</span>
+                        <span>{safeMetric.median.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span>Top:</span>
+                        <span>{safeMetric.topTenant.name} ({safeMetric.topTenant.value.toFixed(2)})</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span>Bottom:</span>
+                        <span>{safeMetric.bottomTenant.name} ({safeMetric.bottomTenant.value.toFixed(2)})</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

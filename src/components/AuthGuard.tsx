@@ -1,23 +1,39 @@
+// In AuthGuard.tsx
 "use client";
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useUser } from './UserContext';
 import { FaSpinner } from 'react-icons/fa';
 
 interface AuthGuardProps {
   children: React.ReactNode;
   fallback?: React.ReactNode;
+  adminOnly?: boolean;
 }
 
-export default function AuthGuard({ children, fallback }: AuthGuardProps) {
+export default function AuthGuard({ children, fallback, adminOnly = false }: AuthGuardProps) {
   const { user, loading } = useUser();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+
+    // Check if user is authenticated
+    if (!user) {
       router.push('/login');
+      return;
     }
-  }, [user, loading, router]);
+
+    // Check if admin access is required
+    if (adminOnly || pathname.startsWith('/admin')) {
+      const isAdmin = user.roles?.includes('admin') || user.roles?.includes('superadmin') || user.isSuperadmin;
+      if (!isAdmin) {
+        console.log('Admin access denied - redirecting to /');
+        router.push('/');
+      }
+    }
+  }, [user, loading, router, pathname, adminOnly]);
 
   // Show loading state while checking authentication
   if (loading) {
@@ -33,12 +49,9 @@ export default function AuthGuard({ children, fallback }: AuthGuardProps) {
     );
   }
 
-  // Show fallback or redirect if not authenticated
+  // If no user and not loading, show fallback or redirect
   if (!user) {
-    if (fallback) {
-      return <>{fallback}</>;
-    }
-    return (
+    return fallback || (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
           <div className="flex justify-center mb-4">
@@ -50,6 +63,19 @@ export default function AuthGuard({ children, fallback }: AuthGuardProps) {
     );
   }
 
-  // User is authenticated, render children
+  // Check admin access in render phase as well
+  if (adminOnly || pathname.startsWith('/admin')) {
+    const isAdmin = user.roles?.includes('admin') || user.roles?.includes('superadmin') || user.isSuperadmin;
+    if (!isAdmin) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-gray-600 text-lg">Access Denied. You don't have permission to view this page.</p>
+          </div>
+        </div>
+      );
+    }
+  }
+
   return <>{children}</>;
-} 
+}

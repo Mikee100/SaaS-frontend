@@ -11,7 +11,7 @@ import { hasPermission } from '@/utils/permissions';
 import { FaTachometerAlt } from 'react-icons/fa';
 
 export default function PlanBasedNav() {
-  const userContext = useUser([]);
+  const userContext = useUser();
   const { limits, hasFeature, loading: limitsLoading } = usePlanLimits();
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
   const [showUserMenu, setShowUserMenu] = useState(false);
