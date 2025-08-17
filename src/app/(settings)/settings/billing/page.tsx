@@ -44,10 +44,7 @@ export default function BillingSettings() {
           <h2 className="text-xl font-bold mb-4">Save Card</h2>
           <SaveCard />
         </div>
-        <div className="mt-10">
-          <h2 className="text-xl font-bold mb-4">Test Payment</h2>
-          <MakePayment />
-        </div>
+       
       </div>
     </Elements>
   );
