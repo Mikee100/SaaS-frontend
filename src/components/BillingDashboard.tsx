@@ -42,14 +42,13 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
 
   useEffect(() => {
     fetchBillingData();
-    // Optionally, fetch analytics and history as before
-    // ...existing code...
-  }, [period]);
-
-  useEffect(() => {
-    // Optionally, fetch analytics and history as before
-    // ...existing code...
-  }, []);
+    // Fetch subscription history from backend API
+    apiGet('/subscriptions/history').then((data) => {
+      if (Array.isArray(data)) {
+        setHistory(data);
+      }
+    });
+  }, [period, tenantId]);
 
   const formatCurrency = (amount: number, currency: string = 'usd') => {
     return new Intl.NumberFormat('en-US', {
@@ -81,6 +80,19 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
     }
   };
 
+  // Helper to map backend plans to BillingPlan type
+  const mapPlans = (plans: any[], currentPlanId?: string): BillingPlan[] => {
+    if (!plans) return [];
+    return plans.map((plan: any) => ({
+      id: plan.stripePriceId || plan.id || plan.name, // Use stripePriceId for upgrade actions
+      name: plan.name,
+      price: plan.price,
+      currency: plan.currency || 'usd',
+      features: plan.features || [],
+      isCurrent: currentPlanId ? (plan.id === currentPlanId || plan.stripePriceId === currentPlanId) : false,
+    }));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -88,19 +100,6 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
       </div>
     );
   }
-
-  // Helper to map backend plans to BillingPlan type
-  const mapPlans = (plans: any[], currentPlanId?: string): BillingPlan[] => {
-    if (!plans) return [];
-    return plans.map((plan: any) => ({
-      id: plan.id || plan.priceId || plan.name,
-      name: plan.name,
-      price: plan.price,
-      currency: plan.currency || 'usd',
-      features: plan.features || [],
-      isCurrent: currentPlanId ? (plan.id === currentPlanId || plan.priceId === currentPlanId) : false,
-    }));
-  };
 
   return (
     <div className="space-y-6">
@@ -150,8 +149,8 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
         <BillingPlans
           plans={mapPlans(billingData.plans, billingData.subscription?.planId)}
           currentPlanId={billingData.subscription?.planId}
-          onUpgrade={async (planId) => {
-            const url = await createCheckoutSession(planId);
+          onUpgrade={async (stripePriceId) => {
+            const url = await createCheckoutSession(stripePriceId);
             if (url) window.location.href = url;
           }}
         />
@@ -159,123 +158,148 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
 
       {/* Overview Tab */}
       {selectedTab === 'overview' && analytics && (
-        <div className="space-y-6">
-          {/* Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Total Revenue</h3>
-                <FaDollarSign className="w-5 h-5 text-green-600" />
-              </div>
-              <p className="text-3xl font-bold text-gray-900">
-                {formatCurrency(analytics.totalRevenue, analytics.currency)}
-              </p>
-              <p className="text-sm text-gray-600">This {period}</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Payments</h3>
-                <FaCreditCard className="w-5 h-5 text-blue-600" />
-              </div>
-              <p className="text-3xl font-bold text-gray-900">{analytics.paymentCount}</p>
-              <p className="text-sm text-gray-600">Total payments</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Average Payment</h3>
-                <FaChartLine className="w-5 h-5 text-purple-600" />
-              </div>
-              <p className="text-3xl font-bold text-gray-900">
-                {formatCurrency(analytics.averagePayment, analytics.currency)}
-              </p>
-              <p className="text-sm text-gray-600">Per transaction</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Payment Methods</h3>
-                <FaUsers className="w-5 h-5 text-orange-600" />
-              </div>
-              <p className="text-3xl font-bold text-gray-900">{analytics.paymentMethods.length}</p>
-              <p className="text-sm text-gray-600">Different methods</p>
-            </div>
-          </div>
-
-          {/* Payment Methods Distribution */}
-          {analytics.paymentMethods.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Payment Methods</h3>
-              <div className="space-y-3">
-                {analytics.paymentMethods.map((method, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-800">{method.paymentMethod}</p>
-                      <p className="text-sm text-gray-600">{method._count.paymentMethod} payments</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900">
-                        {formatCurrency(method._sum.amount, analytics.currency)}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {((method._sum.amount / analytics.totalRevenue) * 100).toFixed(1)}%
-                      </p>
+        (() => {
+          if (!analytics) return null;
+          return (
+            <div className="space-y-6">
+              {/* Key Metrics */}
+              <div className="mb-8">
+                {billingData?.subscription && (
+                  <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Current Subscription</h3>
+                    <div className="flex flex-col md:flex-row md:items-center md:space-x-6">
+                      <div>
+                        <span className="font-bold">Plan:</span> {billingData.subscription.plan?.name || 'N/A'}
+                      </div>
+                      <div>
+                        <span className="font-bold">Status:</span> {billingData.subscription.status || 'N/A'}
+                      </div>
+                      <div>
+                        <span className="font-bold">Renewal Date:</span> {billingData.subscription.currentPeriodEnd ? formatDate(billingData.subscription.currentPeriodEnd) : 'N/A'}
+                      </div>
                     </div>
                   </div>
-                ))}
+                )}
+                {Array.isArray(billingData?.subscription?.history) && billingData.subscription.history.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border p-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Subscription History</h3>
+                    <ul className="divide-y divide-gray-200">
+                      {billingData.subscription.history.map((sub: any) => (
+                        <li key={sub.id} className="py-2 flex justify-between items-center">
+                          <span>{sub.plan?.name || 'N/A'}</span>
+                          <span>{sub.status}</span>
+                          <span>{sub.currentPeriodStart ? formatDate(sub.currentPeriodStart) : 'N/A'} - {sub.currentPeriodEnd ? formatDate(sub.currentPeriodEnd) : 'N/A'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-800">Total Revenue</h3>
+                  <FaDollarSign className="w-5 h-5 text-green-600" />
+                </div>
+                <p className="text-3xl font-bold text-gray-900">
+                  {formatCurrency(analytics.totalRevenue, analytics.currency)}
+                </p>
+                <p className="text-sm text-gray-600">This {period}</p>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-800">Payments</h3>
+                  <FaCreditCard className="w-5 h-5 text-blue-600" />
+                </div>
+                <p className="text-3xl font-bold text-gray-900">{analytics.paymentCount}</p>
+                <p className="text-sm text-gray-600">Total payments</p>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-800">Average Payment</h3>
+                  <FaChartLine className="w-5 h-5 text-purple-600" />
+                </div>
+                <p className="text-3xl font-bold text-gray-900">
+                  {formatCurrency(analytics.averagePayment, analytics.currency)}
+                </p>
+                <p className="text-sm text-gray-600">Per transaction</p>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-800">Payment Methods</h3>
+                  <FaUsers className="w-5 h-5 text-orange-600" />
+                </div>
+                <p className="text-3xl font-bold text-gray-900">{analytics.paymentMethods.length}</p>
+                <p className="text-sm text-gray-600">Different methods</p>
+              </div>
+
+              {/* Payment Methods Distribution */}
+              {analytics.paymentMethods.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm border p-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Payment Methods</h3>
+                  <div className="space-y-3">
+                    {analytics.paymentMethods.map((method, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-gray-800">{method.paymentMethod}</p>
+                          <p className="text-sm text-gray-600">{method._count.paymentMethod} payments</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-gray-900">
+                            {formatCurrency(method._sum.amount, analytics.currency)}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {((method._sum.amount / analytics.totalRevenue) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()
       )}
 
       {/* History Tab */}
       {selectedTab === 'history' && (
         <div className="bg-white rounded-xl shadow-sm border">
           <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800">Payment History</h3>
+            <h3 className="text-lg font-semibold text-gray-800">Subscription History</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Description
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoices</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {history.map((payment) => (
-                  <tr key={payment.id} className="hover:bg-gray-50">
+                {history.map((sub: any) => (
+                  <tr key={sub.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sub.plan?.name || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sub.status}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(payment.createdAt)}
+                      {sub.currentPeriodStart ? formatDate(sub.currentPeriodStart) : 'N/A'} - {sub.currentPeriodEnd ? formatDate(sub.currentPeriodEnd) : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {payment.description}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {formatCurrency(payment.amount, payment.currency)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(payment.status)}`}>
-                        {payment.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
-                      {payment.type}
+                      {sub.invoices && sub.invoices.length > 0 ? (
+                        <ul className="list-disc ml-4">
+                          {sub.invoices.map((inv: any) => (
+                            <li key={inv.id}>
+                              #{inv.number} - {formatCurrency(inv.amount, 'usd')} ({formatDate(inv.createdAt)})
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="text-gray-500">No invoices</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -285,8 +309,8 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
           {history.length === 0 && (
             <div className="text-center py-12">
               <FaReceipt className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No payments yet</h3>
-              <p className="mt-1 text-sm text-gray-500">Your payment history will appear here.</p>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No subscriptions yet</h3>
+              <p className="mt-1 text-sm text-gray-500">Your subscription history will appear here.</p>
             </div>
           )}
         </div>

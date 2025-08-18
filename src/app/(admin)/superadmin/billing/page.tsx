@@ -26,13 +26,15 @@ export default function SuperAdminBillingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [metrics, setMetrics] = useState<BillingMetrics | null>(null);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [subsLoading, setSubsLoading] = useState(true);
+  const [subsError, setSubsError] = useState('');
 
-  // Fetch billing data on component mount
   useEffect(() => {
     fetchBillingData();
+    fetchSubscriptions();
   }, []);
 
-  // Fetch billing metrics from API
   const fetchBillingData = async () => {
     try {
       setLoading(true);
@@ -46,7 +48,19 @@ export default function SuperAdminBillingPage() {
     }
   };
 
-  // Format currency
+  const fetchSubscriptions = async () => {
+    try {
+      setSubsLoading(true);
+      setSubsError('');
+      const data = await apiGet('/admin/billing/subscriptions');
+      setSubscriptions(data);
+    } catch (err: any) {
+      setSubsError(err.message || 'Failed to load subscriptions');
+    } finally {
+      setSubsLoading(false);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -54,7 +68,6 @@ export default function SuperAdminBillingPage() {
     }).format(amount / 100);
   };
 
-  // Loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -106,6 +119,51 @@ export default function SuperAdminBillingPage() {
           value={`${metrics?.delinquentRate || 0}%`}
           color="red"
         />
+      </div>
+
+      {/* Client Subscriptions Table */}
+      <div className="bg-white rounded-lg shadow mb-8">
+        <div className="px-6 py-5 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">Client Subscription Records</h2>
+        </div>
+        <div className="p-6">
+          {subsLoading ? (
+            <div className="text-gray-500">Loading client subscriptions...</div>
+          ) : subsError ? (
+            <div className="text-red-600">{subsError}</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm border">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="py-2 px-4 text-left">Client</th>
+                    <th className="py-2 px-4 text-left">Email</th>
+                    <th className="py-2 px-4 text-left">Plan</th>
+                    <th className="py-2 px-4 text-left">Price</th>
+                    <th className="py-2 px-4 text-left">Status</th>
+                    <th className="py-2 px-4 text-left">Start Date</th>
+                    <th className="py-2 px-4 text-left">Renewal</th>
+                    <th className="py-2 px-4 text-left">Cancel At Period End</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscriptions.map((sub, idx) => (
+                    <tr key={sub.id || idx} className="border-b">
+                      <td className="py-2 px-4">{sub.clientName || sub.tenantName || '-'}</td>
+                      <td className="py-2 px-4">{sub.clientEmail || sub.email || '-'}</td>
+                      <td className="py-2 px-4">{sub.plan?.name || '-'}</td>
+                      <td className="py-2 px-4">{formatCurrency(sub.plan?.price || 0)}</td>
+                      <td className="py-2 px-4">{sub.status || '-'}</td>
+                      <td className="py-2 px-4">{sub.startDate ? new Date(sub.startDate).toLocaleDateString() : '-'}</td>
+                      <td className="py-2 px-4">{sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).toLocaleDateString() : '-'}</td>
+                      <td className="py-2 px-4">{sub.cancelAtPeriodEnd ? 'Yes' : 'No'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Quick Actions */}

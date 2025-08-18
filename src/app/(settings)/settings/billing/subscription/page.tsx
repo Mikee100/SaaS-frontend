@@ -5,6 +5,7 @@ import { apiGet, apiPost } from "@/utils/api";
 export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [changing, setChanging] = useState(false);
@@ -13,11 +14,13 @@ export default function SubscriptionPage() {
   useEffect(() => {
     Promise.all([
       apiGet("/billing/subscription-details"),
-      apiGet("/billing/plans")
+      apiGet("/billing/plans"),
+      apiGet("/subscriptions/history")
     ])
-      .then(([sub, plans]) => {
+      .then(([sub, plans, history]) => {
         setSubscription(sub);
         setPlans(plans);
+        setHistory(Array.isArray(history) ? history : []);
         setSelectedPlan(sub?.plan?.id || "");
       })
       .catch(() => setError("Failed to load subscription info"))
@@ -58,6 +61,47 @@ export default function SubscriptionPage() {
       <h2 className="text-2xl font-bold mb-6">Subscription & Plans</h2>
       {error && <div className="text-red-600 mb-4">{error}</div>}
       {/* Current Subscription */}
+      {/* Subscription History */}
+      <div className="bg-white rounded-xl shadow p-6 mb-8">
+        <h3 className="font-semibold mb-4">Subscription History</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="py-2 px-4 text-left">Plan</th>
+                <th className="py-2 px-4 text-left">Status</th>
+                <th className="py-2 px-4 text-left">Period</th>
+                <th className="py-2 px-4 text-left">Invoices</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map(sub => (
+                <tr key={sub.id}>
+                  <td className="py-2 px-4">{sub.plan?.name || 'N/A'}</td>
+                  <td className="py-2 px-4">{sub.status}</td>
+                  <td className="py-2 px-4">{sub.currentPeriodStart ? new Date(sub.currentPeriodStart).toLocaleDateString() : 'N/A'} - {sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).toLocaleDateString() : 'N/A'}</td>
+                  <td className="py-2 px-4">
+                    {sub.invoices && sub.invoices.length > 0 ? (
+                      <ul className="list-disc ml-4">
+                        {sub.invoices.map((inv: any) => (
+                          <li key={inv.id}>
+                            #{inv.number} - ${inv.amount} ({new Date(inv.createdAt).toLocaleDateString()})
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="text-gray-500">No invoices</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {history.length === 0 && (
+          <div className="text-center py-8 text-gray-500">No subscriptions found.</div>
+        )}
+      </div>
       <div className="bg-white rounded-xl shadow p-6 mb-8">
         <h3 className="font-semibold mb-4">Current Plan</h3>
         <div className="mb-2 text-lg font-bold text-blue-700">{subscription?.plan?.name || "None"}</div>

@@ -43,7 +43,7 @@ export default function TenantBillingPage() {
     try {
       setLoading(true);
       setError('');
-      const data = await apiGet('/admin/billing/tenants');
+  const data = await apiGet('/billing/admin/billing/tenants');
       setTenants(data);
     } catch (err: any) {
       setError(err.message || 'Failed to load tenants');
@@ -53,9 +53,12 @@ export default function TenantBillingPage() {
   };
 
   const filteredTenants = tenants.filter(tenant => {
-    const matchesSearch = 
-      tenant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant.email.toLowerCase().includes(searchTerm.toLowerCase());
+    // Support both name/email and clientName/clientEmail from backend
+    const name = tenant.name || tenant.clientName || '';
+    const email = tenant.email || tenant.clientEmail || '';
+    const matchesSearch =
+      name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || tenant.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -204,26 +207,26 @@ export default function TenantBillingPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedTenants.length > 0 ? (
                 paginatedTenants.map((tenant) => (
-                  <tr key={tenant.id} className="hover:bg-gray-50">
+                  <tr key={tenant.tenantId || tenant.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{tenant.name}</div>
-                      <div className="text-sm text-gray-500">{tenant.email}</div>
+                      <div className="text-sm font-medium text-gray-900">{tenant.clientName || tenant.name || '-'}</div>
+                      <div className="text-sm text-gray-500">{tenant.clientEmail || tenant.email || '-'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 capitalize">{tenant.plan}</div>
+                      <div className="text-sm text-gray-900 capitalize">{tenant.plan?.name || '-'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(tenant.status)}
+                      {getStatusBadge(tenant.status || '-')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(tenant.currentPeriodEnd)}
+                      {tenant.currentPeriodEnd ? formatDate(tenant.currentPeriodEnd) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {formatCurrency(tenant.amount, tenant.currency)}
+                      {tenant.plan?.price !== undefined ? formatCurrency(tenant.plan.price, tenant.plan?.currency || 'USD') : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
-                        onClick={() => router.push(`/admin/superadmin/billing/tenants/${tenant.id}`)}
+                        onClick={() => router.push(`/superadmin/billing/tenants/${tenant.tenantId || tenant.id}`)}
                         className="text-blue-600 hover:text-blue-900 mr-4"
                       >
                         <FaEdit className="inline mr-1" /> Edit
