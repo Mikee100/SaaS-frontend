@@ -52,6 +52,8 @@ export default function ProductsPage() {
   const canEditProducts = hasPermission(user, 'edit_products');
   const canDeleteProducts = hasPermission(user, 'delete_products');
 
+
+
   useEffect(() => {
     fetchProducts();
   }, []);
@@ -261,6 +263,7 @@ export default function ProductsPage() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentProducts = filteredProducts.slice(startIndex, endIndex);
+  
 
   // Reset to first page when search changes
   useEffect(() => {
@@ -597,6 +600,8 @@ export default function ProductsPage() {
       {/* Products Display */}
       {viewMode === 'grid' ? (
         // Grid View
+
+      
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {currentProducts.map((product) => (
             <div key={product.id} className="bg-white rounded-xl shadow-sm border p-6 hover:shadow-md transition-shadow">
