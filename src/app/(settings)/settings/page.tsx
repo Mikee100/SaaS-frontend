@@ -73,8 +73,8 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Settings */}
-        <div className="lg:col-span-2 space-y-6">
+  {/* Main Settings */}
+  <div className="lg:col-span-2 space-y-6">
           {/* Basic Settings - Available to all */}
           <div className="bg-white rounded-xl shadow-sm border p-6">
             <div className="flex items-center gap-3 mb-6">
@@ -240,8 +240,8 @@ export default function SettingsPage() {
           </PlanGuard>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
+  {/* Sidebar */}
+  <div className="space-y-6 overflow-y-auto max-h-[80vh] pr-2">
           <UsageDashboard />
           
           {/* Quick Actions */}
@@ -275,6 +275,13 @@ export default function SettingsPage() {
                   <span className="text-sm font-medium text-gray-700">Analytics Settings</span>
                 </a>
               </PlanGuard>
+              <a
+                href="/settings/branches"
+                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              >
+                <FaCog className="w-4 h-4 text-yellow-600" />
+                <span className="text-sm font-medium text-gray-700">Branches</span>
+              </a>
             </div>
           </div>
         </div>

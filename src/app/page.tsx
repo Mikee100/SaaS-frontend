@@ -1,6 +1,5 @@
-// import LogoEnforcement from '@/components/LogoEnforcement';
-
 "use client";
+// import LogoEnforcement from '@/components/LogoEnforcement';
 import { useEffect, useState } from 'react';
 import { apiGet } from '@/utils/api';
 import PlanGuard from '@/components/PlanGuard';
@@ -11,6 +10,7 @@ import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaShare, FaCrown, FaSt
 import AnalyticsCharts from '@/components/AnalyticsCharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiTrendingUp, FiDollarSign, FiPackage, FiUsers, FiAlertCircle, FiClock, FiRefreshCw } from 'react-icons/fi';
+import BranchSwitcher from '@/components/BranchSwitcher';
 
 interface AnalyticsData {
   totalSales?: number;
@@ -73,7 +73,7 @@ interface AnalyticsData {
     repeatCustomers: number;
     retentionRate: number;
   };
-}
+};
 
 interface SubscriptionPlan {
   id: string;
@@ -289,10 +289,8 @@ function SkeletonLoader() {
   );
 }
 
-export default function AnalyticsPage() {
-  // ...existing code...
-  // Place this after all state and lowStockProducts declarations
-  // Low stock notification state for dashboard
+export default function DashboardPage() {
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
   const [showLowStockAlert, setShowLowStockAlert] = useState(true);
   const [showLowStockForm, setShowLowStockForm] = useState(false);
   const [restockProduct, setRestockProduct] = useState<{ name: string; stock: number } | null>(null);
@@ -438,6 +436,14 @@ export default function AnalyticsPage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-6 flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <div>
+              <BranchSwitcher onChange={setSelectedBranchId} />
+            </div>
+          </div>
+        </div>
         {/* Low Stock Notification Bell */}
         <div className="fixed top-6 right-8 z-50">
           <button
@@ -787,3 +793,4 @@ export default function AnalyticsPage() {
     </AuthGuard>
   );
 }
+
