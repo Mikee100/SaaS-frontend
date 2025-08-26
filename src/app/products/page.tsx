@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
+import { useBranch } from "@/contexts/BranchContext";
 
 
 interface Product {
@@ -24,6 +25,9 @@ interface Product {
 
 export default function ProductsPage() {
   const { user } = useUser();
+  const { selectedBranchId, setSelectedBranchId } = useBranch();
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -56,6 +60,25 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
+  }, [selectedBranchId]);
+
+  useEffect(() => {
+    async function fetchBranches() {
+      setBranchesLoading(true);
+      try {
+        const data = await apiGet('/branches');
+        setBranches(data);
+        // Auto-select first branch if none selected
+        if (!selectedBranchId && data.length > 0) {
+          setSelectedBranchId(data[0].id);
+        }
+      } catch (err) {
+        // Optionally handle error
+      } finally {
+        setBranchesLoading(false);
+      }
+    }
+    fetchBranches();
   }, []);
 
 
@@ -64,7 +87,8 @@ export default function ProductsPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await apiGet("/products");
+      // Fetch products for the selected branch
+      const data = await apiGet(`/products?branchId=${selectedBranchId}`);
       setProducts(data as Product[]);
     } catch (err: any) {
       setError(err.message || "Failed to fetch products");
@@ -77,9 +101,15 @@ export default function ProductsPage() {
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    
+
     if (!canCreate('products')) {
       alert('Product limit reached. Please upgrade your plan.');
+      return;
+    }
+
+    // Validate selectedBranchId before creating product
+    if (!selectedBranchId || typeof selectedBranchId !== 'string' || selectedBranchId.trim() === '') {
+      setError('Please select a valid branch before creating a product.');
       return;
     }
 
@@ -92,8 +122,8 @@ export default function ProductsPage() {
         price: parseFloat(formData.get("price") as string),
         stock: parseInt(formData.get("stock") as string),
         description: formData.get("description"),
+        branchId: selectedBranchId, // Add branchId to payload
       });
-      
       setProducts([newProduct, ...products]);
       setShowAddForm(false);
     } catch (err: any) {
@@ -315,51 +345,69 @@ export default function ProductsPage() {
   return (
     <AuthGuard>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Products</h1>
-          <p className="text-gray-600">Manage your product catalog</p>
-        </div>
-        
-        <PlanGuard requiredPlan="Basic" fallback={
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-gray-600">Product management requires Basic plan or higher</p>
+        {/* Branch Selector */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Products</h1>
+            <p className="text-gray-600">Manage your product catalog</p>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select Branch</label>
+              {branchesLoading ? (
+                <div className="text-gray-500 text-sm">Loading branches...</div>
+              ) : (
+                <select
+                  value={selectedBranchId || ''}
+                  onChange={e => setSelectedBranchId(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  style={{ minWidth: 200 }}
+                >
+                  <option value="" disabled>Select a branch</option>
+                  {branches.map(branch => (
+                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
-        }>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              {viewMode === 'grid' ? 'Table View' : 'Grid View'}
-            </button>
-            {canCreateProducts ? (
+          <PlanGuard requiredPlan="Basic" fallback={
+            <div className="text-center p-4 bg-gray-50 rounded-lg">
+              <p className="text-gray-600">Product management requires Basic plan or higher</p>
+            </div>
+          }>
+            <div className="flex gap-2">
               <button
-                onClick={() => setShowAddForm(true)}
-                disabled={!canCreate('products')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                  canCreate('products')
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
+                onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <FaPlus className="w-4 h-4" />
-                Add Product
+                {viewMode === 'grid' ? 'Table View' : 'Grid View'}
               </button>
-            ) : (
-              <Tooltip content="You don't have permission to create products. Contact your administrator.">
+              {canCreateProducts ? (
                 <button
-                  disabled
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gray-300 text-gray-500 cursor-not-allowed"
+                  onClick={() => setShowAddForm(true)}
+                  disabled={!canCreate('products')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    canCreate('products')
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                 >
                   <FaPlus className="w-4 h-4" />
                   Add Product
                 </button>
-              </Tooltip>
-            )}
-          </div>
-        </PlanGuard>
-      </div>
+              ) : (
+                <Tooltip content="You don't have permission to create products. Contact your administrator.">
+                  <button
+                    disabled
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gray-300 text-gray-500 cursor-not-allowed"
+                  >
+                    <FaPlus className="w-4 h-4" />
+                    Add Product
+                  </button>
+                </Tooltip>
+              )}
+            </div>
+          </PlanGuard>
+        </div>
 
       {/* Usage Warning */}
       {isNearLimit && (
@@ -491,6 +539,11 @@ export default function ProductsPage() {
           <h2 className="text-xl font-semibold text-gray-800 mb-4">
             {editProduct ? 'Edit Product' : 'Add New Product'}
           </h2>
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
           <form onSubmit={editProduct ? handleEditProduct : handleAddProduct} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -850,4 +903,4 @@ export default function ProductsPage() {
       </div>
     </AuthGuard>
   );
-} 
+}

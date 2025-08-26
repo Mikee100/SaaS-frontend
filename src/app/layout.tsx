@@ -4,6 +4,7 @@ import "./globals.css";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import LayoutWrapper from "@/components/LayoutWrapper";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { BranchProvider } from "@/contexts/BranchContext";
 import { DashboardProvider } from "@/contexts/DashboardContext";
 import OfflineIndicator from '@/components/ui/OfflineIndicator';
 import { Toaster } from '@/components/ui/toaster';
@@ -37,6 +38,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Get initialBranchId from localStorage or JWT/user context
+  let initialBranchId = "";
+  if (typeof window !== "undefined") {
+    initialBranchId = localStorage.getItem("selectedBranchId") || "";
+  }
+  // You can also get this from a global user context if available
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -68,13 +75,14 @@ export default function RootLayout({
       <body className={inter.className}>
         <SessionProvider>
           <DashboardProvider>
-            <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-              <LayoutWrapper>
-                {children}
-              </LayoutWrapper>
-              <Toaster />
-              
-            </ThemeProvider>
+            <BranchProvider initialBranchId={initialBranchId}>
+              <ThemeProvider>
+                <LayoutWrapper>
+                  {children}
+                </LayoutWrapper>
+                <Toaster />
+              </ThemeProvider>
+            </BranchProvider>
           </DashboardProvider>
         </SessionProvider>
       </body>

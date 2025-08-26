@@ -50,19 +50,26 @@ const fetchUser = async () => {
   try {
     const userData = await apiGet('/user/me');
     console.log('Fetched user data:', userData); // Debug log
-    
+    console.log('branchId from userData:', userData.branchId);
+
     // Ensure roles is always an array and handle different role formats
-    const roles = Array.isArray(userData.roles) 
-      ? userData.roles 
+    const roles = Array.isArray(userData.roles)
+      ? userData.roles
       : (userData.role ? [userData.role] : []);
-    
+
     // Create normalized user object
     const normalizedUser = {
       ...userData,
       roles,
       isSuperadmin: userData.isSuperadmin || roles.includes('superadmin') || roles.includes('admin')
     };
-    
+
+    // Sync branch context from backend/JWT
+    if (userData.branchId) {
+      localStorage.setItem('selectedBranchId', userData.branchId);
+      console.log('branchId set in localStorage:', userData.branchId);
+    }
+
     console.log('Normalized user:', normalizedUser); // Debug log
     setUser(normalizedUser);
     setError(null);
