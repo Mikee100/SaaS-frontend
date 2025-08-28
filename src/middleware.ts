@@ -1,4 +1,4 @@
-import { withAuth } from "next-auth/middleware";
+// Removed NextAuth middleware. No authentication applied.
 import { NextResponse } from "next/server";
 
 export default withAuth(

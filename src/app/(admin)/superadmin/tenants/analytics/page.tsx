@@ -78,12 +78,38 @@ interface TenantComparison {
   bottomTenant: { name: string; value: number };
 }
 
+interface TenantDbStat {
+  tenantId: string;
+  spaceUsedMB: string;
+  productCount?: number;
+}
+
 export default function TenantAnalyticsPage() {
   const { user, loading } = useUser();
   const router = useRouter();
-  const [tenants, setTenants] = useState<TenantAnalytics[]>([]);
+  const [tenants, setTenants] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedTenant, setSelectedTenant] = useState<string>("");
+  const [tenantUsers, setTenantUsers] = useState<any[]>([]);
+// Section to show users for a tenant
+function TenantUsersSection({ tenantId, users }: { tenantId: string, users: any[] }) {
+  return (
+    <div style={{ marginTop: "1rem", background: "#f3f4f6", padding: "1rem", borderRadius: "6px" }}>
+      <h5 style={{ margin: "0 0 0.5rem 0", fontSize: "14px", fontWeight: "600" }}>Users for Tenant {tenantId}</h5>
+      {users.length === 0 ? (
+        <div style={{ fontSize: "12px", color: "#6b7280" }}>No users found.</div>
+      ) : (
+        <ul style={{ fontSize: "13px", color: "#374151", paddingLeft: "1rem" }}>
+          {users.map(user => (
+            <li key={user.id}>
+              {user.name || user.email || user.id} - {user.role || "User"}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [comparisonData, setComparisonData] = useState<TenantComparison[]>([]);
   const [filter, setFilter] = useState<'all' | 'active' | 'over_limit' | 'inactive'>('all');
@@ -100,24 +126,22 @@ export default function TenantAnalyticsPage() {
     }
   }, [user, timeRange]);
 
+  // Helper to get DB space for a tenant (directly from tenant object)
+  const getDbSpace = (tenantId: string) => {
+    const tenant = tenants.find(t => t.id === tenantId);
+    return tenant && tenant.spaceUsedMB ? tenant.spaceUsedMB : null;
+  };
+
   const fetchTenantAnalytics = async (timeRange: string) => {
     try {
       setLoadingData(true);
-
-      const [analyticsData, comparisonData] = await Promise.all([
-        apiGet('/admin/test/analytics'),
-        apiGet('/admin/test/comparison')
-      ]);
-
-      // Add null checks and default values
+      const analyticsData = await apiGet('/admin/tenants/analytics');
+      // Expecting analyticsData to be an array of tenants with dbStats property
       const safeAnalyticsData = Array.isArray(analyticsData) ? analyticsData : [];
-      const safeComparisonData = Array.isArray(comparisonData) ? comparisonData : [];
-
       setTenants(safeAnalyticsData);
-      setComparisonData(safeComparisonData);
+      setComparisonData([]); // No comparison data for now
     } catch (error: any) {
       console.error("Failed to fetch tenant analytics:", error);
-      // Set empty arrays on error to prevent crashes
       setTenants([]);
       setComparisonData([]);
     } finally {
@@ -290,7 +314,7 @@ export default function TenantAnalyticsPage() {
               </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 24, fontWeight: "bold", color: "#1f2937" }}>
-                  {formatBytes(tenants.reduce((sum, t) => sum + (t?.usage?.storage?.current || 0), 0))}
+                  {formatBytes(tenants.reduce((sum: number, tenant: any) => sum + ((tenant.spaceUsedMB ? parseFloat(tenant.spaceUsedMB) : 0) * 1024 * 1024), 0))}
                 </div>
                 <div style={{ fontSize: 14, color: "#6b7280" }}>Total Storage Used</div>
               </div>
@@ -393,9 +417,8 @@ export default function TenantAnalyticsPage() {
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
                             <span>Products</span>
-                            <span>{tenant.usage?.products?.current || 0}/{tenant.usage?.products?.limit || 0}</span>
+                            <span>{tenant.productCount ?? 0}</span>
                           </div>
-                          {renderUsageBar(tenant.usage?.products?.current || 0, tenant.usage?.products?.limit || 1, tenant.usage?.products?.percentage || 0)}
                         </div>
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
@@ -403,6 +426,10 @@ export default function TenantAnalyticsPage() {
                             <span>{formatBytes(tenant.usage?.storage?.current || 0)}</span>
                           </div>
                           {renderUsageBar(tenant.usage?.storage?.current || 0, tenant.usage?.storage?.limit || 1, tenant.usage?.storage?.percentage || 0)}
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginTop: "0.5rem" }}>
+                            <span>DB Space Used</span>
+                            <span>{tenant.spaceUsedMB ? `${tenant.spaceUsedMB} MB` : 'N/A'}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -481,19 +508,19 @@ export default function TenantAnalyticsPage() {
                   <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1rem" }}>
                     <div>
                       <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "0.25rem" }}>Users Trend</div>
-                      {renderSparkline(tenant.historicalData.users.map(u => ({ date: u.timestamp, count: u.value })), "#3b82f6")}
+                      {renderSparkline(tenant.historicalData.users.map((u: any) => ({ date: u.timestamp, count: u.value })), "#3b82f6")}
                     </div>
                     <div>
                       <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "0.25rem" }}>Sales Trend</div>
-                      {renderSparkline(tenant.historicalData.sales.map(s => ({ date: s.timestamp, count: s.value })), "#10b981")}
+                      {renderSparkline(tenant.historicalData.sales.map((s: any) => ({ date: s.timestamp, count: s.value })), "#10b981")}
                     </div>
                     <div>
                       <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "0.25rem" }}>API Calls</div>
-                      {renderSparkline(tenant.historicalData.apiCalls.map(a => ({ date: a.timestamp, count: a.value })), "#f59e0b")}
+                      {renderSparkline(tenant.historicalData.apiCalls.map((a: any) => ({ date: a.timestamp, count: a.value })), "#f59e0b")}
                     </div>
                     <div>
                       <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "0.25rem" }}>Storage Usage</div>
-                      {renderSparkline(tenant.historicalData.storage.map(s => ({ date: s.timestamp, count: s.value })), "#8b5cf6")}
+                      {renderSparkline(tenant.historicalData.storage.map((s: any) => ({ date: s.timestamp, count: s.value })), "#8b5cf6")}
                     </div>
                   </div>
                 </div>

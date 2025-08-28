@@ -54,29 +54,31 @@ class EnhancedAPI {
     }
   }
 
-  async get(endpoint: string): Promise<any> {
-    return this.makeRequest(endpoint, { method: 'GET' });
+  async get(endpoint: string, headers?: Record<string, string>): Promise<any> {
+    return this.makeRequest(endpoint, { method: 'GET', headers });
   }
-  async post(endpoint: string, data: any): Promise<any> {
+  async post(endpoint: string, data: any, headers?: Record<string, string>): Promise<any> {
     return this.makeRequest(endpoint, {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
+      headers,
     });
   }
-  async put(endpoint: string, data: any): Promise<any> {
+  async put(endpoint: string, data: any, headers?: Record<string, string>): Promise<any> {
     return this.makeRequest(endpoint, {
       method: 'PUT',
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
+      headers,
     });
   }
-  async delete(endpoint: string): Promise<any> {
-    return this.makeRequest(endpoint, { method: 'DELETE' });
+  async delete(endpoint: string, headers?: Record<string, string>): Promise<any> {
+    return this.makeRequest(endpoint, { method: 'DELETE', headers });
   }
 }
 
 const enhancedAPI = new EnhancedAPI();
-export const apiGet = (endpoint: string) => enhancedAPI.get(endpoint);
-export const apiPost = <T = any>(endpoint: string, data: any): Promise<T> => enhancedAPI.post(endpoint, data);
-export const apiPut = (endpoint: string, data: any) => enhancedAPI.put(endpoint, data);
-export const apiDelete = (endpoint: string) => enhancedAPI.delete(endpoint);
+export const apiGet = (endpoint: string, headers?: Record<string, string>) => enhancedAPI.get(endpoint, headers);
+export const apiPost = <T = any>(endpoint: string, data: any, headers?: Record<string, string>): Promise<T> => enhancedAPI.post(endpoint, data, headers);
+export const apiPut = (endpoint: string, data: any, headers?: Record<string, string>) => enhancedAPI.put(endpoint, data, headers);
+export const apiDelete = (endpoint: string, headers?: Record<string, string>) => enhancedAPI.delete(endpoint, headers);
 export default enhancedAPI; 

@@ -49,8 +49,6 @@ const fetchUser = async () => {
   setLoading(true);
   try {
     const userData = await apiGet('/user/me');
-    console.log('Fetched user data:', userData); // Debug log
-    console.log('branchId from userData:', userData.branchId);
 
     // Ensure roles is always an array and handle different role formats
     const roles = Array.isArray(userData.roles)
@@ -67,10 +65,9 @@ const fetchUser = async () => {
     // Sync branch context from backend/JWT
     if (userData.branchId) {
       localStorage.setItem('selectedBranchId', userData.branchId);
-      console.log('branchId set in localStorage:', userData.branchId);
     }
 
-    console.log('Normalized user:', normalizedUser); // Debug log
+  // ...existing code...
     setUser(normalizedUser);
     setError(null);
   } catch (err) {

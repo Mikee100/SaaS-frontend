@@ -26,28 +26,27 @@ interface User {
   name: string;
   email: string;
   userRoles: Array<{ role: { name: string } }>;
-  userPermissions?: Array<{ permission: string;  note?: string }>;
+  permissions?: string[]; // Add permissions property for modal
 }
 
 export default function PermissionsSettings() {
-  const { user } = useUser();
+  const { user } = useUser && typeof useUser === 'function' ? useUser() : { user: null };
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [showManagePermissions, setShowManagePermissions] = useState<User | null>(null);
+  const [userPermissionsEdit, setUserPermissionsEdit] = useState<string[]>([]);
   
   // Role management
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [newRole, setNewRole] = useState({ name: "", description: "" });
+  const defaultRoles = ["Admin", "Manager", "Staff"];
+  const [selectedDefaultRole, setSelectedDefaultRole] = useState<string>("");
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   
-  // User permissions
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [showUserPermissions, setShowUserPermissions] = useState(false);
-  const [userPermissions, setUserPermissions] = useState<Array<{ key: string; note?: string }>>([]);
-
   // Permission checks
   const canEditUsers = hasPermission(user, 'edit_users');
 
@@ -64,7 +63,14 @@ export default function PermissionsSettings() {
         apiGet("/user"),
       ]);
       setRoles(rolesData as Role[]);
-      setPermissions(permissionsData as Permission[]);
+      // Map backend permission response to always include 'key' property
+      const mappedPermissions = Array.isArray(permissionsData)
+        ? permissionsData.map((p: any) => ({
+            ...p,
+            key: p.key || p.name // fallback to 'name' if 'key' is missing
+          }))
+        : [];
+      setPermissions(mappedPermissions);
       setUsers(usersData as User[]);
     } catch (err) {
       setError("Failed to load data");
@@ -97,35 +103,6 @@ export default function PermissionsSettings() {
     } catch (err: any) {
       setError(err.message || "Failed to update role permissions");
     }
-  };
-
-  const handleUpdateUserPermissions = async () => {
-    if (!selectedUser) return;
-    setLoading(true);
-    try {
-      // Convert userPermissions [{key, note}] to [{name, note}]
-  const formattedPermissions = userPermissions.map(up => ({ name: up.key, note: up.note }));
-  console.log('Sending permissions to backend:', formattedPermissions);
-  await apiPut(`/user/${selectedUser.id}/permissions`, { permissions: formattedPermissions });
-      await loadData();
-      setShowUserPermissions(false);
-      setSelectedUser(null);
-      setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || "Failed to update user permissions");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-  const openUserPermissions = async (user: User) => {
-    setSelectedUser(user);
-    setUserPermissions(user.userPermissions?.map(up => ({ 
-      key: up.permission, 
-      note: up.note 
-    })) || []);
-    setShowUserPermissions(true);
   };
 
   const permissionCategories = {
@@ -244,20 +221,19 @@ export default function PermissionsSettings() {
         </div>
       </div>
 
-      {/* User Permissions */}
+      {/* User List (Roles & Manage Permissions) */}
       <div className="bg-white rounded-xl shadow p-8 w-full mb-8">
         <div className="flex items-center gap-2 mb-6">
           <FaUserShield className="text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-800">User Permissions</h3>
+          <h3 className="text-lg font-semibold text-gray-800">Users & Roles</h3>
         </div>
-
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Roles</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Direct Permissions</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700">Permissions</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
               </tr>
             </thead>
@@ -288,17 +264,29 @@ export default function PermissionsSettings() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex flex-wrap gap-1">
-                      {user.userPermissions?.map((up, index) => (
-                        <li key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          {up.permission}
-                        </li>
-                      ))}
+                      {Array.isArray(user.permissions) && user.permissions.length > 0 ? (
+                        user.permissions.map((perm, idx) => (
+                          <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            {perm}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-gray-400">No permissions</span>
+                      )}
                     </div>
                   </td>
                   <td className="py-3 px-4">
                     <button
-                      onClick={() => openUserPermissions(user)}
-                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                      className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                      onClick={() => {
+                        setShowManagePermissions(user);
+                        // Ensure permissions are always an array of valid keys
+                        setUserPermissionsEdit(
+                          Array.isArray(user.permissions) && user.permissions.length > 0
+                            ? user.permissions.filter(pk => typeof pk === 'string' && pk.length > 0)
+                            : []
+                        );
+                      }}
                     >
                       Manage Permissions
                     </button>
@@ -309,6 +297,81 @@ export default function PermissionsSettings() {
           </table>
         </div>
       </div>
+
+      {/* Manage Permissions Modal */}
+      {showManagePermissions && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold mb-4">Manage Permissions for {showManagePermissions.name}</h3>
+            <form
+              onSubmit={async e => {
+                e.preventDefault();
+                setLoading(true);
+                try {
+                  // Use selected keys as permission names (backend expects 'name' to match 'key')
+                  await apiPut(`/user/${showManagePermissions.id}/permissions`, { permissions: userPermissionsEdit });
+                  setShowManagePermissions(null);
+                  await loadData();
+                  setSuccess(true);
+                } catch (err: any) {
+                  setError(err.message || "Failed to update user permissions");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Assign Permissions</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {permissions.map(p => (
+                      <label key={p.key} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={userPermissionsEdit.includes(p.key)}
+                          disabled={false}
+                          onChange={e => {
+                            console.log('Checkbox clicked:', { key: p.key, checked: e.target.checked });
+                            setUserPermissionsEdit(prev => {
+                              if (e.target.checked) {
+                                // Only add valid, non-null, non-empty keys
+                                return p.key && typeof p.key === 'string' && p.key.length > 0 && !prev.includes(p.key)
+                                  ? [...prev, p.key]
+                                  : prev;
+                              } else {
+                                return prev.filter(pk => pk !== p.key);
+                              }
+                            });
+                          }}
+                        />
+                        <span className="text-sm">{p.key}</span>
+                        {p.description && <span className="text-xs text-gray-500">({p.description})</span>}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  disabled={loading}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowManagePermissions(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Available Permissions */}
       <div className="bg-white rounded-xl shadow p-8 w-full">
@@ -348,12 +411,30 @@ export default function PermissionsSettings() {
             <form onSubmit={handleCreateRole}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Role Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Default Role</label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-2"
+                    value={selectedDefaultRole}
+                    onChange={e => {
+                      setSelectedDefaultRole(e.target.value);
+                      setNewRole({ ...newRole, name: e.target.value });
+                    }}
+                  >
+                    <option value="">-- Choose default role (or enter custom below) --</option>
+                    {defaultRoles.map(role => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Or Enter Custom Role Name</label>
                   <input
                     type="text"
                     value={newRole.name}
-                    onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
+                    onChange={e => {
+                      setNewRole({ ...newRole, name: e.target.value });
+                      setSelectedDefaultRole("");
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Custom role name"
                     required
                   />
                 </div>
@@ -387,61 +468,7 @@ export default function PermissionsSettings() {
         </div>
       )}
 
-      {/* User Permissions Modal */}
-      {showUserPermissions && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">
-              Manage Permissions for {selectedUser.name}
-            </h3>
-            
-            <div className="space-y-6">
-              {Object.entries(permissionCategories).map(([category, perms]) => (
-                <div key={category} className="border border-gray-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-900 mb-3">{category}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {perms.map(permKey => {
-                      const isSelected = userPermissions.some(up => up.key === permKey);
-                      return (
-                        <label key={permKey} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setUserPermissions([...userPermissions, { key: permKey }]);
-                              } else {
-                                setUserPermissions(userPermissions.filter(up => up.key !== permKey));
-                              }
-                            }}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="text-sm font-medium text-gray-700">{permKey}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={handleUpdateUserPermissions}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                Save Permissions
-              </button>
-              <button
-                onClick={() => setShowUserPermissions(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
-} 
+}

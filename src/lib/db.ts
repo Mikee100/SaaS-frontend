@@ -21,6 +21,10 @@ interface SaaSPlatformDB extends DBSchema {
     value: any;
     indexes: { 'by-timestamp': number };
   };
+  preferences: {
+    key: string;
+    value: any;
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<SaaSPlatformDB>> | null = null;
@@ -42,33 +46,55 @@ const getDb = () => {
           const store = db.createObjectStore('offline-operations', { autoIncrement: true, keyPath: 'id' });
           store.createIndex('by-timestamp', 'timestamp');
         }
+        // Add preferences store for dashboard preferences
+        if (!db.objectStoreNames.contains('preferences')) {
+          db.createObjectStore('preferences', { keyPath: 'id' });
+        }
       },
     });
   }
   return dbPromise;
 };
 
-export async function set(storeName: keyof SaaSPlatformDB, value: any) {
+
+export async function set(
+  storeName: "products" | "customers" | "sales" | "offline-operations" | "preferences",
+  value: any
+) {
   const db = await getDb();
   return db.put(storeName, value);
 }
 
-export async function getAll(storeName: keyof SaaSPlatformDB) {
+
+export async function getAll(
+  storeName: "products" | "customers" | "sales" | "offline-operations" | "preferences"
+) {
   const db = await getDb();
   return db.getAll(storeName);
 }
 
-export async function get(storeName: keyof SaaSPlatformDB, key: string) {
-    const db = await getDb();
-    return db.get(storeName, key);
+
+export async function get(
+  storeName: "products" | "customers" | "sales" | "offline-operations" | "preferences",
+  key: string
+) {
+  const db = await getDb();
+  return db.get(storeName, key);
 }
 
-export async function del(storeName: keyof SaaSPlatformDB, key: string) {
+
+export async function del(
+  storeName: "products" | "customers" | "sales" | "offline-operations" | "preferences",
+  key: string
+) {
   const db = await getDb();
   return db.delete(storeName, key);
 }
 
-export async function clear(storeName: keyof SaaSPlatformDB) {
-    const db = await getDb();
-    return db.clear(storeName);
+
+export async function clear(
+  storeName: "products" | "customers" | "sales" | "offline-operations" | "preferences"
+) {
+  const db = await getDb();
+  return db.clear(storeName);
 }

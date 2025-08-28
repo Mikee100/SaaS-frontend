@@ -1,13 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { SessionProvider } from "@/components/providers/SessionProvider";
+// Removed SessionProvider (NextAuth) import
 import LayoutWrapper from "@/components/LayoutWrapper";
+import ClientBranchProvider from "@/components/ClientBranchProvider";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { BranchProvider } from "@/contexts/BranchContext";
 import { DashboardProvider } from "@/contexts/DashboardContext";
 import OfflineIndicator from '@/components/ui/OfflineIndicator';
 import { Toaster } from '@/components/ui/toaster';
+import React from "react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -38,12 +40,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Get initialBranchId from localStorage or JWT/user context
-  let initialBranchId = "";
-  if (typeof window !== "undefined") {
-    initialBranchId = localStorage.getItem("selectedBranchId") || "";
-  }
-  // You can also get this from a global user context if available
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -73,18 +69,11 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        <SessionProvider>
-          <DashboardProvider>
-            <BranchProvider initialBranchId={initialBranchId}>
-              <ThemeProvider>
-                <LayoutWrapper>
-                  {children}
-                </LayoutWrapper>
-                <Toaster />
-              </ThemeProvider>
-            </BranchProvider>
-          </DashboardProvider>
-        </SessionProvider>
+        <DashboardProvider>
+          <ClientBranchProvider>
+            {children}
+          </ClientBranchProvider>
+        </DashboardProvider>
       </body>
     </html>
   );

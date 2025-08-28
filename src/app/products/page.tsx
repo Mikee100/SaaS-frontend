@@ -87,8 +87,8 @@ export default function ProductsPage() {
     setLoading(true);
     setError("");
     try {
-      // Fetch products for the selected branch
-      const data = await apiGet(`/products?branchId=${selectedBranchId}`);
+      // Fetch products for the selected branch using header
+      const data = await apiGet(`/products`, { 'x-branch-id': selectedBranchId || '' });
       setProducts(data as Product[]);
     } catch (err: any) {
       setError(err.message || "Failed to fetch products");
@@ -123,7 +123,7 @@ export default function ProductsPage() {
         stock: parseInt(formData.get("stock") as string),
         description: formData.get("description"),
         branchId: selectedBranchId, // Add branchId to payload
-      });
+      }, { 'x-branch-id': selectedBranchId || '' });
       setProducts([newProduct, ...products]);
       setShowAddForm(false);
     } catch (err: any) {
@@ -146,7 +146,7 @@ export default function ProductsPage() {
           price: parseFloat(formData.get("price") as string),
           stock: parseInt(formData.get("stock") as string),
           description: formData.get("description"),
-        });
+        }, { 'x-branch-id': selectedBranchId || '' });
         setEditProduct(null);
       }
       setShowAddForm(false);
@@ -165,7 +165,7 @@ export default function ProductsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this product?")) return;
-    await apiDelete(`/products/${id}`);
+    await apiDelete(`/products/${id}`, { 'x-branch-id': selectedBranchId || '' });
     fetchProducts();
   }
 
@@ -187,9 +187,10 @@ export default function ProductsPage() {
     try {
       // Use XMLHttpRequest for upload progress
       await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/products/bulk-upload`);
-        xhr.setRequestHeader("Authorization", `Bearer ${localStorage.getItem("token")}`);
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/products/bulk-upload`);
+  xhr.setRequestHeader("Authorization", `Bearer ${localStorage.getItem("token")}`);
+  xhr.setRequestHeader("x-branch-id", selectedBranchId || "");
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
             setUploadProgress(Math.round((event.loaded / event.total) * 30)); // 0-30% for upload
@@ -230,9 +231,16 @@ export default function ProductsPage() {
 
   async function pollBackendProgress(uploadId: string, totalRows: number) {
     let finished = false;
+    const token = localStorage.getItem("token");
     while (!finished) {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/products/bulk-upload-progress/${uploadId}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/products/bulk-upload-progress/${uploadId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
         if (!res.ok) break;
         const progress = await res.json();
         if (progress && progress.total) {

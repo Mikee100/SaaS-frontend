@@ -18,8 +18,6 @@ export default function PlanBasedNav() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   // Debug logs
-  console.log('userContext:', userContext);
-  console.log('limits:', limits);
 
   // Always call hooks at top level!
   const navigationItems = [
@@ -48,24 +46,24 @@ export default function PlanBasedNav() {
       // Check permission requirements
       if (item.requiredPermission && userContext?.user) {
         const hasPerm = hasPermission(userContext.user, item.requiredPermission);
-        console.log('Checking permission for', item.name, '->', item.requiredPermission, ':', hasPerm);
+  // ...existing code...
         return hasPerm;
       }
       return true;
     });
   }, [limits, userContext.user, currentLevel]);
-{console.log('Accessible navigation items:', accessibleItems)}
+{/* ...existing code... */}
   // Hide sidebar on settings pages
   const isSettingsPage = pathname?.startsWith('/settings');
   if (isSettingsPage) {
-    console.log('Sidebar hidden on settings page');
+  // ...existing code...
     return null;
   }
 
   // Use a regular variable for loading skeleton
   const isLoading = userContext?.loading || limitsLoading || !userContext?.user || !limits;
   if (isLoading) {
-    console.log('Sidebar loading:', { userLoading: userContext?.loading, limitsLoading, user: userContext?.user, limits });
+  // ...existing code...
     return (
       <div className={`fixed top-0 left-0 h-full bg-white shadow-lg border-r z-50 transition-all duration-300 ${
         sidebarCollapsed ? 'w-16' : 'w-64'

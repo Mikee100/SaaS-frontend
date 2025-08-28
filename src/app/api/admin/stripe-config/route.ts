@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+// Removed NextAuth getServerSession. No authentication applied.
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 
