@@ -1,3 +1,5 @@
+// Paused: WebSocket logic temporarily disabled for user consistency debugging.
+/*
 "use client";
 
 // Usage example:
@@ -21,7 +23,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     // Adjust the URL if your backend runs on a different host/port
-    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000', {
+    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000', {
       transports: ['websocket'],
       autoConnect: true,
     });
@@ -36,4 +38,5 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       {children}
     </SocketContext.Provider>
   );
-}; 
+};
+*/ 

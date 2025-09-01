@@ -23,31 +23,47 @@ export default function PlanGuard({
   const [planLimits, setPlanLimits] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // If user context is not available yet, wait
     if (!userContext || userContext.loading) return;
 
+    // If no user, default to allowing access (for public pages)
+    if (!userContext.user) {
+      setHasAccess(true);
+      setLoading(false);
+      return;
+    }
+
     const checkAccess = async () => {
       try {
-        const limits = await apiGet('/billing/limits');
+        setError(null);
+        const limits = await apiGet('/billing/limits') as any;
         setPlanLimits(limits);
         
         if (requiredPlan) {
-          const planHierarchy = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
-          const currentPlan = limits.currentPlan || 'Basic';
+          const planHierarchy: Record<string, number> = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
+          const currentPlan = limits?.currentPlan || 'Basic';
           const currentLevel = planHierarchy[currentPlan] || 0;
           const requiredLevel = planHierarchy[requiredPlan] || 0;
           setHasAccess(currentLevel >= requiredLevel);
         } else if (requiredFeature) {
-          setHasAccess(limits.features?.[requiredFeature] || false);
+          setHasAccess(limits?.features?.[requiredFeature] || false);
         } else {
           setHasAccess(true);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error checking plan access:', error);
-        // Default to allowing access if there's an error
-        setHasAccess(true);
+        
+        // Handle unauthorized error
+        if (error?.message?.includes('Unauthorized') || error?.status === 401) {
+          setError('Please log in to access this feature');
+          setHasAccess(false);
+        } else {
+          // For other errors, default to allowing access
+          setHasAccess(true);
+        }
       } finally {
         setLoading(false);
       }
@@ -64,6 +80,21 @@ export default function PlanGuard({
   // If no user context, show children (for public pages)
   if (!userContext?.user) {
     return <>{children}</>;
+  }
+
+  // If there's an authentication error, show error message
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+        <p className="text-red-600">{error}</p>
+        <a
+          href="/login"
+          className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors mt-2"
+        >
+          Log In
+        </a>
+      </div>
+    );
   }
 
   if (hasAccess) {

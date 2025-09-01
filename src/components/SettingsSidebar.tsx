@@ -1,7 +1,7 @@
 "use client";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaBuilding, FaCogs, FaClipboardList, FaCreditCard, FaUserShield, FaUsers, FaKey, FaImage } from 'react-icons/fa';
+import { FaBuilding, FaCogs, FaClipboardList, FaCreditCard, FaUserShield, FaChartBar,FaUsers, FaKey, FaImage, FaCrown } from 'react-icons/fa';
 
 export default function SettingsSidebar() {
   const pathname = usePathname();
@@ -13,8 +13,11 @@ export default function SettingsSidebar() {
         { href: "/settings/business-info", label: "Business Info", icon: <FaBuilding className="mr-2" /> },
         { href: "/settings/logo", label: "Logo", icon: <FaImage className="mr-2" /> },
         { href: "/settings/users", label: "Users", icon: <FaUsers className="mr-2" /> },
+        { href: "/settings/branches", label: "Branches", icon: <FaBuilding className="mr-2 text-yellow-600" /> },
         { href: "/settings/permissions", label: "Permissions", icon: <FaUserShield className="mr-2" /> },
         { href: "/settings/billing", label: "Billing", icon: <FaCreditCard className="mr-2" /> },
+        { href: "/settings/enterprise", label: "Enterprise Features", icon: <FaCrown className="mr-2" /> },
+        { href: "/settings/statistics", label: "Statistics", icon: <FaChartBar className="mr-2" /> },
       ]
     },
     {
