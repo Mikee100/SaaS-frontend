@@ -30,6 +30,11 @@ type Receipt = {
     phone?: string;
     email?: string;
   };
+  branch?: {
+    id: string;
+    name: string;
+    address?: string;
+  };
 };
 
 export default function ReceiptPage() {
@@ -135,31 +140,15 @@ export default function ReceiptPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 transition"
-          >
-            <FaArrowLeft className="w-4 h-4" />
-            Back to Sales
-          </button>
-          
-          <div className="flex gap-3">
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition"
-            >
-              <FaDownload className="w-4 h-4" />
-              Download
-            </button>
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-            >
-              <FaPrint className="w-4 h-4" />
-              Print Receipt
-            </button>
-          </div>
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Receipt</h1>
+          {/* Add branch name here */}
+          {receipt.branch && (
+            <div className="mb-2">
+              <strong>Branch:</strong> {sale.branch?.name || 'Unknown'}
+            </div>
+          )}
+          {/* ...other header details... */}
         </div>
       </div>
 
@@ -174,6 +163,15 @@ export default function ReceiptPage() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               {receipt.businessInfo?.name || 'Business Name'}
             </h1>
+            {/* Branch info */}
+            {receipt.branch && (
+              <p className="text-base font-semibold text-blue-700 mb-1">
+                Branch: {receipt.branch.name}
+                {receipt.branch.address && (
+                  <span className="ml-2 text-gray-500">({receipt.branch.address})</span>
+                )}
+              </p>
+            )}
             {receipt.businessInfo?.address && (
               <p className="text-gray-600 mb-1">{receipt.businessInfo.address}</p>
             )}
@@ -314,4 +312,4 @@ export default function ReceiptPage() {
       `}</style>
     </div>
   );
-} 
+}

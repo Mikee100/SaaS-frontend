@@ -11,6 +11,7 @@ export interface User {
   isSuperadmin?: boolean; // <-- Add this line
   permissions?: string[]; // Add permissions property for RBAC
   receiptLogo?: string;
+  tenantId?: string;
   // Add more fields as needed
 }
 

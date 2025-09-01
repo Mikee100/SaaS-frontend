@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
 import { FaBox, FaSearch, FaFilter, FaDownload, FaPlus, FaMinus, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaChartBar, FaHistory, FaEdit, FaEye } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
+import { useBranch } from "@/contexts/BranchContext";
+import { useEffect, useState } from "react";
 
 interface Product {
   id: string;
@@ -31,6 +32,7 @@ interface InventoryStats {
 
 export default function InventoryPage() {
   const { user } = useUser();
+  const { selectedBranchId, setSelectedBranchId } = useBranch();
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,15 +54,37 @@ export default function InventoryPage() {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      apiGet("/products"),
+      apiGet("/products", { 'x-branch-id': selectedBranchId || '' }),
       apiGet("/inventory"),
     ]).then(([products, inventory]) => {
       setProducts(products);
       setInventory(inventory);
     }).finally(() => setLoading(false));
+  }, [selectedBranchId]);
+
+  useEffect(() => {
+    async function fetchBranches() {
+      setBranchesLoading(true);
+      try {
+        const data = await apiGet('/branches');
+        setBranches(data);
+        // Auto-select first branch if none selected
+        if (!selectedBranchId && data.length > 0) {
+          setSelectedBranchId(data[0].id);
+        }
+      } catch (err) {
+        // Optionally handle error
+      } finally {
+        setBranchesLoading(false);
+      }
+    }
+    fetchBranches();
   }, []);
 
   // Helper: get inventory record for a product
@@ -241,6 +265,26 @@ export default function InventoryPage() {
   return (
     <AuthGuard>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Branch Selector */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Select Branch</label>
+          {branchesLoading ? (
+            <div className="text-gray-500 text-sm">Loading branches...</div>
+          ) : (
+            <select
+              value={selectedBranchId || ''}
+              onChange={e => setSelectedBranchId(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+              style={{ minWidth: 200 }}
+            >
+              <option value="" disabled>Select a branch</option>
+              {branches.map(branch => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Inventory</h1>
@@ -521,4 +565,4 @@ export default function InventoryPage() {
       
     </AuthGuard>
   );
-} 
+}

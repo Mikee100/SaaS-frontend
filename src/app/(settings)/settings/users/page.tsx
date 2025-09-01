@@ -12,6 +12,7 @@ interface User {
   permissions?: Array<{ permission: { key: string; description?: string }; note?: string }>;
   createdAt: string;
   isSuperadmin?: boolean;
+  branchId?: string;
 }
 
 interface Role {
@@ -20,18 +21,25 @@ interface Role {
   description?: string;
 }
 
+interface Branch {
+  id: string;
+  name: string;
+}
+
 export default function UsersSettings() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "", branchId: "" });
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [branchId, setBranchId] = useState("");
 
   useEffect(() => {
     loadData();
@@ -40,14 +48,16 @@ export default function UsersSettings() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [usersData, rolesData] = await Promise.all([
+      const [usersData, rolesData, branchesData] = await Promise.all([
         apiGet("/user"),
         apiGet("/roles"),
+        apiGet("/branches"),
       ]);
       setUsers(usersData as User[]);
       setRoles(rolesData as Role[]);
+      setBranches(branchesData as Branch[]);
     } catch (err) {
-      setError("Failed to load users or roles");
+      setError("Failed to load users, roles, or branches");
     } finally {
       setLoading(false);
     }
@@ -63,8 +73,9 @@ export default function UsersSettings() {
     setError("");
     setSuccess(false);
     try {
-      await apiPost("/user", form);
-      setForm({ name: "", email: "", password: "", role: "" });
+      await apiPost("/user", { ...form, branchId });
+      setForm({ name: "", email: "", password: "", role: "", branchId: "" });
+      setBranchId("");
       await loadData();
       setSuccess(true);
     } catch (err: any) {
@@ -83,7 +94,8 @@ export default function UsersSettings() {
     try {
       await apiPut(`/user/${editingUser.id}`, {
         name: editingUser.name,
-        role: editingUser.userRoles[0]?.role?.name || ""
+        role: editingUser.userRoles[0]?.role?.name || "",
+        branchId: editingUser.branchId
       });
       await loadData();
       setShowEditModal(false);
@@ -218,10 +230,25 @@ export default function UsersSettings() {
             </select>
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+            <select
+              value={branchId}
+              onChange={e => setBranchId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              required
+              disabled={saving}
+            >
+              <option value="">Select branch</option>
+              {branches.map(branch => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <button
               type="submit"
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
-              disabled={saving || !form.name || !form.email || !form.password || !form.role}
+              disabled={saving || !form.name || !form.email || !form.password || !form.role || !branchId}
             >
               {saving ? 'Creating...' : 'Add User'}
             </button>
@@ -251,6 +278,7 @@ export default function UsersSettings() {
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Name</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Email</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Role</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Branch</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Joined</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
                 </tr>
@@ -280,6 +308,9 @@ export default function UsersSettings() {
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {(user.userRoles || []).map((ur: any) => ur.role?.name).filter(Boolean).join(', ') || 'No Role'}
                       </span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">
+                      {branches.find(branch => branch.id === user.branchId)?.name || 'No Branch'}
                     </td>
                     <td className="py-3 px-4 text-gray-500 text-sm">
                       {formatDate(user.createdAt)}
@@ -344,6 +375,19 @@ export default function UsersSettings() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                  <select
+                    value={editingUser.branchId}
+                    onChange={(e) => setEditingUser({ ...editingUser, branchId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select Branch</option>
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>{branch.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="flex gap-3 mt-6">
                 <button
@@ -394,4 +438,4 @@ export default function UsersSettings() {
       )}
     </div>
   );
-} 
+}

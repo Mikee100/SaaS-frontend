@@ -25,8 +25,14 @@ interface User {
   id: string;
   name: string;
   email: string;
+  branchId?: string;
   userRoles: Array<{ role: { name: string } }>;
   permissions?: string[]; // Add permissions property for modal
+}
+
+interface Branch {
+  id: string;
+  name: string;
 }
 
 export default function PermissionsSettings() {
@@ -34,6 +40,7 @@ export default function PermissionsSettings() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -57,10 +64,11 @@ export default function PermissionsSettings() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [rolesData, permissionsData, usersData] = await Promise.all([
+      const [rolesData, permissionsData, usersData, branchesData] = await Promise.all([
         apiGet("/roles"),
         apiGet("/permissions"),
         apiGet("/user"),
+        apiGet("/branches"),
       ]);
       setRoles(rolesData as Role[]);
       // Map backend permission response to always include 'key' property
@@ -72,6 +80,7 @@ export default function PermissionsSettings() {
         : [];
       setPermissions(mappedPermissions);
       setUsers(usersData as User[]);
+      setBranches(branchesData as Branch[]);
     } catch (err) {
       setError("Failed to load data");
     } finally {
@@ -144,6 +153,14 @@ export default function PermissionsSettings() {
       </div>
     );
   }
+
+  // Group users by branchId
+  const usersByBranch: { [branchId: string]: User[] } = {};
+  users.forEach(user => {
+    const branchKey = user.branchId || "unassigned";
+    if (!usersByBranch[branchKey]) usersByBranch[branchKey] = [];
+    usersByBranch[branchKey].push(user);
+  });
 
   return (
     <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
@@ -221,83 +238,6 @@ export default function PermissionsSettings() {
         </div>
       </div>
 
-      {/* User List (Roles & Manage Permissions) */}
-      <div className="bg-white rounded-xl shadow p-8 w-full mb-8">
-        <div className="flex items-center gap-2 mb-6">
-          <FaUserShield className="text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-800">Users & Roles</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Roles</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Permissions</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(user => (
-                <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-blue-600 font-medium text-sm">
-                          {user.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{user.name}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex flex-wrap gap-1">
-                      {(Array.isArray(user.userRoles) ? user.userRoles : []).map((ur, index) => (
-                        <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {ur.role.name}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex flex-wrap gap-1">
-                      {Array.isArray(user.permissions) && user.permissions.length > 0 ? (
-                        user.permissions.map((perm, idx) => (
-                          <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            {perm}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-gray-400">No permissions</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <button
-                      className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
-                      onClick={() => {
-                        setShowManagePermissions(user);
-                        // Ensure permissions are always an array of valid keys
-                        setUserPermissionsEdit(
-                          Array.isArray(user.permissions) && user.permissions.length > 0
-                            ? user.permissions.filter(pk => typeof pk === 'string' && pk.length > 0)
-                            : []
-                        );
-                      }}
-                    >
-                      Manage Permissions
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       {/* Manage Permissions Modal */}
       {showManagePermissions && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
@@ -372,6 +312,168 @@ export default function PermissionsSettings() {
           </div>
         </div>
       )}
+
+ {/* Users grouped by branch */}
+      {branches.map(branch => (
+  <div key={branch.id} className="mb-10">
+    <h3 className="text-xl font-bold text-blue-700 mb-1">{branch.name}</h3>
+    <div className="border-b-2 border-blue-200 mb-4"></div>
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-gray-200">
+            <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-700">Roles</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-700">Permissions</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(usersByBranch[branch.id] || []).map(user => (
+            <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <td className="py-3 px-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-blue-600 font-medium text-sm">
+                      {user.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">{user.name}</div>
+                    <div className="text-sm text-gray-500">{user.email}</div>
+                  </div>
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <div className="flex flex-wrap gap-1">
+                  {(Array.isArray(user.userRoles) ? user.userRoles : []).map((ur, index) => (
+                    <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {ur.role.name}
+                    </span>
+                  ))}
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <div className="flex flex-wrap gap-1">
+                  {Array.isArray(user.permissions) && user.permissions.length > 0 ? (
+                    user.permissions.map((perm, idx) => (
+                      <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        {perm}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-gray-400">No permissions</span>
+                  )}
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <button
+                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                  onClick={() => {
+                    setShowManagePermissions(user);
+                    setUserPermissionsEdit(
+                      Array.isArray(user.permissions) && user.permissions.length > 0
+                        ? user.permissions.filter(pk => typeof pk === 'string' && pk.length > 0)
+                        : []
+                    );
+                  }}
+                >
+                  Manage Permissions
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {(usersByBranch[branch.id] || []).length === 0 && (
+        <div className="text-gray-500 text-sm py-4">No users in this branch.</div>
+      )}
+    </div>
+  </div>
+))}
+
+{/* Unassigned users */}
+{usersByBranch["unassigned"] && (
+  <div className="mb-10">
+    <h3 className="text-xl font-bold text-red-700 mb-1">Unassigned</h3>
+    <div className="border-b-2 border-red-200 mb-4"></div>
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-gray-200">
+            <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-700">Roles</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-700">Permissions</th>
+            <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {usersByBranch["unassigned"].map(user => (
+            <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <td className="py-3 px-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-blue-600 font-medium text-sm">
+                      {user.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">{user.name}</div>
+                    <div className="text-sm text-gray-500">{user.email}</div>
+                  </div>
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <div className="flex flex-wrap gap-1">
+                  {(Array.isArray(user.userRoles) ? user.userRoles : []).map((ur, index) => (
+                    <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {ur.role.name}
+                    </span>
+                  ))}
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <div className="flex flex-wrap gap-1">
+                  {Array.isArray(user.permissions) && user.permissions.length > 0 ? (
+                    user.permissions.map((perm, idx) => (
+                      <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        {perm}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-gray-400">No permissions</span>
+                  )}
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <button
+                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                  onClick={() => {
+                    setShowManagePermissions(user);
+                    setUserPermissionsEdit(
+                      Array.isArray(user.permissions) && user.permissions.length > 0
+                        ? user.permissions.filter(pk => typeof pk === 'string' && pk.length > 0)
+                        : []
+                    );
+                  }}
+                >
+                  Manage Permissions
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
+
+
+
+
+
+
 
       {/* Available Permissions */}
       <div className="bg-white rounded-xl shadow p-8 w-full">
@@ -468,7 +570,7 @@ export default function PermissionsSettings() {
         </div>
       )}
 
-
+     
     </div>
   );
 }

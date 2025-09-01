@@ -14,7 +14,8 @@ import {
   FaLock, FaArrowUp, FaQrcode, FaBarcode, FaDownload, FaUpload, FaSearch, 
   FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaPrint, FaChevronLeft, 
   FaChevronRight, FaKeyboard, FaHistory, FaUser, FaCalculator, FaUndo, FaRedo,
-  FaStar, FaClock, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaTimesCircle
+  FaStar, FaClock, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaTimesCircle,
+  FaFilter, FaSort, FaTh, FaList, FaPlus, FaMinus
 } from 'react-icons/fa';
 import MpesaPayment from '@/components/MpesaPayment';
 import { hasPermission } from '@/utils/permissions';
@@ -22,6 +23,7 @@ import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
 import debounce from '@/utils/debounce';
 import ProductSkeleton from '@/components/ProductSkeleton';
+import { useBranch } from "@/contexts/BranchContext";
 
 type Product = { 
   id: string; 
@@ -45,6 +47,11 @@ type Receipt = {
   paymentMethod: string;
   amountReceived: number;
   change: number;
+   branch?: {
+    id: string;
+    name: string;
+    address?: string;
+  };
 };
 
 type QuickAction = {
@@ -58,6 +65,8 @@ type QuickAction = {
 export default function SalesPage() {
   const { user } = useUser();
   const router = useRouter();
+  const { selectedBranchId } = useBranch();
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,6 +145,10 @@ export default function SalesPage() {
     };
     
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    apiGet('/branches').then(setBranches);
   }, []);
 
   // Keyboard shortcuts
@@ -289,7 +302,14 @@ export default function SalesPage() {
         idempotencyKey: uuidv4()
       };
 
-      const sale = await apiPost("/sales", saleData);
+      // Add branchId to saleData
+      const branch = branches.find(b => b.id === selectedBranchId);
+      const payload = {
+        ...saleData,
+        branchId: selectedBranchId,
+        branch: branch ? { id: branch.id, name: branch.name } : undefined,
+      };
+      const sale = await apiPost("/sales", payload);
       
       // Reset and redirect to receipt
       clearCart();
@@ -298,6 +318,8 @@ export default function SalesPage() {
       setCustomerPhone("");
       setAmountReceived(0);
       
+
+        console.log("Sales Data",sale);
       // Refresh products
       apiGet("/products").then(setProducts);
       
@@ -315,12 +337,11 @@ export default function SalesPage() {
     }
   };
 
+
   // M-Pesa payment handlers
   const handleMpesaSuccess = useCallback((transactionId: string) => {
-    // Show success message
     setStatusMessage('M-Pesa payment successful! Processing your order...');
     
-    // Complete the sale with M-Pesa details
     const completeMpesaSale = async () => {
       try {
         const saleData = {
@@ -341,20 +362,16 @@ export default function SalesPage() {
 
         const sale = await apiPost("/sales", saleData);
         
-        // Reset cart and close modals
         clearCart();
         setCheckoutOpen(false);
         setShowMpesaPayment(false);
         setCustomerName("");
         setCustomerPhone("");
         
-        // Show success message
         alert('Payment successful! Your order has been processed.');
         
-        // Refresh products
         apiGet("/products").then(setProducts);
         
-        // Redirect to receipt if available
         const saleId = sale.id || sale.saleId || sale._id;
         if (saleId) {
           router.push(`/sales/receipt/${saleId}`);
@@ -386,28 +403,28 @@ export default function SalesPage() {
       name: "Undo (Ctrl+Z)",
       action: undoCart,
       icon: <FaUndo />,
-      color: "bg-gray-500"
+      color: "bg-gray-500 hover:bg-gray-600"
     },
     {
       id: "redo", 
       name: "Redo (Ctrl+Shift+Z)",
       action: redoCart,
       icon: <FaRedo />,
-      color: "bg-gray-500"
+      color: "bg-gray-500 hover:bg-gray-600"
     },
     {
       id: "clear",
       name: "Clear Cart",
       action: clearCart,
       icon: <FaTimes />,
-      color: "bg-red-500"
+      color: "bg-red-500 hover:bg-red-600"
     },
     {
       id: "history",
       name: "Recent Sales",
       action: () => router.push("/sales/history"),
       icon: <FaHistory />,
-      color: "bg-blue-500"
+      color: "bg-blue-500 hover:bg-blue-600"
     }
   ];
 
@@ -474,7 +491,7 @@ export default function SalesPage() {
     <AuthGuard>
       <div className="min-h-screen bg-gray-50">
         {/* Enhanced Header */}
-        <header className="bg-white shadow-sm">
+        <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center mb-4">
               <div>
@@ -509,33 +526,33 @@ export default function SalesPage() {
 
             {/* Quick Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-blue-50 rounded-lg p-3">
-                <div className="flex items-center gap-2">
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-100">
+                <div className="flex items-center gap-2 mb-1">
                   <FaShoppingCart className="w-4 h-4 text-blue-600" />
                   <span className="text-sm font-medium text-blue-800">Cart Items</span>
                 </div>
-                <p className="text-xl font-bold text-blue-900">{cart.length}</p>
+                <p className="text-2xl font-bold text-blue-900">{cart.length}</p>
               </div>
-              <div className="bg-green-50 rounded-lg p-3">
-                <div className="flex items-center gap-2">
+              <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-4 border border-green-100">
+                <div className="flex items-center gap-2 mb-1">
                   <FaMoneyBillWave className="w-4 h-4 text-green-600" />
                   <span className="text-sm font-medium text-green-800">Total</span>
                 </div>
-                <p className="text-xl font-bold text-green-900">${cartTotal.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-green-900">${cartTotal.toFixed(2)}</p>
               </div>
-              <div className="bg-purple-50 rounded-lg p-3">
-                <div className="flex items-center gap-2">
+              <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-100">
+                <div className="flex items-center gap-2 mb-1">
                   <FaChartLine className="w-4 h-4 text-purple-600" />
                   <span className="text-sm font-medium text-purple-800">Products</span>
                 </div>
-                <p className="text-xl font-bold text-purple-900">{products.length}</p>
+                <p className="text-2xl font-bold text-purple-900">{products.length}</p>
               </div>
-              <div className="bg-orange-50 rounded-lg p-3">
-                <div className="flex items-center gap-2">
+              <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-100">
+                <div className="flex items-center gap-2 mb-1">
                   <FaClock className="w-4 h-4 text-orange-600" />
                   <span className="text-sm font-medium text-orange-800">Recent Sales</span>
                 </div>
-                <p className="text-xl font-bold text-orange-900">{recentSales.length}</p>
+                <p className="text-2xl font-bold text-orange-900">{recentSales.length}</p>
               </div>
             </div>
           </div>
@@ -544,7 +561,7 @@ export default function SalesPage() {
         {/* Keyboard Shortcuts Modal */}
         {showKeyboardShortcuts && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
               <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                 <h3 className="font-semibold text-lg">Keyboard Shortcuts</h3>
                 <button onClick={() => setShowKeyboardShortcuts(false)} className="text-gray-500 hover:text-gray-700">
@@ -552,23 +569,23 @@ export default function SalesPage() {
                 </button>
               </div>
               <div className="p-6 space-y-3">
-                <div className="flex justify-between">
+                <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-600">Ctrl+F</span>
                   <span className="font-medium">Search products</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-600">Ctrl+Z</span>
                   <span className="font-medium">Undo cart change</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-600">Ctrl+Shift+Z</span>
                   <span className="font-medium">Redo cart change</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-600">Enter</span>
                   <span className="font-medium">Proceed to checkout</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between py-2">
                   <span className="text-gray-600">Escape</span>
                   <span className="font-medium">Close modals</span>
                 </div>
@@ -583,7 +600,7 @@ export default function SalesPage() {
             {/* Products Section */}
             <div className="lg:col-span-2 space-y-6">
               {/* Enhanced Search and Filters */}
-              <div className="bg-white rounded-xl shadow-sm p-4">
+              <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="relative flex-1">
                     <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -593,7 +610,7 @@ export default function SalesPage() {
                       placeholder="Search products... (Ctrl+F)"
                       defaultValue={searchTerm}
                       onChange={handleSearchChange}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                     />
                     {isSearching && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -603,13 +620,13 @@ export default function SalesPage() {
                   </div>
                   
                   <FeatureGuard requiredFeature="api_access" fallback={
-                    <button disabled className="p-2 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed">
+                    <button disabled className="p-2.5 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed">
                       <FaQrcode className="w-5 h-5" />
                     </button>
                   }>
                     <button
                       onClick={() => setShowScanner(true)}
-                      className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
+                      className="p-2.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
                       title="Scan QR Code"
                     >
                       <FaQrcode className="w-5 h-5" />
@@ -622,55 +639,63 @@ export default function SalesPage() {
                   {/* Category Filter */}
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {categories.map(category => (
-                        <option key={category} value={category}>
-                          {category === 'all' ? 'All Categories' : category}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <FaFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                      >
+                        {categories.map(category => (
+                          <option key={category} value={category}>
+                            {category === 'all' ? 'All Categories' : category}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   {/* Sort By */}
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as any)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="name">Name</option>
-                      <option value="price">Price</option>
-                      <option value="stock">Stock</option>
-                    </select>
+                    <div className="relative">
+                      <FaSort className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as any)}
+                        className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                      >
+                        <option value="name">Name</option>
+                        <option value="price">Price</option>
+                        <option value="stock">Stock</option>
+                      </select>
+                    </div>
                   </div>
 
                   {/* View Mode */}
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-gray-700 mb-1">View</label>
-                    <div className="flex border border-gray-300 rounded-lg">
+                    <div className="flex border border-gray-300 rounded-lg overflow-hidden">
                       <button
                         onClick={() => setViewMode("grid")}
-                        className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                        className={`flex-1 px-3 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
                           viewMode === "grid" 
                             ? "bg-blue-600 text-white" 
                             : "bg-white text-gray-700 hover:bg-gray-50"
                         }`}
                       >
+                        <FaTh className="w-3 h-3" />
                         Grid
                       </button>
                       <button
                         onClick={() => setViewMode("list")}
-                        className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                        className={`flex-1 px-3 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
                           viewMode === "list" 
                             ? "bg-blue-600 text-white" 
                             : "bg-white text-gray-700 hover:bg-gray-50"
                         }`}
                       >
+                        <FaList className="w-3 h-3" />
                         List
                       </button>
                     </div>
@@ -679,7 +704,7 @@ export default function SalesPage() {
               </div>
 
               {/* Products Grid */}
-              <div className="bg-white rounded-xl shadow-sm p-4">
+              <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200">
                 {isLoading ? (
                   <ProductSkeleton count={8} />
                 ) : filteredProducts.length === 0 ? (
@@ -695,54 +720,53 @@ export default function SalesPage() {
                     {paginatedProducts.map((product) => (
                       <div 
                         key={product.id}
-                        className="group relative bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-100"
+                        className="group relative bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 hover:border-blue-100"
                       >
-                        <div className="aspect-square bg-gray-50 flex items-center justify-center p-4">
-                          {/* Product image placeholder */}
-                          <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
-                            <FaShoppingCart className="w-8 h-8" />
+                        <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4 relative">
+                          <div className="w-full h-full flex items-center justify-center text-gray-400">
+                            <FaShoppingCart className="w-8 h-8 opacity-70" />
+                          </div>
+                          <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 text-xs font-medium text-gray-700">
+                            ${product.price.toFixed(2)}
+                          </div>
+                          <div className={`absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 text-xs font-medium ${
+                            product.stock > 10 ? 'text-green-700' : product.stock > 0 ? 'text-orange-700' : 'text-red-700'
+                          }`}>
+                            {product.stock} in stock
                           </div>
                         </div>
                         <div className="p-3">
-                          <h3 className="text-sm font-medium text-gray-900 truncate">
+                          <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10 mb-2">
                             {product.name}
                           </h3>
-                          <p className="mt-1 text-sm font-medium text-blue-600">
-                            ${product.price.toFixed(2)}
-                          </p>
-                          <div className="mt-2 flex justify-between items-center">
-                            <span className="text-xs text-gray-500">
-                              {product.stock} in stock
-                            </span>
+                          
+                          <div className="flex justify-between items-center">
+                            <button
+                              onClick={() => toggleFavorite(product.id)}
+                              className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                              aria-label={favoriteProducts.includes(product.id) ? 'Remove from favorites' : 'Add to favorites'}
+                            >
+                              <FaStar
+                                className={`w-4 h-4 ${
+                                  favoriteProducts.includes(product.id)
+                                    ? 'text-yellow-400 fill-current'
+                                    : 'text-gray-300 hover:text-yellow-400'
+                                }`}
+                              />
+                            </button>
                             <button
                               onClick={() => addToCart(product)}
                               disabled={product.stock <= 0}
-                              className={`px-2 py-1 text-xs font-medium rounded ${
+                              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                                 product.stock > 0
-                                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
                                   : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                               }`}
                             >
-                              {product.stock > 0 ? 'Add' : 'Out of stock'}
+                              {product.stock > 0 ? 'Add to Cart' : 'Out of stock'}
                             </button>
                           </div>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(product.id);
-                          }}
-                          className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-full hover:bg-gray-100 transition-colors"
-                          aria-label={favoriteProducts.includes(product.id) ? 'Remove from favorites' : 'Add to favorites'}
-                        >
-                          <FaStar
-                            className={`w-4 h-4 ${
-                              favoriteProducts.includes(product.id)
-                                ? 'text-yellow-400 fill-current'
-                                : 'text-gray-300 hover:text-yellow-400'
-                            }`}
-                          />
-                        </button>
                       </div>
                     ))}
                   </div>
@@ -753,22 +777,22 @@ export default function SalesPage() {
                     <button
                       onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="flex items-center gap-1 px-3 py-1 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-100 rounded"
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-100 rounded-lg transition"
                     >
                       <FaChevronLeft className="w-3 h-3" />
                       Previous
                     </button>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       {Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
                         const page = i + 1;
                         return (
                           <button
                             key={page}
                             onClick={() => setCurrentPage(page)}
-                            className={`w-8 h-8 text-sm rounded ${
+                            className={`w-8 h-8 text-sm rounded-lg transition ${
                               currentPage === page
-                                ? 'bg-blue-600 text-white'
+                                ? 'bg-blue-600 text-white shadow-sm'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                           >
@@ -776,12 +800,15 @@ export default function SalesPage() {
                           </button>
                         );
                       })}
+                      {pageCount > 5 && (
+                        <span className="px-2 text-gray-500">...</span>
+                      )}
                     </div>
                     
                     <button
                       onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
                       disabled={currentPage === pageCount}
-                      className="flex items-center gap-1 px-3 py-1 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-100 rounded"
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-100 rounded-lg transition"
                     >
                       Next
                       <FaChevronRight className="w-3 h-3" />
@@ -793,14 +820,14 @@ export default function SalesPage() {
 
             {/* Enhanced Cart Section */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-sm h-full flex flex-col">
+              <div className="bg-white rounded-xl shadow-sm h-full flex flex-col border border-gray-200">
                 <div className="p-4 border-b border-gray-200">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="font-semibold text-gray-800 flex items-center gap-2">
                       <FaShoppingCart className="text-blue-600" />
                       Order Summary
                     </h2>
-                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                    <span className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-medium">
                       {cart.reduce((sum, item) => sum + item.quantity, 0)} items
                     </span>
                   </div>
@@ -808,55 +835,56 @@ export default function SalesPage() {
                   {/* Quick Actions */}
                   <div className="flex gap-2">
                     {quickActions.map(action => (
-                      <button
-                        key={action.id}
-                        onClick={action.action}
-                        className={`p-2 rounded-lg text-white text-xs font-medium transition-colors ${action.color} hover:opacity-80`}
-                        title={action.name}
-                      >
-                        {action.icon}
-                      </button>
+                      <Tooltip key={action.id} content={action.name}>
+                        <button
+                          onClick={action.action}
+                          className={`p-2.5 rounded-lg text-white text-xs font-medium transition-colors ${action.color} shadow-sm hover:shadow-md`}
+                        >
+                          {action.icon}
+                        </button>
+                      </Tooltip>
                     ))}
                   </div>
                 </div>
                 
                 {cart.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-gray-500">
-                    <FaShoppingCart className="w-10 h-10 mb-3 text-gray-300" />
-                    <p>Your cart is empty</p>
-                    <p className="text-sm">Add products to get started</p>
+                    <FaShoppingCart className="w-12 h-12 mb-3 text-gray-300" />
+                    <p className="font-medium text-gray-500">Your cart is empty</p>
+                    <p className="text-sm mt-1">Add products to get started</p>
                   </div>
                 ) : (
                   <>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
                       {cart.map(item => (
-                        <div key={item.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
+                        <div key={item.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
                           <div className="flex-1">
-                            <h3 className="font-medium text-gray-800 text-sm">{item.name}</h3>
+                            <h3 className="font-medium text-gray-800 text-sm line-clamp-1">{item.name}</h3>
                             <p className="text-xs text-gray-600">${item.price.toFixed(2)} each</p>
-                            <p className="text-xs text-gray-500">Subtotal: ${(item.price * item.quantity).toFixed(2)}</p>
+                            <p className="text-xs text-gray-500 mt-1">Subtotal: ${(item.price * item.quantity).toFixed(2)}</p>
                           </div>
                           
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              className="w-6 h-6 flex items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                              className="w-7 h-7 flex items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                             >
-                              -
+                              <FaMinus className="w-3 h-3" />
                             </button>
-                            <span className="w-8 text-center font-medium">{item.quantity}</span>
+                            <span className="w-8 text-center font-medium text-gray-800">{item.quantity}</span>
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              className="w-6 h-6 flex items-center justify-center rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
+                              disabled={item.quantity >= item.stock}
+                              className="w-7 h-7 flex items-center justify-center rounded-lg bg-green-50 text-green-600 hover:bg-green-100 disabled:bg-gray-100 disabled:text-gray-400 transition-colors"
                             >
-                              +
+                              <FaPlus className="w-3 h-3" />
                             </button>
                           </div>
                         </div>
                       ))}
                     </div>
                     
-                    <div className="p-4 border-t border-gray-200">
+                    <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
                       <div className="space-y-3 mb-4">
                         <div className="flex justify-between">
                           <span className="text-gray-600">Subtotal:</span>
@@ -866,7 +894,7 @@ export default function SalesPage() {
                           <span className="text-gray-600">Tax:</span>
                           <span className="font-medium">$0.00</span>
                         </div>
-                        <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
+                        <div className="flex justify-between text-lg font-bold pt-3 border-t border-gray-200">
                           <span>Total:</span>
                           <span className="text-blue-600">${cartTotal.toFixed(2)}</span>
                         </div>
@@ -874,7 +902,7 @@ export default function SalesPage() {
                       
                       <button
                         onClick={handleCheckout}
-                        className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
                       >
                         <FaMoneyBillWave />
                         Checkout
@@ -889,8 +917,8 @@ export default function SalesPage() {
 
         {/* QR Scanner Modal */}
         {showScanner && (
-          <div className="fixed inset-0 bg-white bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl overflow-hidden w-full max-w-md">
+          <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl overflow-hidden w-full max-w-md shadow-2xl">
               <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                 <h3 className="font-semibold text-lg">Scan Product QR Code</h3>
                 <button 
@@ -898,15 +926,15 @@ export default function SalesPage() {
                     setShowScanner(false);
                     setScanResult(null);
                   }}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition"
                 >
                   <FaTimes className="w-5 h-5" />
                 </button>
               </div>
               
               <div className="p-6 text-center">
-                <div className="bg-black p-4 rounded-lg mb-4">
-                  <div className="aspect-square bg-white/10 rounded relative overflow-hidden">
+                <div className="bg-black p-4 rounded-lg mb-4 mx-auto max-w-xs">
+                  <div className="aspect-square bg-white/10 rounded relative overflow-hidden border-2 border-dashed border-white/30">
                     <div className="absolute inset-0 flex items-center justify-center text-white">
                       <div className="text-center">
                         <FaQrcode className="w-16 h-16 mx-auto mb-2 opacity-50" />
@@ -920,7 +948,7 @@ export default function SalesPage() {
                 
                 <button
                   onClick={() => setShowScanner(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                  className="px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
                 >
                   Cancel
                 </button>
@@ -931,13 +959,14 @@ export default function SalesPage() {
 
         {/* Enhanced Checkout Modal */}
         {checkoutOpen && (
-          <div className="fixed inset-0 bg-white bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+          <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
                 <h3 className="font-semibold text-lg">Complete Order</h3>
                 <button 
                   onClick={() => setCheckoutOpen(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition"
+                  disabled={isProcessing}
                 >
                   <FaTimes className="w-5 h-5" />
                 </button>
@@ -946,7 +975,10 @@ export default function SalesPage() {
               <div className="p-6 space-y-6">
                 {/* Customer Info */}
                 <div>
-                  <h4 className="font-medium text-gray-800 mb-3">Customer Information</h4>
+                  <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                    <FaUser className="text-blue-500" />
+                    Customer Information
+                  </h4>
                   <div className="space-y-3">
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">Name (Optional)</label>
@@ -954,7 +986,7 @@ export default function SalesPage() {
                         type="text"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                         placeholder="John Doe"
                       />
                     </div>
@@ -964,7 +996,7 @@ export default function SalesPage() {
                         type="tel"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                         placeholder="254700000000"
                       />
                     </div>
@@ -973,14 +1005,17 @@ export default function SalesPage() {
                 
                 {/* Payment Method */}
                 <div>
-                  <h4 className="font-medium text-gray-800 mb-3">Payment Method</h4>
+                  <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                    <FaMoneyBillWave className="text-blue-500" />
+                    Payment Method
+                  </h4>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => setPaymentMethod("cash")}
                       className={`p-3 border rounded-lg flex items-center justify-center gap-2 transition-colors ${
                         paymentMethod === "cash" 
-                          ? 'border-blue-500 bg-blue-50 text-blue-600' 
-                          : 'border-gray-300 hover:border-blue-300'
+                          ? 'border-blue-500 bg-blue-50 text-blue-600 shadow-inner' 
+                          : 'border-gray-300 hover:border-blue-300 bg-white'
                       }`}
                     >
                       <FaMoneyBillWave />
@@ -990,8 +1025,8 @@ export default function SalesPage() {
                       onClick={() => setPaymentMethod("mpesa")}
                       className={`p-3 border rounded-lg flex items-center justify-center gap-2 transition-colors ${
                         paymentMethod === "mpesa" 
-                          ? 'border-blue-500 bg-blue-50 text-blue-600' 
-                          : 'border-gray-300 hover:border-blue-300'
+                          ? 'border-blue-500 bg-blue-50 text-blue-600 shadow-inner' 
+                          : 'border-gray-300 hover:border-blue-300 bg-white'
                       }`}
                     >
                       <FaMobileAlt />
@@ -1005,9 +1040,9 @@ export default function SalesPage() {
                   <h4 className="font-medium text-gray-800 mb-3">Payment Details</h4>
                   {paymentMethod === "cash" ? (
                     <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-gray-600">Amount Due:</span>
-                        <span className="font-bold">${cartTotal.toFixed(2)}</span>
+                      <div className="flex justify-between items-center mb-2 bg-blue-50 p-3 rounded-lg">
+                        <span className="text-gray-700 font-medium">Amount Due:</span>
+                        <span className="font-bold text-lg">${cartTotal.toFixed(2)}</span>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 mb-1">Amount Received</label>
@@ -1018,34 +1053,39 @@ export default function SalesPage() {
                             const value = parseFloat(e.target.value);
                             setAmountReceived(isNaN(value) ? 0 : value);
                           }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                           placeholder="0.00"
                           min={cartTotal}
                           step="0.01"
                         />
                       </div>
                       {amountReceived > 0 && (
-                        <div className="mt-2 text-right">
-                          <span className="text-sm text-gray-600">Change: </span>
-                          <span className="font-medium">
-                            ${(amountReceived - cartTotal).toFixed(2)}
-                          </span>
+                        <div className="mt-3 p-3 rounded-lg bg-gray-50">
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">Change: </span>
+                            <span className="font-medium text-green-600">
+                              ${(amountReceived - cartTotal).toFixed(2)}
+                            </span>
+                          </div>
+                          {amountReceived < cartTotal && (
+                            <p className="text-red-500 text-xs mt-1">Amount received is less than total</p>
+                          )}
                         </div>
                       )}
                     </div>
                   ) : (
                     <div>
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-gray-600">Amount Due:</span>
-                        <span className="font-bold">KES {cartTotal.toFixed(2)}</span>
+                      <div className="flex justify-between items-center mb-3 bg-green-50 p-3 rounded-lg">
+                        <span className="text-gray-700 font-medium">Amount Due:</span>
+                        <span className="font-bold text-lg">KES {cartTotal.toFixed(2)}</span>
                       </div>
-                      <div className="text-center py-4">
-                        <p className="text-sm text-gray-600 mb-2">
+                      <div className="text-center py-4 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-600 mb-3">
                           M-Pesa payment will be processed after order confirmation
                         </p>
                         <button 
                           onClick={() => setShowMpesaPayment(true)}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                          className="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-md hover:shadow-lg"
                         >
                           Proceed to M-Pesa Payment
                         </button>
@@ -1057,49 +1097,54 @@ export default function SalesPage() {
                 {/* Error Message */}
                 {error && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                    {error}
+                    <div className="flex items-center gap-2">
+                      <FaExclamationTriangle className="w-4 h-4" />
+                      {error}
+                    </div>
                   </div>
                 )}
                 
                 {/* Order Summary */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="font-medium text-gray-800 mb-2">Order Summary</h4>
-                  <div className="space-y-2 mb-3">
+                  <div className="space-y-2 mb-3 max-h-40 overflow-y-auto">
                     {cart.map(item => (
-                      <div key={item.id} className="flex justify-between text-sm">
-                        <span>{item.name} × {item.quantity}</span>
-                        <span>${(item.price * item.quantity).toFixed(2)}</span>
+                      <div key={item.id} className="flex justify-between text-sm py-1.5">
+                        <span className="text-gray-700">{item.name} × {item.quantity}</span>
+                        <span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
-                  <div className="flex justify-between font-bold border-t border-gray-200 pt-2">
+                  <div className="flex justify-between font-bold border-t border-gray-200 pt-3 text-lg">
                     <span>Total</span>
-                    <span>${cartTotal.toFixed(2)}</span>
+                    <span className="text-blue-600">${cartTotal.toFixed(2)}</span>
                   </div>
                 </div>
                 
                 {/* Actions */}
-                <div className="flex gap-3 pt-2">
+                <div className="flex gap-3 pt-2 sticky bottom-0 bg-white pb-1">
                   <button
                     onClick={() => setCheckoutOpen(false)}
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                    disabled={isProcessing}
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleConfirmSale}
                     disabled={isProcessing || (paymentMethod === "cash" && amountReceived < cartTotal)}
-                    className={`flex-1 px-4 py-3 rounded-lg text-white transition-colors ${
+                    className={`flex-1 px-4 py-3 rounded-lg text-white transition-colors flex items-center justify-center gap-2 ${
                       isProcessing ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
-                    } flex items-center justify-center gap-2`}
+                    } shadow-md hover:shadow-lg disabled:opacity-50`}
                   >
                     {isProcessing ? (
                       <>
-                        <Spinner size={24} />
+                        <Spinner size={20} />
                         Processing...
                       </>
                     ) : (
                       <>
+                        <FaCheckCircle className="w-4 h-4" />
                         Complete Sale
                       </>
                     )}
@@ -1111,13 +1156,13 @@ export default function SalesPage() {
         )}
         {/* M-Pesa Payment Modal */}
         {showMpesaPayment && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+          <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
                 <h3 className="font-semibold text-lg">M-Pesa Payment</h3>
                 <button 
                   onClick={() => setShowMpesaPayment(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition"
                   disabled={isProcessing}
                 >
                   <FaTimes className="w-5 h-5" />
