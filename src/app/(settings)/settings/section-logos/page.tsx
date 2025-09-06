@@ -1,14 +1,5 @@
 "use client";
-
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { toast } from '@/components/ui/use-toast';
-import { Icons } from '@/components/icons';
-import { Loader } from "lucide-react";
 
 interface SectionLogo {
   url: string;
@@ -77,7 +68,6 @@ export default function SectionLogosPage() {
       }));
     } catch (error) {
       console.error('Error fetching section logos:', error);
-      toast('Error: Failed to load section logos');
     } finally {
       setIsLoading(false);
     }
@@ -114,10 +104,8 @@ export default function SectionLogosPage() {
         }
       }));
 
-      toast('Logo uploaded successfully');
     } catch (error) {
       console.error('Error uploading logo:', error);
-      toast('Error: Failed to upload logo');
     } finally {
       setIsLoading(false);
     }
@@ -146,10 +134,8 @@ export default function SectionLogosPage() {
         }
       }));
 
-      toast('Section configuration updated');
     } catch (error) {
       console.error('Error updating section config:', error);
-      toast('Error: Failed to update section configuration');
     } finally {
       setIsLoading(false);
     }
@@ -174,10 +160,8 @@ export default function SectionLogosPage() {
         }
       }));
 
-      toast('Logo removed successfully');
     } catch (error) {
       console.error('Error removing logo:', error);
-      toast('Error: Failed to remove logo');
     } finally {
       setIsLoading(false);
     }
@@ -219,155 +203,7 @@ export default function SectionLogosPage() {
         </p>
       </div>
 
-      <Tabs 
-        value={activeTab} 
-        onValueChange={setActiveTab}
-        className="space-y-4"
-      >
-        <TabsList>
-          {sectionTabs.map(tab => (
-            <TabsTrigger key={tab.id} value={tab.id}>
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {sectionTabs.map(tab => {
-          const section = sections[tab.id];
-          if (!section) return null;
-
-          return (
-            <TabsContent key={tab.id} value={tab.id} className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{tab.label} Logo</CardTitle>
-                  <CardDescription>
-                    Customize the logo that appears in the {tab.label.toLowerCase()} section
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative w-32 h-16 bg-muted rounded-md overflow-hidden flex items-center justify-center">
-                      {section.logo?.url ? (
-                        <img
-                          src={section.logo.url}
-                          alt={section.logo.altText || `${tab.id} logo`}
-                          className="max-w-full max-h-full object-contain"
-                          style={{
-                            width: section.dimensions?.width ? `${section.dimensions.width}px` : '100%',
-                            height: section.dimensions?.height ? `${section.dimensions.height}px` : '100%',
-                            objectFit: 'contain',
-                            objectPosition: section.position || 'center'
-                          }}
-                        />
-                      ) : (
-                        <div className="text-muted-foreground text-sm">
-                          No logo uploaded
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isLoading}
-                          onClick={() => document.getElementById(`file-upload-${tab.id}`)?.click()}
-                        >
-                          {isLoading ? (
-                            <Loader className="mr-2 h-4 w-4 animate-spin" />
-                          ) : section.logo?.url ? (
-                            'Change Logo'
-                          ) : (
-                            'Upload Logo'
-                          )}
-                        </Button>
-                        <input
-                          id={`file-upload-${tab.id}`}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleFileUpload(e, tab.id)}
-                          disabled={isLoading}
-                        />
-                        {section.logo?.url && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isLoading}
-                            onClick={() => handleRemoveLogo(tab.id)}
-                            
-                          >
-                            Remove
-                          </Button>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Recommended size: {section.dimensions?.width || 200}×{section.dimensions?.height || 50}px
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor={`${tab.id}-width`}>Width (px)</Label>
-                      <Input
-                        id={`${tab.id}-width`}
-                        type="number"
-                        value={section.dimensions?.width || ''}
-                        onChange={(e) => handleDimensionChange(tab.id, 'width', e.target.value)}
-                        disabled={isLoading}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor={`${tab.id}-height`}>Height (px)</Label>
-                      <Input
-                        id={`${tab.id}-height`}
-                        type="number"
-                        value={section.dimensions?.height || ''}
-                        onChange={(e) => handleDimensionChange(tab.id, 'height', e.target.value)}
-                        disabled={isLoading}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Position</Label>
-                    <div className="flex space-x-2">
-                      {['left', 'center', 'right'].map((pos) => (
-                        <Button
-                          key={pos}
-                          variant={section.position === pos ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => handlePositionChange(tab.id, pos)}
-                          disabled={isLoading}
-                        >
-                          {pos.charAt(0).toUpperCase() + pos.slice(1)}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id={`${tab.id}-enabled`}
-                      checked={section.enabled}
-                      onChange={(e) => handleToggleEnabled(tab.id, e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      disabled={isLoading}
-                    />
-                    <Label htmlFor={`${tab.id}-enabled`} className="text-sm font-medium">
-                      Show {tab.label} Logo
-                    </Label>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          );
-        })}
-      </Tabs>
+      <pre>{JSON.stringify(sections, null, 2)}</pre>
     </div>
   );
 }
