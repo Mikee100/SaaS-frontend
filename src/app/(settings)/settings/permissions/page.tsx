@@ -7,7 +7,6 @@ import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
 
-
 interface Role {
   id: string;
   name: string;
@@ -27,7 +26,7 @@ interface User {
   email: string;
   branchId?: string;
   userRoles: Array<{ role: { name: string } }>;
-  permissions?: string[]; // Add permissions property for modal
+  permissions?: string[];
 }
 
 interface Branch {
@@ -46,45 +45,64 @@ export default function PermissionsSettings() {
   const [success, setSuccess] = useState(false);
   const [showManagePermissions, setShowManagePermissions] = useState<User | null>(null);
   const [userPermissionsEdit, setUserPermissionsEdit] = useState<string[]>([]);
-  
+
+  // LOG: User context
+  console.log("User from context:", user);
+
   // Role management
   const [showCreateRole, setShowCreateRole] = useState(false);
-  const [showAvailablePermissions, setShowAvailablePermissions] = useState(false); // New state for toggling permissions
+  const [showAvailablePermissions, setShowAvailablePermissions] = useState(false);
   const [newRole, setNewRole] = useState({ name: "", description: "" });
   const defaultRoles = ["Admin", "Manager", "Staff"];
   const [selectedDefaultRole, setSelectedDefaultRole] = useState<string>("");
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [showRolesManagement, setShowRolesManagement] = useState(true);
-  
+
   // Permission checks
   const canEditUsers = hasPermission(user, 'edit_users');
+  console.log("canEditUsers:", canEditUsers);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (user) {
+      loadData();
+    }
+  }, [user]);
 
   const loadData = async () => {
+    console.log("loadData called"); // <--- Add this
     setLoading(true);
+    setError("");
     try {
+      // LOG: JWT token if available
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      console.log("JWT token being sent:", token);
+
       const [rolesData, permissionsData, usersData, branchesData] = await Promise.all([
         apiGet("/roles"),
         apiGet("/permissions"),
         apiGet("/user"),
         apiGet("/api/branches"),
       ]);
+      // LOG: API responses
+      console.log("rolesData:", rolesData);
+      console.log("permissionsData:", permissionsData);
+      console.log("usersData:", usersData);
+      console.log("branchesData:", branchesData);
+
       setRoles(rolesData as Role[]);
-      // Map backend permission response to always include 'key' property
       const mappedPermissions = Array.isArray(permissionsData)
         ? permissionsData.map((p: any) => ({
             ...p,
-            key: p.key || p.name // fallback to 'name' if 'key' is missing
+            key: p.key || p.name
           }))
         : [];
       setPermissions(mappedPermissions);
       setUsers(usersData as User[]);
       setBranches(branchesData as Branch[]);
-    } catch (err) {
-      setError("Failed to load data");
+    } catch (err: any) {
+      // LOG: Error details
+      console.error("Failed to load data:", err);
+      setError(err?.message || "Failed to load data");
     } finally {
       setLoading(false);
     }
@@ -100,6 +118,7 @@ export default function PermissionsSettings() {
       await loadData();
       setSuccess(true);
     } catch (err: any) {
+      console.error("Failed to create role:", err);
       setError(err.message || "Failed to create role");
     } finally {
       setLoading(false);
@@ -112,6 +131,7 @@ export default function PermissionsSettings() {
       await loadData();
       setSuccess(true);
     } catch (err: any) {
+      console.error("Failed to update role permissions:", err);
       setError(err.message || "Failed to update role permissions");
     }
   };
