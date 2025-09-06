@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/use-toast';
 import { Icons } from '@/components/icons';
+import { Loader } from "lucide-react";
 
 interface SectionLogo {
   url: string;
@@ -30,7 +30,6 @@ interface SectionConfig {
 }
 
 export default function SectionLogosPage() {
-  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('login');
   const [sections, setSections] = useState<SectionConfig>({
@@ -67,16 +66,10 @@ export default function SectionLogosPage() {
   const fetchSectionLogos = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/tenant/section-logos', {
-        headers: {
-          'Authorization': `Bearer ${user?.token}`,
-        },
-      });
-      
+      const response = await fetch('/api/tenant/section-logos');
       if (!response.ok) {
         throw new Error('Failed to fetch section logos');
       }
-      
       const data = await response.json();
       setSections(prev => ({
         ...prev,
@@ -84,11 +77,7 @@ export default function SectionLogosPage() {
       }));
     } catch (error) {
       console.error('Error fetching section logos:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load section logos',
-        variant: 'destructive',
-      });
+      toast('Error: Failed to load section logos');
     } finally {
       setIsLoading(false);
     }
@@ -108,9 +97,6 @@ export default function SectionLogosPage() {
       setIsLoading(true);
       const response = await fetch(`/api/tenant/section-logos/upload/${section}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user?.token}`,
-        },
         body: formData,
       });
 
@@ -128,17 +114,10 @@ export default function SectionLogosPage() {
         }
       }));
 
-      toast({
-        title: 'Success',
-        description: 'Logo uploaded successfully',
-      });
+      toast('Logo uploaded successfully');
     } catch (error) {
       console.error('Error uploading logo:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to upload logo',
-        variant: 'destructive',
-      });
+      toast('Error: Failed to upload logo');
     } finally {
       setIsLoading(false);
     }
@@ -151,7 +130,6 @@ export default function SectionLogosPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.token}`,
         },
         body: JSON.stringify(updates),
       });
@@ -168,17 +146,10 @@ export default function SectionLogosPage() {
         }
       }));
 
-      toast({
-        title: 'Success',
-        description: 'Section configuration updated',
-      });
+      toast('Section configuration updated');
     } catch (error) {
       console.error('Error updating section config:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update section configuration',
-        variant: 'destructive',
-      });
+      toast('Error: Failed to update section configuration');
     } finally {
       setIsLoading(false);
     }
@@ -189,9 +160,6 @@ export default function SectionLogosPage() {
       setIsLoading(true);
       const response = await fetch(`/api/tenant/section-logos/${section}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${user?.token}`,
-        },
       });
 
       if (!response.ok) {
@@ -206,17 +174,10 @@ export default function SectionLogosPage() {
         }
       }));
 
-      toast({
-        title: 'Success',
-        description: 'Logo removed successfully',
-      });
+      toast('Logo removed successfully');
     } catch (error) {
       console.error('Error removing logo:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to remove logo',
-        variant: 'destructive',
-      });
+      toast('Error: Failed to remove logo');
     } finally {
       setIsLoading(false);
     }
@@ -315,7 +276,7 @@ export default function SectionLogosPage() {
                           onClick={() => document.getElementById(`file-upload-${tab.id}`)?.click()}
                         >
                           {isLoading ? (
-                            <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader className="mr-2 h-4 w-4 animate-spin" />
                           ) : section.logo?.url ? (
                             'Change Logo'
                           ) : (
@@ -336,7 +297,7 @@ export default function SectionLogosPage() {
                             size="sm"
                             disabled={isLoading}
                             onClick={() => handleRemoveLogo(tab.id)}
-                            variant="destructive"
+                            
                           >
                             Remove
                           </Button>
