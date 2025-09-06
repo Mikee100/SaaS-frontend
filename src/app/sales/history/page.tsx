@@ -54,7 +54,7 @@ export default function SalesHistoryPage() {
   // Fetch branches
   useEffect(() => {
     setBranchesLoading(true);
-    apiGet("/branches")
+    apiGet("/api/branches")
       .then((data) => {
         setBranches(data);
         if (data.length > 0 && !selectedBranchId) setSelectedBranchId(data[0].id);

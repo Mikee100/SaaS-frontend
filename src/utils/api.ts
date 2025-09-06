@@ -1,6 +1,6 @@
 import { } from './offlineStorage';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000';
 
 class EnhancedAPI {
   private isOnline = true;
@@ -12,7 +12,10 @@ class EnhancedAPI {
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');
       if (token) {
+        console.log('[API] Using token from localStorage');
         headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        console.warn('[API] No token found in localStorage');
       }
     }
     return headers;
@@ -27,27 +30,58 @@ class EnhancedAPI {
       ...this.getAuthHeaders(),
       ...options.headers,
     };
+    
+    console.log(`[API] ${options.method || 'GET'} ${url}`, { 
+      headers: {
+        ...headers,
+        Authorization: headers.Authorization ? 'Bearer [REDACTED]' : undefined
+      },
+      body: options.body ? JSON.parse(options.body as string) : undefined 
+    });
+    
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        credentials: 'include',
       });
       
-     
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Response error text:', errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-      }
-      
       const responseText = await response.text();
-    
+      let responseData;
       
-      if (!responseText) {
-        throw new Error('Empty response from server');
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch (e) {
+        console.error('Failed to parse JSON response:', e, 'Response text:', responseText);
+        throw new Error('Invalid JSON response from server');
       }
       
-      return JSON.parse(responseText);
+      if (!response.ok) {
+        console.error(`[API] Request failed with status ${response.status}`, {
+          status: response.status,
+          statusText: response.statusText,
+          url,
+          response: responseData || responseText,
+          requestHeaders: headers,
+        });
+        
+        // Handle 401 Unauthorized
+        if (response.status === 401) {
+          // Clear invalid token
+          localStorage.removeItem('token');
+          // Redirect to login or handle unauthorized
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+        }
+        
+        const errorMessage = responseData?.message || 
+                            response.statusText || 
+                            `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
+      }
+      
+      return responseData;
     } catch (error) {
       console.error('API request failed:', error);
       throw error;

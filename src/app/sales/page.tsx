@@ -11,7 +11,7 @@ import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
 import { useRouter } from "next/navigation";
 import { 
-  FaLock, FaArrowUp, FaQrcode, FaBarcode, FaDownload, FaUpload, FaSearch, 
+  FaLock, FaArrowUp, FaStore, FaQrcode, FaBarcode, FaDownload, FaUpload, FaSearch, 
   FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaPrint, FaChevronLeft, 
   FaChevronRight, FaKeyboard, FaHistory, FaUser, FaCalculator, FaUndo, FaRedo,
   FaStar, FaClock, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaTimesCircle,
@@ -25,6 +25,11 @@ import debounce from '@/utils/debounce';
 import ProductSkeleton from '@/components/ProductSkeleton';
 import { useBranch } from "@/contexts/BranchContext";
 
+
+interface Branch {
+  id: string;
+  name: string;
+}
 type Product = { 
   id: string; 
   name: string; 
@@ -65,7 +70,7 @@ type QuickAction = {
 export default function SalesPage() {
   const { user } = useUser();
   const router = useRouter();
-  const { selectedBranchId } = useBranch();
+  const { selectedBranchId, setSelectedBranchId } = useBranch();
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -148,8 +153,20 @@ export default function SalesPage() {
   }, []);
 
   useEffect(() => {
-    apiGet('/branches').then(setBranches);
-  }, []);
+    const fetchBranches = async () => {
+      try {
+        const data = await apiGet('/api/branches');
+        setBranches(data);
+        // Only set the first branch if none is selected
+        if (data.length > 0 && !selectedBranchId) {
+          setSelectedBranchId(data[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+      }
+    };
+    fetchBranches();
+  }, [selectedBranchId, setSelectedBranchId]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -273,9 +290,32 @@ export default function SalesPage() {
     setCheckoutOpen(true);
   };
 
+ 
+  
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const data = await apiGet('/api/branches');
+        setBranches(data);
+        // Only set the first branch if none is selected
+        if (data.length > 0 && !selectedBranchId) {
+          setSelectedBranchId(data[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+      }
+    };
+    fetchBranches();
+  }, [selectedBranchId, setSelectedBranchId]);
+
   const handleConfirmSale = async () => {
     if (paymentMethod === "mpesa") {
       setShowMpesaPayment(true);
+      return;
+    }
+
+    if (!selectedBranchId) {
+      setError("Please select a branch");
       return;
     }
 
@@ -287,56 +327,52 @@ export default function SalesPage() {
         throw new Error("Amount received must cover the total");
       }
 
+      // Prepare the sale data according to CreateSaleDto
       const saleData = {
         items: cart.map(item => ({
           productId: item.id,
           quantity: item.quantity,
           price: item.price
         })),
-        total: cartTotal,
         paymentMethod,
-        amountReceived,
-        change: amountReceived - cartTotal,
+        amountReceived: paymentMethod === 'cash' ? amountReceived : cartTotal,
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
-        idempotencyKey: uuidv4()
+        branchId: selectedBranchId,
+        idempotencyKey: uuidv4(),
+        total: cartTotal // Add total as it's expected by the DTO
       };
 
-      // Add branchId to saleData
-      const branch = branches.find(b => b.id === selectedBranchId);
-      const payload = {
-        ...saleData,
-        branchId: selectedBranchId,
-        branch: branch ? { id: branch.id, name: branch.name } : undefined,
-      };
-      const sale = await apiPost("/sales", payload);
+      console.log("Submitting sale data:", saleData);
+      const response = await apiPost("/api/sales", saleData);
+      const sale = response.data || response; // Handle both response formats
       
-      // Reset and redirect to receipt
+      console.log("Sale created successfully:", sale);
+      
+      // Reset form state
       clearCart();
       setCheckoutOpen(false);
       setCustomerName("");
       setCustomerPhone("");
       setAmountReceived(0);
       
-
-        console.log("Sales Data",sale);
-      // Refresh products
-      apiGet("/products").then(setProducts);
-      
-      // Redirect to receipt page
+      // Redirect to receipt page with the sale ID
       const saleId = sale.id || sale.saleId || sale._id;
+      console.log("Extracted sale ID:", saleId);
+      
       if (saleId) {
         router.push(`/sales/receipt/${saleId}`);
       } else {
-        alert("Sale completed successfully!");
+        console.error("No sale ID found in response:", sale);
+        setError("Sale completed but could not redirect to receipt");
       }
     } catch (err: any) {
+      console.error("Error creating sale:", err);
       setError(err.message || "Failed to complete sale");
     } finally {
       setIsProcessing(false);
     }
   };
-
 
   // M-Pesa payment handlers
   const handleMpesaSuccess = useCallback((transactionId: string) => {
@@ -348,7 +384,8 @@ export default function SalesPage() {
           items: cart.map(item => ({
             productId: item.id,
             quantity: item.quantity,
-            price: item.price
+            price: item.price,
+            name: item.name
           })),
           total: cartTotal,
           paymentMethod: 'mpesa',
@@ -356,6 +393,7 @@ export default function SalesPage() {
           customerName: customerName || undefined,
           customerPhone: customerPhone || undefined,
           idempotencyKey: uuidv4(),
+          branchId: selectedBranchId,
           tenantId: businessInfo?.id,
           userId: user?.id
         };
@@ -502,7 +540,7 @@ export default function SalesPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition"
                   title="Keyboard Shortcuts"
                 >
                   <FaKeyboard className="w-4 h-4" />
@@ -510,13 +548,13 @@ export default function SalesPage() {
                 </button>
                 
                 <FeatureGuard requiredFeature="data_export" fallback={
-                  <button disabled className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-400 text-sm cursor-not-allowed">
-                    <FaDownload className="w-4 h-4" />
+                  <button disabled className="p-2.5 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed">
+                    <FaDownload className="w-5 h-5" />
                     Export
                     <FaLock className="w-3 h-3" />
                   </button>
                 }>
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition">
+                  <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition">
                     <FaDownload className="w-4 h-4" />
                     Export
                   </button>
@@ -885,7 +923,7 @@ export default function SalesPage() {
                     </div>
                     
                     <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-                      <div className="space-y-3 mb-4">
+                      <div className="space-y-2 mb-3">
                         <div className="flex justify-between">
                           <span className="text-gray-600">Subtotal:</span>
                           <span className="font-medium">${cartTotal.toFixed(2)}</span>
@@ -1003,6 +1041,26 @@ export default function SalesPage() {
                   </div>
                 </div>
                 
+                {/* Branch */}
+                <div>
+                  <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                    <FaStore className="text-blue-500" />
+                    Branch
+                  </h4>
+                  <select
+                    value={selectedBranchId || ''}
+                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
+                    disabled={isProcessing}
+                  >
+                    {branches.map(branch => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Payment Method */}
                 <div>
                   <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
@@ -1037,7 +1095,7 @@ export default function SalesPage() {
                 
                 {/* Payment Details */}
                 <div>
-                  <h4 className="font-medium text-gray-800 mb-3">Payment Details</h4>
+                  <h4 className="font-medium text-gray-800 mb-2">Payment Details</h4>
                   {paymentMethod === "cash" ? (
                     <div>
                       <div className="flex justify-between items-center mb-2 bg-blue-50 p-3 rounded-lg">
@@ -1185,6 +1243,7 @@ export default function SalesPage() {
                     customerName: customerName || undefined,
                     customerPhone: customerPhone || undefined,
                     idempotencyKey: uuidv4(),
+                    branchId: selectedBranchId,
                     tenantId: businessInfo?.id,
                     userId: user?.id,
                     timestamp: new Date().toISOString()

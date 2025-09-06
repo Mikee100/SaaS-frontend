@@ -72,14 +72,14 @@ export default function InventoryPage() {
     async function fetchBranches() {
       setBranchesLoading(true);
       try {
-        const data = await apiGet('/branches');
+        const data = await apiGet('/api/branches');
         setBranches(data);
         // Auto-select first branch if none selected
         if (!selectedBranchId && data.length > 0) {
           setSelectedBranchId(data[0].id);
         }
       } catch (err) {
-        // Optionally handle error
+        console.error('Error fetching branches:', err);
       } finally {
         setBranchesLoading(false);
       }

@@ -1,8 +1,12 @@
 "use client";
 import { useEffect, useState, useMemo } from 'react';
-import { FaChartLine, FaChartBar, FaChartPie, FaFilter, FaBoxes, FaUsers, FaDollarSign } from 'react-icons/fa';
+import { FaChartLine, FaChartBar, FaChartPie, FaFilter, FaBoxes, FaUsers, FaDollarSign, FaShoppingCart } from 'react-icons/fa';
 import { FiTrendingUp, FiTrendingDown } from 'react-icons/fi';
-import { Line, Bar, Pie } from 'react-chartjs-2';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import KPICard from './KPICard';
+import MiniChart from './MiniChart';
+import DateRangePicker from './DateRangePicker';
+
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,6 +17,7 @@ import {
   ArcElement,
   Tooltip,
   Legend,
+  Filler,
 } from 'chart.js';
 
 ChartJS.register(
@@ -23,7 +28,8 @@ ChartJS.register(
   BarElement,
   ArcElement,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 interface ChartData {
@@ -45,25 +51,145 @@ type AnalyticsChartsProps = {
   productData?: Array<{ name: string; unitsSold: number; revenue: number; margin?: number }>;
   inventoryAnalytics?: { lowStockItems?: number; overstockItems?: number; inventoryTurnover?: number; stockoutRate?: number };
   customerRetention?: { totalCustomers: number; repeatCustomers: number; retentionRate: number };
+  salesByCategory?: Record<string, number>;
+  customerGrowth?: Record<string, number>;
+  orderData?: Array<{ date: string; amount: number; itemsCount: number }>;
 };
 
-export default function AnalyticsCharts({ salesData, dailySalesData, weeklySalesData, productData, inventoryAnalytics, customerRetention }: AnalyticsChartsProps) {
+export default function AnalyticsCharts({ 
+  salesData = {}, 
+  dailySalesData = {}, 
+  weeklySalesData = {},
+  productData = [], 
+  inventoryAnalytics = {},
+  customerRetention = { totalCustomers: 0, repeatCustomers: 0, retentionRate: 0 },
+  salesByCategory = {},
+  customerGrowth = {},
+  orderData = []
+}: AnalyticsChartsProps) {
   const [filter, setFilter] = useState<'month' | 'week' | 'day'>('month');
-  const [activeTab, setActiveTab] = useState<'sales' | 'products' | 'inventory' | 'customers'>('sales');
+  const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ 
+    start: null, 
+    end: null 
+  });
+
+  // Calculate metrics from database
+  const totalRevenue = Object.values(salesData).reduce((sum, amount) => sum + amount, 0);
+  const totalOrders = orderData.length;
+  const totalProducts = productData.length;
+  const totalCustomers = customerRetention?.totalCustomers || 0;
+  
+  // Calculate month-over-month changes
+  const monthlySales = Object.entries(salesData).sort(([dateA], [dateB]) => 
+    new Date(dateA).getTime() - new Date(dateB).getTime()
+  );
+  
+  const lastMonthRevenue = monthlySales.length >= 2 
+    ? monthlySales[monthlySales.length - 2][1] 
+    : 0;
+  const currentMonthRevenue = monthlySales.length > 0 
+    ? monthlySales[monthlySales.length - 1][1] 
+    : 0;
+  const revenueChange = lastMonthRevenue !== 0 
+    ? ((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
+    : 0;
+
+  // Calculate order change (simplified - you might want to implement more sophisticated logic)
+  const orderChange = 8.2; // Replace with actual calculation if order history is available
+  
+  // Calculate product count change (simplified)
+  const productChange = 3.1; // Replace with actual calculation if historical product data is available
+
+  // KPI cards data
+  const kpiData = [
+    {
+      title: 'Total Revenue',
+      value: `$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      change: parseFloat(revenueChange.toFixed(1)),
+      icon: <FaDollarSign className="w-5 h-5 text-indigo-600" />,
+      chartData: Object.values(salesData).slice(-12) // Last 12 data points
+    },
+    {
+      title: 'Total Orders',
+      value: totalOrders.toLocaleString(),
+      change: orderChange,
+      icon: <FaShoppingCart className="w-5 h-5 text-green-600" />,
+      chartData: orderData.slice(-12).map(order => order.itemsCount || 1) // Last 12 orders
+    },
+    {
+      title: 'Products',
+      value: totalProducts.toString(),
+      change: productChange,
+      icon: <FaBoxes className="w-5 h-5 text-blue-600" />,
+      chartData: productData.slice(0, 12).map(p => p.unitsSold || 0) // First 12 products
+    },
+    {
+      title: 'Customers',
+      value: totalCustomers.toLocaleString(),
+      change: customerRetention.retentionRate ? parseFloat((customerRetention.retentionRate * 100).toFixed(1)) : 0,
+      icon: <FaUsers className="w-5 h-5 text-purple-600" />,
+      chartData: customerGrowth ? Object.values(customerGrowth).slice(-12) : [] // Last 12 data points
+    }
+  ];
+
+  const filterDataByDateRange = (data: Record<string, number>, startDate: Date | null, endDate: Date | null) => {
+    if (!startDate || !endDate) return data;
+    
+    return Object.entries(data).reduce((acc, [date, value]) => {
+      const currentDate = new Date(date);
+      if (currentDate >= startDate && currentDate <= endDate) {
+        acc[date] = value;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+  };
 
   const salesChartData = useMemo(() => {
-    let data: Record<string, number> = salesData || {};
-    if (filter === 'day' && dailySalesData) {
-      data = dailySalesData;
-    } else if (filter === 'week' && weeklySalesData) {
-      data = weeklySalesData;
+    // Select the appropriate data source based on the filter
+    let data: Record<string, number> = {};
+    
+    switch (filter) {
+      case 'day':
+        data = dailySalesData || {};
+        break;
+      case 'week':
+        data = weeklySalesData || {};
+        break;
+      case 'month':
+      default:
+        data = salesData || {};
     }
+
+    // Apply date range filter if dates are selected
+    if (dateRange.start && dateRange.end) {
+      data = filterDataByDateRange(data, dateRange.start, dateRange.end);
+    }
+
+    // Sort by date to ensure chronological order
+    const sortedEntries = Object.entries(data).sort(([dateA], [dateB]) => 
+      new Date(dateA).getTime() - new Date(dateB).getTime()
+    );
+
+    // Format labels based on the selected filter
+    const formatLabel = (dateString: string) => {
+      const date = new Date(dateString);
+      switch (filter) {
+        case 'day':
+          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        case 'week':
+          return `Week of ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+        case 'month':
+        default:
+          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+      }
+    };
+
     return {
-      labels: Object.keys(data),
+      labels: sortedEntries.map(([date]) => formatLabel(date)),
       datasets: [
         {
           label: filter === 'day' ? 'Daily Sales' : filter === 'week' ? 'Weekly Sales' : 'Monthly Sales',
-          data: Object.values(data),
+          data: sortedEntries.map(([_, value]) => value),
           borderColor: '#6366F1',
           backgroundColor: 'rgba(99, 102, 241, 0.1)',
           tension: 0.4,
@@ -71,7 +197,7 @@ export default function AnalyticsCharts({ salesData, dailySalesData, weeklySales
         },
       ],
     };
-  }, [salesData, dailySalesData, weeklySalesData, filter]);
+  }, [salesData, dailySalesData, weeklySalesData, filter, dateRange]);
 
   const productChartData: ChartData = {
     labels: productData ? productData.map(p => p.name) : [],
@@ -139,10 +265,139 @@ export default function AnalyticsCharts({ salesData, dailySalesData, weeklySales
     ],
   };
 
+  const categoryChartData: ChartData = {
+    labels: salesByCategory ? Object.keys(salesByCategory) : [],
+    datasets: [
+      {
+        label: 'Sales by Category',
+        data: salesByCategory ? Object.values(salesByCategory) : [],
+        backgroundColor: [
+          '#6366F1',
+          '#10B981',
+          '#F59E0B',
+          '#EF4444',
+          '#3B82F6'
+        ],
+      },
+    ],
+  };
+
+  const growthChartData: ChartData = {
+    labels: customerGrowth ? Object.keys(customerGrowth) : [],
+    datasets: [
+      {
+        label: 'Customer Growth',
+        data: customerGrowth ? Object.values(customerGrowth) : [],
+        borderColor: '#3B82F6',
+        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+        tension: 0.4,
+        fill: true,
+      },
+    ],
+  };
+
+  const { revenueTrendData, aovData } = useMemo(() => {
+    const groupedOrders = orderData.reduce((acc, order) => {
+      const date = new Date(order.date);
+      let key;
+      
+      if (filter === 'day') {
+        key = date.toLocaleDateString();
+      } else if (filter === 'week') {
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        key = `Week ${Math.ceil((date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay()) / 7)}`;
+      } else {
+        key = date.toLocaleString('default', { month: 'short' });
+      }
+      
+      if (!acc[key]) {
+        acc[key] = { totalAmount: 0, orderCount: 0 };
+      }
+      
+      acc[key].totalAmount += order.amount;
+      acc[key].orderCount += 1;
+      
+      return acc;
+    }, {} as Record<string, { totalAmount: number; orderCount: number }>);
+
+    const aovLabels = Object.keys(groupedOrders);
+    const aovValues = aovLabels.map(key => 
+      groupedOrders[key].orderCount > 0 
+        ? groupedOrders[key].totalAmount / groupedOrders[key].orderCount 
+        : 0
+    );
+
+    const revenueLabels = Object.keys(salesData || {});
+    const revenueValues = Object.values(salesData || {});
+
+    return {
+      revenueTrendData: {
+        labels: revenueLabels,
+        datasets: [{
+          label: 'Revenue',
+          data: revenueValues,
+          borderColor: '#4F46E5',
+          backgroundColor: 'rgba(79, 70, 229, 0.1)',
+          tension: 0.4,
+          fill: true,
+        }]
+      },
+      aovData: {
+        labels: aovLabels,
+        datasets: [{
+          label: 'Average Order Value',
+          data: aovValues,
+          borderColor: '#10B981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          tension: 0.4,
+          fill: true,
+        }]
+      }
+    };
+  }, [salesData, orderData, filter]);
+
+  const categoryData = useMemo(() => ({
+    labels: Object.keys(salesByCategory),
+    datasets: [{
+      data: Object.values(salesByCategory),
+      backgroundColor: [
+        '#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+        '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#8B5CF6'
+      ],
+      borderWidth: 1,
+    }]
+  }), [salesByCategory]);
+
+  const topProductsData = useMemo(() => {
+    const sortedProducts = [...(productData || [])]
+      .sort((a, b) => b.unitsSold - a.unitsSold)
+      .slice(0, 5);
+
+    return {
+      labels: sortedProducts.map(p => p.name),
+      datasets: [{
+        label: 'Units Sold',
+        data: sortedProducts.map(p => p.unitsSold),
+        backgroundColor: '#4F46E5',
+        borderRadius: 4,
+      }]
+    };
+  }, [productData]);
+
+  const tabs = [
+    { id: 'sales', label: 'Revenue Trend', icon: <FaChartLine /> },
+    { id: 'category', label: 'Sales by Category', icon: <FaChartPie /> },
+    { id: 'products', label: 'Top Products', icon: <FaChartBar /> },
+    { id: 'aov', label: 'Avg Order Value', icon: <FaDollarSign /> },
+    { id: 'inventory', label: 'Inventory', icon: <FaBoxes /> },
+    { id: 'customers', label: 'Customers', icon: <FaUsers /> },
+  ];
+
   const summaryCards = [
     {
       title: 'Total Sales',
-  value: `$${Object.values(salesData || {}).reduce((a, b) => a + b, 0).toLocaleString()}`,
+      value: `$${Object.values(salesData || {}).reduce((a, b) => a + b, 0).toLocaleString()}`,
       change: 12.5,
       icon: <FaDollarSign className="text-indigo-500" />,
       trend: 'up'
@@ -174,407 +429,164 @@ export default function AnalyticsCharts({ salesData, dailySalesData, weeklySales
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Analytics Dashboard</h1>
-          <p className="text-gray-600">Monitor your business performance and key metrics</p>
+      <div className="max-w-7xl mx-auto space-y-8">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Analytics Dashboard</h1>
+            <p className="text-gray-600">Monitor your business performance and key metrics</p>
+          </div>
+          <DateRangePicker 
+            onDateRangeChange={setDateRange}
+            className="w-full md:w-auto"
+          />
         </header>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {summaryCards.map((card, index) => (
-            <div key={index} className="bg-white rounded-xl shadow-sm border p-5">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">{card.title}</p>
-                  <h3 className="text-2xl font-semibold text-gray-900 mt-1">{card.value}</h3>
-                </div>
-                <div className={`p-3 rounded-lg ${card.trend === 'up' ? 'bg-green-50' : 'bg-red-50'}`}>
-                  {card.icon}
-                </div>
-              </div>
-              <div className={`flex items-center mt-4 text-sm ${card.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-                {card.trend === 'up' ? <FiTrendingUp className="mr-1" /> : <FiTrendingDown className="mr-1" />}
-                <span>{Math.abs(card.change)}% {card.trend === 'up' ? 'increase' : 'decrease'} from last period</span>
-              </div>
-            </div>
+        {/* KPI Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {kpiData.map((kpi, index) => (
+            <KPICard
+              key={index}
+              title={kpi.title}
+              value={kpi.value}
+              change={kpi.change}
+              icon={kpi.icon}
+              chartData={kpi.chartData}
+            />
           ))}
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex overflow-x-auto mb-6 border-b border-gray-200">
-          <button
-            onClick={() => setActiveTab('sales')}
-            className={`px-4 py-2 font-medium text-sm flex items-center ${activeTab === 'sales' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            <FaChartLine className="mr-2" /> Sales
-          </button>
-          <button
-            onClick={() => setActiveTab('products')}
-            className={`px-4 py-2 font-medium text-sm flex items-center ${activeTab === 'products' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            <FaChartBar className="mr-2" /> Products
-          </button>
-          <button
-            onClick={() => setActiveTab('inventory')}
-            className={`px-4 py-2 font-medium text-sm flex items-center ${activeTab === 'inventory' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            <FaBoxes className="mr-2" /> Inventory
-          </button>
-          <button
-            onClick={() => setActiveTab('customers')}
-            className={`px-4 py-2 font-medium text-sm flex items-center ${activeTab === 'customers' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            <FaUsers className="mr-2" /> Customers
-          </button>
+        {/* Mini Charts Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white p-4 rounded-xl shadow-sm border">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">Sales Trend</h3>
+            <div className="h-32">
+              <MiniChart 
+                data={[30, 40, 35, 50, 49, 60, 70, 91, 125, 110, 120, 140]} 
+                color="#4F46E5"
+                showPoints={false}
+              />
+            </div>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">Order Volume</h3>
+            <div className="h-32">
+              <MiniChart 
+                data={[10, 20, 15, 25, 30, 40, 35, 45, 50, 55, 60, 65]} 
+                color="#10B981"
+                showPoints={true}
+              />
+            </div>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">Customer Growth</h3>
+            <div className="h-32">
+              <MiniChart 
+                data={[15, 20, 18, 25, 30, 28, 35, 40, 38, 45, 42, 50]} 
+                color="#8B5CF6"
+                showPoints={false}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Sales Tab */}
-        {activeTab === 'sales' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-indigo-50">
-                    <FaChartLine className="w-5 h-5 text-indigo-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-800">Sales Trend</h3>
-                    <p className="text-sm text-gray-500">Track your sales performance over time</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1">
-                  <button
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium ${filter === 'month' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-                    onClick={() => setFilter('month')}
-                  >
-                    Monthly
-                  </button>
-                  <button
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium ${filter === 'week' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-                    onClick={() => setFilter('week')}
-                  >
-                    Weekly
-                  </button>
-                  <button
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium ${filter === 'day' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-                    onClick={() => setFilter('day')}
-                  >
-                    Daily
-                  </button>
-                </div>
-              </div>
-              <div className="h-80">
-                <Line 
-                  data={salesChartData} 
-                  options={{ 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    plugins: { 
-                      legend: { display: false },
-                      tooltip: {
-                        mode: 'index',
-                        intersect: false,
-                        backgroundColor: '#1F2937',
-                        titleFont: { size: 14, weight: 'bold' },
-                        bodyFont: { size: 12 },
-                        padding: 12,
-                        cornerRadius: 8
-                      }
-                    },
-                    scales: {
-                      y: {
-                        grid: {
-                          drawBorder: false,
-                          color: '#E5E7EB'
-                        },
-                        ticks: {
-                          callback: function(value) {
-                            return '$' + value;
-                          }
-                        }
-                      },
-                      x: {
-                        grid: {
-                          display: false
-                        }
-                      }
-                    }
-                  }} 
-                />
-              </div>
+        {/* Main Chart Area */}
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Performance Overview</h2>
+              <p className="text-sm text-gray-500">Key metrics and trends for your business</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as any)}
+                className="text-sm border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="day">Daily</option>
+                <option value="week">Weekly</option>
+                <option value="month">Monthly</option>
+              </select>
             </div>
           </div>
-        )}
-
-        {/* Products Tab */}
-        {activeTab === 'products' && productData && productData.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-indigo-50">
-                  <FaChartBar className="w-5 h-5 text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800">Product Performance</h3>
-                  <p className="text-sm text-gray-500">Units sold vs revenue generated</p>
-                </div>
-              </div>
-              <div className="h-80">
-                <Bar 
-                  data={productChartData} 
-                  options={{ 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    plugins: { 
-                      legend: { 
-                        position: 'bottom',
-                        labels: {
-                          usePointStyle: true,
-                          padding: 20
-                        }
-                      },
-                      tooltip: {
-                        backgroundColor: '#1F2937',
-                        titleFont: { size: 14, weight: 'bold' },
-                        bodyFont: { size: 12 },
-                        padding: 12,
-                        cornerRadius: 8
-                      }
-                    },
-                    scales: {
-                      y: {
-                        grid: {
-                          drawBorder: false,
-                          color: '#E5E7EB'
-                        },
-                        ticks: {
-                          callback: function(value) {
-                            return value === 0 ? value : '$' + value;
-                          }
-                        }
-                      },
-                      x: {
-                        grid: {
-                          display: false
-                        }
+          
+          <div className="h-96">
+            {filter === 'day' && (
+              <Line 
+                data={salesChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                      callbacks: {
+                        label: (context) => `$${context.parsed.y.toLocaleString()}`
                       }
                     }
-                  }} 
-                />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-green-50">
-                  <FaChartBar className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800">Profit Margins</h3>
-                  <p className="text-sm text-gray-500">Profitability by product</p>
-                </div>
-              </div>
-              <div className="h-80">
-                <Bar 
-                  data={marginChartData} 
-                  options={{ 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    plugins: { 
-                      legend: { 
-                        display: false
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: function(context) {
-                            return context.dataset.label + ': ' + context.raw + '%';
-                          }
-                        },
-                        backgroundColor: '#1F2937',
-                        titleFont: { size: 14, weight: 'bold' },
-                        bodyFont: { size: 12 },
-                        padding: 12,
-                        cornerRadius: 8
-                      }
-                    },
-                    scales: {
-                      y: {
-                        grid: {
-                          drawBorder: false,
-                          color: '#E5E7EB'
-                        },
-                        ticks: {
-                          callback: function(value) {
-                            return value + '%';
-                          }
-                        }
-                      },
-                      x: {
-                        grid: {
-                          display: false
-                        }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      ticks: {
+                        callback: (value) => `$${Number(value).toLocaleString()}`
                       }
                     }
-                  }} 
-                />
-              </div>
-            </div>
+                  }
+                }}
+              />
+            )}
+            {filter === 'week' && (
+              <Line 
+                data={salesChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                      callbacks: {
+                        label: (context) => `$${context.parsed.y.toLocaleString()}`
+                      }
+                    }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      ticks: {
+                        callback: (value) => `$${Number(value).toLocaleString()}`
+                      }
+                    }
+                  }
+                }}
+              />
+            )}
+            {filter === 'month' && (
+              <Line 
+                data={salesChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                      callbacks: {
+                        label: (context) => `$${context.parsed.y.toLocaleString()}`
+                      }
+                    }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      ticks: {
+                        callback: (value) => `$${Number(value).toLocaleString()}`
+                      }
+                    }
+                  }
+                }}
+              />
+            )}
           </div>
-        )}
-
-        {/* Inventory Tab */}
-        {activeTab === 'inventory' && (
-          <div className="grid grid-cols-1 gap-6">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-amber-50">
-                  <FaBoxes className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800">Inventory Analytics</h3>
-                  <p className="text-sm text-gray-500">Key inventory metrics and movement</p>
-                </div>
-              </div>
-              <div className="h-80">
-                <Bar 
-                  data={inventoryChartData} 
-                  options={{ 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    plugins: { 
-                      legend: { 
-                        display: false
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) label += ': ';
-                            if (context.label === 'Stockout Rate') {
-                              label += context.raw + '%';
-                            } else {
-                              label += context.raw;
-                            }
-                            return label;
-                          }
-                        },
-                        backgroundColor: '#1F2937',
-                        titleFont: { size: 14, weight: 'bold' },
-                        bodyFont: { size: 12 },
-                        padding: 12,
-                        cornerRadius: 8
-                      }
-                    },
-                    scales: {
-                      y: {
-                        grid: {
-                          drawBorder: false,
-                          color: '#E5E7EB'
-                        }
-                      },
-                      x: {
-                        grid: {
-                          display: false
-                        }
-                      }
-                    }
-                  }} 
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Customers Tab */}
-        {activeTab === 'customers' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-purple-50">
-                  <FaUsers className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800">Customer Retention</h3>
-                  <p className="text-sm text-gray-500">Repeat customers vs churn rate</p>
-                </div>
-              </div>
-              <div className="h-80">
-                <Pie 
-                  data={retentionChartData} 
-                  options={{ 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    plugins: { 
-                      legend: { 
-                        position: 'right',
-                        labels: {
-                          usePointStyle: true,
-                          padding: 20
-                        }
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: function(context) {
-                            return context.label + ': ' + context.raw + '%';
-                          }
-                        },
-                        backgroundColor: '#1F2937',
-                        titleFont: { size: 14, weight: 'bold' },
-                        bodyFont: { size: 12 },
-                        padding: 12,
-                        cornerRadius: 8
-                      }
-                    }
-                  }} 
-                />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-blue-50">
-                  <FaUsers className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800">Customer Insights</h3>
-                  <p className="text-sm text-gray-500">Key customer metrics</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Total Customers</p>
-                    <h3 className="text-xl font-semibold text-gray-900">{customerRetention?.totalCustomers || 0}</h3>
-                  </div>
-                  <div className="p-3 rounded-lg bg-blue-100 text-blue-600">
-                    <FaUsers className="w-5 h-5" />
-                  </div>
-                </div>
-                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Repeat Customers</p>
-                    <h3 className="text-xl font-semibold text-gray-900">{customerRetention?.repeatCustomers || 0}</h3>
-                  </div>
-                  <div className="p-3 rounded-lg bg-green-100 text-green-600">
-                    <FiTrendingUp className="w-5 h-5" />
-                  </div>
-                </div>
-                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Retention Rate</p>
-                    <h3 className="text-xl font-semibold text-gray-900">{((customerRetention?.retentionRate || 0) * 100).toFixed(1)}%</h3>
-                  </div>
-                  <div className={`p-3 rounded-lg ${(customerRetention?.retentionRate || 0) * 100 > 75 ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
-                    {(customerRetention?.retentionRate || 0) * 100 > 75 ? 
-                      <FiTrendingUp className="w-5 h-5" /> : 
-                      <FiTrendingDown className="w-5 h-5" />}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

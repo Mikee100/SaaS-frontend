@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { FaShieldAlt, FaUsers, FaEdit, FaTrash, FaPlus, FaUserShield, FaCog, FaLock } from 'react-icons/fa';
+import { FaListAlt, FaShieldAlt, FaUsers, FaEdit, FaTrash, FaPlus, FaUserShield, FaCog, FaLock } from 'react-icons/fa';
 import Link from "next/link";
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
@@ -36,7 +36,7 @@ interface Branch {
 }
 
 export default function PermissionsSettings() {
-  const { user } = useUser && typeof useUser === 'function' ? useUser() : { user: null };
+  const { user } = useUser();
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -49,10 +49,12 @@ export default function PermissionsSettings() {
   
   // Role management
   const [showCreateRole, setShowCreateRole] = useState(false);
+  const [showAvailablePermissions, setShowAvailablePermissions] = useState(false); // New state for toggling permissions
   const [newRole, setNewRole] = useState({ name: "", description: "" });
   const defaultRoles = ["Admin", "Manager", "Staff"];
   const [selectedDefaultRole, setSelectedDefaultRole] = useState<string>("");
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [showRolesManagement, setShowRolesManagement] = useState(true);
   
   // Permission checks
   const canEditUsers = hasPermission(user, 'edit_users');
@@ -68,7 +70,7 @@ export default function PermissionsSettings() {
         apiGet("/roles"),
         apiGet("/permissions"),
         apiGet("/user"),
-        apiGet("/branches"),
+        apiGet("/api/branches"),
       ]);
       setRoles(rolesData as Role[]);
       // Map backend permission response to always include 'key' property
@@ -183,63 +185,9 @@ export default function PermissionsSettings() {
         </div>
       )}
 
-      {/* Roles Management */}
-      <div className="bg-white rounded-xl shadow p-8 w-full mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <FaCog className="text-blue-600" />
-            <h3 className="text-lg font-semibold text-gray-800">Roles Management</h3>
-          </div>
-          <button
-            onClick={() => setShowCreateRole(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
-          >
-            <FaPlus className="w-4 h-4" />
-            Create Role
-          </button>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {roles.map(role => (
-            <div key={role.id} className="border border-gray-200 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-gray-900">{role.name}</h4>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setEditingRole(role)}
-                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                    title="Edit role"
-                  >
-                    <FaEdit className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              {role.description && (
-                <p className="text-gray-600 text-sm mb-4">{role.description}</p>
-              )}
-              
-              <div className="space-y-3">
-                <h5 className="font-medium text-gray-700 text-sm">Permissions:</h5>
-                <div className="space-y-2">
-                  {(Array.isArray(role.rolePermissions) && role.rolePermissions.length === 0) ? (
-                    <p className="text-gray-500 text-sm">No permissions assigned</p>
-                  ) : (
-                    (Array.isArray(role.rolePermissions) ? role.rolePermissions : []).map((rp, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-sm text-gray-600">{rp.permission.key}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Manage Permissions Modal */}
-      {showManagePermissions && (
+           {/* Manage Permissions Modal */}
+           {showManagePermissions && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-semibold mb-4">Manage Permissions for {showManagePermissions.name}</h3>
@@ -469,40 +417,111 @@ export default function PermissionsSettings() {
 )}
 
 
-
-
-
-
-
-
-      {/* Available Permissions */}
-      <div className="bg-white rounded-xl shadow p-8 w-full">
-        <div className="flex items-center gap-2 mb-6">
-          <FaShieldAlt className="text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-800">Available Permissions</h3>
+      {/* Roles Management */}
+      <div className="bg-white rounded-xl shadow p-6 w-full mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => setShowRolesManagement(!showRolesManagement)}
+            className="flex items-center gap-2 text-left focus:outline-none"
+          >
+            <FaCog className="text-blue-600" />
+            <h3 className="text-lg font-semibold text-gray-800">Roles Management</h3>
+            <span className="text-blue-600 text-sm ml-2">
+              {showRolesManagement ? '▲' : '▼'}
+            </span>
+          </button>
+          <button
+            onClick={() => setShowCreateRole(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+          >
+            <FaPlus className="w-4 h-4" />
+            Create Role
+          </button>
         </div>
-
-        <div className="space-y-6">
-          {Object.entries(permissionCategories).map(([category, perms]) => (
-            <div key={category} className="border border-gray-200 rounded-lg p-4">
-              <h4 className="font-semibold text-gray-900 mb-3">{category}</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {(Array.isArray(perms) ? perms : []).map(permKey => {
-                  const permission = Array.isArray(permissions) ? permissions.find(p => p.key === permKey) : undefined;
-                  return (
-                    <div key={permKey} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-gray-700">{permKey}</span>
-                      {permission?.description && (
-                        <span className="text-xs text-gray-500">({permission.description})</span>
+        
+        {showRolesManagement && (
+          <div className="mt-4 border-t pt-4">
+            <div className="space-y-4">
+              {roles.map((role) => (
+                <div key={role.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-gray-900">{role.name}</h4>
+                      {role.description && (
+                        <p className="text-sm text-gray-500 mt-1">{role.description}</p>
                       )}
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEditingRole(role)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                        title="Edit Role"
+                      >
+                        <FaEdit />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <h5 className="font-medium text-gray-700 text-sm">Permissions:</h5>
+                    <div className="space-y-2">
+                      {(Array.isArray(role.rolePermissions) && role.rolePermissions.length === 0) ? (
+                        <p className="text-gray-500 text-sm">No permissions assigned</p>
+                      ) : (
+                        (Array.isArray(role.rolePermissions) ? role.rolePermissions : []).map((rp, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="text-sm text-gray-600">{rp.permission.key}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+      </div>
+
+ 
+
+      {/* Available Permissions Section */}
+      <div className="bg-white rounded-xl shadow p-6 mb-8">
+        <button
+          onClick={() => setShowAvailablePermissions(!showAvailablePermissions)}
+          className="flex items-center justify-between w-full text-left mb-4 focus:outline-none"
+        >
+          <div className="flex items-center gap-2">
+            <FaListAlt className="text-blue-600" />
+            <h3 className="text-lg font-semibold text-gray-800">Available Permissions</h3>
+          </div>
+          <span className="text-blue-600">
+            {showAvailablePermissions ? 'Hide' : 'Show'} Permissions
+          </span>
+        </button>
+        
+        {showAvailablePermissions && (
+          <div className="mt-4 border-t pt-4">
+            {Object.entries(permissionCategories).map(([category, perms]) => (
+              <div key={category} className="mb-6">
+                <h4 className="font-medium text-gray-700 mb-2">{category}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {perms.map((key) => {
+                    const permission = permissions.find(p => p.key === key);
+                    return permission ? (
+                      <div key={key} className="bg-gray-50 p-3 rounded-lg border">
+                        <div className="font-mono text-sm text-gray-700">{permission.key}</div>
+                        {permission.description && (
+                          <div className="text-xs text-gray-500 mt-1">{permission.description}</div>
+                        )}
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Create Role Modal */}

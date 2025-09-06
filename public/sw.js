@@ -1,81 +1,116 @@
-const CACHE_NAME = 'static-cache-v1';
-
-// Assets to cache immediately
-const STATIC_ASSETS = [
+const CACHE_NAME = 'saas-platform-v1';
+const OFFLINE_URL = '/offline.html';
+const PRECACHE_URLS = [
   '/',
-  '/offline.html', // We should create this page later
-  '/manifest.json',
-  '/next.svg',
-  '/vercel.svg',
+  '/_next/static/css/app/layout.css',
+  '/_next/static/chunks/main.js',
+  '/_next/static/chunks/webpack.js',
   '/icon.svg',
-  '/globe.svg',
-  '/file.svg',
-  '/window.svg'
+  '/manifest.json',
+  // Add other critical assets here
 ];
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
-  console.log('Service Worker installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Caching static assets');
-        return cache.addAll(STATIC_ASSETS);
+        console.log('Opened cache');
+        return cache.addAll(PRECACHE_URLS);
       })
-      .then(() => {
-        console.log('Static assets cached successfully');
-        return self.skipWaiting();
-      })
-      .catch((error) => {
-        console.error('Error caching static assets:', error);
-      })
+      .then(() => self.skipWaiting())
   );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker activating...');
+  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => {
-      console.log('Service Worker activated');
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
-// Fetch event - handle requests
+// Fetch event - cache first, then network with cache update
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') return;
 
-  // For navigation requests, use a network-first strategy with offline fallback
-  if (request.mode === 'navigate') {
+  // Handle API requests with network-first strategy
+  if (event.request.url.includes('/api/')) {
     event.respondWith(
-      fetch(request).catch(() => {
-        return caches.match('/offline.html');
-      })
+      fetch(event.request)
+        .then((response) => {
+          // Clone the response for caching
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          return response;
+        })
+        .catch(() => {
+          // If network fails, try to get from cache
+          return caches.match(event.request);
+        })
     );
     return;
   }
 
-  // For other GET requests (static assets), use a cache-first strategy
-  if (request.method === 'GET' && new URL(request.url).origin === self.location.origin) {
-    event.respondWith(
-      caches.match(request).then((cachedResponse) => {
-        // If we have a cached response, return it.
+  // For static assets, use cache-first strategy
+  event.respondWith(
+    caches.match(event.request)
+      .then((cachedResponse) => {
+        // Return cached response if found
         if (cachedResponse) {
+          // Update cache in the background
+          fetchAndCache(event.request);
           return cachedResponse;
         }
-        // Otherwise, fetch from the network.
-        return fetch(request);
+        // Otherwise fetch from network
+        return fetchAndCache(event.request);
+      })
+  );
+});
+
+// Helper function to fetch and cache responses
+function fetchAndCache(request) {
+  return fetch(request)
+    .then((response) => {
+      // Check if we received a valid response
+      if (!response || response.status !== 200 || response.type !== 'basic') {
+        return response;
+      }
+
+      // Clone the response for caching
+      const responseToCache = response.clone();
+
+      caches.open(CACHE_NAME)
+        .then((cache) => {
+          cache.put(request, responseToCache);
+        });
+
+      return response;
+    })
+    .catch((error) => {
+      console.error('Fetching failed:', error);
+      throw error;
+    });
+}
+
+// Handle offline fallback
+self.addEventListener('fetch', (event) => {
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(OFFLINE_URL);
       })
     );
   }

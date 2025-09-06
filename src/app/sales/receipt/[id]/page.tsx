@@ -37,8 +37,12 @@ type Receipt = {
   };
 };
 
+type ReceiptPageParams = {
+  id: string;
+};
+
 export default function ReceiptPage() {
-  const params = useParams();
+  const params = useParams<ReceiptPageParams>() as ReceiptPageParams | null;
   const router = useRouter();
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +51,7 @@ export default function ReceiptPage() {
   useEffect(() => {
     const fetchReceipt = async () => {
       try {
-        if (!params.id || params.id === 'undefined') {
+        if (!params?.id || params.id === 'undefined') {
           setError("Invalid receipt ID");
           setLoading(false);
           return;
@@ -61,27 +65,48 @@ export default function ReceiptPage() {
         }
         
         console.log('Fetching receipt for ID:', params.id);
-        const data = await apiGet(`/sales/${params.id}/receipt`);
+        const data = await apiGet(`/sales/${params.id}`);
         console.log('Receipt data received:', data);
-        setReceipt(data);
+        
+        // Transform the data to match the Receipt type
+        const receiptData = {
+          id: data.id,
+          saleId: data.id, // Use the same ID as saleId if not provided
+          date: data.createdAt,
+          customerName: data.customerName,
+          customerPhone: data.customerPhone,
+          items: data.items?.map((item: any) => ({
+            productId: item.productId,
+            name: item.name || `Product ${item.productId}`,
+            price: item.price,
+            quantity: item.quantity
+          })) || [],
+          total: data.total,
+          paymentMethod: data.paymentType || 'cash',
+          amountReceived: data.amountReceived || data.total,
+          change: data.change || 0,
+          branch: data.branch
+        };
+        
+        setReceipt(receiptData);
       } catch (err: any) {
         console.error('Error fetching receipt:', err);
-        if (err.message.includes('401')) {
+        if (err.message?.includes('401')) {
           setError("Please log in to view this receipt");
-        } else if (err.message.includes('404')) {
+        } else if (err.message?.includes('404')) {
           setError("Receipt not found. The sale may not exist or you may not have permission to view it.");
         } else {
-          setError(err.message || "Failed to load receipt");
+          setError(err.message || "Failed to load receipt. Please try again later.");
         }
       } finally {
         setLoading(false);
       }
     };
 
-    if (params.id) {
+    if (params?.id) {
       fetchReceipt();
     }
-  }, [params.id]);
+  }, [params?.id]);
 
   const handlePrint = () => {
     window.print();
@@ -145,7 +170,7 @@ export default function ReceiptPage() {
           {/* Add branch name here */}
           {receipt.branch && (
             <div className="mb-2">
-              <strong>Branch:</strong> {sale.branch?.name || 'Unknown'}
+              <strong>Branch:</strong> {receipt.branch.name || 'Unknown'}
             </div>
           )}
           {/* ...other header details... */}
@@ -165,12 +190,12 @@ export default function ReceiptPage() {
             </h1>
             {/* Branch info */}
             {receipt.branch && (
-              <p className="text-base font-semibold text-blue-700 mb-1">
-                Branch: {receipt.branch.name}
+              <div className="text-center mb-4">
+                <h3 className="text-lg font-semibold">{receipt.branch.name}</h3>
                 {receipt.branch.address && (
-                  <span className="ml-2 text-gray-500">({receipt.branch.address})</span>
+                  <p className="text-sm text-gray-600">{receipt.branch.address}</p>
                 )}
-              </p>
+              </div>
             )}
             {receipt.businessInfo?.address && (
               <p className="text-gray-600 mb-1">{receipt.businessInfo.address}</p>
@@ -280,6 +305,36 @@ export default function ReceiptPage() {
                 <span className="capitalize font-medium">{receipt.paymentMethod}</span>
               </div>
             </div>
+          </div>
+
+          {/* Receipt Details */}
+          <div className="mt-4 text-sm">
+            <div className="flex justify-between py-1 border-b border-gray-200">
+              <span className="text-gray-600">Receipt #:</span>
+              <span>{receipt.saleId || receipt.id}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-gray-200">
+              <span className="text-gray-600">Date:</span>
+              <span>{new Date(receipt.date).toLocaleString()}</span>
+            </div>
+            {receipt.branch && (
+              <div className="flex justify-between py-1 border-b border-gray-200">
+                <span className="text-gray-600">Branch:</span>
+                <span>{receipt.branch.name}</span>
+              </div>
+            )}
+            {receipt.customerName && (
+              <div className="flex justify-between py-1 border-b border-gray-200">
+                <span className="text-gray-600">Customer:</span>
+                <span>{receipt.customerName}</span>
+              </div>
+            )}
+            {receipt.customerPhone && (
+              <div className="flex justify-between py-1 border-b border-gray-200">
+                <span className="text-gray-600">Phone:</span>
+                <span>{receipt.customerPhone}</span>
+              </div>
+            )}
           </div>
 
           {/* Thank You Message */}

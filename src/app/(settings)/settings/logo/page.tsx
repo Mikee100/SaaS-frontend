@@ -174,7 +174,7 @@ export default function LogoSettings() {
         formData.append("type", type);
 
         const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/tenant/logo`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/tenant/logo`, {
           method: "POST",
           headers: {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),

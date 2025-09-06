@@ -48,14 +48,27 @@ export default function UsersSettings() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [usersData, rolesData, branchesData] = await Promise.all([
-        apiGet("/user"),
+      // Get the selected branch from localStorage or use the first available branch
+      const selectedBranchId = localStorage.getItem('selectedBranchId');
+      const branchesData = await apiGet("/api/branches");
+      setBranches(branchesData as Branch[]);
+      
+      // If no branch is selected and we have branches, select the first one
+      const effectiveBranchId = selectedBranchId || (branchesData.length > 0 ? branchesData[0].id : '');
+      
+      // Fetch users for the current branch (tenant is handled by the backend)
+      const [usersData, rolesData] = await Promise.all([
+        apiGet(effectiveBranchId ? `/user?branchId=${effectiveBranchId}` : '/user'),
         apiGet("/roles"),
-        apiGet("/branches"),
       ]);
+      
       setUsers(usersData as User[]);
       setRoles(rolesData as Role[]);
-      setBranches(branchesData as Branch[]);
+      
+      // Set the current branch ID in state
+      if (effectiveBranchId) {
+        setBranchId(effectiveBranchId);
+      }
     } catch (err) {
       setError("Failed to load users, roles, or branches");
     } finally {

@@ -12,6 +12,7 @@ export interface User {
   permissions?: string[]; // Add permissions property for RBAC
   receiptLogo?: string;
   tenantId?: string;
+  branchId?: string;
   // Add more fields as needed
 }
 
@@ -39,38 +40,46 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const router = useRouter();
 
   // Helper to fetch user
-  // In UserContext.tsx
-const fetchUser = async () => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  if (!token) {
-    setUser(null);
-    setLoading(false);
-    return;
-  }
-  setLoading(true);
-  try {
-    const userData = await apiGet('/user/me');
-
-    // Ensure roles is always an array and handle different role formats
-    const roles = Array.isArray(userData.roles)
-      ? userData.roles
-      : (userData.role ? [userData.role] : []);
-
-    // Create normalized user object
-    const normalizedUser = {
-      ...userData,
-      roles,
-      isSuperadmin: userData.isSuperadmin || roles.includes('superadmin') || roles.includes('admin')
-    };
-
-    // Sync branch context from backend/JWT
-    if (userData.branchId) {
-      localStorage.setItem('selectedBranchId', userData.branchId);
+  const fetchUser = async () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return;
     }
+    
+    setLoading(true);
+    try {
+      const userData = await apiGet('/user/me');
+      
+      if (!userData) {
+        throw new Error('No user data received');
+      }
 
-  // ...existing code...
-    setUser(normalizedUser);
-    setError(null);
+      // Ensure roles and permissions are always arrays
+      const roles = Array.isArray(userData.roles) ? userData.roles : [];
+      const permissions = Array.isArray(userData.permissions) ? userData.permissions : [];
+
+      // Create normalized user object with all required fields
+      const normalizedUser: User = {
+        id: userData.id,
+        email: userData.email || '',
+        name: userData.name || '',
+        roles,
+        permissions,
+        isSuperadmin: userData.isSuperadmin || roles.includes('superadmin') || roles.includes('admin'),
+        tenantId: userData.tenantId,
+        branchId: userData.branchId,
+        receiptLogo: userData.receiptLogo
+      };
+
+      // Sync branch context from backend/JWT
+      if (userData.branchId) {
+        localStorage.setItem('selectedBranchId', userData.branchId);
+      }
+      
+      setUser(normalizedUser);
+      setError(null);
   } catch (err) {
     console.error('Error fetching user:', err);
     setUser(null);
@@ -96,23 +105,73 @@ const fetchUser = async () => {
   const login = async (email: string, password: string) => {
     setLoading(true);
     setError(null);
+    
     try {
-      const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000') + '/auth/login', {
+      const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000');
+      const loginUrl = `${apiUrl}/auth/login`;
+      console.log('Attempting to login to:', loginUrl);
+      
+      const response = await fetch(loginUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'include',
+        mode: 'cors',
         body: JSON.stringify({ email, password })
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Login failed');
+      
+      console.log('Login response status:', response.status);
+      
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+          console.error('Login error response:', errorData);
+          throw new Error(errorData.message || `Login failed with status ${response.status}`);
+        } catch (e) {
+          console.error('Failed to parse error response:', e);
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
       }
-      const data = await res.json();
-      if (data.access_token) {
-        localStorage.setItem('token', data.access_token);
+      
+      const loginResponse = await response.json();
+      console.log('Full login response:', loginResponse);
+      const { access_token, user } = loginResponse;
+      
+      if (access_token) {
+        console.log('Saving token to localStorage:', access_token);
+        localStorage.setItem('token', access_token);
+        console.log('Token in localStorage after set:', localStorage.getItem('token'));
+        
+        // Update user state with the user data from the response
+        if (user) {
+          const { roles = [], permissions = [] } = user;
+          const normalizedUser: User = {
+            id: user.id,
+            email: user.email,
+            name: user.name || '',
+            roles: Array.isArray(roles) ? roles : [],
+            permissions: Array.isArray(permissions) ? permissions : [],
+            isSuperadmin: user.isSuperadmin || roles.includes('superadmin') || roles.includes('admin'),
+            tenantId: user.tenantId,
+            branchId: user.branchId,
+            receiptLogo: user.receiptLogo
+          };
+          setUser(normalizedUser);
+          
+          // Store branch ID if available
+          if (user.branchId) {
+            localStorage.setItem('selectedBranchId', user.branchId);
+          }
+        }
+        
+        // Refresh user data from the server
         await fetchUser();
-        setError(null);
       } else {
-        throw new Error('No token received');
+        throw new Error('No access token received in response');
       }
     } catch (err: any) {
       setUser(null);
@@ -162,4 +221,4 @@ export function useUser(p0: never[]) {
   const ctx = useContext(UserContext);
   if (!ctx) throw new Error("useUser must be used within a UserProvider");
   return ctx;
-} 
+}

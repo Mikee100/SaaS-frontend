@@ -39,7 +39,7 @@ export default function BillingCards() {
     setLoading(true);
     setError(null);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
       const res = await fetch(`${apiUrl}/payments/methods`, {
         method: "GET",
@@ -99,7 +99,7 @@ export default function BillingCards() {
     }
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
       const res = await fetch(`${apiUrl}/payments/methods`, {
         method: "POST",
