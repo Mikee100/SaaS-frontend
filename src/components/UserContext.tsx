@@ -105,7 +105,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const login = async (email: string, password: string) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000');
       const loginUrl = `${apiUrl}/auth/login`;
@@ -170,6 +170,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
         
         // Refresh user data from the server
         await fetchUser();
+        // Redirect to the dashboard (app page)
+        router.push('/');
       } else {
         throw new Error('No access token received in response');
       }

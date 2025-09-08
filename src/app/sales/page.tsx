@@ -344,7 +344,7 @@ export default function SalesPage() {
       };
 
       console.log("Submitting sale data:", saleData);
-      const response = await apiPost("/api/sales", saleData);
+      const response = await apiPost("/sales", saleData);
       const sale = response.data || response; // Handle both response formats
       
       console.log("Sale created successfully:", sale);

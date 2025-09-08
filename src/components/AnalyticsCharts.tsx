@@ -184,20 +184,111 @@ export default function AnalyticsCharts({
       }
     };
 
+    // Calculate trend line (simple moving average)
+    const values = sortedEntries.map(([_, value]) => value);
+    const period = Math.min(3, values.length); // 3-point moving average
+    const movingAverages = values.map((_, i) => {
+      const start = Math.max(0, i - period + 1);
+      const end = i + 1;
+      const subset = values.slice(start, end);
+      return subset.reduce((a, b) => a + b, 0) / subset.length;
+    });
+
     return {
       labels: sortedEntries.map(([date]) => formatLabel(date)),
       datasets: [
         {
           label: filter === 'day' ? 'Daily Sales' : filter === 'week' ? 'Weekly Sales' : 'Monthly Sales',
-          data: sortedEntries.map(([_, value]) => value),
-          borderColor: '#6366F1',
-          backgroundColor: 'rgba(99, 102, 241, 0.1)',
-          tension: 0.4,
+          data: values,
+          borderColor: '#4F46E5',
+          backgroundColor: (context: any) => {
+            const ctx = context.chart.ctx;
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, 'rgba(79, 70, 229, 0.3)');
+            gradient.addColorStop(1, 'rgba(79, 70, 229, 0.0)');
+            return gradient;
+          },
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#4F46E5',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          tension: 0.3,
           fill: true,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Trend',
+          data: movingAverages,
+          borderColor: '#10B981',
+          borderWidth: 2,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          tension: 0.3,
+          yAxisID: 'y',
         },
       ],
     };
   }, [salesData, dailySalesData, weeklySalesData, filter, dateRange]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+          usePointStyle: true,
+          padding: 20,
+        },
+      },
+      tooltip: {
+        backgroundColor: 'white',
+        titleColor: '#1F2937',
+        bodyColor: '#4B5563',
+        borderColor: '#E5E7EB',
+        borderWidth: 1,
+        padding: 12,
+        usePointStyle: true,
+        callbacks: {
+          label: function(context: any) {
+            return `${context.dataset.label}: $${context.parsed.y.toLocaleString()}`;
+          },
+          title: function(context: any) {
+            return context[0].label;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: {
+          display: false,
+        },
+        ticks: {
+          color: '#6B7280',
+        },
+      },
+      y: {
+        grid: {
+          color: '#F3F4F6',
+          borderDash: [5, 5],
+          drawBorder: false,
+        },
+        ticks: {
+          color: '#6B7280',
+          callback: function(value: any) {
+            return '$' + value.toLocaleString();
+          },
+        },
+      },
+    },
+  };
 
   const productChartData: ChartData = {
     labels: productData ? productData.map(p => p.name) : [],
