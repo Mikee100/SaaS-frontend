@@ -24,12 +24,13 @@ export default function LoginPage() {
       setShowLoginAnimation(true);
       const timer = setTimeout(() => {
         // Check both roles array and isSuperadmin flag
-        const isAdmin = user.roles?.includes('admin') || 
-                       user.roles?.includes('superadmin') || 
-                       user.isSuperadmin;
+        const isSuperAdmin = user.roles?.includes('superadmin') || user.isSuperadmin;
+        const isAdmin = user.roles?.includes('admin');
         
-        if (isAdmin) {
-          router.push("/superadmin");  // Try without the (admin) group
+        if (isSuperAdmin) {
+          router.push("/superadmin");  // Super admin dashboard
+        } else if (isAdmin) {
+          router.push("/admin");  // Regular admin dashboard
         } else {
           router.push("/");  // Regular user dashboard
         }

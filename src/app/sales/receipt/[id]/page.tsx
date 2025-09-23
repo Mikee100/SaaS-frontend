@@ -1,370 +1,436 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
 import { apiGet } from "@/utils/api";
-import { FaPrint, FaArrowLeft, FaDownload } from "react-icons/fa";
-import { isAuthenticated } from '@/utils/auth';
-import { ReceiptLogo } from '@/components/LogoUsage';
+import Barcode from "react-barcode";
+import { QRCodeCanvas } from "qrcode.react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+import { Download, Printer, Share2 } from "lucide-react";
 
-type ReceiptItem = {
-  productId: string;
-  name: string;
-  price: number;
-  quantity: number;
-};
+// Add this CSS for better print styling
+const printStyles = `
+  @media print {
+    @page { margin: 0; size: auto; }
+    body { -webkit-print-color-adjust: exact; }
+    .no-print { display: none !important; }
+    .print-receipt { 
+      box-shadow: none !important;
+      border: none !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+    .receipt-container { 
+      box-shadow: none !important;
+      border: none !important;
+    }
+  }
+`;
 
-type Receipt = {
-  id: string;
-  saleId: string;
-  date: string;
-  customerName?: string;
-  customerPhone?: string;
-  items: ReceiptItem[];
-  total: number;
-  paymentMethod: string;
-  amountReceived: number;
-  change: number;
-  businessInfo?: {
-    name: string;
-    address?: string;
-    phone?: string;
-    email?: string;
-  };
-  branch?: {
-    id: string;
-    name: string;
-    address?: string;
-  };
-};
-
-type ReceiptPageParams = {
-  id: string;
-};
-
-export default function ReceiptPage() {
-  const params = useParams<ReceiptPageParams>() as ReceiptPageParams | null;
-  const router = useRouter();
-  const [receipt, setReceipt] = useState<Receipt | null>(null);
+export default function DigitalReceiptPage() {
+  const params = useParams();
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
+  
+  if (!params?.id) {
+    return <div className="min-h-screen flex items-center justify-center text-red-600">Receipt ID is missing</div>;
+  }
+  
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const [receipt, setReceipt] = useState<any>(null);
+  const [businessInfo, setBusinessInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Add print styles to the document head
   useEffect(() => {
-    const fetchReceipt = async () => {
-      try {
-        if (!params?.id || params.id === 'undefined') {
-          setError("Invalid receipt ID");
-          setLoading(false);
-          return;
-        }
+    const styleElement = document.createElement('style');
+    styleElement.innerHTML = printStyles;
+    document.head.appendChild(styleElement);
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, []);
 
-        // Check if user is authenticated
-        if (!isAuthenticated()) {
-          setError("Please log in to view this receipt");
-          setLoading(false);
-          return;
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [receiptData, business] = await Promise.all([
+          apiGet(`/sales/${id}`),
+          apiGet('/tenant/me'),
+        ]);
+        
+        const vatRate = 0.16;
+        let subtotal = receiptData.subtotal;
+        let vatAmount = receiptData.vatAmount;
+        
+        if (!subtotal && receiptData.total) {
+          subtotal = receiptData.total / (1 + vatRate);
         }
         
-        console.log('Fetching receipt for ID:', params.id);
-        const data = await apiGet(`/sales/${params.id}`);
-        console.log('Receipt data received:', data);
+        if (!vatAmount && receiptData.total && subtotal) {
+          vatAmount = receiptData.total - subtotal;
+        }
         
-        // Transform the data to match the Receipt type
-        const receiptData = {
-          id: data.id,
-          saleId: data.id, // Use the same ID as saleId if not provided
-          date: data.createdAt,
-          customerName: data.customerName,
-          customerPhone: data.customerPhone,
-          items: data.items?.map((item: any) => ({
-            productId: item.productId,
-            name: item.name || `Product ${item.productId}`,
-            price: item.price,
-            quantity: item.quantity
-          })) || [],
-          total: data.total,
-          paymentMethod: data.paymentType || 'cash',
-          amountReceived: data.amountReceived || data.total,
-          change: data.change || 0,
-          branch: data.branch
+        const processedReceipt = {
+          ...receiptData,
+          vatRate: vatRate,
+          vatAmount: vatAmount,
+          subtotal: subtotal,
+          items: receiptData.items?.map((item: any) => ({
+            ...item,
+            price: item.price || 0,
+            quantity: item.quantity || 1
+          })) || []
         };
         
-        setReceipt(receiptData);
-      } catch (err: any) {
-        console.error('Error fetching receipt:', err);
-        if (err.message?.includes('401')) {
-          setError("Please log in to view this receipt");
-        } else if (err.message?.includes('404')) {
-          setError("Receipt not found. The sale may not exist or you may not have permission to view it.");
-        } else {
-          setError(err.message || "Failed to load receipt. Please try again later.");
-        }
+        setReceipt(processedReceipt);
+        setBusinessInfo(business);
+      } catch (e: any) {
+        setError(e?.message || "Failed to load receipt");
       } finally {
         setLoading(false);
       }
-    };
-
-    if (params?.id) {
-      fetchReceipt();
     }
-  }, [params?.id]);
+    if (id) fetchData();
+  }, [id]);
+
+  const receiptUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com') + `/receipt/${receipt?.saleId}`;
 
   const handlePrint = () => {
-    window.print();
+    setIsPrinting(true);
+    setTimeout(() => {
+      window.print();
+      setIsPrinting(false);
+    }, 500);
   };
 
-  const handleDownload = () => {
-    // Create a PDF or download functionality
-    const receiptData = {
-      ...receipt,
-      printDate: new Date().toISOString()
-    };
+  const handleDownloadPDF = async () => {
+    if (!receiptRef.current) return;
     
-    const blob = new Blob([JSON.stringify(receiptData, null, 2)], {
-      type: 'application/json'
-    });
-    
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `receipt-${receipt?.saleId}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      setIsPrinting(true);
+      const canvas = await html2canvas(receiptRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [80, 297] // A4 width, auto height
+      });
+      
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = 80; // mm
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`receipt-${receipt?.saleId?.slice(0, 8) || 'unknown'}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading receipt...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Receipt #${receipt?.saleId?.slice(0, 8) || ''}`,
+          text: 'View your digital receipt',
+          url: receiptUrl,
+        });
+      } catch (e) {
+        // Sharing was cancelled
+      }
+    } else {
+      // Fallback for browsers that don't support Web Share API
+      navigator.clipboard.writeText(receiptUrl);
+      alert('Link copied to clipboard!');
+    }
+  };
 
-  if (error || !receipt) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center p-6 bg-white rounded-xl shadow-sm max-w-md">
-          <h1 className="text-xl font-bold text-red-600 mb-2">Error</h1>
-          <p className="text-gray-700 mb-4">{error || "Receipt not found"}</p>
-          <button 
-            onClick={() => router.back()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            Go Back
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+  );
+  
+  if (error || !receipt) return (
+    <div className="min-h-screen flex items-center justify-center text-red-600">
+      {error || "Receipt not found."}
+    </div>
+  );
+
+  const vatRate = 0.16;
+  const calculatedSubtotal = receipt.items?.reduce((sum: number, item: any) => {
+    return sum + (Number(item.price) * (Number(item.quantity) || 1));
+  }, 0) || 0;
+  
+  const subtotal = receipt.subtotal ?? calculatedSubtotal;
+  const total = receipt.total ?? subtotal * (1 + vatRate);
+  const vatAmount = receipt.vatAmount ?? (total - subtotal);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Receipt</h1>
-          {/* Add branch name here */}
-          {receipt.branch && (
-            <div className="mb-2">
-              <strong>Branch:</strong> {receipt.branch.name || 'Unknown'}
-            </div>
-          )}
-          {/* ...other header details... */}
-        </div>
-      </div>
-
-      {/* Receipt Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          {/* Receipt Header */}
-          <div className="p-8 border-b border-gray-200 text-center">
-            <div className="flex justify-center mb-4">
-              <ReceiptLogo size="lg" className="h-16 w-auto" />
-            </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {receipt.businessInfo?.name || 'Business Name'}
-            </h1>
-            {/* Branch info */}
-            {receipt.branch && (
-              <div className="text-center mb-4">
-                <h3 className="text-lg font-semibold">{receipt.branch.name}</h3>
-                {receipt.branch.address && (
-                  <p className="text-sm text-gray-600">{receipt.branch.address}</p>
-                )}
-              </div>
-            )}
-            {receipt.businessInfo?.address && (
-              <p className="text-gray-600 mb-1">{receipt.businessInfo.address}</p>
-            )}
-            {receipt.businessInfo?.phone && (
-              <p className="text-gray-600 mb-1">Phone: {receipt.businessInfo.phone}</p>
-            )}
-            {receipt.businessInfo?.email && (
-              <p className="text-gray-600 mb-3">Email: {receipt.businessInfo.email}</p>
-            )}
-            
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <p className="text-sm text-gray-600">
-                {new Date(receipt.date).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </p>
-              <p className="text-sm text-gray-600">
-                {new Date(receipt.date).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </p>
-              <p className="text-lg font-semibold text-gray-800 mt-2">
-                Receipt #{receipt.saleId.slice(-8).toUpperCase()}
-              </p>
-            </div>
-          </div>
-
-          {/* Customer Information */}
-          {(receipt.customerName || receipt.customerPhone) && (
-            <div className="p-8 border-b border-gray-200 bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-800 mb-3">Customer Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {receipt.customerName && (
-                  <div>
-                    <p className="text-sm text-gray-600">Name</p>
-                    <p className="font-medium">{receipt.customerName}</p>
-                  </div>
-                )}
-                {receipt.customerPhone && (
-                  <div>
-                    <p className="text-sm text-gray-600">Phone</p>
-                    <p className="font-medium">{receipt.customerPhone}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Items */}
-          <div className="p-8">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Items Purchased</h2>
-            <div className="space-y-4">
-              {receipt.items.map((item, index) => (
-                <div key={index} className="flex justify-between items-start py-3 border-b border-gray-100">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-gray-800">{item.name}</h3>
-                    <p className="text-sm text-gray-600">
-                      {item.quantity} × ${item.price.toFixed(2)} each
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-800">
-                      ${(item.price * item.quantity).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Totals */}
-          <div className="p-8 bg-gray-50">
-            <div className="max-w-md ml-auto space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Subtotal:</span>
-                <span className="font-medium">${receipt.total.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Tax:</span>
-                <span className="font-medium">$0.00</span>
-              </div>
-              <div className="flex justify-between text-xl font-bold pt-3 border-t border-gray-300">
-                <span>Total:</span>
-                <span className="text-blue-600">${receipt.total.toFixed(2)}</span>
-              </div>
-              
-              {receipt.paymentMethod === "cash" && (
-                <>
-                  <div className="flex justify-between text-sm pt-2">
-                    <span className="text-gray-600">Cash Received:</span>
-                    <span className="font-medium">${receipt.amountReceived.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Change:</span>
-                    <span className="font-medium">${receipt.change.toFixed(2)}</span>
-                  </div>
-                </>
-              )}
-              
-              <div className="pt-3 text-sm">
-                <span className="text-gray-600">Payment Method: </span>
-                <span className="capitalize font-medium">{receipt.paymentMethod}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Receipt Details */}
-          <div className="mt-4 text-sm">
-            <div className="flex justify-between py-1 border-b border-gray-200">
-              <span className="text-gray-600">Receipt #:</span>
-              <span>{receipt.saleId || receipt.id}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-gray-200">
-              <span className="text-gray-600">Date:</span>
-              <span>{new Date(receipt.date).toLocaleString()}</span>
-            </div>
-            {receipt.branch && (
-              <div className="flex justify-between py-1 border-b border-gray-200">
-                <span className="text-gray-600">Branch:</span>
-                <span>{receipt.branch.name}</span>
-              </div>
-            )}
-            {receipt.customerName && (
-              <div className="flex justify-between py-1 border-b border-gray-200">
-                <span className="text-gray-600">Customer:</span>
-                <span>{receipt.customerName}</span>
-              </div>
-            )}
-            {receipt.customerPhone && (
-              <div className="flex justify-between py-1 border-b border-gray-200">
-                <span className="text-gray-600">Phone:</span>
-                <span>{receipt.customerPhone}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Thank You Message */}
-          <div className="p-8 text-center bg-blue-50">
-            <h3 className="text-lg font-semibold text-blue-800 mb-2">Thank you for your purchase!</h3>
-            <p className="text-blue-600">We appreciate your business</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Print Styles */}
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <style jsx global>{`
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          .receipt-content, .receipt-content * {
-            visibility: visible;
-          }
-          .receipt-content {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-          .no-print {
+          body > *:not(#receipt-container) {
             display: none !important;
           }
         }
+
+        /* Replace oklch with standard color values */
+        .bg-gradient-to-br {
+          background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        }
+        
+        .from-blue-600 {
+          --tw-gradient-from: #2563eb;
+          --tw-gradient-to: rgba(37, 99, 235, 0);
+          --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+        }
+        
+        .to-blue-800 {
+          --tw-gradient-to: #1e40af;
+        }
+        
+        .bg-blue-50 {
+          background-color: #eff6ff;
+        }
+        
+        .border-yellow-100 {
+          border-color: #fef9c3;
+        }
+        
+        .bg-yellow-50 {
+          background-color: #fffbeb;
+        }
       `}</style>
+      
+      <div className="max-w-md mx-auto">
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-6 no-print">
+          <button 
+            onClick={handleDownloadPDF}
+            disabled={isPrinting}
+            className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            <Download className="w-5 h-5" />
+            {isPrinting ? 'Generating...' : 'Download PDF'}
+          </button>
+          <button 
+            onClick={handlePrint}
+            disabled={isPrinting}
+            className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            <Printer className="w-5 h-5" />
+            Print
+          </button>
+          <button 
+            onClick={handleShare}
+            className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors"
+          >
+            <Share2 className="w-5 h-5" />
+            Share
+          </button>
+        </div>
+        
+        {/* Receipt Container */}
+        <div 
+          ref={receiptRef}
+          id="receipt-container"
+          className={`bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 ${isPrinting ? 'scale-100' : 'hover:shadow-xl'}`}
+          style={{ width: '100%', maxWidth: '380px', margin: '0 auto' }}
+        >
+          {/* Receipt Header */}
+          <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-4 text-center">
+            {businessInfo?.logoUrl && (
+              <img 
+                src={businessInfo.logoUrl} 
+                alt="Business Logo" 
+                className="mx-auto mb-2 max-h-16 w-auto max-w-full"
+                style={{ objectFit: 'contain' }} 
+              />
+            )}
+            <h1 className="text-xl font-bold tracking-wide">{businessInfo?.name || 'Business Name'}</h1>
+            <p className="text-blue-100 text-sm">{businessInfo?.businessType || 'Retail'}</p>
+            
+            <div className="mt-2 text-xs text-blue-100 space-y-0.5">
+              {businessInfo?.address && <div>{businessInfo.address}</div>}
+              {businessInfo?.contactPhone && <div>Phone: {businessInfo.contactPhone}</div>}
+              {businessInfo?.contactEmail && <div>Email: {businessInfo.contactEmail}</div>}
+            </div>
+            
+            {/* KRA and VAT Info */}
+            <div className="mt-3 pt-2 border-t border-blue-500/30">
+              {businessInfo?.kraPin && (
+                <div className="text-xs">
+                  <span className="font-semibold">KRA PIN:</span> {businessInfo.kraPin}
+                </div>
+              )}
+              {businessInfo?.vatNumber && (
+                <div className="text-xs">
+                  <span className="font-semibold">VAT No:</span> {businessInfo.vatNumber}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Receipt Body */}
+          <div className="p-4">
+            {/* Receipt Header */}
+            <div className="text-center mb-4">
+              <div className="text-sm text-gray-500 mb-1">TAX INVOICE</div>
+              <div className="flex justify-between text-sm border-b border-dashed border-gray-200 pb-2 mb-3">
+                <span>No:</span>
+                <span className="font-medium">#{receipt.saleId?.slice(0, 8) || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Date:</span>
+                <span>{new Date(receipt.date).toLocaleString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</span>
+              </div>
+              
+              {/* Barcode */}
+              <div className="mt-3 flex justify-center">
+                <Barcode 
+                  value={receipt.saleId} 
+                  width={1.2} 
+                  height={32} 
+                  fontSize={10} 
+                  background="transparent"
+                  lineColor="#374151"
+                />
+              </div>
+            </div>
+            
+            {/* Customer Info */}
+            {(receipt.customerName || receipt.customerPhone) && (
+              <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
+                <h3 className="font-medium text-gray-700 mb-1">Customer</h3>
+                {receipt.customerName && <div>Name: {receipt.customerName}</div>}
+                {receipt.customerPhone && <div>Phone: {receipt.customerPhone}</div>}
+              </div>
+            )}
+            
+            {/* Items List */}
+            <div className="mb-4">
+              <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 border-b border-gray-200 pb-1 mb-2">
+                <div className="col-span-7">ITEM</div>
+                <div className="col-span-2 text-right">QTY</div>
+                <div className="col-span-3 text-right">AMOUNT</div>
+              </div>
+              
+              <div className="space-y-2">
+                {receipt.items.map((item: any, index: number) => (
+                  <div key={index} className="grid grid-cols-12 gap-2 text-sm">
+                    <div className="col-span-7 font-medium">{item.name}</div>
+                    <div className="col-span-2 text-right text-gray-600">×{item.quantity}</div>
+                    <div className="col-span-3 text-right font-medium">
+                      KES {(item.price * item.quantity).toFixed(2)}
+                    </div>
+                    {item.price > 0 && (
+                      <div className="col-span-12 text-xs text-gray-500 -mt-1">
+                        @ KES {item.price.toFixed(2)} each
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Payment Summary */}
+            <div className="bg-gray-50 rounded-lg p-3 mb-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal:</span>
+                  <span>KES {subtotal.toFixed(2)}</span>
+                </div>
+                
+                <div className="bg-yellow-50 p-2 rounded border border-yellow-100">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">VAT @ {(vatRate * 100).toFixed(0)}%:</span>
+                    <span className="font-medium">
+                      KES {vatAmount.toFixed(2)}
+                    </span>
+                  </div>
+                  {!businessInfo?.vatNumber && (
+                    <div className="text-xs text-yellow-700 mt-1">
+                      VAT not registered
+                    </div>
+                  )}
+                </div>
+                
+                <div className="border-t border-dashed border-gray-200 pt-2 mt-2">
+                  <div className="flex justify-between font-bold">
+                    <span>TOTAL:</span>
+                    <span className="text-lg">KES {total.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Payment Details */}
+              <div className="mt-3 pt-3 border-t border-dashed border-gray-200">
+                <div className="text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Payment Method:</span>
+                    <span className="capitalize font-medium">{receipt.paymentMethod || 'N/A'}</span>
+                  </div>
+                  
+                  {receipt.paymentMethod === "cash" && receipt.amountReceived > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Amount Tendered:</span>
+                        <span>KES {receipt.amountReceived.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-medium">
+                        <span>Change:</span>
+                        <span>KES {receipt.change?.toFixed(2) || '0.00'}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="text-center text-xs text-gray-500 space-y-2">
+              <div className="flex justify-center mb-2">
+                <QRCodeCanvas 
+                  value={receiptUrl} 
+                  size={80} 
+                  level="H"
+                  includeMargin={true}
+                  className="border border-gray-200 p-1 rounded"
+                />
+              </div>
+              
+              <div className="font-medium text-gray-700">Thank you for your business!</div>
+              <p>Scan the QR code to verify this receipt</p>
+              
+              <div className="mt-3 pt-2 border-t border-dashed border-gray-200 text-[11px] text-gray-400">
+                <p>No returns without receipt. Items can be returned within 14 days with receipt.</p>
+                <p className="mt-1">For inquiries, contact: {businessInfo?.contactPhone || 'N/A'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

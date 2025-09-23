@@ -31,8 +31,11 @@ interface InventoryStats {
 }
 
 export default function InventoryPage() {
-  const { user } = useUser();
-  const { selectedBranchId, setSelectedBranchId } = useBranch();
+  const { user } = useUser([]); // Pass an empty array as required by the hook
+  const branchContext = useBranch();
+  const selectedBranchId = branchContext?.selectedBranchId;
+  const setSelectedBranchId = branchContext?.setSelectedBranchId;
+  
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,13 +62,21 @@ export default function InventoryPage() {
 
   useEffect(() => {
     setLoading(true);
+    const headers: Record<string, string> = selectedBranchId ? { 'X-Branch-Id': selectedBranchId } : {};
+    
     Promise.all([
-      apiGet("/products", { 'x-branch-id': selectedBranchId || '' }),
-      apiGet("/inventory"),
-    ]).then(([products, inventory]) => {
-      setProducts(products);
-      setInventory(inventory);
-    }).finally(() => setLoading(false));
+      apiGet("/products", headers),
+      apiGet("/inventory", headers),
+    ])
+      .then(([products, inventory]) => {
+        setProducts(products || []);
+        setInventory(inventory || []);
+      })
+      .catch(error => {
+        console.error("Error fetching inventory data:", error);
+        // Optionally set error state to show to the user
+      })
+      .finally(() => setLoading(false));
   }, [selectedBranchId]);
 
   useEffect(() => {
@@ -96,7 +107,7 @@ export default function InventoryPage() {
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
 
   // Calculate statistics
-  const stats: InventoryStats = {
+  const stats = {
     totalProducts: products.length,
     inStock: products.filter(p => {
       const inv = getInv(p.id);
@@ -154,7 +165,7 @@ export default function InventoryPage() {
       setModalProduct(null);
       setModalQuantity(0);
       setTimeout(() => {
-        apiGet<InventoryItem[]>("/inventory").then(setInventory);
+        apiGet("/inventory").then((data: InventoryItem[]) => setInventory(data));
       }, 300);
     } catch (err: unknown) {
       const error = err as Error;

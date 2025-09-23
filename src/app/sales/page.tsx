@@ -48,11 +48,14 @@ type Receipt = {
   customerName?: string;
   customerPhone?: string;
   items: { productId: string; name: string; price: number; quantity: number }[];
+  subtotal: number;
+  vatAmount: number;
+  vatRate: number;
   total: number;
   paymentMethod: string;
   amountReceived: number;
   change: number;
-   branch?: {
+  branch?: {
     id: string;
     name: string;
     address?: string;
@@ -65,6 +68,7 @@ type QuickAction = {
   action: () => void;
   icon: React.ReactNode;
   color: string;
+  disabled?: boolean;
 };
 
 export default function SalesPage() {
@@ -128,7 +132,10 @@ export default function SalesPage() {
     (currentPage - 1) * productsPerPage, 
     currentPage * productsPerPage
   );
-  const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const VAT_RATE = 0.16; // 16% VAT rate for Kenya
+  const cartSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const vatAmount = cartSubtotal * VAT_RATE;
+  const cartTotal = cartSubtotal + vatAmount;
   const categories = ["all", ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
 
   useEffect(() => {
@@ -309,19 +316,25 @@ export default function SalesPage() {
   }, [selectedBranchId, setSelectedBranchId]);
 
   const handleConfirmSale = async () => {
-    if (paymentMethod === "mpesa") {
-      setShowMpesaPayment(true);
+    // Validate required fields
+    if (!customerName?.trim()) {
+      setError("Customer name is required");
       return;
     }
 
     if (!selectedBranchId) {
-      setError("Please select a branch");
+      setError("Please select a branch before processing the sale");
+      return;
+    }
+
+    if (paymentMethod === 'cash' && amountReceived < cartTotal) {
+      setError("Amount received is less than the total amount");
       return;
     }
 
     setIsProcessing(true);
     setError(null);
-    
+
     try {
       if (paymentMethod === "cash" && amountReceived < cartTotal) {
         throw new Error("Amount received must cover the total");
@@ -374,8 +387,81 @@ export default function SalesPage() {
     }
   };
 
+  const handleProcessSale = async () => {
+    if (cart.length === 0) {
+      setError("Cannot process an empty cart");
+      return;
+    }
+
+    if (!selectedBranchId) {
+      setError("Please select a branch before processing the sale");
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      // Prepare the sale data according to CreateSaleDto
+      const saleData = {
+        items: cart.map(item => ({
+          productId: item.id,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        paymentMethod: 'cash',
+        amountReceived: cartTotal,
+        customerName: customerName || undefined,
+        customerPhone: customerPhone || undefined,
+        branchId: selectedBranchId,
+        idempotencyKey: uuidv4(),
+        total: cartTotal // Add total as it's expected by the DTO
+      };
+
+      console.log("Submitting sale data:", saleData);
+      const response = await apiPost("/sales", saleData);
+      const sale = response.data || response; // Handle both response formats
+      
+      console.log("Sale created successfully:", sale);
+      
+      // Reset form state
+      clearCart();
+      setCheckoutOpen(false);
+      setCustomerName("");
+      setCustomerPhone("");
+      setAmountReceived(0);
+      
+      // Redirect to receipt page with the sale ID
+      const saleId = sale.id || sale.saleId || sale._id;
+      console.log("Extracted sale ID:", saleId);
+      
+      if (saleId) {
+        router.push(`/sales/receipt/${saleId}`);
+      } else {
+        console.error("No sale ID found in response:", sale);
+        setError("Sale completed but could not redirect to receipt");
+      }
+    } catch (err: any) {
+      console.error("Error creating sale:", err);
+      setError(err.message || "Failed to complete sale");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // M-Pesa payment handlers
   const handleMpesaSuccess = useCallback((transactionId: string) => {
+    // Validate required fields
+    if (!selectedBranchId) {
+      setError("Please select a branch before processing the payment");
+      return;
+    }
+    
+    if (!customerName?.trim() || !customerPhone?.trim()) {
+      setError("Customer name and phone number are required for M-Pesa payment");
+      return;
+    }
+    
     setStatusMessage('M-Pesa payment successful! Processing your order...');
     
     const completeMpesaSale = async () => {
@@ -639,37 +725,35 @@ export default function SalesPage() {
             <div className="lg:col-span-2 space-y-6">
               {/* Enhanced Search and Filters */}
               <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-200">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="relative flex-1">
-                    <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      id="search-input"
-                      type="text"
-                      placeholder="Search products... (Ctrl+F)"
-                      defaultValue={searchTerm}
-                      onChange={handleSearchChange}
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                    />
-                    {isSearching && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                      </div>
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-medium text-gray-900">Cart Summary</h2>
+                    {selectedBranchId ? (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                        {branches.find(b => b.id === selectedBranchId)?.name || 'Branch'}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                        No Branch Selected
+                      </span>
                     )}
                   </div>
                   
-                  <FeatureGuard requiredFeature="api_access" fallback={
-                    <button disabled className="p-2.5 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed">
-                      <FaQrcode className="w-5 h-5" />
-                    </button>
-                  }>
-                    <button
-                      onClick={() => setShowScanner(true)}
-                      className="p-2.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
-                      title="Scan QR Code"
-                    >
-                      <FaQrcode className="w-5 h-5" />
-                    </button>
-                  </FeatureGuard>
+                  <div className="flex gap-3">
+                    <FeatureGuard requiredFeature="api_access" fallback={
+                      <button disabled className="p-2.5 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed">
+                        <FaQrcode className="w-5 h-5" />
+                      </button>
+                    }>
+                      <button
+                        onClick={() => setShowScanner(true)}
+                        className="p-2.5 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
+                        title="Scan QR Code"
+                      >
+                        <FaQrcode className="w-5 h-5" />
+                      </button>
+                    </FeatureGuard>
+                  </div>
                 </div>
 
                 {/* Enhanced Filters */}
@@ -926,11 +1010,11 @@ export default function SalesPage() {
                       <div className="space-y-2 mb-3">
                         <div className="flex justify-between">
                           <span className="text-gray-600">Subtotal:</span>
-                          <span className="font-medium">${cartTotal.toFixed(2)}</span>
+                          <span className="font-medium">${cartSubtotal.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Tax:</span>
-                          <span className="font-medium">$0.00</span>
+                          <span className="text-gray-600">VAT (16%):</span>
+                          <span className="font-medium">${vatAmount.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-lg font-bold pt-3 border-t border-gray-200">
                           <span>Total:</span>
@@ -1019,24 +1103,32 @@ export default function SalesPage() {
                   </h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm text-gray-600 mb-1">Name (Optional)</label>
+                      <label className="text-sm text-gray-600 mb-1 flex items-center">
+                        Name <span className="text-red-500 ml-1">*</span>
+                      </label>
                       <input
                         type="text"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
                         className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                         placeholder="John Doe"
+                        required
                       />
+                      {!customerName && <p className="mt-1 text-sm text-red-600">Customer name is required</p>}
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-600 mb-1">Phone (Optional)</label>
+                      <label className="text-sm text-gray-600 mb-1 flex items-center">
+                        Phone <span className="text-red-500 ml-1">*</span>
+                      </label>
                       <input
                         type="tel"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
                         className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                         placeholder="254700000000"
+                        required
                       />
+                      {!customerPhone && <p className="mt-1 text-sm text-red-600">Phone number is required</p>}
                     </div>
                   </div>
                 </div>
@@ -1098,9 +1190,19 @@ export default function SalesPage() {
                   <h4 className="font-medium text-gray-800 mb-2">Payment Details</h4>
                   {paymentMethod === "cash" ? (
                     <div>
-                      <div className="flex justify-between items-center mb-2 bg-blue-50 p-3 rounded-lg">
-                        <span className="text-gray-700 font-medium">Amount Due:</span>
-                        <span className="font-bold text-lg">${cartTotal.toFixed(2)}</span>
+                      <div className="space-y-2 mb-3">
+                        <div className="flex justify-between">
+                          <span className="text-gray-700">Subtotal:</span>
+                          <span>${cartSubtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-700">VAT (16%):</span>
+                          <span>${vatAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                          <span className="text-gray-700 font-medium">Amount Due:</span>
+                          <span className="font-bold text-lg">${cartTotal.toFixed(2)}</span>
+                        </div>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 mb-1">Amount Received</label>

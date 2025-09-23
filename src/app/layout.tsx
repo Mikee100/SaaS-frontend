@@ -1,18 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import LayoutWrapper from "@/components/LayoutWrapper";
-import ClientBranchProvider from "@/components/ClientBranchProvider";
-import { ThemeProvider } from "@/contexts/ThemeContext";
-import { BranchProvider } from "@/contexts/BranchContext";
-import { DashboardProvider } from "@/contexts/DashboardContext";
-import OfflineIndicator from '@/components/ui/OfflineIndicator';
+import ClientLayout from "./ClientLayout";
 
-import { ReactQueryProvider } from '@/providers/ReactQueryProvider';
-import React from "react";
-import ServiceWorkerWrapper from '@/components/ServiceWorkerWrapper';
-
-// Optimize font loading with display: 'swap' and preload
+// Configure Inter font with optimized loading
 const inter = Inter({ 
   subsets: ["latin"],
   display: 'swap',
@@ -32,12 +23,11 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false
   },
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
   other: {
     'theme-color': '#2563eb',
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
-    'apple-mobile-web-app-status-bar-style': 'default',
+    'apple-mobile-web-app-status-bar-style': 'default'
   }
 };
 
@@ -49,11 +39,13 @@ export const viewport: Viewport = {
   userScalable: false
 };
 
+
+
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} font-sans`}>
       <head>
@@ -69,23 +61,9 @@ export default function RootLayout({
         <meta name="msapplication-TileImage" content="/icon.svg" />
       </head>
       <body className={`${inter.className} antialiased`}>
-        <ReactQueryProvider>
-          <ThemeProvider>
-            <DashboardProvider>
-              <BranchProvider>
-                <ClientBranchProvider>
-                  
-                    <LayoutWrapper>
-                      {children}
-                    </LayoutWrapper>
-                  
-                    {/* Service Worker Registration */}
-                    <ServiceWorkerWrapper />
-                </ClientBranchProvider>
-              </BranchProvider>
-            </DashboardProvider>
-          </ThemeProvider>
-        </ReactQueryProvider>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
       </body>
     </html>
   );

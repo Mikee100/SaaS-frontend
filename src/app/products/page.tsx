@@ -24,7 +24,7 @@ interface Product {
 
 export default function ProductsPage() {
   const { user } = useUser();
-  const { selectedBranchId, setSelectedBranchId } = useBranch();
+  const { selectedBranchId, setSelectedBranchId, canChangeBranch, isBranchLoading } = useBranch();
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
@@ -67,8 +67,16 @@ export default function ProductsPage() {
       try {
         const data = await apiGet('/api/branches');
         setBranches(data);
-        if (data?.length > 0 && !selectedBranchId) {
-          setSelectedBranchId(data[0].id);
+        
+        // If no branch is selected and user has a branch, use that
+        if (data?.length > 0) {
+          if (user?.branchId) {
+            // If user has a specific branch, use that
+            setSelectedBranchId(user.branchId);
+          } else if (!selectedBranchId) {
+            // Otherwise select the first branch
+            setSelectedBranchId(data[0].id);
+          }
         }
       } catch (error) {
         console.error('Error fetching branches:', error);
@@ -77,9 +85,49 @@ export default function ProductsPage() {
       }
     }
     fetchBranches();
-  }, []);
+  }, [user?.branchId]); // Add user.branchId as dependency
+
+  // Handle branch selection change
+  const handleBranchChange = (branchId: string) => {
+    if (!branchId) return;
+    setSelectedBranchId(branchId);
+    // The products will be fetched by the useEffect below
+  };
+
+  // Fetch products when selected branch changes
+  useEffect(() => {
+    if (selectedBranchId) {
+      const fetchData = async () => {
+        try {
+          setLoading(true);
+          console.log('Fetching products for branch:', selectedBranchId);
+          const data = await apiGet(`/products?branchId=${selectedBranchId}`);
+          setProducts(Array.isArray(data) ? data : []);
+          setError('');
+        } catch (err: any) {
+          console.error('Error fetching products:', err);
+          setError(err.message || "Failed to fetch products");
+          setProducts([]);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      fetchData();
+    } else {
+      // If no branch is selected, clear products
+      setProducts([]);
+      setLoading(false);
+    }
+  }, [selectedBranchId]);
 
   async function fetchProducts() {
+    if (!selectedBranchId) {
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     setError("");
     try {
@@ -403,9 +451,10 @@ export default function ProductsPage() {
                 <div className="flex items-center gap-3">
                   <select
                     value={selectedBranchId || ''}
-                    onChange={e => setSelectedBranchId(e.target.value)}
+                    onChange={e => handleBranchChange(e.target.value)}
                     className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
                     style={{ minWidth: 200 }}
+                    disabled={!canChangeBranch}
                   >
                     <option value="" disabled>Select a branch</option>
                     {branches.map(branch => (

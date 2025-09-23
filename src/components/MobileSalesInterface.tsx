@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from 'react';
-import { FaPlus, FaMinus, FaTrash, FaCalculator, FaCreditCard, FaMoneyBillWave, FaMobile } from 'react-icons/fa';
+import { useState } from 'react';
+import { FaPlus, FaMinus, FaTrash, FaCalculator, FaCreditCard, FaMoneyBillWave, FaMobile, FaUser, FaPhone } from 'react-icons/fa';
 
 interface Product {
   id: string;
@@ -14,13 +14,18 @@ interface CartItem extends Product {
   quantity: number;
 }
 
+interface CustomerInfo {
+  name: string;
+  phone: string;
+}
+
 interface MobileSalesInterfaceProps {
   products: Product[];
   cart: CartItem[];
   onAddToCart: (product: Product) => void;
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onRemoveFromCart: (productId: string) => void;
-  onCheckout: () => void;
+  onCheckout: (customerInfo: CustomerInfo) => void;
   total: number;
   isOffline?: boolean;
 }
@@ -38,6 +43,9 @@ export default function MobileSalesInterface({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showCart, setShowCart] = useState(false);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({ name: '', phone: '' });
+  const [errors, setErrors] = useState<{name?: string; phone?: string}>({});
 
   const filteredProducts = products.filter(product => 
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
@@ -217,7 +225,7 @@ export default function MobileSalesInterface({
               )}
               
               <button
-                onClick={onCheckout}
+                onClick={() => setShowCustomerModal(true)}
                 disabled={cart.length === 0}
                 className={`w-full py-4 rounded-lg font-bold text-lg transition-colors ${
                   cart.length > 0
@@ -227,6 +235,94 @@ export default function MobileSalesInterface({
               >
                 {cart.length > 0 ? 'Proceed to Checkout' : 'Cart Empty'}
               </button>
+              
+              {/* Customer Information Modal */}
+              {showCustomerModal && (
+                <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                    <h3 className="text-xl font-bold mb-4">Customer Information</h3>
+                    
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Customer Name <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <FaUser className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                          type="text"
+                          value={customerInfo.name}
+                          onChange={(e) => {
+                            setCustomerInfo({...customerInfo, name: e.target.value});
+                            if (errors.name) setErrors({...errors, name: undefined});
+                          }}
+                          className={`pl-10 w-full px-4 py-2 border ${errors.name ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          placeholder="John Doe"
+                        />
+                      </div>
+                      {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
+                    </div>
+                    
+                    <div className="mb-6">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone Number <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <FaPhone className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                          type="tel"
+                          value={customerInfo.phone}
+                          onChange={(e) => {
+                            setCustomerInfo({...customerInfo, phone: e.target.value});
+                            if (errors.phone) setErrors({...errors, phone: undefined});
+                          }}
+                          className={`pl-10 w-full px-4 py-2 border ${errors.phone ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          placeholder="+1234567890"
+                        />
+                      </div>
+                      {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
+                    </div>
+                    
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        onClick={() => {
+                          setShowCustomerModal(false);
+                          setErrors({});
+                        }}
+                        className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          const newErrors: {name?: string; phone?: string} = {};
+                          if (!customerInfo.name.trim()) {
+                            newErrors.name = 'Customer name is required';
+                          }
+                          if (!customerInfo.phone.trim()) {
+                            newErrors.phone = 'Phone number is required';
+                          }
+                          
+                          if (Object.keys(newErrors).length > 0) {
+                            setErrors(newErrors);
+                            return;
+                          }
+                          
+                          onCheckout(customerInfo);
+                          setShowCustomerModal(false);
+                          setCustomerInfo({ name: '', phone: '' });
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      >
+                        Complete Purchase
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
