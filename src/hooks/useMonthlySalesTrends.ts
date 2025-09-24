@@ -22,7 +22,7 @@ export const useMonthlySalesTrends = () => {
 
       try {
         setLoading(true);
-        const response = await fetch(`/api/sales-trends/${tenantId}/monthly`);
+        const response = await fetch(`/api/sales-trends`);
         
         if (!response.ok) {
           throw new Error('Failed to fetch monthly sales trends');
