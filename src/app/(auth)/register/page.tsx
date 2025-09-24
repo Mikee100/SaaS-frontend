@@ -2,6 +2,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiPost } from "@/utils/api";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 
 // Business categories and subcategories
 const BUSINESS_CATEGORIES = {
@@ -24,12 +26,17 @@ export default function RegisterPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Check if user is already authenticated
   useEffect(() => {
-    if (typeof window !== "undefined" && localStorage.getItem("token")) {
-      router.replace("/");
+    const token = localStorage.getItem('token');
+    if (token) {
+      setIsAuthenticated(true);
+      // Show a message that they're already logged in
+      setError("You are already logged in. If you want to register a new tenant, please log out first or contact support.");
     }
-  }, [router]);
+  }, []);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -93,9 +100,16 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // If user is already authenticated, don't allow registration
+    if (isAuthenticated) {
+      setError("Please log out first before registering a new account.");
+      return;
+    }
+
     setLoading(true);
     setError("");
-    
+
     try {
       // Log the current form state
       console.log('Current form data:', JSON.stringify(formData, null, 2));
@@ -168,24 +182,9 @@ export default function RegisterPage() {
         return;
       }
 
-      // Auto-login
-      try {
-        const loginRes = await apiPost<{ access_token: string; user: any }>('/auth/login', { 
-          email: formData.ownerEmail, 
-          password: formData.ownerPassword 
-        });
-        localStorage.setItem('token', loginRes.access_token);
-        localStorage.setItem('user', JSON.stringify(loginRes.user));
-        if (loginRes.user.isSuperadmin) {
-          router.push('/superadmin');
-        } else {
-          router.push('/');
-        }
-      } catch (loginError: any) {
-        console.error('Auto-login failed:', loginError);
-        // Even if auto-login fails, the account was created successfully
-        router.push('/login');
-      }
+      // Registration successful - redirect to login page with success message
+      console.log('Registration completed successfully!');
+      router.push('/login?message=Registration successful! Please log in with your credentials.');
     } catch (err: any) {
       console.error('Registration error:', err);
       
@@ -624,62 +623,81 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-100 p-4">
-      <div className="bg-white/90 border border-gray-200 shadow-xl rounded-2xl w-full max-w-4xl backdrop-blur-md">
-        {/* Progress Bar */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-gray-800">Business Registration</h1>
-            <span className="text-sm text-gray-500">Step {currentStep} of 5</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${(currentStep / 5) * 100}%` }}
-            ></div>
+    <ReactQueryProvider>
+      <ThemeProvider>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-100 p-4">
+          <div className="bg-white/90 border border-gray-200 shadow-xl rounded-2xl w-full max-w-4xl backdrop-blur-md">
+            {/* Progress Bar */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h1 className="text-2xl font-bold text-gray-800">Business Registration</h1>
+                <span className="text-sm text-gray-500">Step {currentStep} of 5</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${(currentStep / 5) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-8">
+            {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 text-sm">{error}</p>
+                  {isAuthenticated && (
+                    <div className="mt-2 text-center">
+                      <button
+                        onClick={() => {
+                          localStorage.removeItem('token');
+                          setIsAuthenticated(false);
+                          setError("");
+                          router.push('/login');
+                        }}
+                        className="text-blue-600 hover:underline text-sm font-medium"
+                      >
+                        Log out and continue registration
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {renderStepContent()}
+
+              {/* Navigation Buttons */}
+              <div className="flex justify-between mt-8">
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  disabled={currentStep === 1}
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+
+                {currentStep < 5 ? (
+                  <button
+                    type="button"
+                    onClick={nextStep}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all"
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-8 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Creating Account..." : "Complete Registration"}
+                  </button>
+                )}
+              </div>
+            </form>
           </div>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-8">
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-600 text-sm">{error}</p>
-            </div>
-          )}
-
-          {renderStepContent()}
-
-          {/* Navigation Buttons */}
-          <div className="flex justify-between mt-8">
-            <button
-              type="button"
-              onClick={prevStep}
-              disabled={currentStep === 1}
-              className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Previous
-            </button>
-
-            {currentStep < 5 ? (
-              <button
-                type="button"
-                onClick={nextStep}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all"
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-8 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? "Creating Account..." : "Complete Registration"}
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
-    </div>
+      </ThemeProvider>
+    </ReactQueryProvider>
   );
 } 

@@ -2,9 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import ClientLayout from "./ClientLayout";
+import AuthPageWrapper from "@/components/AuthPageWrapper";
 
 // Configure Inter font with optimized loading
-const inter = Inter({ 
+const inter = Inter({
   subsets: ["latin"],
   display: 'swap',
   preload: true,
@@ -39,8 +40,6 @@ export const viewport: Viewport = {
   userScalable: false
 };
 
-
-
 export default function RootLayout({
   children,
 }: {
@@ -61,9 +60,9 @@ export default function RootLayout({
         <meta name="msapplication-TileImage" content="/icon.svg" />
       </head>
       <body className={`${inter.className} antialiased`}>
-        <ClientLayout>
+        <AuthPageWrapper>
           {children}
-        </ClientLayout>
+        </AuthPageWrapper>
       </body>
     </html>
   );

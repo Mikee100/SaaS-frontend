@@ -12,28 +12,48 @@ interface AuthGuardProps {
 }
 
 export default function AuthGuard({ children, fallback, adminOnly = false }: AuthGuardProps) {
-  const { user, loading } = useUser();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
+
+  // Define authentication-related paths that should be accessible without login
+  const authPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/superadmin'];
+  const isAuthPath = authPaths.some(path => pathname === path || pathname.startsWith(path));
+
+  // For auth pages, don't use UserContext at all to prevent redirect loops
+  const { user, loading } = isAuthPath ? { user: null, loading: false } : (() => {
+    try {
+      return useUser([]);
+    } catch (e) {
+      console.log('Error calling useUser in AuthGuard:', e);
+      return { user: null, loading: false };
+    }
+  })();
 
   useEffect(() => {
+    // Skip all redirect logic for auth pages
+    if (isAuthPath) {
+      console.log('Auth page detected in AuthGuard, skipping redirects:', pathname);
+      return;
+    }
+
     if (loading) return;
 
-    // Check if user is authenticated
+    // Check if user is authenticated for non-auth pages
     if (!user) {
+      console.log('No user found, redirecting to login from:', pathname);
       router.push('/login');
       return;
     }
 
     // Check if admin access is required
     if (adminOnly || pathname.startsWith('/admin')) {
-      const isAdmin = user.roles?.includes('admin') || user.roles?.includes('superadmin') || user.isSuperadmin;
+      const isAdmin = user?.roles?.includes('admin') || user?.roles?.includes('superadmin') || user?.isSuperadmin;
       if (!isAdmin) {
         console.log('Admin access denied - redirecting to /');
         router.push('/');
       }
     }
-  }, [user, loading, router, pathname, adminOnly]);
+  }, [user, loading, router, pathname, adminOnly, isAuthPath]);
 
   // Show loading state while checking authentication
   if (loading) {
@@ -65,7 +85,7 @@ export default function AuthGuard({ children, fallback, adminOnly = false }: Aut
 
   // Check admin access in render phase as well
   if (adminOnly || pathname.startsWith('/admin')) {
-    const isAdmin = user.roles?.includes('admin') || user.roles?.includes('superadmin') || user.isSuperadmin;
+    const isAdmin = user?.roles?.includes('admin') || user?.roles?.includes('superadmin') || user?.isSuperadmin;
     if (!isAdmin) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 flex items-center justify-center">

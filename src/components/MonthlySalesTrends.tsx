@@ -1,52 +1,16 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, Typography, useTheme } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { useMonthlySalesTrends } from '../hooks/useMonthlySalesTrends';
-import { formatCurrency } from '../utils/format';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMonthlySalesTrends } from '@/hooks/useMonthlySalesTrends';
+import { formatCurrency } from '@/utils/format';
 
 const MonthlySalesTrends: React.FC = () => {
-  const theme = useTheme();
   const { data: monthlyTrends, loading, error } = useMonthlySalesTrends();
-
-  const columns: GridColDef[] = [
-    { 
-      field: 'month', 
-      headerName: 'Month', 
-      flex: 1,
-      valueGetter: (params) => {
-        const month = params.row.monthName;
-        const year = params.row.year;
-        return `${month} ${year}`;
-      }
-    },
-    { 
-      field: 'totalSales', 
-      headerName: 'Total Sales', 
-      flex: 1,
-      valueFormatter: (params) => formatCurrency(Number(params.value)),
-      cellClassName: 'font-tabular-nums'
-    },
-    { 
-      field: 'totalOrders', 
-      headerName: 'Total Orders', 
-      flex: 1,
-      valueFormatter: (params) => params.value.toLocaleString(),
-      cellClassName: 'font-tabular-nums'
-    },
-    { 
-      field: 'averageOrderValue', 
-      headerName: 'Avg. Order Value', 
-      flex: 1,
-      valueFormatter: (params) => formatCurrency(Number(params.value)),
-      cellClassName: 'font-tabular-nums'
-    },
-  ];
 
   if (error) {
     return (
       <Card>
         <CardContent>
-          <Typography color="error">Error loading monthly sales trends: {error}</Typography>
+          <div className="text-red-600">Error loading monthly sales trends: {error}</div>
         </CardContent>
       </Card>
     );
@@ -59,54 +23,66 @@ const MonthlySalesTrends: React.FC = () => {
     avgOrderValue: acc.avgOrderValue + trend.averageOrderValue
   }), { totalSales: 0, totalOrders: 0, avgOrderValue: 0 });
 
-  const avgOrderValue = monthlyTrends.length > 0 
-    ? totals.avgOrderValue / monthlyTrends.length 
+  const avgOrderValue = monthlyTrends.length > 0
+    ? totals.avgOrderValue / monthlyTrends.length
     : 0;
 
   return (
     <Card>
-      <CardHeader 
-        title="Monthly Sales Trends" 
-        subheader="Historical sales data by month"
-      />
+      <CardHeader>
+        <CardTitle>Monthly Sales Trends</CardTitle>
+        <p className="text-sm text-muted-foreground">Historical sales data by month</p>
+      </CardHeader>
       <CardContent>
         {monthlyTrends.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="bg-gray-50 p-4 rounded-lg">
-                <Typography variant="subtitle2" color="textSecondary">Total Sales</Typography>
-                <Typography variant="h5">{formatCurrency(totals.totalSales)}</Typography>
+                <div className="text-sm text-gray-600">Total Sales</div>
+                <div className="text-2xl font-bold">{formatCurrency(totals.totalSales)}</div>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <Typography variant="subtitle2" color="textSecondary">Total Orders</Typography>
-                <Typography variant="h5">{totals.totalOrders.toLocaleString()}</Typography>
+                <div className="text-sm text-gray-600">Total Orders</div>
+                <div className="text-2xl font-bold">{totals.totalOrders.toLocaleString()}</div>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <Typography variant="subtitle2" color="textSecondary">Avg. Order Value</Typography>
-                <Typography variant="h5">{formatCurrency(avgOrderValue)}</Typography>
+                <div className="text-sm text-gray-600">Avg. Order Value</div>
+                <div className="text-2xl font-bold">{formatCurrency(avgOrderValue)}</div>
               </div>
             </div>
-            <div style={{ height: 400, width: '100%' }}>
-              <DataGrid
-                rows={monthlyTrends}
-                columns={columns}
-                pageSize={10}
-                rowsPerPageOptions={[10, 25, 50]}
-                loading={loading}
-                disableSelectionOnClick
-                sx={{
-                  '& .MuiDataGrid-cell': {
-                    borderBottom: `1px solid ${theme.palette.divider}`,
-                  },
-                  '& .MuiDataGrid-columnHeaders': {
-                    backgroundColor: theme.palette.background.paper,
-                  },
-                }}
-              />
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border border-gray-200">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-200 px-4 py-2 text-left">Month</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Total Sales</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Total Orders</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Avg. Order Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyTrends.map((trend, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="border border-gray-200 px-4 py-2">
+                        {trend.monthName} {trend.year}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2 font-mono">
+                        {formatCurrency(trend.totalSales)}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2 font-mono">
+                        {trend.totalOrders.toLocaleString()}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2 font-mono">
+                        {formatCurrency(trend.averageOrderValue)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </>
         ) : (
-          <Typography>No monthly sales data available</Typography>
+          <div className="text-gray-500">No monthly sales data available</div>
         )}
       </CardContent>
     </Card>

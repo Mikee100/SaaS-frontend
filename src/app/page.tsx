@@ -466,22 +466,19 @@ export default function DashboardPage() {
 
   if (loading || limitsLoading) {
     return (
-      <AuthGuard>
-        <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="mb-8">
-              <div className="h-8 bg-gray-200 rounded w-64 mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-80"></div>
-            </div>
-            <SkeletonLoader />
+      <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <div className="h-8 bg-gray-200 rounded w-64 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-80"></div>
           </div>
+          <SkeletonLoader />
         </div>
-      </AuthGuard>
+      </div>
     );
   }
 
   return (
-    <AuthGuard>
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
@@ -757,6 +754,5 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-    </AuthGuard>
   );
 }

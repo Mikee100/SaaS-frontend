@@ -1,6 +1,6 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState, ReactNode, Dispatch, SetStateAction } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { apiGet } from "@/utils/api";
 
 export interface User {
@@ -31,13 +31,15 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 interface UserProviderProps {
   children: ReactNode;
+  skipUserFetch?: boolean; // Add this prop to skip user fetching
 }
 
-export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
+export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFetch = false }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
 
   // Helper to fetch user
   const fetchUser = async () => {
@@ -47,11 +49,11 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
       setLoading(false);
       return;
     }
-    
+
     setLoading(true);
     try {
       const userData = await apiGet('/user/me');
-      
+
       if (!userData) {
         throw new Error('No user data received');
       }
@@ -77,29 +79,78 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
       if (userData.branchId) {
         localStorage.setItem('selectedBranchId', userData.branchId);
       }
-      
+
       setUser(normalizedUser);
       setError(null);
-  } catch (err) {
-    console.error('Error fetching user:', err);
-    setUser(null);
-    setError('Authentication failed. Please log in again.');
-    localStorage.removeItem('token');
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (err) {
+      console.error('Error fetching user:', err);
+      setUser(null);
+      setError('Authentication failed. Please log in again.');
+      localStorage.removeItem('token');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if current path is an auth path
+  const isAuthPath = () => {
+    if (typeof window === 'undefined') return false;
+    const path = pathname || window.location.pathname;
+    return path === '/login' ||
+           path === '/register' ||
+           path === '/forgot-password' ||
+           path === '/reset-password' ||
+           path.startsWith('/superadmin');
+  };
+
+  // Check if current path should allow authenticated users (like register page)
+  const shouldAllowAuthenticatedUsers = () => {
+    if (typeof window === 'undefined') return false;
+    const path = pathname || window.location.pathname;
+    return path === '/register'; // Register page should be accessible even when authenticated
+  };
 
   // Initial fetch and storage event listener
   useEffect(() => {
+    // CRITICAL: If skipUserFetch is true, completely skip all authentication logic
+    if (skipUserFetch) {
+      console.log('Skipping user fetch for auth page');
+      setUser(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    // CRITICAL: Never fetch user data on auth pages to prevent redirect loops
+    if (isAuthPath()) {
+      console.log('Auth page detected, completely skipping user fetch:', pathname);
+      setUser(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    // Only fetch user data for non-auth pages
     fetchUser();
-    // Listen for login/logout in other tabs
+
+    // Listen for login/logout in other tabs - only for non-auth pages
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'token') fetchUser();
+      if (e.key === 'token' && !isAuthPath() && !skipUserFetch) {
+        fetchUser();
+      }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  }, [skipUserFetch, pathname]);
+
+  // Additional effect to prevent redirects on auth pages
+  useEffect(() => {
+    if (isAuthPath() || skipUserFetch) {
+      // Ensure loading is false and no errors on auth pages to prevent loading states and redirects
+      setLoading(false);
+      setError(null);
+    }
+  }, [pathname, skipUserFetch]);
 
   // Login function
   const login = async (email: string, password: string) => {
@@ -110,10 +161,10 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
       const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000');
       const loginUrl = `${apiUrl}/auth/login`;
       console.log('Attempting to login to:', loginUrl);
-      
+
       const response = await fetch(loginUrl, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-Requested-With': 'XMLHttpRequest'
@@ -122,9 +173,9 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
         mode: 'cors',
         body: JSON.stringify({ email, password })
       });
-      
+
       console.log('Login response status:', response.status);
-      
+
       if (!response.ok) {
         let errorData;
         try {
@@ -136,16 +187,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
       }
-      
+
       const loginResponse = await response.json();
       console.log('Full login response:', loginResponse);
       const { access_token, user } = loginResponse;
-      
+
       if (access_token) {
         console.log('Saving token to localStorage:', access_token);
         localStorage.setItem('token', access_token);
         console.log('Token in localStorage after set:', localStorage.getItem('token'));
-        
+
         // Update user state with the user data from the response
         if (user) {
           const { roles = [], permissions = [] } = user;
@@ -161,13 +212,13 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
             receiptLogo: user.receiptLogo
           };
           setUser(normalizedUser);
-          
+
           // Store branch ID if available
           if (user.branchId) {
             localStorage.setItem('selectedBranchId', user.branchId);
           }
         }
-        
+
         // Refresh user data from the server
         await fetchUser();
         // Redirect to the dashboard (app page)

@@ -8,23 +8,25 @@ import { SidebarProvider, useSidebar } from "@/components/SidebarContext";
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { sidebarCollapsed } = useSidebar();
-  
+
   // Check if current path is in a route group (auth, admin, settings)
-  const isInRouteGroup = pathname.startsWith('/(auth)') || 
-                        pathname === '/login' || 
-                        pathname === '/register' || 
-                        pathname === '/forgot-password' || 
-                        pathname === '/reset-password' ||
-                        pathname.startsWith('/superadmin') ||
-                        pathname.startsWith('/settings');
+  const isInRouteGroup = pathname && (
+    pathname.startsWith('/(auth)') ||
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/forgot-password' ||
+    pathname === '/reset-password' ||
+    pathname.startsWith('/superadmin') ||
+    pathname.startsWith('/settings')
+  );
 
   return (
     <>
       {!isInRouteGroup && <PlanBasedNav />}
       <main className={`min-h-screen bg-gray-50 transition-all duration-300 ${
-        !isInRouteGroup 
-          ? sidebarCollapsed 
-            ? 'lg:ml-16' 
+        !isInRouteGroup
+          ? sidebarCollapsed
+            ? 'lg:ml-16'
             : 'lg:ml-64'
           : ''
       }`}>
@@ -36,10 +38,8 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   return (
-    <UserProvider>
-      <SidebarProvider>
-        <LayoutContent>{children}</LayoutContent>
-      </SidebarProvider>
-    </UserProvider>
+    <SidebarProvider>
+      <LayoutContent>{children}</LayoutContent>
+    </SidebarProvider>
   );
-} 
+}
