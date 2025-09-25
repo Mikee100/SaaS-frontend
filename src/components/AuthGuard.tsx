@@ -16,18 +16,11 @@ export default function AuthGuard({ children, fallback, adminOnly = false }: Aut
   const pathname = usePathname() || '';
 
   // Define authentication-related paths that should be accessible without login
-  const authPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/superadmin'];
+  const authPaths = ['/login', '/forgot-password', '/reset-password', '/superadmin'];
   const isAuthPath = authPaths.some(path => pathname === path || pathname.startsWith(path));
 
-  // For auth pages, don't use UserContext at all to prevent redirect loops
-  const { user, loading } = isAuthPath ? { user: null, loading: false } : (() => {
-    try {
-      return useUser([]);
-    } catch (e) {
-      console.log('Error calling useUser in AuthGuard:', e);
-      return { user: null, loading: false };
-    }
-  })();
+  // Always call useUser at the top level - this is required by React hooks rules
+  const { user, loading } = useUser();
 
   useEffect(() => {
     // Skip all redirect logic for auth pages

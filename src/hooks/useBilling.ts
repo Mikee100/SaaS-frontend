@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 export function useBilling() {
 	const [billingData, setBillingData] = useState(null);
 	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState(null);
+	const [error] = useState(null);
 
 	useEffect(() => {
 		// Simulate loading billing data

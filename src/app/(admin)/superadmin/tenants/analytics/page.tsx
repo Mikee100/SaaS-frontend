@@ -5,11 +5,18 @@ import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
 import { apiGet } from "@/utils/api";
 
+interface HistoricalDataItem {
+  timestamp: string;
+  value: number;
+}
+
 interface TenantAnalytics {
   id: string;
   name: string;
   businessType: string;
   createdAt: string;
+  productCount?: number;
+  spaceUsedMB?: string;
   subscription?: {
     plan: string;
     status: string;
@@ -78,47 +85,37 @@ interface TenantComparison {
   bottomTenant: { name: string; value: number };
 }
 
-interface TenantDbStat {
-  tenantId: string;
-  spaceUsedMB: string;
-  productCount?: number;
-}
+// Removed unused interface
 
 export default function TenantAnalyticsPage() {
-  const { user, loading } = useUser();
   const router = useRouter();
-  const [tenants, setTenants] = useState<any[]>([]);
+  const { user, loading } = useUser();
+  const [tenants, setTenants] = useState<TenantAnalytics[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [selectedTenant, setSelectedTenant] = useState<string>("");
-  const [tenantUsers, setTenantUsers] = useState<any[]>([]);
-// Section to show users for a tenant
-function TenantUsersSection({ tenantId, users }: { tenantId: string, users: any[] }) {
-  return (
-    <div style={{ marginTop: "1rem", background: "#f3f4f6", padding: "1rem", borderRadius: "6px" }}>
-      <h5 style={{ margin: "0 0 0.5rem 0", fontSize: "14px", fontWeight: "600" }}>Users for Tenant {tenantId}</h5>
-      {users.length === 0 ? (
-        <div style={{ fontSize: "12px", color: "#6b7280" }}>No users found.</div>
-      ) : (
-        <ul style={{ fontSize: "13px", color: "#374151", paddingLeft: "1rem" }}>
-          {users.map(user => (
-            <li key={user.id}>
-              {user.name || user.email || user.id} - {user.role || "User"}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [selectedTenant] = useState<string>("");
+  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('7d');
   const [comparisonData, setComparisonData] = useState<TenantComparison[]>([]);
-  const [filter, setFilter] = useState<'all' | 'active' | 'over_limit' | 'inactive'>('all');
+  const [error, setError] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
       router.replace("/");
     }
   }, [user, loading, router]);
+
+  const fetchTenantAnalytics = async (range: string) => {
+    try {
+      setLoadingData(true);
+      const data = await apiGet(`/admin/tenants/analytics?range=${range}`);
+      setTenants(data.tenants || []);
+      setComparisonData(data.comparisons || []);
+    } catch (err) {
+      setError('Failed to fetch tenant analytics');
+      console.error('Error fetching tenant analytics:', err);
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.isSuperadmin) {
@@ -126,28 +123,7 @@ function TenantUsersSection({ tenantId, users }: { tenantId: string, users: any[
     }
   }, [user, timeRange]);
 
-  // Helper to get DB space for a tenant (directly from tenant object)
-  const getDbSpace = (tenantId: string) => {
-    const tenant = tenants.find(t => t.id === tenantId);
-    return tenant && tenant.spaceUsedMB ? tenant.spaceUsedMB : null;
-  };
-
-  const fetchTenantAnalytics = async (timeRange: string) => {
-    try {
-      setLoadingData(true);
-      const analyticsData = await apiGet('/admin/tenants/analytics');
-      // Expecting analyticsData to be an array of tenants with dbStats property
-      const safeAnalyticsData = Array.isArray(analyticsData) ? analyticsData : [];
-      setTenants(safeAnalyticsData);
-      setComparisonData([]); // No comparison data for now
-    } catch (error: any) {
-      console.error("Failed to fetch tenant analytics:", error);
-      setTenants([]);
-      setComparisonData([]);
-    } finally {
-      setLoadingData(false);
-    }
-  };
+  // Removed unused function
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -231,15 +207,48 @@ function TenantUsersSection({ tenantId, users }: { tenantId: string, users: any[
     );
   };
 
+  const [filter] = useState<'all' | 'active' | 'over_limit' | 'inactive'>('all');
+  
   const filteredTenants = tenants.filter(tenant => {
-    if (!tenant || !tenant.usage || !tenant.activity) return false;
+    if (!tenant?.usage || !tenant.performance) return false;
     
     if (filter === 'all') return true;
     if (filter === 'active') return tenant.usage.users.percentage < 90;
     if (filter === 'over_limit') return tenant.usage.users.percentage >= 90;
-    if (filter === 'inactive') return tenant.activity.activeDays < 7;
+    if (filter === 'inactive') return tenant.performance.activeUsers === 0;
     return true;
   });
+
+  if (error) {
+    return (
+      <div style={{ padding: "2rem" }}>
+        <div style={{ 
+          backgroundColor: '#fef2f2', 
+          border: '1px solid #fecaca', 
+          color: '#b91c1c', 
+          padding: '1rem', 
+          borderRadius: '0.5rem',
+          marginBottom: '1rem'
+        }}>
+          <p>Error loading tenant analytics: {error}</p>
+          <button 
+            onClick={() => fetchTenantAnalytics(timeRange)}
+            style={{
+              marginTop: '0.5rem',
+              padding: '0.5rem 1rem',
+              backgroundColor: '#dc2626',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.25rem',
+              cursor: 'pointer'
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !user) return null;
 
@@ -256,7 +265,10 @@ function TenantUsersSection({ tenantId, users }: { tenantId: string, users: any[
         <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
           <select
             value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value as any)}
+            onChange={(e) => {
+              const value = e.target.value as '7d' | '30d' | '90d';
+              setTimeRange(value);
+            }}
             style={{
               padding: "0.5rem",
               border: "1px solid #ddd",
@@ -314,7 +326,7 @@ function TenantUsersSection({ tenantId, users }: { tenantId: string, users: any[
               </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 24, fontWeight: "bold", color: "#1f2937" }}>
-                  {formatBytes(tenants.reduce((sum: number, tenant: any) => sum + ((tenant.spaceUsedMB ? parseFloat(tenant.spaceUsedMB) : 0) * 1024 * 1024), 0))}
+                  {formatBytes(tenants.reduce((sum: number, tenant: TenantAnalytics) => sum + ((tenant.spaceUsedMB ? parseFloat(tenant.spaceUsedMB) : 0) * 1024 * 1024), 0))}
                 </div>
                 <div style={{ fontSize: 14, color: "#6b7280" }}>Total Storage Used</div>
               </div>
@@ -508,19 +520,19 @@ function TenantUsersSection({ tenantId, users }: { tenantId: string, users: any[
                   <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1rem" }}>
                     <div>
                       <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "0.25rem" }}>Users Trend</div>
-                      {renderSparkline(tenant.historicalData.users.map((u: any) => ({ date: u.timestamp, count: u.value })), "#3b82f6")}
+                      {renderSparkline(tenant.historicalData.users.map((u: HistoricalDataItem) => ({ date: u.timestamp, count: u.value })), "#3b82f6")}
                     </div>
                     <div>
                       <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "0.25rem" }}>Sales Trend</div>
-                      {renderSparkline(tenant.historicalData.sales.map((s: any) => ({ date: s.timestamp, count: s.value })), "#10b981")}
+                      {renderSparkline(tenant.historicalData.sales.map((s: HistoricalDataItem) => ({ date: s.timestamp, count: s.value })), "#10b981")}
                     </div>
                     <div>
                       <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "0.25rem" }}>API Calls</div>
-                      {renderSparkline(tenant.historicalData.apiCalls.map((a: any) => ({ date: a.timestamp, count: a.value })), "#f59e0b")}
+                      {renderSparkline(tenant.historicalData.apiCalls.map((a: HistoricalDataItem) => ({ date: a.timestamp, count: a.value })), "#f59e0b")}
                     </div>
                     <div>
                       <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "0.25rem" }}>Storage Usage</div>
-                      {renderSparkline(tenant.historicalData.storage.map((s: any) => ({ date: s.timestamp, count: s.value })), "#8b5cf6")}
+                      {renderSparkline(tenant.historicalData.storage.map((s: HistoricalDataItem) => ({ date: s.timestamp, count: s.value })), "#8b5cf6")}
                     </div>
                   </div>
                 </div>
@@ -531,4 +543,4 @@ function TenantUsersSection({ tenantId, users }: { tenantId: string, users: any[
       )}
     </main>
   );
-} 
+}

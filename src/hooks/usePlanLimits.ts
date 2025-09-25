@@ -24,9 +24,9 @@ export function usePlanLimits() {
 		limits,
 		loading: false,
 		error: null,
-		hasFeature: (feature: string) => false,
-		canCreate: (type: 'users' | 'products' | 'sales') => true,
-		getUsagePercentage: (type: 'users' | 'products' | 'sales') => 0,
+		hasFeature: () => false,
+		canCreate: () => true,
+		getUsagePercentage: () => 0,
 		isPlanAtLeast: (plan: 'Basic' | 'Pro' | 'Enterprise') => plan === 'Basic',
 	};
 }

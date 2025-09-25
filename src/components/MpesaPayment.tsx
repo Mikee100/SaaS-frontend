@@ -7,7 +7,6 @@ interface MpesaPaymentProps {
   amount: number;
   saleData?: any;
   onSuccess: (transactionId: string) => void;
-  onError: (error: string) => void;
   onCancel: () => void;
 }
 
@@ -22,7 +21,7 @@ interface MpesaTransaction {
   createdAt: string;
 }
 
-export default function MpesaPayment({ amount, saleData, onSuccess, onError, onCancel }: MpesaPaymentProps) {
+export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: MpesaPaymentProps) {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentTransaction, setCurrentTransaction] = useState<MpesaTransaction | null>(null);
@@ -153,7 +152,7 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onError, onC
 
   const formatPhoneNumber = (phone: string) => {
     // Remove all non-digit characters
-    let cleaned = phone.replace(/\D/g, '');
+    const cleaned = phone.replace(/\D/g, '');
     
     // Handle different formats
     if (cleaned.startsWith('0')) {
@@ -252,48 +251,7 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onError, onC
     }
   };
 
-  const handleCancelPayment = async () => {
-    if (currentTransaction?.checkoutRequestId) {
-      try {
-        await apiPost(`/mpesa/cancel/${currentTransaction.checkoutRequestId}`);
-      } catch (err) {
-        console.error('Error cancelling payment:', err);
-      }
-    }
-    onCancel();
-  };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'success':
-        return <FaCheckCircle className="w-6 h-6 text-green-600" />;
-      case 'failed':
-      case 'cancelled':
-      case 'timeout':
-      case 'stock_unavailable':
-        return <FaTimesCircle className="w-6 h-6 text-red-600" />;
-      case 'pending':
-        return <FaClock className="w-6 h-6 text-yellow-600" />;
-      default:
-        return <FaExclamationTriangle className="w-6 h-6 text-gray-600" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'success':
-        return 'text-green-600';
-      case 'failed':
-      case 'cancelled':
-      case 'timeout':
-      case 'stock_unavailable':
-        return 'text-red-600';
-      case 'pending':
-        return 'text-yellow-600';
-      default:
-        return 'text-gray-600';
-    }
-  };
 
   return (
     <div className="space-y-4">

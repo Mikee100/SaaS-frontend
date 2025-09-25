@@ -6,24 +6,24 @@ const DB_VERSION = 1;
 interface SaaSPlatformDB extends DBSchema {
   products: {
     key: string;
-    value: any;
+    value: unknown;
   };
   customers: {
     key: string;
-    value: any;
+    value: unknown;
   };
   sales: {
     key: string;
-    value: any;
+    value: unknown;
   };
   'offline-operations': {
     key: number;
-    value: any;
+    value: unknown;
     indexes: { 'by-timestamp': number };
   };
   preferences: {
     key: string;
-    value: any;
+    value: unknown;
   };
 }
 
@@ -59,7 +59,7 @@ const getDb = () => {
 
 export async function set(
   storeName: "products" | "customers" | "sales" | "offline-operations" | "preferences",
-  value: any
+  value: unknown
 ) {
   const db = await getDb();
   return db.put(storeName, value);

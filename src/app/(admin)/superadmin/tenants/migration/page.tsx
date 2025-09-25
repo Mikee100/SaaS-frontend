@@ -165,21 +165,7 @@ export default function MigrationBackupPage() {
     }
   };
 
-  const handleRestoreBackup = async () => {
-    try {
-      const result = await apiPost('/admin/tenants/restore', restoreForm);
-      console.log('Backup restore initiated:', result);
-      fetchData(); // Refresh data
-      setRestoreForm({
-        backupId: '',
-        tenantId: '',
-        targetTenantId: '',
-        options: { overwrite: false, preserveUsers: true, preserveSettings: true }
-      });
-    } catch (error) {
-      console.error('Failed to restore backup:', error);
-    }
-  };
+  // Restore backup functionality removed as it's not being used
 
   const handleMigrateTenant = async () => {
     try {

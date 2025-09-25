@@ -4,6 +4,17 @@ import { apiGet } from "@/utils/api";
 import { FaClipboardList } from 'react-icons/fa';
 import Link from "next/link";
 
+interface AuditLog {
+  id: string | number;
+  createdAt: string;
+  user?: {
+    name?: string;
+    email?: string;
+  };
+  action: string;
+  details: any;
+}
+
 export default function AuditLogsSettings() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,6 +23,12 @@ export default function AuditLogsSettings() {
   useEffect(() => {
     apiGet("/audit-logs").then((value) => setLogs(value as any[])).catch(() => setError("Failed to load logs")).finally(() => setLoading(false));
   }, []);
+
+  const handleRowClick = () => {
+    // Handle row click
+  };
+
+
 
   if (loading) return (
     <div className="flex justify-center items-center min-h-[300px]">
@@ -45,7 +62,7 @@ export default function AuditLogsSettings() {
             </thead>
             <tbody>
               {logs.map(log => (
-                <tr key={log.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                <tr key={log.id} style={{ borderBottom: '1px solid #f0f0f0' }} onClick={handleRowClick}>
                   <td style={{ padding: '8px 0', color: '#555' }}>{new Date(log.createdAt).toLocaleString()}</td>
                   <td style={{ padding: '8px 0', color: '#555' }}>{log.user?.name || log.user?.email || '-'}</td>
                   <td style={{ padding: '8px 0', color: '#555' }}>{log.action}</td>
@@ -58,4 +75,4 @@ export default function AuditLogsSettings() {
       </div>
     </div>
   );
-} 
+}

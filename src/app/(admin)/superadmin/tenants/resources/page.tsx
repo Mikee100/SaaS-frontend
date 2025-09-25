@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
-import { apiGet, apiPost, apiPut } from "@/utils/api";
+import { apiGet, apiPut } from "@/utils/api";
 
 interface ResourceAllocation {
   id: string;
@@ -90,8 +90,8 @@ export default function ResourceAllocationPage() {
         apiGet("/admin/tenants/resources"),
         apiGet("/admin/tenants/plans")
       ]);
-      setAllocations(allocationsData);
-      setPlans(plansData);
+      setAllocations(allocationsData as ResourceAllocation[]);
+      setPlans(plansData as ResourcePlan[]);
     } catch (error) {
       console.error("Failed to fetch resource data:", error);
     } finally {
@@ -132,13 +132,7 @@ export default function ResourceAllocationPage() {
     return '#10b981';
   };
 
-  const getRecommendationColor = (recommendation: string) => {
-    switch (recommendation) {
-      case 'upgrade': return '#ef4444';
-      case 'downgrade': return '#10b981';
-      default: return '#6b7280';
-    }
-  };
+  
 
   const renderResourceBar = (current: number, limit: number, label: string, unit: string = '') => {
     const percentage = (current / limit) * 100;

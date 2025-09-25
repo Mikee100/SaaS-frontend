@@ -8,7 +8,7 @@ import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, loading, error, user, clearError } = useUser([]);
+  const { login, loading, error, user, clearError } = useUser();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [year, setYear] = useState<number | null>(null);
@@ -34,34 +34,39 @@ export default function LoginPage() {
       console.log('Authenticated user detected in login page:', user);
       animationStartedRef.current = true;
       setShowLoginAnimation(true);
+      
       const timer = setTimeout(() => {
-        // Check if user is trying to access register page - allow it
         const currentPath = window.location.pathname;
-        const searchParams = new URLSearchParams(window.location.search);
-        const redirectTo = searchParams.get('redirect');
-
-        console.log('Current path:', currentPath, 'Redirect to:', redirectTo);
-
-        // Allow access to register page even when authenticated
-        if (currentPath === '/register' || redirectTo === '/register') {
-          console.log('User trying to access register page, allowing access');
+        console.log('Current path in login page effect:', currentPath);
+        
+        // If we're on the register page, don't redirect
+        if (currentPath === '/register') {
+          console.log('Allowing access to register page');
           setShowLoginAnimation(false);
           animationStartedRef.current = false;
           return;
         }
-
-        // Check both roles array and isSuperadmin flag
-        const isSuperAdmin = user.roles?.includes('superadmin') || user.isSuperadmin;
-        const isAdmin = user.roles?.includes('admin');
-
-        if (isSuperAdmin) {
-          router.push("/superadmin");  // Super admin dashboard
-        } else if (isAdmin) {
-          router.push("/admin");  // Regular admin dashboard
+        
+        // Only redirect if we're on the login page
+        if (currentPath === '/login') {
+          console.log('Redirecting authenticated user from login page');
+          const isSuperAdmin = user.roles?.includes('superadmin') || user.isSuperadmin;
+          const isAdmin = user.roles?.includes('admin');
+          
+          if (isSuperAdmin) {
+            router.push("/superadmin");
+          } else if (isAdmin) {
+            router.push("/admin");
+          } else {
+            router.push("/");
+          }
         } else {
-          router.push("/");  // Regular user dashboard
+          // If we're on some other page, just clear the animation
+          setShowLoginAnimation(false);
+          animationStartedRef.current = false;
         }
       }, 1000);
+      
       return () => clearTimeout(timer);
     }
   }, [user, router]);
@@ -148,7 +153,7 @@ export default function LoginPage() {
               <a href="/forgot-password" className="text-blue-600 hover:underline text-sm font-medium">Forgot Password?</a>
             </div>
             <div className="mt-6 text-sm text-gray-600">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <a href="/register" className="text-blue-600 hover:underline font-medium">
                 Register
               </a>

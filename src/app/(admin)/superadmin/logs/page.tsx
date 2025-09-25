@@ -5,12 +5,21 @@ import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
 import { apiGet } from "@/utils/api";
 
+interface AuditLogDetails {
+  [key: string]: unknown;
+  oldValues?: Record<string, unknown>;
+  newValues?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+  timestamp?: string;
+}
+
 interface AuditLog {
   id: string;
   action: string;
   entityType: string;
   entityId: string;
-  details: any;
+  details: AuditLogDetails | string | null;
   createdAt: string;
   user: {
     id: string;
@@ -68,12 +77,13 @@ export default function SuperadminLogsPage() {
     }
   };
 
-  const formatDetails = (details: any) => {
+  const formatDetails = (details: AuditLogDetails | string | null) => {
     if (!details) return "No details";
+    if (typeof details === 'string') return details;
     try {
       return JSON.stringify(details, null, 2);
     } catch {
-      return String(details);
+      return 'Unable to parse details';
     }
   };
 

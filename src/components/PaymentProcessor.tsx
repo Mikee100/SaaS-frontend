@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiPost, apiGet } from '@/utils/api';
-import { FaCreditCard, FaLock, FaCheckCircle, FaExclamationTriangle, FaSpinner } from 'react-icons/fa';
 
 interface PaymentProcessorProps {
   amount: number;
@@ -42,8 +41,8 @@ function PaymentForm({
   const elements = useElements();
   const [savedPaymentMethods, setSavedPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const loadPaymentMethods = async () => {

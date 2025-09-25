@@ -5,14 +5,14 @@ interface OfflineOperation {
   id: string;
   type: 'CREATE' | 'UPDATE' | 'DELETE';
   endpoint: string;
-  data: any;
+  data: unknown;
   timestamp: number;
   retryCount: number;
 }
 
 interface CachedData {
   key: string;
-  data: any;
+  data: unknown;
   timestamp: number;
   expiresAt?: number;
 }
@@ -73,7 +73,7 @@ class OfflineStorage {
   }
 
   // Store data locally
-  async storeData(storeName: string, data: any): Promise<void> {
+  async storeData(storeName: string, data: unknown): Promise<void> {
     if (typeof window === 'undefined' || typeof indexedDB === 'undefined') {
       return;
     }
@@ -92,7 +92,7 @@ class OfflineStorage {
   }
 
   // Get data from local storage
-  async getData(storeName: string, key?: string): Promise<any> {
+  async getData(storeName: string, key?: string): Promise<unknown> {
     if (typeof window === 'undefined' || typeof indexedDB === 'undefined') {
       return null;
     }
@@ -138,7 +138,14 @@ class OfflineStorage {
 
   // Get all offline operations
   async getOfflineOperations(): Promise<OfflineOperation[]> {
-    return await this.getData('offlineOperations') || [];
+    const result = await this.getData('offlineOperations');
+    if (Array.isArray(result)) {
+      return result as OfflineOperation[];
+    } else if (result) {
+      return [result as OfflineOperation];
+    } else {
+      return [];
+    }
   }
 
   // Remove operation from sync queue
@@ -147,7 +154,7 @@ class OfflineStorage {
   }
 
   // Cache API response
-  async cacheApiResponse(key: string, data: any, expiresIn?: number): Promise<void> {
+  async cacheApiResponse(key: string, data: unknown, expiresIn?: number): Promise<void> {
     const cachedData: CachedData = {
       key,
       data,
@@ -159,8 +166,9 @@ class OfflineStorage {
   }
 
   // Get cached API response
-  async getCachedResponse(key: string): Promise<any | null> {
-    const cachedData: CachedData = await this.getData('cachedData', key);
+  async getCachedResponse(key: string): Promise<unknown | null> {
+    const result = await this.getData('cachedData', key);
+    const cachedData = result as CachedData | undefined;
     
     if (!cachedData) return null;
 
@@ -175,7 +183,12 @@ class OfflineStorage {
 
   // Clear expired cache
   async clearExpiredCache(): Promise<void> {
-    const allCachedData: CachedData[] = await this.getData('cachedData');
+    const result = await this.getData('cachedData');
+    const allCachedData: CachedData[] = Array.isArray(result)
+      ? result as CachedData[]
+      : result
+        ? [result as CachedData]
+        : [];
     const now = Date.now();
 
     for (const cached of allCachedData) {
@@ -212,7 +225,7 @@ class OfflineStorage {
              await this.removeOfflineOperation(operation.id);
            }
          }
-       } catch (error) {
+       } catch {
          operation.retryCount++;
          if (operation.retryCount < 3) {
            await this.storeData('offlineOperations', operation);
@@ -269,60 +282,66 @@ export default offlineStorage;
 // Utility functions for common operations
 export const offlineUtils = {
   // Store products locally
-  async storeProducts(products: any[]): Promise<void> {
+  async storeProducts(products: unknown[]): Promise<void> {
     for (const product of products) {
       await offlineStorage.storeData('products', product);
     }
   },
 
   // Get products from local storage
-  async getProducts(): Promise<any[]> {
-    return await offlineStorage.getData('products') || [];
+  async getProducts(): Promise<unknown[]> {
+    const result = await offlineStorage.getData('products');
+    return Array.isArray(result) ? result : result ? [result] : [];
   },
 
   // Store customers locally
-  async storeCustomers(customers: any[]): Promise<void> {
+  async storeCustomers(customers: unknown[]): Promise<void> {
     for (const customer of customers) {
       await offlineStorage.storeData('customers', customer);
     }
   },
 
   // Get customers from local storage
-  async getCustomers(): Promise<any[]> {
-    return await offlineStorage.getData('customers') || [];
+  async getCustomers(): Promise<unknown[]> {
+    const result = await offlineStorage.getData('customers');
+    return Array.isArray(result) ? result : result ? [result] : [];
   },
 
   // Store sales locally
-  async storeSales(sales: any[]): Promise<void> {
+  async storeSales(sales: unknown[]): Promise<void> {
     for (const sale of sales) {
       await offlineStorage.storeData('sales', sale);
     }
   },
 
   // Get sales from local storage
-  async getSales(): Promise<any[]> {
-    return await offlineStorage.getData('sales') || [];
+  async getSales(): Promise<unknown[]> {
+    const result = await offlineStorage.getData('sales');
+    return Array.isArray(result) ? result : result ? [result] : [];
   },
 
   // Store analytics data
-  async storeAnalytics(key: string, data: any): Promise<void> {
+  async storeAnalytics(key: string, data: unknown): Promise<void> {
     await offlineStorage.storeData('analytics', { key, data, timestamp: Date.now() });
   },
 
   // Get analytics data
-  async getAnalytics(key: string): Promise<any> {
+  async getAnalytics(key: string): Promise<unknown> {
     const result = await offlineStorage.getData('analytics', key);
-    return result?.data || null;
+    if (result && typeof result === 'object' && 'data' in result) {
+      return (result as { data: unknown }).data;
+    }
+    return null;
   },
 
   // Queue offline operation
-  async queueOperation(type: 'CREATE' | 'UPDATE' | 'DELETE', endpoint: string, data?: any): Promise<void> {
+  async queueOperation(type: 'CREATE' | 'UPDATE' | 'DELETE', endpoint: string, data?: unknown): Promise<void> {
     await offlineStorage.addOfflineOperation({ type, endpoint, data });
   },
 
   // Check if data is available offline
   async isDataAvailableOffline(dataType: string): Promise<boolean> {
     const data = await offlineStorage.getData(dataType);
-    return data && data.length > 0;
+    return Array.isArray(data) ? data.length > 0 : !!data;
   }
-}; 
+};

@@ -1,13 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { FaCrown, FaStar, FaCheck, FaTimes, FaCreditCard, FaDownload, FaHistory, FaArrowUp, FaArrowDown } from 'react-icons/fa';
-import { Suspense } from "react";
-import dynamic from "next/dynamic";
-
-
 import BillingDashboard from '@/components/BillingDashboard';
-import MakePayment from './make-payment';
 import SaveCard from './save-card';
 
 import { Elements } from '@stripe/react-stripe-js';

@@ -38,7 +38,8 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
   if (loading || !user) return null;
 
   // Check if a link is active
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) =>
+    pathname !== null && (pathname === href || pathname.startsWith(`${href}/`));
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">

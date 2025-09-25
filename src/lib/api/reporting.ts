@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { getSession } from 'next-auth/react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_REPORTING_SERVICE_URL || 'http://localhost:3001/api';
@@ -37,23 +37,23 @@ axiosInstance.interceptors.response.use(
 // API methods
 export const reportingApi = {
   // Sales Reports
-  getSalesReport: (params: any) => 
+  getSalesReport: (params: Record<string, unknown>) => 
     axiosInstance.get('/reports/sales', { params }),
   
   // Sales Trends
-  getSalesTrends: (params: any) => 
+  getSalesTrends: (params: Record<string, unknown>) => 
     axiosInstance.get('/reports/sales-trends', { params }),
   
   // Customer Segmentation
-  getCustomerSegments: (params: any) => 
+  getCustomerSegments: (params: Record<string, unknown>) => 
     axiosInstance.get('/reports/customer-segmentation', { params }),
   
   // Branch Reports
-  getBranchReports: (branchId: string, params: any) => 
+  getBranchReports: (branchId: string, params: Record<string, unknown>) => 
     axiosInstance.get(`/reports/branches/${branchId}`, { params }),
   
   // Tenant Analytics
-  getTenantAnalytics: (tenantId: string, params: any) => 
+  getTenantAnalytics: (tenantId: string, params: Record<string, unknown>) => 
     axiosInstance.get(`/reports/tenants/${tenantId}`, { params }),
 };
 

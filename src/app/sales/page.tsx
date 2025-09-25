@@ -4,17 +4,14 @@ import { apiGet, apiPost } from "@/utils/api";
 import React from "react";
 import Spinner from '@/components/Spinner';
 import { v4 as uuidv4 } from 'uuid';
-import { QRCodeCanvas } from 'qrcode.react';
-import Barcode from 'react-barcode';
-import { Scanner } from '@yudiel/react-qr-scanner';
 import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
 import { useRouter } from "next/navigation";
 import { 
-  FaLock, FaArrowUp, FaStore, FaQrcode, FaBarcode, FaDownload, FaUpload, FaSearch, 
-  FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaPrint, FaChevronLeft, 
-  FaChevronRight, FaKeyboard, FaHistory, FaUser, FaCalculator, FaUndo, FaRedo,
-  FaStar, FaClock, FaChartLine, FaExclamationTriangle, FaCheckCircle, FaTimesCircle,
+  FaLock, FaStore, FaQrcode, FaDownload, FaSearch, 
+  FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaChevronLeft, 
+  FaChevronRight, FaKeyboard, FaHistory, FaUser, FaUndo, FaRedo,
+  FaStar, FaClock, FaChartLine, FaExclamationTriangle, FaCheckCircle,
   FaFilter, FaSort, FaTh, FaList, FaPlus, FaMinus
 } from 'react-icons/fa';
 import MpesaPayment from '@/components/MpesaPayment';
@@ -146,9 +143,9 @@ export default function SalesPage() {
           apiGet("/tenant/me"),
           apiGet("/sales/recent").catch(() => [])
         ]);
-        setProducts(products);
+        setProducts(products as Product[]);
         setBusinessInfo(businessInfo);
-        setRecentSales(recentSalesData);
+        setRecentSales(recentSalesData as any[]);
       } catch (err) {
         setError("Failed to load data. Please try again.");
       } finally {
@@ -163,10 +160,10 @@ export default function SalesPage() {
     const fetchBranches = async () => {
       try {
         const data = await apiGet('/api/branches');
-        setBranches(data);
+        setBranches(data as { id: string; name: string }[]);
         // Only set the first branch if none is selected
-        if (data.length > 0 && !selectedBranchId) {
-          setSelectedBranchId(data[0].id);
+        if ((data as { id: string; name: string }[]).length > 0 && !selectedBranchId) {
+          setSelectedBranchId((data as { id: string; name: string }[])[0].id);
         }
       } catch (error) {
         console.error('Error fetching branches:', error);
@@ -303,10 +300,11 @@ export default function SalesPage() {
     const fetchBranches = async () => {
       try {
         const data = await apiGet('/api/branches');
-        setBranches(data);
+        setBranches(data as { id: string; name: string }[]);
         // Only set the first branch if none is selected
-        if (data.length > 0 && !selectedBranchId) {
-          setSelectedBranchId(data[0].id);
+        const branchData = data as { id: string; name: string }[];
+        if (branchData.length > 0 && !selectedBranchId) {
+          setSelectedBranchId(branchData[0].id);
         }
       } catch (error) {
         console.error('Error fetching branches:', error);
@@ -358,7 +356,7 @@ export default function SalesPage() {
 
       console.log("Submitting sale data:", saleData);
       const response = await apiPost("/sales", saleData);
-      const sale = response.data || response; // Handle both response formats
+      const sale = (response as any).data || response;
       
       console.log("Sale created successfully:", sale);
       
@@ -370,7 +368,8 @@ export default function SalesPage() {
       setAmountReceived(0);
       
       // Redirect to receipt page with the sale ID
-      const saleId = sale.id || sale.saleId || sale._id;
+      const saleObj = sale as { id?: string; saleId?: string; _id?: string };
+      const saleId = (saleObj as { id?: string; saleId?: string; _id?: string }).id || saleObj.saleId || saleObj._id;
       console.log("Extracted sale ID:", saleId);
       
       if (saleId) {
@@ -420,7 +419,7 @@ export default function SalesPage() {
 
       console.log("Submitting sale data:", saleData);
       const response = await apiPost("/sales", saleData);
-      const sale = response.data || response; // Handle both response formats
+      const sale = (response as any).data || response; // Handle both response formats
       
       console.log("Sale created successfully:", sale);
       
@@ -432,7 +431,8 @@ export default function SalesPage() {
       setAmountReceived(0);
       
       // Redirect to receipt page with the sale ID
-      const saleId = sale.id || sale.saleId || sale._id;
+      const saleObj = sale as { id?: string; saleId?: string; _id?: string };
+      const saleId = (saleObj as { id?: string; saleId?: string; _id?: string }).id || saleObj.saleId || saleObj._id;
       console.log("Extracted sale ID:", saleId);
       
       if (saleId) {
@@ -494,9 +494,10 @@ export default function SalesPage() {
         
         alert('Payment successful! Your order has been processed.');
         
-        apiGet("/products").then(setProducts);
+        apiGet("/products").then((data) => setProducts(data as Product[]));
         
-        const saleId = sale.id || sale.saleId || sale._id;
+        const saleObj = sale as { id?: string; saleId?: string; _id?: string };
+        const saleId = saleObj.id || saleObj.saleId || saleObj._id;
         if (saleId) {
           router.push(`/sales/receipt/${saleId}`);
         }
@@ -557,7 +558,8 @@ export default function SalesPage() {
   // Debounced search function
   const debouncedSearch = useMemo(
     () =>
-      debounce((searchValue: string) => {
+      debounce((...args: unknown[]) => {
+        const searchValue = args[0] as string;
         setSearchTerm(searchValue);
         setCurrentPage(1);
         setIsSearching(false);
@@ -1299,7 +1301,7 @@ export default function SalesPage() {
                   >
                     {isProcessing ? (
                       <>
-                        <Spinner size={20} />
+                        <Spinner />
                         Processing...
                       </>
                     ) : (
@@ -1351,7 +1353,6 @@ export default function SalesPage() {
                     timestamp: new Date().toISOString()
                   }}
                   onSuccess={handleMpesaSuccess}
-                  onError={handleMpesaError}
                   onCancel={handleMpesaCancel}
                 />
               </div>

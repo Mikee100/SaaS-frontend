@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useState, useCallback } from "react";
 import ClientLayout from "@/app/ClientLayout";
 import { UserProvider } from "@/components/UserContext";
 
@@ -13,19 +13,46 @@ export default function AuthPageWrapper({ children }: AuthPageWrapperProps) {
   const pathname = usePathname();
   const [isAuthPage, setIsAuthPage] = useState(false);
 
+  // Memoize the auth path check to prevent unnecessary re-renders
+  const checkIfAuthPath = useCallback((currentPathname: string) => {
+    if (!currentPathname) {
+      console.log('checkIfAuthPath: No pathname provided, returning false');
+      return false;
+    }
+    
+    const authPaths = [
+      '/login', 
+      '/forgot-password', 
+      '/reset-password',
+      '/api/auth',
+      '/_next',
+      '/favicon.ico',
+      '/api/',
+      '/_next/'
+    ];
+    
+    // Check direct matches first
+    if (authPaths.includes(currentPathname)) {
+      console.log(`checkIfAuthPath: Path '${currentPathname}' is an exact auth path match`);
+      return true;
+    }
+    
+    // Check if path starts with any auth path
+    const isAuthPath = authPaths.some(path => currentPathname.startsWith(path));
+    console.log(`checkIfAuthPath: Path '${currentPathname}' ${isAuthPath ? 'starts with an auth path' : 'is not an auth path'}`);
+    
+    return isAuthPath;
+  }, []);
+
   useEffect(() => {
     if (!pathname) return;
-
-    const authPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/superadmin'];
-    const isAuth = authPaths.some(path =>
-      pathname === path || pathname.startsWith(path + '/')
-    );
+    const isAuth = checkIfAuthPath(pathname);
+    console.log('AuthPageWrapper - pathname:', pathname, 'isAuth:', isAuth);
     setIsAuthPage(isAuth);
-  }, [pathname]);
+  }, [pathname, checkIfAuthPath]);
 
+  // For auth pages, use a minimal layout without the full app shell
   if (isAuthPage) {
-    // For auth pages, provide minimal UserProvider that doesn't fetch user data
-    // but still allows login functionality
     return (
       <UserProvider skipUserFetch={true}>
         <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
@@ -35,10 +62,12 @@ export default function AuthPageWrapper({ children }: AuthPageWrapperProps) {
     );
   }
 
-  // For non-auth pages, apply ClientLayout (which includes UserProvider)
+  // For non-auth pages, use the full app layout with all providers
   return (
-    <ClientLayout>
-      {children}
-    </ClientLayout>
+    <UserProvider>
+      <ClientLayout>
+        {children}
+      </ClientLayout>
+    </UserProvider>
   );
 }

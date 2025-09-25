@@ -33,16 +33,37 @@ export default function DigitalReceiptPage() {
   const params = useParams();
   const receiptRef = useRef<HTMLDivElement>(null);
   const [isPrinting, setIsPrinting] = useState(false);
-  
-  if (!params?.id) {
-    return <div className="min-h-screen flex items-center justify-center text-red-600">Receipt ID is missing</div>;
-  }
-  
-  const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [receipt, setReceipt] = useState<any>(null);
-  const [businessInfo, setBusinessInfo] = useState<any>(null);
+  const [receipt, setReceipt] = useState<{
+    saleId: string;
+    date: string;
+    subtotal?: number;
+    total?: number;
+    vatAmount?: number;
+    paymentMethod?: string;
+    amountReceived?: number;
+    change?: number;
+    customerName?: string;
+    customerPhone?: string;
+    items: Array<{
+      name: string;
+      price: number;
+      quantity: number;
+    }>;
+  } | null>(null);
+  const [businessInfo, setBusinessInfo] = useState<{
+    name?: string;
+    businessType?: string;
+    address?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    logoUrl?: string;
+    kraPin?: string;
+    vatNumber?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const id = params?.id ? (Array.isArray(params.id) ? params.id[0] : params.id) : null;
 
   // Add print styles to the document head
   useEffect(() => {
@@ -59,45 +80,77 @@ export default function DigitalReceiptPage() {
       setLoading(true);
       setError(null);
       try {
-        const [receiptData, business] = await Promise.all([
+        const [receiptDataRaw, business] = await Promise.all([
           apiGet(`/sales/${id}`),
           apiGet('/tenant/me'),
         ]);
-        
+
+        // Type assertion for receiptData
+        const receiptData = receiptDataRaw as {
+          saleId: string;
+          date: string;
+          subtotal?: number;
+          total?: number;
+          vatAmount?: number;
+          paymentMethod?: string;
+          amountReceived?: number;
+          change?: number;
+          customerName?: string;
+          customerPhone?: string;
+          items: Array<{
+            name: string;
+            price: number;
+            quantity: number;
+          }>;
+        };
+
         const vatRate = 0.16;
         let subtotal = receiptData.subtotal;
         let vatAmount = receiptData.vatAmount;
-        
+
         if (!subtotal && receiptData.total) {
           subtotal = receiptData.total / (1 + vatRate);
         }
-        
+
         if (!vatAmount && receiptData.total && subtotal) {
           vatAmount = receiptData.total - subtotal;
         }
-        
+
         const processedReceipt = {
           ...receiptData,
           vatRate: vatRate,
           vatAmount: vatAmount,
           subtotal: subtotal,
-          items: receiptData.items?.map((item: any) => ({
+          items: receiptData.items?.map((item: { name: string; price: number; quantity: number }) => ({
             ...item,
             price: item.price || 0,
             quantity: item.quantity || 1
           })) || []
         };
-        
+
         setReceipt(processedReceipt);
-        setBusinessInfo(business);
-      } catch (e: any) {
-        setError(e?.message || "Failed to load receipt");
+        setBusinessInfo(business as {
+          name?: string;
+          businessType?: string;
+          address?: string;
+          contactPhone?: string;
+          contactEmail?: string;
+          logoUrl?: string;
+          kraPin?: string;
+          vatNumber?: string;
+        } | null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load receipt");
       } finally {
         setLoading(false);
       }
     }
     if (id) fetchData();
   }, [id]);
+
+  if (!id) {
+    return <div className="min-h-screen flex items-center justify-center text-red-600">Receipt ID is missing</div>;
+  }
 
   const receiptUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com') + `/receipt/${receipt?.saleId}`;
 
@@ -172,7 +225,7 @@ export default function DigitalReceiptPage() {
   );
 
   const vatRate = 0.16;
-  const calculatedSubtotal = receipt.items?.reduce((sum: number, item: any) => {
+  const calculatedSubtotal = receipt.items?.reduce((sum: number, item: { name: string; price: number; quantity: number }) => {
     return sum + (Number(item.price) * (Number(item.quantity) || 1));
   }, 0) || 0;
   
@@ -310,7 +363,7 @@ export default function DigitalReceiptPage() {
               </div>
               
               <div className="space-y-2">
-                {receipt.items.map((item: any, index: number) => (
+                {receipt.items.map((item: { name: string; price: number; quantity: number }, index: number) => (
                   <div key={index} className="grid grid-cols-12 gap-2 text-sm">
                     <div className="col-span-7 font-medium">{item.name}</div>
                     <div className="col-span-2 text-right text-gray-600">×{item.quantity}</div>
@@ -365,7 +418,7 @@ export default function DigitalReceiptPage() {
                     <span className="capitalize font-medium">{receipt.paymentMethod || 'N/A'}</span>
                   </div>
                   
-                  {receipt.paymentMethod === "cash" && receipt.amountReceived > 0 && (
+                  {receipt.paymentMethod === "cash" && receipt.amountReceived && receipt.amountReceived > 0 && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Amount Tendered:</span>
@@ -384,12 +437,9 @@ export default function DigitalReceiptPage() {
             {/* Footer */}
             <div className="text-center text-xs text-gray-500 space-y-2">
               <div className="flex justify-center mb-2">
-                <QRCodeCanvas 
-                  value={receiptUrl} 
-                  size={80} 
-                  level="H"
-                  includeMargin={true}
-                  className="border border-gray-200 p-1 rounded"
+                <QRCodeCanvas
+                  value={receiptUrl}
+                  size={80}
                 />
               </div>
               

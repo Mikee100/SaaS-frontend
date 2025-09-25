@@ -3,27 +3,21 @@ import React from 'react';
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
-import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import PlanGuard from '@/components/PlanGuard';
 import AuthGuard from '@/components/AuthGuard';
 import LogoEnforcement from '@/components/LogoEnforcement';
 import BranchSwitcher from '@/components/BranchSwitcher';
-import { 
-  FiTrendingUp, 
-  FiDollarSign, 
-  FiPackage, 
-  FiUsers, 
-  FiAlertCircle, 
+import {
+  FiTrendingUp,
   FiRefreshCw,
   FiTrendingDown,
-  FiShoppingCart,
   FiUserPlus,
-  FiBarChart2,
-  FiCalendar,
-  FiPieChart,
   FiPlus,
-  FiFileText
+  FiFileText,
+  FiPackage,
+  FiDollarSign,
+  FiAlertCircle
 } from 'react-icons/fi';
 
 // Dynamically import components with no SSR for better performance
@@ -82,25 +76,23 @@ const colors = {
   info: 'rgba(59, 130, 246, 1)',
 };
 
-function StatCard({ 
-  icon, 
-  label, 
-  value, 
-  trend, 
+function StatCard({
+  icon,
+  label,
+  value,
+  trend,
   trendDirection = 'up',
   color = 'primary'
-}: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: string | number; 
-  trend?: string; 
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  trend?: string;
   trendDirection?: 'up' | 'down';
   color?: keyof typeof colors;
 }) {
-  const colorValue = colors[color];
-  
   return (
-    <motion.div 
+    <motion.div
       className="bg-white rounded-xl p-6 shadow-sm ring-1 ring-gray-200"
       whileHover={{ y: -2 }}
       transition={{ type: 'spring', stiffness: 300 }}
@@ -110,7 +102,7 @@ function StatCard({
           <p className="text-sm font-medium text-gray-500">{label}</p>
           <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
         </div>
-        <div className="rounded-lg p-3" style={{ backgroundColor: `${colorValue}10` }}>
+        <div className="rounded-lg p-3" style={{ backgroundColor: `${colors[color]}10` }}>
           {icon}
         </div>
       </div>
@@ -136,7 +128,7 @@ function StatCard({
 function UsageLimitCard({ label, value, limit }: { label: string; value: number; limit: number }) {
   const percentage = Math.min(Math.round((value / limit) * 100), 100);
   const isOverLimit = value > limit;
-  
+
   return (
     <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
       <div className="flex items-center justify-between">
@@ -146,7 +138,7 @@ function UsageLimitCard({ label, value, limit }: { label: string; value: number;
         </span>
       </div>
       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-        <div 
+        <div
           className={`h-full ${isOverLimit ? 'bg-red-500' : 'bg-indigo-600'}`}
           style={{ width: `${percentage}%` }}
         />
@@ -159,16 +151,14 @@ function UsageLimitCard({ label, value, limit }: { label: string; value: number;
 }
 
 function QuickActions() {
-  const quickActions = [
-    { icon: <FiPlus className="h-5 w-5" />, label: 'New Sale', onClick: () => {} },
-    { icon: <FiUserPlus className="h-5 w-5" />, label: 'Add Customer', onClick: () => {} },
-    { icon: <FiPackage className="h-5 w-5" />, label: 'Add Product', onClick: () => {} },
-    { icon: <FiFileText className="h-5 w-5" />, label: 'Generate Report', onClick: () => {} },
-  ];
-
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      {quickActions.map((action, index) => (
+      {[
+        { icon: <FiPlus className="h-5 w-5" />, label: 'New Sale', onClick: () => {} },
+        { icon: <FiUserPlus className="h-5 w-5" />, label: 'Add Customer', onClick: () => {} },
+        { icon: <FiPackage className="h-5 w-5" />, label: 'Add Product', onClick: () => {} },
+        { icon: <FiFileText className="h-5 w-5" />, label: 'Generate Report', onClick: () => {} },
+      ].map((action, index) => (
         <motion.button
           key={index}
           whileHover={{ y: -2 }}
@@ -185,49 +175,7 @@ function QuickActions() {
   );
 }
 
-// Simple error boundary component
-function ErrorBoundary({ children }: { children: React.ReactNode }) {
-  const [hasError, setHasError] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
 
-  const handleError = useCallback((error: Error, errorInfo: React.ErrorInfo) => {
-    console.error('Error in component:', error, errorInfo);
-    setHasError(true);
-    setError(error);
-  }, []);
-
-  if (hasError) {
-    return (
-      <div className="rounded-lg bg-red-50 p-4 mb-6">
-        <h3 className="text-sm font-medium text-red-800">Error loading component</h3>
-        <p className="mt-2 text-sm text-red-700">{error?.message || 'An unknown error occurred'}</p>
-        <button
-          onClick={() => setHasError(false)}
-          className="mt-2 text-sm font-medium text-red-700 hover:text-red-600"
-        >
-          Try again
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <ErrorBoundaryWrapper onError={handleError}>
-      {children}
-    </ErrorBoundaryWrapper>
-  );
-}
-
-// This is a simplified version of the ErrorBoundary component
-class ErrorBoundaryWrapper extends React.Component<{ children: React.ReactNode; onError: (error: Error, errorInfo: React.ErrorInfo) => void }> {
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    this.props.onError(error, errorInfo);
-  }
-
-  render() {
-    return this.props.children;
-  }
-}
 
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState('30d');
@@ -520,9 +468,7 @@ export default function DashboardPage() {
               <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
                 <h3 className="mb-4 text-lg font-semibold text-gray-900">Sales Trends Analysis</h3>
                 <div className="grid grid-cols-1 gap-6">
-                  <ErrorBoundary>
-                    <ChartComponents.MonthlySalesTrends />
-                  </ErrorBoundary>
+                  <ChartComponents.MonthlySalesTrends />
                 </div>
               </div>
             </div>

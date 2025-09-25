@@ -1,9 +1,6 @@
 "use client";
 
 import AuthGuard from "@/components/AuthGuard";
-import { useUser } from "@/components/UserContext";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 // In (admin)/layout.tsx
 export default function AdminLayout({

@@ -1,11 +1,9 @@
 "use client";
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
-import PlanGuard from '@/components/PlanGuard';
-import AuthGuard from '@/components/AuthGuard';
 import LogoEnforcement from '@/components/LogoEnforcement';
 import BranchSwitcher from '@/components/BranchSwitcher';
 import AnalyticsCharts from '@/components/AnalyticsCharts';
@@ -16,8 +14,7 @@ import {
   FiUsers, 
   FiAlertCircle, 
   FiRefreshCw, 
-  FiBell,
-  FiPlusCircle, 
+  FiBell, 
   FiUserPlus, 
   FiFileText, 
   FiShoppingCart,
@@ -363,11 +360,7 @@ function MetricCard({ title, value, unit, trend }: { title: string; value: numbe
 }
 
 export default function DashboardPage() {
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
-  const [showLowStockAlert, setShowLowStockAlert] = useState(true);
-  const [showLowStockForm, setShowLowStockForm] = useState(false);
-  const [restockProduct, setRestockProduct] = useState<{ name: string; stock: number } | null>(null);
-  const [restockAmount, setRestockAmount] = useState(0);
+
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -387,10 +380,10 @@ export default function DashboardPage() {
     const fetchDashboard = async () => {
       try {
         setLoading(true);
-        const config = await apiGet('/tenant/configurations/stockThreshold');
+        const config = await apiGet<{ value?: number | string }>('/tenant/configurations/stockThreshold');
         setStockThreshold(config?.value ? Number(config.value) : 15);
         
-        const stats = await apiGet('/analytics/dashboard');
+        const stats = await apiGet('/analytics/dashboard') as AnalyticsData;
         setAnalyticsData({
           totalSales: stats.totalSales,
           totalRevenue: stats.totalRevenue,
@@ -457,12 +450,6 @@ export default function DashboardPage() {
     };
     fetchDashboard();
   }, []);
-
-  useEffect(() => {
-    if (lowStockProducts.length > 0) {
-      setShowLowStockAlert(true);
-    }
-  }, [lowStockProducts.length]);
 
   if (loading || limitsLoading) {
     return (

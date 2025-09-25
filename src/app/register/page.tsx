@@ -33,11 +33,11 @@ export default function RegisterPage() {
     const token = localStorage.getItem('token');
     if (token) {
       setIsAuthenticated(true);
-      // Show a message that they're already logged in
-      setError("You are already logged in. If you want to register a new tenant, please log out first or contact support.");
+      // Instead of setting an error, we'll let the user proceed with registration
+      // since they might want to register a new business
+      console.log("User is authenticated but can still register a new business");
     }
   }, []);
-
   // Form state
   const [formData, setFormData] = useState({
     // Business Info
@@ -98,8 +98,8 @@ export default function RegisterPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
     // If user is already authenticated, don't allow registration
     if (isAuthenticated) {
@@ -700,4 +700,4 @@ export default function RegisterPage() {
       </ThemeProvider>
     </ReactQueryProvider>
   );
-} 
+}

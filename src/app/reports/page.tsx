@@ -16,7 +16,7 @@ import {
   Filler,
 } from "chart.js";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
-import { FaCrown, FaLock, FaArrowUp, FaChartBar, FaDownload } from 'react-icons/fa';
+import { FaCrown,  FaChartBar } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 
@@ -34,9 +34,9 @@ ChartJS.register(
   Filler,
 );
 
-const paymentTypes = ["cash", "mpesa", "card"];
 
-type TopProduct = { id: string; name: string; unitsSold: number; revenue: number; margin?: number };
+
+type TopProduct = { id: string; name: string; unitsSold: number; revenue: number; margin?: number; cost?: number };
 type Customer = { name: string; phone: string; total: number; count: number; lastPurchase?: Date };
 type Forecast = { forecast_months: string[]; forecast_sales: number[] };
 
@@ -83,7 +83,7 @@ export default function ReportsPage() {
   // Low stock notification state
   const [showLowStockAlert, setShowLowStockAlert] = useState(true);
   const { user } = useUser();
-  const { limits, hasFeature } = usePlanLimits();
+  const { limits } = usePlanLimits();
   const [metrics, setMetrics] = useState<Metrics>({
     totalSales: 0,
     totalRevenue: 0,
@@ -102,29 +102,22 @@ export default function ReportsPage() {
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [productId, setProductId] = useState("");
-  const [paymentType, setPaymentType] = useState("");
   // Grouping selector for sales trend
   const [grouping, setGrouping] = useState<'day' | 'week' | 'month'>('month');
-
-  // Plan-based access control
-  const canAccessBasicReports = !limits?.currentPlan || limits.currentPlan === 'Basic' || limits.currentPlan === 'Pro' || limits.currentPlan === 'Enterprise';
-  const canAccessAdvancedReports = limits?.currentPlan === 'Pro' || limits?.currentPlan === 'Enterprise';
-  const canAccessEnterpriseReports = limits?.currentPlan === 'Enterprise';
 
   // Permission checks
   const permissionsLoading = !user || !limits;
   const canViewReports = !permissionsLoading && hasPermission(user, 'view_reports');
 
   useEffect(() => {
-    apiGet("/products").then(setProducts).catch(() => setProducts([]));
+    apiGet("/products").then((data) => setProducts(data as any[])).catch(() => setProducts([]));
   }, []);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
     apiGet(`/analytics/dashboard`)
-      .then((data) => setMetrics(data))
+      .then((data) => setMetrics(data as Metrics))
       .catch((err) => setError(err.message || "An error occurred while fetching data."))
       .finally(() => setLoading(false));
   }, []);
@@ -133,8 +126,8 @@ export default function ReportsPage() {
   const { salesTrendData, revenueBreakdownData, paymentMethodData } = useMemo(() => {
     // Support grouping by day, week, or month
     const salesRaw = metrics.salesByMonth || {};
-    let labels: string[] = Object.keys(salesRaw);
-    let values: number[] = Object.values(salesRaw);
+    const labels = Object.keys(salesRaw);
+    const values = Object.values(salesRaw);
     // Helper to get week string from date
     function getWeekStr(date: Date) {
       const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
@@ -172,7 +165,7 @@ export default function ReportsPage() {
       filtered = filtered.filter(f => f.date <= to);
     }
     // Regroup by selected grouping
-    let grouped: Record<string, number> = {};
+    const grouped: Record<string, number> = {};
     filtered.forEach(({ date, value }) => {
       let key = '';
       if (grouping === 'day') {
@@ -200,8 +193,8 @@ export default function ReportsPage() {
       ],
     };
     // Revenue chart fallback
-  let revenueLabels = (metrics.topProducts || []).map(p => p.name);
-  let revenueData = (metrics.topProducts || []).map(p => p.revenue);
+  const revenueLabels = (metrics.topProducts || []).map(p => p.name);
+  const revenueData = (metrics.topProducts || []).map(p => p.revenue);
     const revenueBreakdownData = {
       labels: revenueLabels,
       datasets: [{
@@ -212,8 +205,8 @@ export default function ReportsPage() {
       }],
     };
     // Payment chart fallback
-  let paymentLabels = Object.keys(metrics.paymentBreakdown || {});
-  let paymentData = Object.values(metrics.paymentBreakdown || {});
+  const paymentLabels = Object.keys(metrics.paymentBreakdown || {});
+  const paymentData = Object.values(metrics.paymentBreakdown || {});
     const paymentMethodData = {
       labels: paymentLabels,
       datasets: [{
@@ -323,7 +316,7 @@ export default function ReportsPage() {
                 <option value="month">Month</option>
               </select>
             </div>
-            <button className="text-sm text-gray-600 hover:text-indigo-600" onClick={() => { setDateFrom(""); setDateTo(""); setProductId(""); setPaymentType(""); }}>Clear Filters</button>
+            <button className="text-sm text-gray-600 hover:text-indigo-600" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear Filters</button>
           </div>
         </div>
 

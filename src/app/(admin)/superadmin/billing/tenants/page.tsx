@@ -2,22 +2,28 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiGet, apiPut } from '@/utils/api';
-import { 
-  FaSearch, 
-  FaFilter, 
-  FaSync, 
-  FaEdit, 
-  FaTrash, 
+import { apiGet } from '@/utils/api';
+import {
+  FaSearch,
+  FaFilter,
+  FaSync,
+  FaEdit,
   FaPlus,
   FaChevronLeft
 } from 'react-icons/fa';
 
 interface Tenant {
   id: string;
-  name: string;
-  email: string;
-  plan: string;
+  tenantId?: string;
+  name?: string;
+  clientName?: string;
+  email?: string;
+  clientEmail?: string;
+  plan?: {
+    name?: string;
+    price?: number;
+    currency?: string;
+  } | string;
   status: 'active' | 'past_due' | 'canceled' | 'unpaid' | 'trialing';
   currentPeriodEnd: string;
   amount: number;
@@ -45,8 +51,8 @@ export default function TenantBillingPage() {
       setError('');
   const data = await apiGet('/billing/admin/billing/tenants');
       setTenants(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load tenants');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load tenants');
     } finally {
       setLoading(false);
     }
@@ -213,7 +219,9 @@ export default function TenantBillingPage() {
                       <div className="text-sm text-gray-500">{tenant.clientEmail || tenant.email || '-'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 capitalize">{tenant.plan?.name || '-'}</div>
+                      <div className="text-sm text-gray-900 capitalize">
+                        {typeof tenant.plan === 'string' ? tenant.plan : tenant.plan?.name || '-'}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getStatusBadge(tenant.status || '-')}
@@ -222,7 +230,9 @@ export default function TenantBillingPage() {
                       {tenant.currentPeriodEnd ? formatDate(tenant.currentPeriodEnd) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {tenant.plan?.price !== undefined ? formatCurrency(tenant.plan.price, tenant.plan?.currency || 'USD') : '-'}
+                      {typeof tenant.plan === 'object' && tenant.plan?.price !== undefined
+                        ? formatCurrency(tenant.plan.price, tenant.plan?.currency || 'USD')
+                        : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button

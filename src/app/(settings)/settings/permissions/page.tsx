@@ -1,11 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
-import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { FaListAlt, FaShieldAlt, FaUsers, FaEdit, FaTrash, FaPlus, FaUserShield, FaCog, FaLock } from 'react-icons/fa';
+import { useEffect, useState, useContext } from "react";
+import { apiGet, apiPost, apiPut } from "@/utils/api";
+import { FaListAlt, FaShieldAlt, FaCog, FaLock, FaPlus, FaEdit } from 'react-icons/fa';
 import Link from "next/link";
+import { useUser } from "@/components/UserContext";
 import { hasPermission } from '@/utils/permissions';
-import { useUser } from '@/components/UserContext';
-import Tooltip from '@/components/Tooltip';
 
 interface Role {
   id: string;
@@ -46,16 +45,12 @@ export default function PermissionsSettings() {
   const [showManagePermissions, setShowManagePermissions] = useState<User | null>(null);
   const [userPermissionsEdit, setUserPermissionsEdit] = useState<string[]>([]);
 
-  // LOG: User context
-  console.log("User from context:", user);
-
   // Role management
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [showAvailablePermissions, setShowAvailablePermissions] = useState(false);
   const [newRole, setNewRole] = useState({ name: "", description: "" });
   const defaultRoles = ["Admin", "Manager", "Staff"];
   const [selectedDefaultRole, setSelectedDefaultRole] = useState<string>("");
-  const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [showRolesManagement, setShowRolesManagement] = useState(true);
 
   // Permission checks
@@ -108,31 +103,52 @@ export default function PermissionsSettings() {
     }
   };
 
+
+  console.log("User in TenantID:", user?.tenantId);
   const handleCreateRole = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await apiPost("/roles", newRole);
+      if (!user?.tenantId) {
+        throw new Error("Tenant ID is missing. Please log in again.")
+      }
+      
+      console.log('Sending role creation request with:', {
+        name: newRole.name,
+        description: newRole.description,
+        tenantId: user.tenantId
+      });
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/roles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: newRole.name,
+          description: newRole.description,
+          tenantId: user.tenantId
+        })
+      });
+      
+      const responseData = await response.json().catch(() => ({}));
+      
+      if (!response.ok) {
+        console.error('Role creation failed with status:', response.status, 'Response:', responseData);
+        throw new Error(responseData.message || `Failed to create role: ${response.statusText}`);
+      }
+      
       setNewRole({ name: "", description: "" });
       setShowCreateRole(false);
       await loadData();
       setSuccess(true);
     } catch (err: any) {
       console.error("Failed to create role:", err);
-      setError(err.message || "Failed to create role");
+      setError(err.message || "Failed to create role. Please check the console for more details.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleUpdateRolePermissions = async (roleId: string, permissions: string[]) => {
-    try {
-      await apiPut(`/roles/${roleId}/permissions`, { permissions });
-      await loadData();
-      setSuccess(true);
-    } catch (err: any) {
-      console.error("Failed to update role permissions:", err);
-      setError(err.message || "Failed to update role permissions");
     }
   };
 
@@ -145,13 +161,6 @@ export default function PermissionsSettings() {
     "Analytics": ["view_analytics", "export_data"],
     "Settings": ["view_settings", "edit_settings"],
     "Billing": ["view_billing", "edit_billing"],
-  };
-
-  const getPermissionCategory = (key: string) => {
-    for (const [category, perms] of Object.entries(permissionCategories)) {
-      if (perms.includes(key)) return category;
-    }
-    return "Other";
   };
 
   if (loading) {
@@ -183,6 +192,10 @@ export default function PermissionsSettings() {
     if (!usersByBranch[branchKey]) usersByBranch[branchKey] = [];
     usersByBranch[branchKey].push(user);
   });
+
+  function setEditingRole(role: Role): void {
+    throw new Error("Function not implemented.");
+  }
 
   return (
     <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">

@@ -3,13 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiPost } from '@/utils/api';
-import { 
-  FaChevronLeft, 
-  FaSave, 
-  FaCreditCard, 
+import {
+  FaChevronLeft,
+  FaSave,
+  FaCreditCard,
   FaExchangeAlt,
-  FaMoneyBillWave,
-  FaInfoCircle
+  FaMoneyBillWave
 } from 'react-icons/fa';
 
 interface StripeConfig {
@@ -59,8 +58,8 @@ export default function BillingSettingsPage() {
       setError('');
       const data = await apiGet('/admin/billing/settings');
       setSettings(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load billing settings');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load billing settings');
     } finally {
       setLoading(false);
     }
@@ -72,7 +71,7 @@ export default function BillingSettingsPage() {
       setSaving(true);
       setError('');
       setSuccess('');
-      
+
       // Validate required fields
       if (!settings.stripe.publishableKey || !settings.stripe.secretKey) {
         throw new Error('Stripe publishable key and secret key are required');
@@ -80,11 +79,11 @@ export default function BillingSettingsPage() {
 
       await apiPost('/admin/billing/settings', settings);
       setSuccess('Billing settings saved successfully!');
-      
+
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to save settings');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -120,8 +119,8 @@ export default function BillingSettingsPage() {
       await apiPost('/admin/billing/test-connection', settings.stripe);
       setSuccess('Successfully connected to Stripe!');
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to connect to Stripe');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to connect to Stripe');
     } finally {
       setLoading(false);
     }

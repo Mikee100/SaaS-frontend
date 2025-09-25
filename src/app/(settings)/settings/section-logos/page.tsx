@@ -22,7 +22,6 @@ interface SectionConfig {
 
 export default function SectionLogosPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>('login');
   const [sections, setSections] = useState<SectionConfig>({
     login: {
       logo: null,

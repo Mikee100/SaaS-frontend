@@ -6,7 +6,7 @@ import { apiPost } from "@/utils/api";
 export default function ResetPasswordPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get('token');
+  const token = searchParams?.get('token');
   
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -51,6 +51,14 @@ export default function ResetPasswordPage() {
       setError(err.message || "Failed to reset password");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleError = (error: unknown) => {
+    if (error instanceof Error) {
+      setError(error.message);
+    } else {
+      setError("An unknown error occurred");
     }
   };
 
@@ -122,4 +130,4 @@ export default function ResetPasswordPage() {
       </div>
     </div>
   );
-} 
+}

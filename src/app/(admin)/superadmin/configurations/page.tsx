@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/utils/api';
-import { FaCog, FaShieldAlt, FaGlobe, FaEnvelope, FaTools, FaPlus, FaEdit, FaTrash, FaEye, FaEyeSlash, FaSearch, FaDownload, FaUpload, FaRedo, FaExclamationTriangle } from 'react-icons/fa';
+import { FaCog, FaShieldAlt, FaGlobe, FaEnvelope, FaTools, FaPlus, FaEdit, FaTrash, FaEye, FaEyeSlash, FaSearch, FaDownload, FaRedo, FaExclamationTriangle } from 'react-icons/fa';
 
 interface ConfigurationItem {
   key: string;
@@ -41,36 +41,36 @@ export default function ConfigurationsPage() {
     general: FaCog,
   };
 
-  useEffect(() => {
-    fetchConfigurations();
-    fetchCategories();
-  }, [selectedCategory]);
-
-  const fetchConfigurations = async () => {
+  const fetchConfigurations = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const endpoint = selectedCategory === 'all' 
-        ? '/admin/configurations' 
+      const endpoint = selectedCategory === 'all'
+        ? '/admin/configurations'
         : `/admin/configurations/category/${selectedCategory}`;
       const data = await apiGet(endpoint);
-      setConfigurations(data);
+      setConfigurations(data as ConfigurationItem[]);
     } catch (error) {
       console.error('Failed to fetch configurations:', error);
       setError('Failed to load configurations');
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCategory]);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const data = await apiGet('/admin/configurations/categories/list');
-      setCategories(data);
+      setCategories(data as Category[]);
     } catch (error) {
       console.error('Failed to fetch categories:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchConfigurations();
+    fetchCategories();
+  }, [fetchConfigurations, fetchCategories]);
 
   const handleEdit = (config: ConfigurationItem) => {
     setEditingKey(config.key);
@@ -523,7 +523,7 @@ export default function ConfigurationsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                 <select
                   value={createForm.category || ''}
-                  onChange={(e) => setCreateForm({ ...createForm, category: e.target.value as any })}
+                  onChange={(e) => setCreateForm({ ...createForm, category: e.target.value as ConfigurationItem['category'] })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 >
                   <option value="">Select category</option>
@@ -587,4 +587,4 @@ export default function ConfigurationsPage() {
       )}
     </div>
   );
-} 
+}

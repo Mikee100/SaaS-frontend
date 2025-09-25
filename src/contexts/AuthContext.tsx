@@ -15,7 +15,7 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const { user } = useUser([]);
+  const { user } = useUser();
 
   const value = React.useMemo(() => ({
     tenantId: user?.tenantId,

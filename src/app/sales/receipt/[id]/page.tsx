@@ -33,16 +33,12 @@ export default function DigitalReceiptPage() {
   const params = useParams();
   const receiptRef = useRef<HTMLDivElement>(null);
   const [isPrinting, setIsPrinting] = useState(false);
-  
-  if (!params?.id) {
-    return <div className="min-h-screen flex items-center justify-center text-red-600">Receipt ID is missing</div>;
-  }
-  
-  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [receipt, setReceipt] = useState<any>(null);
   const [businessInfo, setBusinessInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const id = params?.id ? (Array.isArray(params.id) ? params.id[0] : params.id) : null;
 
   // Add print styles to the document head
   useEffect(() => {
@@ -63,19 +59,19 @@ export default function DigitalReceiptPage() {
           apiGet(`/sales/${id}`),
           apiGet('/tenant/me'),
         ]);
-        
+
         const vatRate = 0.16;
         let subtotal = receiptData.subtotal;
         let vatAmount = receiptData.vatAmount;
-        
+
         if (!subtotal && receiptData.total) {
           subtotal = receiptData.total / (1 + vatRate);
         }
-        
+
         if (!vatAmount && receiptData.total && subtotal) {
           vatAmount = receiptData.total - subtotal;
         }
-        
+
         const processedReceipt = {
           ...receiptData,
           vatRate: vatRate,
@@ -87,7 +83,7 @@ export default function DigitalReceiptPage() {
             quantity: item.quantity || 1
           })) || []
         };
-        
+
         setReceipt(processedReceipt);
         setBusinessInfo(business);
       } catch (e: any) {
@@ -98,6 +94,10 @@ export default function DigitalReceiptPage() {
     }
     if (id) fetchData();
   }, [id]);
+
+  if (!id) {
+    return <div className="min-h-screen flex items-center justify-center text-red-600">Receipt ID is missing</div>;
+  }
 
   const receiptUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com') + `/receipt/${receipt?.saleId}`;
 
@@ -411,12 +411,9 @@ export default function DigitalReceiptPage() {
             {/* Footer */}
             <div className="text-center text-xs text-gray-500 space-y-2">
               <div className="flex justify-center mb-2">
-                <QRCodeCanvas 
-                  value={receiptUrl} 
-                  size={80} 
-                  level="H"
-                  includeMargin={true}
-                  className="border border-gray-200 p-1 rounded"
+                <QRCodeCanvas
+                  value={receiptUrl}
+                  size={80}
                 />
               </div>
               

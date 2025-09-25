@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext, useEffect, useState, ReactNode, Dispatch, SetStateAction } from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode, Dispatch, SetStateAction, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { apiGet } from "@/utils/api";
 
@@ -40,9 +40,9 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
-
+  
   // Helper to fetch user
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) {
       setUser(null);
@@ -52,7 +52,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
 
     setLoading(true);
     try {
-      const userData = await apiGet('/user/me');
+      const userData = await apiGet('/user/me') as User;
 
       if (!userData) {
         throw new Error('No user data received');
@@ -90,27 +90,27 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // No dependencies needed, or add dependencies if you use any from props/state
 
-  // Check if current path is an auth path
-  const isAuthPath = () => {
-    if (typeof window === 'undefined') return false;
+  // 1. Wrap 'isAuthPath' in useCallback to stabilize its reference
+  const isAuthPath = useCallback(() => {
+    if (typeof window === 'undefined') {
+      console.log('isAuthPath: Running on server, returning false');
+      return false;
+    }
     const path = pathname || window.location.pathname;
-    return path === '/login' ||
-           path === '/register' ||
-           path === '/forgot-password' ||
-           path === '/reset-password' ||
-           path.startsWith('/superadmin');
-  };
+    const isAuth = path === '/login' ||
+                  path === '/register' ||
+                  path === '/forgot-password' ||
+                  path === '/reset-password' ||
+                  path.startsWith('/api/') ||
+                  path.startsWith('/_next/');
+    
+    console.log(`isAuthPath: Path '${path}' is ${isAuth ? 'an auth path' : 'not an auth path'}`);
+    return isAuth;
+  }, [pathname]);
 
-  // Check if current path should allow authenticated users (like register page)
-  const shouldAllowAuthenticatedUsers = () => {
-    if (typeof window === 'undefined') return false;
-    const path = pathname || window.location.pathname;
-    return path === '/register'; // Register page should be accessible even when authenticated
-  };
-
-  // Initial fetch and storage event listener
+// ...existing code...
   useEffect(() => {
     // CRITICAL: If skipUserFetch is true, completely skip all authentication logic
     if (skipUserFetch) {
@@ -141,8 +141,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [skipUserFetch, pathname]);
-
+  }, [skipUserFetch, pathname, isAuthPath, fetchUser]);
+// ...existing code...
   // Additional effect to prevent redirects on auth pages
   useEffect(() => {
     if (isAuthPath() || skipUserFetch) {
@@ -150,15 +150,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       setLoading(false);
       setError(null);
     }
-  }, [pathname, skipUserFetch]);
+  }, [pathname, skipUserFetch, isAuthPath]);
 
+  // 2. Wrap 'login', 'logout', and 'refreshUser' in useCallback
   // Login function
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     setError(null);
 
     try {
-      const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000');
+      const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000' || 'http://13.51.56.67:9000'   ).replace(/\/+$/, '');
       const loginUrl = `${apiUrl}/auth/login`;
       console.log('Attempting to login to:', loginUrl);
 
@@ -226,27 +227,30 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       } else {
         throw new Error('No access token received in response');
       }
-    } catch (err: any) {
-      setUser(null);
-      setError(err.message || 'Login failed');
-      localStorage.removeItem('token');
-    } finally {
+   } catch (err) {
+  setUser(null);
+  // Fix: Specify error type
+  setError((err instanceof Error ? err.message : 'Login failed'));
+  localStorage.removeItem('token');
+}finally {
       setLoading(false);
     }
-  };
+  }, [router, fetchUser]);
 
+  // 2. Wrap 'logout' in useCallback
   // Logout function
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
     setUser(null);
     setError(null);
     router.push('/login');
-  };
+  }, [router]);
 
+  // 2. Wrap 'refreshUser' in useCallback
   // Manual refresh
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     await fetchUser();
-  };
+  }, [fetchUser]);
 
   // Clear error
   const clearError = () => setError(null);
@@ -261,7 +265,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     logout,
     refreshUser,
     clearError,
-  }), [user, loading, error]);
+  }), [user, loading, error, login, logout, refreshUser]);
 
   return (
     <UserContext.Provider value={ctxValue}>
@@ -270,7 +274,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   );
 };
 
-export function useUser(p0: never[]) {
+export function useUser() {
   const ctx = useContext(UserContext);
   if (!ctx) throw new Error("useUser must be used within a UserProvider");
   return ctx;

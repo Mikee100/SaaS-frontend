@@ -1,7 +1,8 @@
 
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import type { StripeCardElementOptions } from "@stripe/stripe-js";
 
 interface PaymentMethod {
   id: string;
@@ -11,6 +12,24 @@ interface PaymentMethod {
     last4: string;
     expMonth: number;
     expYear: number;
+  };
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  methods?: PaymentMethod[];
+}
+
+interface PaymentMethodResponse {
+  id: string;
+  type: string;
+  card?: {
+    brand: string;
+    last4: string;
+    exp_month: number;
+    exp_year: number;
   };
 }
 
@@ -35,7 +54,7 @@ export default function BillingCards() {
   const [saving, setSaving] = useState(false);
 
   // Fetch saved cards
-  const fetchMethods = async () => {
+  const fetchMethods = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -49,23 +68,49 @@ export default function BillingCards() {
         },
         credentials: "include",
       });
-      const data = await res.json();
-      if (data.success) {
-        setMethods(data.methods);
+      
+      const data: ApiResponse<PaymentMethodResponse[]> = await res.json();
+      
+      if (data.success && data.methods) {
+        // Transform the response to match our PaymentMethod interface
+        const formattedMethods = data.methods.map(method => {
+          if (method.card) {
+            // Handle both expMonth/expYear and exp_month/exp_year formats
+            const expMonth = 'expMonth' in method.card ? method.card.expMonth : method.card.exp_month;
+            const expYear = 'expYear' in method.card ? method.card.expYear : method.card.exp_year;
+            
+            return {
+              id: method.id,
+              type: method.type,
+              card: {
+                brand: method.card.brand,
+                last4: method.card.last4,
+                expMonth,
+                expYear
+              }
+            };
+          }
+          return {
+            id: method.id,
+            type: method.type
+          };
+        });
+        
+        setMethods(formattedMethods);
       } else {
         setError(data.error || "Failed to fetch payment methods");
       }
     } catch (err) {
-      setError("Network error");
+      console.error('Error fetching payment methods:', err);
+      setError("Network error while fetching payment methods");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchMethods();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchMethods]);
 
   // Save new card
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,18 +132,16 @@ export default function BillingCards() {
       return;
     }
 
-    const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
-      type: "card",
-      card: cardElement,
-    });
-
-    if (stripeError || !paymentMethod) {
-      setError(stripeError?.message || "Failed to create payment method");
-      setSaving(false);
-      return;
-    }
-
     try {
+      const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
+        type: "card",
+        card: cardElement,
+      });
+
+      if (stripeError || !paymentMethod) {
+        throw new Error(stripeError?.message || "Failed to create payment method");
+      }
+
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000";
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
       const res = await fetch(`${apiUrl}/payments/methods`, {
@@ -109,14 +152,39 @@ export default function BillingCards() {
         },
         body: JSON.stringify({ paymentMethodId: paymentMethod.id }),
       });
-      if (!res.ok) throw new Error("Failed to save payment method");
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to save payment method");
+      }
+
       setSuccess(true);
-      fetchMethods(); // Refresh list after saving
-    } catch (err: any) {
-      setError(err.message || "Failed to save payment method");
+      await fetchMethods(); // Refresh list after saving
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error saving payment method:', error);
+      setError(error.message || "Failed to save payment method");
     } finally {
       setSaving(false);
     }
+  };
+
+  // Card element options
+  const cardElementOptions: StripeCardElementOptions = {
+    style: {
+      base: {
+        fontSize: '16px',
+        color: '#32325d',
+        '::placeholder': {
+          color: '#aab7c4',
+        },
+      },
+      invalid: {
+        color: '#fa755a',
+        iconColor: '#fa755a',
+      },
+    },
+    hidePostalCode: true,
   };
 
   return (
@@ -154,7 +222,7 @@ export default function BillingCards() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <h3 className="text-lg font-semibold">Add New Card</h3>
         <div className="bg-gray-50 rounded-lg p-4">
-          <CardElement options={{ hidePostalCode: true }} />
+          <CardElement options={cardElementOptions} />
         </div>
         {error && <div className="text-red-600 text-sm">{error}</div>}
         {success && <div className="text-green-600 text-sm">Card saved successfully!</div>}

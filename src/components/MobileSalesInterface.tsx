@@ -1,6 +1,6 @@
 "use client";
 import { useState } from 'react';
-import { FaPlus, FaMinus, FaTrash, FaCalculator, FaCreditCard, FaMoneyBillWave, FaMobile, FaUser, FaPhone } from 'react-icons/fa';
+import { FaPlus, FaMinus, FaTrash, FaCalculator, FaMobile, FaUser, FaPhone } from 'react-icons/fa';
 
 interface Product {
   id: string;

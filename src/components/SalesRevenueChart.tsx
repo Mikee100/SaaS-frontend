@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiInfo, FiDollarSign, FiTrendingUp, FiTrendingDown, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { FiInfo, FiDollarSign, FiTrendingUp, FiTrendingDown, FiMinimize2 } from 'react-icons/fi';
 
 interface DataPoint {
   date: Date;
@@ -44,23 +44,8 @@ export default function SalesRevenueChart({
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>('1M');
   const chartRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
-  // Update dimensions on resize
-  useEffect(() => {
-    const updateDimensions = () => {
-      if (chartRef.current) {
-        setDimensions({
-          width: chartRef.current.offsetWidth,
-          height: chartRef.current.offsetHeight
-        });
-      }
-    };
 
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
-  }, []);
 
   if (!salesData || Object.keys(salesData).length === 0) {
     return (

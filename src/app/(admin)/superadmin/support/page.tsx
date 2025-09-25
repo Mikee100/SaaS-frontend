@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "@/utils/api";
@@ -43,8 +43,11 @@ export default function SupportTicketsPage() {
   const [responses, setResponses] = useState<TicketResponse[]>([]);
   const [newResponse, setNewResponse] = useState("");
   const [isInternal, setIsInternal] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'open' | 'in_progress' | 'resolved'>('all');
-  const [priorityFilter, setPriorityFilter] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
+  type TicketStatus = 'all' | 'open' | 'in_progress' | 'resolved';
+  type TicketPriority = 'all' | 'low' | 'medium' | 'high' | 'critical';
+  
+  const [filter, setFilter] = useState<TicketStatus>('all');
+  const [priorityFilter, setPriorityFilter] = useState<TicketPriority>('all');
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
@@ -52,23 +55,26 @@ export default function SupportTicketsPage() {
     }
   }, [user, loading, router]);
 
-  useEffect(() => {
-    if (user?.isSuperadmin) {
-      fetchTickets();
-    }
-  }, [user, filter, priorityFilter]);
-
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
+    if (!user?.isSuperadmin) return;
+    
     try {
       setLoadingTickets(true);
-      const data = await apiGet(`/admin/support/tickets?status=${filter}&priority=${priorityFilter}`);
+      const data = await apiGet(
+        `/admin/support/tickets?status=${filter}&priority=${priorityFilter}`
+      ) as SupportTicket[];
       setTickets(data);
     } catch (error) {
       console.error("Failed to fetch tickets:", error);
     } finally {
       setLoadingTickets(false);
     }
-  };
+  }, [filter, priorityFilter, user?.isSuperadmin]);
+
+  useEffect(() => {
+    fetchTickets();
+  }, [fetchTickets]);
+
 
   const fetchTicketResponses = async (ticketId: string) => {
     try {
@@ -84,29 +90,33 @@ export default function SupportTicketsPage() {
     fetchTicketResponses(ticket.id);
   };
 
-  const handleStatusChange = async (ticketId: string, status: SupportTicket['status']) => {
+  const handleStatusChange = useCallback(async (ticketId: string, status: SupportTicket['status']) => {
     try {
       await apiPut(`/admin/support/tickets/${ticketId}`, { status });
-      fetchTickets();
-      if (selectedTicket?.id === ticketId) {
-        setSelectedTicket({ ...selectedTicket, status });
-      }
+      setTickets(prevTickets => 
+        prevTickets.map(ticket => 
+          ticket.id === ticketId ? { ...ticket, status } : ticket
+        )
+      );
+      setSelectedTicket(prev => prev?.id === ticketId ? { ...prev, status } : prev);
     } catch (error) {
       console.error("Failed to update ticket status:", error);
     }
-  };
+  }, []);
 
-  const handlePriorityChange = async (ticketId: string, priority: SupportTicket['priority']) => {
+  const handlePriorityChange = useCallback(async (ticketId: string, priority: SupportTicket['priority']) => {
     try {
       await apiPut(`/admin/support/tickets/${ticketId}`, { priority });
-      fetchTickets();
-      if (selectedTicket?.id === ticketId) {
-        setSelectedTicket({ ...selectedTicket, priority });
-      }
+      setTickets(prevTickets => 
+        prevTickets.map(ticket => 
+          ticket.id === ticketId ? { ...ticket, priority } : ticket
+        )
+      );
+      setSelectedTicket(prev => prev?.id === ticketId ? { ...prev, priority } : prev);
     } catch (error) {
       console.error("Failed to update ticket priority:", error);
     }
-  };
+  }, []);
 
   const sendResponse = async () => {
     if (!selectedTicket || !newResponse.trim()) return;
@@ -154,7 +164,7 @@ export default function SupportTicketsPage() {
       <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
         <select 
           value={filter} 
-          onChange={(e) => setFilter(e.target.value as any)}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilter(e.target.value as TicketStatus)}
           style={{ padding: "0.5rem", borderRadius: "4px", border: "1px solid #d1d5db" }}
         >
           <option value="all">All Status</option>
@@ -165,7 +175,7 @@ export default function SupportTicketsPage() {
         
         <select 
           value={priorityFilter} 
-          onChange={(e) => setPriorityFilter(e.target.value as any)}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPriorityFilter(e.target.value as TicketPriority)}
           style={{ padding: "0.5rem", borderRadius: "4px", border: "1px solid #d1d5db" }}
         >
           <option value="all">All Priorities</option>
@@ -250,7 +260,8 @@ export default function SupportTicketsPage() {
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <select
                       value={selectedTicket.priority}
-                      onChange={(e) => handlePriorityChange(selectedTicket.id, e.target.value as any)}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => 
+                        handlePriorityChange(selectedTicket.id, e.target.value as 'low' | 'medium' | 'high' | 'critical')}
                       style={{ padding: "0.25rem", borderRadius: "4px", border: "1px solid #d1d5db", fontSize: 12 }}
                     >
                       <option value="low">Low</option>
@@ -260,7 +271,8 @@ export default function SupportTicketsPage() {
                     </select>
                     <select
                       value={selectedTicket.status}
-                      onChange={(e) => handleStatusChange(selectedTicket.id, e.target.value as any)}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => 
+                        handleStatusChange(selectedTicket.id, e.target.value as 'open' | 'in_progress' | 'resolved' | 'closed')}
                       style={{ padding: "0.25rem", borderRadius: "4px", border: "1px solid #d1d5db", fontSize: 12 }}
                     >
                       <option value="open">Open</option>

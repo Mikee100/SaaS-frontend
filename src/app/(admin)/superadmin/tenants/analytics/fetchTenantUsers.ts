@@ -5,7 +5,7 @@ export async function fetchTenantUsers(tenantId: string) {
   try {
     const users = await apiGet(`/user?tenantId=${tenantId}`);
     return Array.isArray(users) ? users : [];
-  } catch (err) {
+  } catch {
     return [];
   }
 }

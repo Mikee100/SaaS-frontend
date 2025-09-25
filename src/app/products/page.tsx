@@ -5,7 +5,7 @@ import { usePlanLimits } from '@/hooks/usePlanLimits';
 import PlanGuard from '@/components/PlanGuard';
 import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
-import { FaPlus, FaBox, FaExclamationTriangle, FaSearch, FaDownload, FaTrash, FaEdit, FaQrcode, FaUpload, FaLock, FaArrowUp, FaFilter, FaSortAmountDown, FaEllipsisV, FaPrint, FaTimes, FaChevronLeft, FaChevronRight, FaEye, FaEyeSlash, FaStore, FaChartLine, FaLayerGroup, FaMoneyBillWave, FaChevronDown } from 'react-icons/fa';
+import { FaPlus, FaBox, FaExclamationTriangle, FaSearch, FaDownload, FaTrash, FaEdit, FaQrcode, FaUpload, FaLock, FaSortAmountDown, FaPrint, FaTimes, FaChevronLeft, FaChevronRight, FaEye, FaStore, FaChartLine, FaLayerGroup, FaMoneyBillWave, FaChevronDown } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
@@ -19,12 +19,12 @@ interface Product {
   price: number;
   stock: number;
   description?: string;
-  customFields?: Record<string, any>;
+  customFields?: Record<string, string | number | boolean>;
 }
 
 export default function ProductsPage() {
   const { user } = useUser();
-  const { selectedBranchId, setSelectedBranchId, canChangeBranch, isBranchLoading } = useBranch();
+  const { selectedBranchId, setSelectedBranchId, canChangeBranch } = useBranch();
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
@@ -35,7 +35,7 @@ export default function ProductsPage() {
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [uploadResult, setUploadResult] = useState<{ length: number } | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [clearMsg, setClearMsg] = useState("");
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -55,7 +55,7 @@ export default function ProductsPage() {
   const canCreateProducts = hasPermission(user, 'create_products');
   const canEditProducts = hasPermission(user, 'edit_products');
   const canDeleteProducts = hasPermission(user, 'delete_products');
- const canUploadProducts = hasPermission(user, 'bulk_upload');
+  const canUploadProducts = hasPermission(user, 'bulk_upload');
 
   useEffect(() => {
     fetchProducts();
@@ -65,7 +65,7 @@ export default function ProductsPage() {
     async function fetchBranches() {
       setBranchesLoading(true);
       try {
-        const data = await apiGet('/api/branches');
+        const data = await apiGet<{ id: string; name: string }[]>('/api/branches');
         setBranches(data);
         
         // If no branch is selected and user has a branch, use that
@@ -146,7 +146,7 @@ export default function ProductsPage() {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
 
-    if (!canCreate('products')) {
+    if (!canCreate()) {
       alert('Product limit reached. Please upgrade your plan.');
       return;
     }
@@ -167,7 +167,7 @@ export default function ProductsPage() {
         stock: parseInt(formData.get("stock") as string),
         description: formData.get("description"),
         branchId: selectedBranchId, // Add branchId to payload
-      }, { 'x-branch-id': selectedBranchId || '' });
+      }, { 'x-branch-id': selectedBranchId || '' }) as Product;
       setProducts([newProduct, ...products]);
       setShowAddForm(false);
     } catch (err: any) {
@@ -422,7 +422,7 @@ export default function ProductsPage() {
     );
   }
 
-  const usagePercentage = getUsagePercentage('products');
+  const usagePercentage = getUsagePercentage();
   const isNearLimit = usagePercentage >= 80;
   const isAtLimit = usagePercentage >= 100;
 
@@ -495,9 +495,9 @@ export default function ProductsPage() {
               {canCreateProducts ? (
                 <button
                   onClick={() => setShowAddForm(true)}
-                  disabled={!canCreate('products')}
+                  disabled={!canCreate()}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                    canCreate('products')
+                    canCreate()
                       ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-md hover:shadow-lg'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}

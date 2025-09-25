@@ -4,7 +4,7 @@ import { useMonthlySalesTrends } from '@/hooks/useMonthlySalesTrends';
 import { formatCurrency } from '@/utils/format';
 
 const MonthlySalesTrends: React.FC = () => {
-  const { data: monthlyTrends, loading, error } = useMonthlySalesTrends();
+  const { data: monthlyTrends, error } = useMonthlySalesTrends();
 
   if (error) {
     return (

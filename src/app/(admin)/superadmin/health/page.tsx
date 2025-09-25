@@ -61,10 +61,12 @@ interface PerformanceMetrics {
   };
 }
 
-interface TimeSeriesData {
+type TimeRange = '1h' | '6h' | '24h' | '7d';
+
+type TimeSeriesData = {
   timestamp: string;
   value: number;
-}
+};
 
 export default function SystemHealthPage() {
   const { user, loading } = useUser();
@@ -73,7 +75,7 @@ export default function SystemHealthPage() {
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
   const [loadingHealth, setLoadingHealth] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [selectedTimeRange, setSelectedTimeRange] = useState<'1h' | '6h' | '24h' | '7d'>('24h');
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('24h');
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
@@ -234,7 +236,7 @@ export default function SystemHealthPage() {
         <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
           <select
             value={selectedTimeRange}
-            onChange={(e) => setSelectedTimeRange(e.target.value as any)}
+            onChange={(e) => setSelectedTimeRange(e.target.value as TimeRange)}
             style={{ padding: "0.5rem", borderRadius: "4px", border: "1px solid #d1d5db" }}
           >
             <option value="1h">Last Hour</option>

@@ -1,32 +1,81 @@
 "use client";
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiGet } from '@/utils/api';
 import { FaChevronLeft } from 'react-icons/fa';
 
-export default function TenantBillingDetailsPage({ params }: { params: { id: string } }) {
+interface Tenant {
+  id: string;
+  tenantId?: string;
+  clientName?: string;
+  clientEmail?: string;
+  plan?: {
+    name?: string;
+    price?: number;
+    interval?: string;
+    features?: {
+      maxUsers?: number;
+      maxProducts?: number;
+      maxSalesPerMonth?: number;
+      analyticsEnabled?: boolean;
+      advancedReports?: boolean;
+      prioritySupport?: boolean;
+      customBranding?: boolean;
+      apiAccess?: boolean;
+    };
+  };
+  status?: string;
+  currentPeriodEnd?: string;
+  cancelAtPeriodEnd?: boolean;
+  lastInvoice?: {
+    amount: number;
+    status: string;
+    dueDate?: string;
+    paidAt?: string;
+  };
+  lastPayment?: {
+    amount: number;
+    status: string;
+    completedAt?: string;
+  };
+}
+
+export default function TenantBillingDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [tenant, setTenant] = useState<any>(null);
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [resolvedParams, setResolvedParams] = useState<{ id: string } | null>(null);
 
   useEffect(() => {
-    fetchTenant();
-  }, []);
+    const resolveParams = async () => {
+      const resolved = await params;
+      setResolvedParams(resolved);
+    };
+    resolveParams();
+  }, [params]);
 
-  const fetchTenant = async () => {
+  const fetchTenant = useCallback(async () => {
+    if (!resolvedParams) return;
+
     try {
       setLoading(true);
       setError('');
       const data = await apiGet(`/billing/admin/billing/tenants`);
-      const found = Array.isArray(data) ? data.find((t: any) => t.tenantId === params.id) : null;
+      const found = Array.isArray(data) ? data.find((t: Tenant) => t.tenantId === resolvedParams.id) : null;
       setTenant(found);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load tenant');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load tenant');
     } finally {
       setLoading(false);
     }
-  };
+  }, [resolvedParams]);
+
+  useEffect(() => {
+    if (resolvedParams) {
+      fetchTenant();
+    }
+  }, [resolvedParams, fetchTenant]);
 
   if (loading) return <div className="p-8">Loading...</div>;
   if (error) return <div className="p-8 text-red-600">{error}</div>;

@@ -20,13 +20,29 @@ interface BillingMetrics {
   delinquentRate: number;
 }
 
+interface Subscription {
+  id: string;
+  clientName?: string;
+  tenantName?: string;
+  clientEmail?: string;
+  email?: string;
+  plan?: {
+    name: string;
+    price: number;
+  };
+  status: string;
+  startDate: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+}
+
 // Main Component
 export default function SuperAdminBillingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [metrics, setMetrics] = useState<BillingMetrics | null>(null);
-  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [subsLoading, setSubsLoading] = useState(true);
   const [subsError, setSubsError] = useState('');
 
@@ -35,27 +51,29 @@ export default function SuperAdminBillingPage() {
     fetchSubscriptions();
   }, []);
 
+ // ...existing code...
   const fetchBillingData = async () => {
     try {
       setLoading(true);
       setError('');
       const data = await apiGet('/admin/billing/metrics');
-      setMetrics(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load billing data');
+      setMetrics(data as BillingMetrics); // <-- Fix: type assertion
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load billing data');
     } finally {
       setLoading(false);
     }
   };
+// ...existing code...
 
   const fetchSubscriptions = async () => {
     try {
       setSubsLoading(true);
       setSubsError('');
       const data = await apiGet('/admin/billing/subscriptions');
-      setSubscriptions(data);
-    } catch (err: any) {
-      setSubsError(err.message || 'Failed to load subscriptions');
+      setSubscriptions(data as Subscription[]);
+    } catch (err) {
+      setSubsError(err instanceof Error ? err.message : 'Failed to load subscriptions');
     } finally {
       setSubsLoading(false);
     }

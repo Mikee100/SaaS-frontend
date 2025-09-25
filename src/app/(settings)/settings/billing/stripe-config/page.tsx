@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { apiGet, apiPost } from "@/utils/api";
-import { FaCreditCard, FaKey, FaEye, FaEyeSlash, FaSave, FaCheck, FaTimes, FaInfoCircle, FaMagic, FaDollarSign } from "react-icons/fa";
+import { FaCreditCard, FaKey, FaEye, FaEyeSlash, FaSave, FaInfoCircle, FaMagic, FaDollarSign, FaCheck, FaTimes } from "react-icons/fa";
 
 interface StripeKeys {
   secretKey: string;
@@ -92,33 +92,19 @@ export default function StripeConfigPage() {
       setError("");
       setSuccess("");
 
-      const response = await apiPost("/tenant/configurations/stripe/create-products", {});
+      await apiPost("/tenant/configurations/stripe/create-products", {});
       
       setSuccess("Stripe products and prices created successfully!");
       await fetchStripeConfig(); // Refresh status
-    } catch (err: any) {
-      setError(err.message || "Failed to create Stripe products");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Failed to create Stripe products");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleUpdatePrices() {
-    try {
-      setSaving(true);
-      setError("");
-      setSuccess("");
-
-      await apiPost("/tenant/configurations/stripe/update-prices", prices);
-      
-      setSuccess("Stripe prices updated successfully!");
-      await fetchStripeConfig(); // Refresh status
-    } catch (err: any) {
-      setError(err.message || "Failed to update Stripe prices");
-    } finally {
-      setSaving(false);
-    }
-  }
+  // Removed unused handleUpdatePrices function
 
   function validateStripeKey(key: string, type: 'secret' | 'publishable'): boolean {
     if (!key) return false;
@@ -403,10 +389,10 @@ export default function StripeConfigPage() {
             </h3>
             <div className="space-y-3 text-sm text-blue-800">
               <p>1. Go to your <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600">Stripe Dashboard</a></p>
-              <p>2. Navigate to Developers → API keys</p>
+              <p>2. Navigate to Developers &rarr; API keys</p>
               <p>3. Copy your Publishable key and Secret key</p>
-              <p>4. For webhook secret, go to Developers → Webhooks and copy the signing secret</p>
-              <p>5. Enable "Auto-Create Products" to automatically create your pricing plans in Stripe</p>
+              <p>4. For webhook secret, go to Developers &rarr; Webhooks and copy the signing secret</p>
+              <p>5. Enable &quot;Auto-Create Products&quot; to automatically create your pricing plans in Stripe</p>
             </div>
           </div>
 

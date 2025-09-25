@@ -15,7 +15,7 @@ export default function SuperadminSettingsPage() {
     }
   }, [user, loading, router]);
 
-  const handleSaveSettings = async (formData: FormData) => {
+  const handleSaveSettings = async () => {
     try {
       setSaving(true);
       // TODO: Implement settings save functionality
@@ -38,7 +38,7 @@ export default function SuperadminSettingsPage() {
         {/* General Settings */}
         <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
           <h2 style={{ fontSize: 20, fontWeight: "bold", marginBottom: "1rem" }}>General Settings</h2>
-          <form onSubmit={(e) => { e.preventDefault(); handleSaveSettings(new FormData(e.currentTarget)); }}>
+          <form onSubmit={(e) => { e.preventDefault(); handleSaveSettings(); }}>
             <div style={{ display: "grid", gap: "1rem" }}>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Platform Name</label>
@@ -200,7 +200,7 @@ export default function SuperadminSettingsPage() {
         {/* Save Button */}
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button
-            onClick={() => handleSaveSettings(new FormData())}
+            onClick={() => handleSaveSettings()}
             disabled={saving}
             style={{
               background: "#3b82f6",

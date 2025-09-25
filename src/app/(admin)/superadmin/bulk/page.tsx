@@ -354,8 +354,8 @@ export default function BulkOperationsPage() {
           }}>
             <h3 style={{ margin: "0 0 1rem 0", fontSize: 20, fontWeight: "bold" }}>Confirm Action</h3>
             <p style={{ margin: "0 0 1rem 0", fontSize: 14, color: "#374151" }}>
-              This action will affect multiple items and cannot be easily undone. 
-              Please type "CONFIRM" to proceed.
+              This action will affect multiple items and cannot be easily undone.
+              Please type &quot;CONFIRM&quot; to proceed.
             </p>
             <input
               type="text"

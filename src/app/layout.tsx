@@ -1,3 +1,4 @@
+import React from 'react';
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -45,9 +46,49 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Log layout rendering
+  if (typeof window !== 'undefined') {
+    console.log('RootLayout - Current path:', window.location.pathname);
+    console.log('RootLayout - Rendering with children:', React.Children.count(children));
+  }
+
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} font-sans`}>
       <head>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            console.log('RootLayout - Client-side path:', window.location.pathname);
+            console.log('RootLayout - Document referrer:', document.referrer);
+            
+            // Log all redirects
+            const originalPush = history.pushState;
+            history.pushState = function(...args) {
+              console.log('History pushState called:', args);
+              return originalPush.apply(history, args);
+            };
+            
+            // Log all redirects via router
+            const originalReplaceState = history.replaceState;
+            history.replaceState = function(...args) {
+              console.log('History replaceState called:', args);
+              return originalReplaceState.apply(history, args);
+            };
+            
+            // Log all link clicks
+            document.addEventListener('click', (e) => {
+              const target = e.target as HTMLElement;
+              const link = target.closest('a');
+              if (link) {
+                console.log('Link clicked:', {
+                  href: link.href,
+                  pathname: link.pathname,
+                  target: link.target,
+                  isExternal: link.hostname !== window.location.hostname
+                });
+              }
+            }, true);
+          `
+        }} />
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />

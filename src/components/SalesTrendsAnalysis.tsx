@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { FiTrendingUp, FiTrendingDown, FiCalendar, FiDollarSign, FiBarChart2 } from 'react-icons/fi';
-import { motion, AnimatePresence } from 'framer-motion';
-import { format, parseISO, eachMonthOfInterval, eachWeekOfInterval, subYears, isWithinInterval, isSameMonth, isSameWeek, isSameYear } from 'date-fns';
+import { FiTrendingUp, FiTrendingDown, FiBarChart2 } from 'react-icons/fi';
+
+import { format, subYears } from 'date-fns';
 
 type TimeRange = '1Y' | '2Y' | '3Y' | 'ALL';
 type ViewMode = 'monthly' | 'weekly';
@@ -13,14 +13,12 @@ interface SalesData {
 interface SalesTrendsAnalysisProps {
   salesData: SalesData;
   title?: string;
-  height?: number;
   className?: string;
 }
 
 const SalesTrendsAnalysis: React.FC<SalesTrendsAnalysisProps> = ({
   salesData = {},
   title = 'Sales Trends Analysis',
-  height = 500,
   className = ''
 }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('1Y');
