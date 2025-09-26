@@ -107,8 +107,18 @@ export default function TenantAnalyticsPage() {
     try {
       setLoadingData(true);
       const data = await apiGet(`/admin/tenants/analytics?range=${range}`);
-      setTenants(data.tenants || []);
-      setComparisonData(data.comparisons || []);
+      if (
+        typeof data === "object" &&
+        data !== null &&
+        "tenants" in data &&
+        "comparisons" in data
+      ) {
+        setTenants((data as { tenants: TenantAnalytics[] }).tenants || []);
+        setComparisonData((data as { comparisons: TenantComparison[] }).comparisons || []);
+      } else {
+        setTenants([]);
+        setComparisonData([]);
+      }
     } catch (err) {
       setError('Failed to fetch tenant analytics');
       console.error('Error fetching tenant analytics:', err);

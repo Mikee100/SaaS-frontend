@@ -1,5 +1,5 @@
 "use client";
-import { FaBrain, FaLightbulb, FaExclamationTriangle, FaChartLine, FaArrowUp, FaArrowDown, FaCheckCircle } from 'react-icons/fa';
+import { FaBrain, FaLightbulb, FaExclamationTriangle, FaCheckCircle } from 'react-icons/fa';
 
 interface AIInsightsProps {
   insights: {
@@ -12,16 +12,6 @@ export default function AIInsights({ insights }: AIInsightsProps) {
   const getInsightIcon = (type: 'recommendation' | 'anomaly') => {
     if (type === 'recommendation') return <FaLightbulb className="w-4 h-4 text-blue-600" />;
     return <FaExclamationTriangle className="w-4 h-4 text-orange-600" />;
-  };
-
-  const getInsightColor = (type: 'recommendation' | 'anomaly') => {
-    if (type === 'recommendation') return 'text-blue-600';
-    return 'text-orange-600';
-  };
-
-  const getInsightBgColor = (type: 'recommendation' | 'anomaly') => {
-    if (type === 'recommendation') return 'bg-blue-50';
-    return 'bg-orange-50';
   };
 
   return (

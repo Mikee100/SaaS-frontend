@@ -1,16 +1,49 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet, apiPut } from "@/utils/api";
-import Spinner from '../../../components/Spinner';
-import { FaBuilding } from 'react-icons/fa';
+import { FaBuilding, FaLock } from 'react-icons/fa';
 import Link from 'next/link';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
-import Tooltip from '@/components/Tooltip';
-import { FaLock } from 'react-icons/fa';
+
+interface FormField {
+  name: string;
+  label: string;
+  required?: boolean;
+  type?: string;
+}
+
+interface BusinessInfoForm {
+  [key: string]: string | number | null;
+  name: string;
+  businessType: string;
+  contactEmail: string;
+  contactPhone: string;
+  website: string;
+  businessCategory: string;
+  businessSubcategory: string;
+  businessDescription: string;
+  foundedYear: number | null;
+  employeeCount: string;
+  annualRevenue: string;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  postalCode: string;
+  kraPin: string;
+  vatNumber: string;
+  businessLicense: string;
+  taxId: string;
+  etimsQrUrl: string;
+  currency: string;
+  timezone: string;
+  invoiceFooter: string;
+  logoUrl: string;
+}
 
 // Basic business information
-const basicFields = [
+const basicFields: FormField[] = [
   { name: "name", label: "Business Name", required: true },
   { name: "businessType", label: "Business Type", required: true },
   { name: "contactEmail", label: "Contact Email", required: true },
@@ -77,7 +110,7 @@ function validateVatNumber(vat: string) {
 
 export default function BusinessInfoSettings() {
   const { user } = useUser();
-  const [form, setForm] = useState<any>({});
+  const [form, setForm] = useState<Partial<BusinessInfoForm>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,13 +118,14 @@ export default function BusinessInfoSettings() {
   const [validation, setValidation] = useState<{ kraPin?: boolean; vatNumber?: boolean }>({});
 
   useEffect(() => {
-    apiGet<any>("/tenant/me")
+    apiGet<Partial<BusinessInfoForm>>("/tenant/me")
       .then((data) => {
         setForm(data || {});
         setLoading(false);
       })
-      .catch((err) => {
-        setError(err.message);
+      .catch((err: unknown) => {
+        const error = err as { message?: string };
+        setError(error.message || "Failed to load business info");
         setLoading(false);
       });
   }, []);
@@ -133,14 +167,15 @@ export default function BusinessInfoSettings() {
     try {
       await apiPut("/tenant/me", form);
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || "Failed to save business info");
     } finally {
       setSaving(false);
     }
   };
 
-  const renderField = (field: any) => {
+  const renderField = (field: FormField) => {
     const isRequired = field.required;
     const hasError = (field.name === 'kraPin' && form.kraPin && validation.kraPin === false) ||
                     (field.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false);
@@ -225,7 +260,7 @@ export default function BusinessInfoSettings() {
         <div className="text-center py-12">
           <FaLock className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don't have permission to edit business info.</p>
+          <p className="text-gray-600 mb-4">You don&apos;t have permission to edit business info.</p>
           <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>

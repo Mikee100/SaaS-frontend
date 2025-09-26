@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from 'react';
-import { FaChartLine, FaDollarSign, FaShoppingCart, FaUsers, FaClock, FaTrendingDown, FaTimes } from 'react-icons/fa';
+import { useCallback, useState, useEffect } from 'react';
+import { FaChartLine, FaDollarSign, FaShoppingCart, FaUsers, FaArrowDown, FaTimes } from 'react-icons/fa';
 import { apiGet } from '@/utils/api';
 
 interface SalesMetrics {
@@ -30,23 +30,23 @@ export default function SalesAnalytics({ isOpen, onClose }: SalesAnalyticsProps)
   const [loading, setLoading] = useState(false);
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('today');
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchAnalytics();
-    }
-  }, [isOpen, timeRange]);
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       const data = await apiGet(`/analytics/sales?range=${timeRange}`);
-      setMetrics(data);
+      setMetrics(data as SalesMetrics);
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchAnalytics();
+    }
+  }, [isOpen, timeRange, fetchAnalytics]);
 
   if (!isOpen) return null;
 
@@ -61,7 +61,7 @@ export default function SalesAnalytics({ isOpen, onClose }: SalesAnalyticsProps)
           <div className="flex items-center gap-3">
             <select
               value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as any)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTimeRange(e.target.value as 'today' | 'week' | 'month')}
               className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="today">Today</option>
@@ -94,7 +94,7 @@ export default function SalesAnalytics({ isOpen, onClose }: SalesAnalyticsProps)
                     {metrics.growthRate > 0 ? (
                       <FaChartLine className="w-3 h-3 text-green-600" />
                     ) : (
-                      <FaTrendingDown className="w-3 h-3 text-red-600" />
+                      <FaArrowDown className="w-3 h-3 text-red-600" />
                     )}
                     <span className={`text-xs ${metrics.growthRate > 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {Math.abs(metrics.growthRate)}% from yesterday
@@ -108,7 +108,7 @@ export default function SalesAnalytics({ isOpen, onClose }: SalesAnalyticsProps)
                     <span className="text-sm font-medium text-green-800">Transactions</span>
                   </div>
                   <p className="text-2xl font-bold text-green-900">{metrics.todayTransactions}</p>
-                  <p className="text-xs text-green-700 mt-1">Today's orders</p>
+                  <p className="text-xs text-green-700 mt-1">Today&apos;s orders</p>
                 </div>
 
                 <div className="bg-purple-50 rounded-lg p-4">
@@ -205,4 +205,4 @@ export default function SalesAnalytics({ isOpen, onClose }: SalesAnalyticsProps)
       </div>
     </div>
   );
-} 
+}

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import React from "react";
 import Spinner from '@/components/Spinner';
@@ -11,22 +11,18 @@ import {
   FaLock, FaStore, FaQrcode, FaDownload, FaSearch, 
   FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaChevronLeft, 
   FaChevronRight, FaKeyboard, FaHistory, FaUser, FaUndo, FaRedo,
-  FaStar, FaClock, FaChartLine, FaExclamationTriangle, FaCheckCircle,
+  FaStar, FaClock, FaChartLine, FaExclamationTriangle,
   FaFilter, FaSort, FaTh, FaList, FaPlus, FaMinus
 } from 'react-icons/fa';
 import MpesaPayment from '@/components/MpesaPayment';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
-import debounce from '@/utils/debounce';
+
 import ProductSkeleton from '@/components/ProductSkeleton';
 import { useBranch } from "@/contexts/BranchContext";
 
 
-interface Branch {
-  id: string;
-  name: string;
-}
 type Product = { 
   id: string; 
   name: string; 
@@ -39,25 +35,7 @@ type Product = {
 
 type CartItem = Product & { quantity: number };
 
-type Receipt = {
-  saleId: string;
-  date: string | Date;
-  customerName?: string;
-  customerPhone?: string;
-  items: { productId: string; name: string; price: number; quantity: number }[];
-  subtotal: number;
-  vatAmount: number;
-  vatRate: number;
-  total: number;
-  paymentMethod: string;
-  amountReceived: number;
-  change: number;
-  branch?: {
-    id: string;
-    name: string;
-    address?: string;
-  };
-};
+
 
 type QuickAction = {
   id: string;
@@ -82,32 +60,27 @@ export default function SalesPage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [mpesaPhone, setMpesaPhone] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [businessInfo, setBusinessInfo] = useState<any>(null);
+
+  const [searchTerm] = useState("");
+  const [businessInfo, setBusinessInfo] = useState<Record<string, unknown> | null>(null);
   const [showScanner, setShowScanner] = useState(false);
-  const [scanResult, setScanResult] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  
+
+
   // New state for enhanced features
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortBy, setSortBy] = useState<"name" | "price" | "stock">("name");
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
-  const [recentSales, setRecentSales] = useState<any[]>([]);
+  const [recentSales, setRecentSales] = useState<Record<string, unknown>[]>([]);
   const [cartHistory, setCartHistory] = useState<CartItem[][]>([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
-  const [showCustomerModal, setShowCustomerModal] = useState(false);
+
   const [favoriteProducts, setFavoriteProducts] = useState<string[]>([]);
   const [showMpesaPayment, setShowMpesaPayment] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Permission checks
   const canViewSales = hasPermission(user, 'view_sales');
-  const canCreateSales = hasPermission(user, 'create_sales');
-  const canEditSales = hasPermission(user, 'edit_sales');
-  const canDeleteSales = hasPermission(user, 'delete_sales');
 
   // Constants
   const productsPerPage = 12;
@@ -144,9 +117,9 @@ export default function SalesPage() {
           apiGet("/sales/recent").catch(() => [])
         ]);
         setProducts(products as Product[]);
-        setBusinessInfo(businessInfo);
-        setRecentSales(recentSalesData as any[]);
-      } catch (err) {
+        setBusinessInfo(businessInfo as Record<string, unknown>);
+       setRecentSales(recentSalesData as Record<string, unknown>[]);
+      } catch  {
         setError("Failed to load data. Please try again.");
       } finally {
         setLoading(false);
@@ -171,6 +144,74 @@ export default function SalesPage() {
     };
     fetchBranches();
   }, [selectedBranchId, setSelectedBranchId]);
+
+  // Cart management functions with history
+  const saveToHistory = useCallback((newCart: CartItem[]) => {
+    setCartHistory(prev => {
+      const newHistory = [...prev.slice(0, currentHistoryIndex + 1), newCart];
+      if (newHistory.length > 10) newHistory.shift();
+      return newHistory;
+    });
+    setCurrentHistoryIndex(prev => prev + 1);
+  }, [currentHistoryIndex]);
+
+  const addToCart = useCallback((product: Product) => {
+    setCart(prevCart => {
+      const existingItem = prevCart.find(item => item.id === product.id);
+      const newCart = existingItem
+        ? prevCart.map(item =>
+            item.id === product.id
+              ? { ...item, quantity: Math.min(item.quantity + 1, product.stock) }
+              : item
+          )
+        : [...prevCart, { ...product, quantity: 1 }];
+      
+      // Save to history
+      saveToHistory(newCart);
+      return newCart;
+    });
+  }, [saveToHistory]);
+
+  const removeFromCart = useCallback((productId: string) => {
+    setCart(prevCart => {
+      const newCart = prevCart.filter(item => item.id !== productId);
+      saveToHistory(newCart);
+      return newCart;
+    });
+  }, [saveToHistory]);
+
+  const updateQuantity = useCallback((productId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+    
+    setCart(prevCart => {
+      const newCart = prevCart.map(item => {
+        if (item.id === productId) {
+          const product = products.find(p => p.id === productId);
+          return { ...item, quantity: Math.min(newQuantity, product?.stock || 0) };
+        }
+        return item;
+      });
+      saveToHistory(newCart);
+      return newCart;
+    });
+  }, [products, removeFromCart, saveToHistory]);
+
+  const undoCart = useCallback(() => {
+    if (currentHistoryIndex > 0) {
+      setCurrentHistoryIndex(prev => prev - 1);
+      setCart(cartHistory[currentHistoryIndex - 1]);
+    }
+  }, [currentHistoryIndex, cartHistory]);
+
+  const redoCart = useCallback(() => {
+    if (currentHistoryIndex < cartHistory.length - 1) {
+      setCurrentHistoryIndex(prev => prev + 1);
+      setCart(cartHistory[currentHistoryIndex + 1]);
+    }
+  }, [currentHistoryIndex, cartHistory]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -198,7 +239,7 @@ export default function SalesPage() {
           case 'Escape':
             setCheckoutOpen(false);
             setShowScanner(false);
-            setShowCustomerModal(false);
+        
             break;
         }
       }
@@ -206,81 +247,12 @@ export default function SalesPage() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [cart]);
-
-  // Cart management functions with history
-  const addToCart = useCallback((product: Product) => {
-    setCart(prevCart => {
-      const existingItem = prevCart.find(item => item.id === product.id);
-      const newCart = existingItem
-        ? prevCart.map(item =>
-            item.id === product.id
-              ? { ...item, quantity: Math.min(item.quantity + 1, product.stock) }
-              : item
-          )
-        : [...prevCart, { ...product, quantity: 1 }];
-      
-      // Save to history
-      saveToHistory(newCart);
-      return newCart;
-    });
-  }, []);
-
-  const removeFromCart = useCallback((productId: string) => {
-    setCart(prevCart => {
-      const newCart = prevCart.filter(item => item.id !== productId);
-      saveToHistory(newCart);
-      return newCart;
-    });
-  }, []);
-
-  const updateQuantity = useCallback((productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    
-    setCart(prevCart => {
-      const newCart = prevCart.map(item => {
-        if (item.id === productId) {
-          const product = products.find(p => p.id === productId);
-          return { ...item, quantity: Math.min(newQuantity, product?.stock || 0) };
-        }
-        return item;
-      });
-      saveToHistory(newCart);
-      return newCart;
-    });
-  }, [products, removeFromCart]);
-
-  const saveToHistory = (newCart: CartItem[]) => {
-    setCartHistory(prev => {
-      const newHistory = [...prev.slice(0, currentHistoryIndex + 1), newCart];
-      if (newHistory.length > 10) newHistory.shift(); // Keep only last 10
-      return newHistory;
-    });
-    setCurrentHistoryIndex(prev => prev + 1);
-  };
-
-  const undoCart = () => {
-    if (currentHistoryIndex > 0) {
-      setCurrentHistoryIndex(prev => prev - 1);
-      setCart(cartHistory[currentHistoryIndex - 1]);
-    }
-  };
-
-  const redoCart = () => {
-    if (currentHistoryIndex < cartHistory.length - 1) {
-      setCurrentHistoryIndex(prev => prev + 1);
-      setCart(cartHistory[currentHistoryIndex + 1]);
-    }
-  };
-
-  const clearCart = () => {
-    setCart([]);
-    setCartHistory([]);
-    setCurrentHistoryIndex(-1);
-  };
+  }, [cart, redoCart, undoCart]);
+const clearCart = useCallback(() => {
+  setCart([]);
+  setCartHistory([]);
+  setCurrentHistoryIndex(-1);
+}, []);
 
   const toggleFavorite = (productId: string) => {
     setFavoriteProducts(prev => 
@@ -330,7 +302,7 @@ export default function SalesPage() {
       return;
     }
 
-    setIsProcessing(true);
+    
     setError(null);
 
     try {
@@ -340,24 +312,24 @@ export default function SalesPage() {
 
       // Prepare the sale data according to CreateSaleDto
       const saleData = {
-        items: cart.map(item => ({
-          productId: item.id,
-          quantity: item.quantity,
-          price: item.price
-        })),
-        paymentMethod,
-        amountReceived: paymentMethod === 'cash' ? amountReceived : cartTotal,
-        customerName: customerName || undefined,
-        customerPhone: customerPhone || undefined,
-        branchId: selectedBranchId,
-        idempotencyKey: uuidv4(),
-        total: cartTotal // Add total as it's expected by the DTO
-      };
+  items: cart.map(item => ({
+    productId: item.id,
+    quantity: item.quantity,
+    price: item.price
+  })),
+  paymentMethod,
+  amountReceived: paymentMethod === 'cash' ? amountReceived : cartTotal,
+  customerName: customerName || undefined,
+  customerPhone: customerPhone || undefined,
+  branchId: selectedBranchId,
+  idempotencyKey: uuidv4(),
+  total: cartTotal // Add total as it's expected by the DTO
+};
 
       console.log("Submitting sale data:", saleData);
       const response = await apiPost("/sales", saleData);
-      const sale = (response as any).data || response;
-      
+      type SaleResponse = { data?: { id?: string; saleId?: string; _id?: string } };
+      const sale = (response as SaleResponse).data || response;
       console.log("Sale created successfully:", sale);
       
       // Reset form state
@@ -378,74 +350,12 @@ export default function SalesPage() {
         console.error("No sale ID found in response:", sale);
         setError("Sale completed but could not redirect to receipt");
       }
-    } catch (err: any) {
-      console.error("Error creating sale:", err);
-      setError(err.message || "Failed to complete sale");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleProcessSale = async () => {
-    if (cart.length === 0) {
-      setError("Cannot process an empty cart");
-      return;
-    }
-
-    if (!selectedBranchId) {
-      setError("Please select a branch before processing the sale");
-      return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-
-    try {
-      // Prepare the sale data according to CreateSaleDto
-      const saleData = {
-        items: cart.map(item => ({
-          productId: item.id,
-          quantity: item.quantity,
-          price: item.price
-        })),
-        paymentMethod: 'cash',
-        amountReceived: cartTotal,
-        customerName: customerName || undefined,
-        customerPhone: customerPhone || undefined,
-        branchId: selectedBranchId,
-        idempotencyKey: uuidv4(),
-        total: cartTotal // Add total as it's expected by the DTO
-      };
-
-      console.log("Submitting sale data:", saleData);
-      const response = await apiPost("/sales", saleData);
-      const sale = (response as any).data || response; // Handle both response formats
-      
-      console.log("Sale created successfully:", sale);
-      
-      // Reset form state
-      clearCart();
-      setCheckoutOpen(false);
-      setCustomerName("");
-      setCustomerPhone("");
-      setAmountReceived(0);
-      
-      // Redirect to receipt page with the sale ID
-      const saleObj = sale as { id?: string; saleId?: string; _id?: string };
-      const saleId = (saleObj as { id?: string; saleId?: string; _id?: string }).id || saleObj.saleId || saleObj._id;
-      console.log("Extracted sale ID:", saleId);
-      
-      if (saleId) {
-        router.push(`/sales/receipt/${saleId}`);
-      } else {
-        console.error("No sale ID found in response:", sale);
-        setError("Sale completed but could not redirect to receipt");
-      }
-    } catch (err: any) {
-      console.error("Error creating sale:", err);
-      setError(err.message || "Failed to complete sale");
-    } finally {
-      setIsProcessing(false);
+   } catch (err: unknown) {
+  const error = err as Error;
+  console.error("Error creating sale:", error);
+  setError(error.message || "Failed to complete sale");
+} finally {
+     
     }
   };
 
@@ -462,8 +372,7 @@ export default function SalesPage() {
       return;
     }
     
-    setStatusMessage('M-Pesa payment successful! Processing your order...');
-    
+   
     const completeMpesaSale = async () => {
       try {
         const saleData = {
@@ -501,25 +410,28 @@ export default function SalesPage() {
         if (saleId) {
           router.push(`/sales/receipt/${saleId}`);
         }
-      } catch (err: any) {
-        console.error('Error completing M-Pesa sale:', err);
+      } catch  {
+        console.error('Error completing M-Pesa sale:');
         setError('Payment was successful but there was an error processing your order. Please contact support.');
-      } finally {
-        setIsProcessing(false);
-      }
+      } 
     };
     
     completeMpesaSale();
-  }, [cart, cartTotal, customerName, customerPhone, businessInfo, user, clearCart, router]);
-
-  const handleMpesaError = useCallback((error: string) => {
-    setError(`M-Pesa payment failed: ${error}`);
-    setIsProcessing(false);
-  }, []);
+  }, [
+    cart,
+    cartTotal,
+    customerName,
+    customerPhone,
+    businessInfo,
+    user,
+    clearCart,
+    router,
+    selectedBranchId,
+  ]);
 
   const handleMpesaCancel = useCallback(() => {
     setShowMpesaPayment(false);
-    setIsProcessing(false);
+  
   }, []);
 
   const quickActions: QuickAction[] = [
@@ -553,25 +465,7 @@ export default function SalesPage() {
     }
   ];
 
-  const [isSearching, setIsSearching] = useState(false);
-
-  // Debounced search function
-  const debouncedSearch = useMemo(
-    () =>
-      debounce((...args: unknown[]) => {
-        const searchValue = args[0] as string;
-        setSearchTerm(searchValue);
-        setCurrentPage(1);
-        setIsSearching(false);
-      }, 300),
-    []
-  );
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setIsSearching(true);
-    debouncedSearch(value);
-  };
+  const [isSearching] = useState(false);
 
   // Loading state for initial data load or search
   const isLoading = loading || isSearching;
@@ -591,7 +485,7 @@ export default function SalesPage() {
         <div className="text-center py-12">
           <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don't have permission to view sales.</p>
+          <p className="text-gray-600 mb-4">You don&apos;t have permission to view sales.</p>
           <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>
@@ -622,7 +516,7 @@ export default function SalesPage() {
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Point of Sale</h1>
-                <p className="text-sm text-gray-500">Welcome back, {businessInfo?.name || 'User'}</p>
+                <p className="text-sm text-gray-500">Welcome back, {typeof businessInfo?.name === "string" && businessInfo?.name.trim() !== "" ? businessInfo.name : "User"}</p>
               </div>
               
               <div className="flex gap-3">
@@ -785,10 +679,10 @@ export default function SalesPage() {
                     <div className="relative">
                       <FaSort className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
                       <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as any)}
-                        className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                      >
+  value={sortBy}
+  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSortBy(e.target.value as "name" | "price" | "stock")}
+  className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+>
                         <option value="name">Name</option>
                         <option value="price">Price</option>
                         <option value="stock">Stock</option>
@@ -1048,7 +942,7 @@ export default function SalesPage() {
                 <button 
                   onClick={() => {
                     setShowScanner(false);
-                    setScanResult(null);
+                    
                   }}
                   className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition"
                 >
@@ -1090,7 +984,7 @@ export default function SalesPage() {
                 <button 
                   onClick={() => setCheckoutOpen(false)}
                   className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition"
-                  disabled={isProcessing}
+                
                 >
                   <FaTimes className="w-5 h-5" />
                 </button>
@@ -1145,7 +1039,7 @@ export default function SalesPage() {
                     value={selectedBranchId || ''}
                     onChange={(e) => setSelectedBranchId(e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
-                    disabled={isProcessing}
+                   
                   >
                     {branches.map(branch => (
                       <option key={branch.id} value={branch.id}>
@@ -1287,29 +1181,19 @@ export default function SalesPage() {
                 <div className="flex gap-3 pt-2 sticky bottom-0 bg-white pb-1">
                   <button
                     onClick={() => setCheckoutOpen(false)}
-                    disabled={isProcessing}
+                    
                     className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleConfirmSale}
-                    disabled={isProcessing || (paymentMethod === "cash" && amountReceived < cartTotal)}
+                    disabled={(paymentMethod === "cash" && amountReceived < cartTotal)}
                     className={`flex-1 px-4 py-3 rounded-lg text-white transition-colors flex items-center justify-center gap-2 ${
-                      isProcessing ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                      'bg-blue-600 hover:bg-blue-700'
                     } shadow-md hover:shadow-lg disabled:opacity-50`}
                   >
-                    {isProcessing ? (
-                      <>
-                        <Spinner />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <FaCheckCircle className="w-4 h-4" />
-                        Complete Sale
-                      </>
-                    )}
+                  
                   </button>
                 </div>
               </div>
@@ -1325,7 +1209,7 @@ export default function SalesPage() {
                 <button 
                   onClick={() => setShowMpesaPayment(false)}
                   className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition"
-                  disabled={isProcessing}
+                  
                 >
                   <FaTimes className="w-5 h-5" />
                 </button>
@@ -1364,3 +1248,6 @@ export default function SalesPage() {
     </AuthGuard>
   );
 }
+
+
+

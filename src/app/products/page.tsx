@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { apiGet, apiPost, apiDelete, apiPut } from "@/utils/api";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import PlanGuard from '@/components/PlanGuard';
@@ -11,6 +11,7 @@ import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
 import { useBranch } from "@/contexts/BranchContext";
+import Image from 'next/image';
 
 interface Product {
   id: string;
@@ -55,11 +56,8 @@ export default function ProductsPage() {
   const canCreateProducts = hasPermission(user, 'create_products');
   const canEditProducts = hasPermission(user, 'edit_products');
   const canDeleteProducts = hasPermission(user, 'delete_products');
-  const canUploadProducts = hasPermission(user, 'bulk_upload');
 
-  useEffect(() => {
-    fetchProducts();
-  }, [selectedBranchId]);
+
 
   useEffect(() => {
     async function fetchBranches() {
@@ -85,7 +83,7 @@ export default function ProductsPage() {
       }
     }
     fetchBranches();
-  }, [user?.branchId]); // Add user.branchId as dependency
+  }, [user?.branchId, selectedBranchId, setSelectedBranchId]);
 
   // Handle branch selection change
   const handleBranchChange = (branchId: string) => {
@@ -104,11 +102,11 @@ export default function ProductsPage() {
           const data = await apiGet(`/products?branchId=${selectedBranchId}`);
           setProducts(Array.isArray(data) ? data : []);
           setError('');
-        } catch (err: any) {
-          console.error('Error fetching products:', err);
-          setError(err.message || "Failed to fetch products");
-          setProducts([]);
-        } finally {
+        } catch (err: unknown) {
+  const error = err as Error;
+  setError(error.message || "Failed to fetch products");
+  setProducts([]);
+} finally {
           setLoading(false);
         }
       };
@@ -121,26 +119,29 @@ export default function ProductsPage() {
     }
   }, [selectedBranchId]);
 
-  async function fetchProducts() {
+  const fetchProducts = useCallback(async () => {
     if (!selectedBranchId) {
       setProducts([]);
       setLoading(false);
       return;
     }
-    
     setLoading(true);
     setError("");
     try {
-      // Fetch products for the selected branch using header
       const data = await apiGet(`/products`, { 'x-branch-id': selectedBranchId || '' });
       setProducts(data as Product[]);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch products");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Failed to fetch products");
       setProducts([]);
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedBranchId]);
+
+    useEffect(() => {
+  fetchProducts();
+}, [fetchProducts]);
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,8 +171,9 @@ export default function ProductsPage() {
       }, { 'x-branch-id': selectedBranchId || '' }) as Product;
       setProducts([newProduct, ...products]);
       setShowAddForm(false);
-    } catch (err: any) {
-      setError(err.message || "Failed to create product");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Failed to create/update product");
     } finally {
       setSaving(false);
     }
@@ -195,8 +197,9 @@ export default function ProductsPage() {
       }
       setShowAddForm(false);
       fetchProducts();
-    } catch (err: any) {
-      setError(err.message || "Failed to update product");
+    } catch (err: unknown) {
+  const error = err as Error;
+      setError(error.message || "Failed to update product");
     } finally {
       setSaving(false);
     }
@@ -246,7 +249,7 @@ export default function ProductsPage() {
             setUploadResult(data.summary);
             // Start polling for backend progress
             if (data.uploadId) {
-              pollBackendProgress(data.uploadId, data.summary.length);
+              pollBackendProgress(data.uploadId);
             } else {
               setUploadProgress(100);
               setTimeout(() => setUploadProgress(null), 1500);
@@ -266,14 +269,15 @@ export default function ProductsPage() {
         };
         xhr.send(formData);
       });
-    } catch (err: any) {
-      setUploadError(err.message || "Bulk upload failed");
+   } catch (err: unknown) {
+  const error = err as Error;
+      setUploadError(error.message || "Bulk upload failed");
     } finally {
       setUploading(false);
     }
   }
 
-  async function pollBackendProgress(uploadId: string, totalRows: number) {
+  async function pollBackendProgress(uploadId: string) {
     let finished = false;
     const token = localStorage.getItem("token");
     while (!finished) {
@@ -331,8 +335,9 @@ export default function ProductsPage() {
       const data = await res.json();
       setClearMsg(`Deleted ${data.deletedCount} products.`);
       fetchProducts();
-    } catch (err: any) {
-      setClearMsg(err.message || "Failed to clear products");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setClearMsg(error.message || "Failed to clear products");
     }
   }
 
@@ -368,8 +373,10 @@ export default function ProductsPage() {
   }, [search]);
 
   // Helper to flatten product fields for table display
-  function flattenProduct(product: any) {
-    return { ...product, ...(product.customFields || {}) };
+  function flattenProduct(product: Product): { [key: string]: string | number | boolean | undefined } {
+    // Exclude 'customFields' property to match the index signature
+    const { customFields, ...rest } = product;
+    return { ...rest, ...(customFields || {}) };
   }
 
   // Dynamically determine all unique columns
@@ -415,7 +422,7 @@ export default function ProductsPage() {
         <div className="text-center py-12">
           <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don't have permission to view products.</p>
+         <p className="text-gray-600 mb-4">You don&apos;t have permission to view products.</p>
           <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>
@@ -424,7 +431,6 @@ export default function ProductsPage() {
 
   const usagePercentage = getUsagePercentage();
   const isNearLimit = usagePercentage >= 80;
-  const isAtLimit = usagePercentage >= 100;
 
   return (
     <AuthGuard>
@@ -528,7 +534,7 @@ export default function ProductsPage() {
               <div>
                 <h4 className="font-medium text-amber-800">Approaching Product Limit</h4>
                 <p className="text-sm text-amber-700">
-                  You've used {limits?.usage.products.current} of {limits?.usage.products.limit} products. 
+                  You&apos;ve used {limits?.usage.products.current} of {limits?.usage.products.limit} products. 
                   Consider upgrading to add more products.
                 </p>
               </div>
@@ -924,7 +930,7 @@ export default function ProductsPage() {
                       Edit
                     </button>
                   ) : (
-                    <Tooltip content="You don't have permission to edit products. Contact your administrator.">
+                    <Tooltip content="You don&apos;t have permission to edit products. Contact your administrator.">
                       <button 
                         disabled
                         className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-gray-100 border border-gray-200 text-gray-400 text-sm font-medium cursor-not-allowed"
@@ -1030,7 +1036,7 @@ export default function ProductsPage() {
                                   <FaEdit className="w-4 h-4" />
                                 </button>
                               ) : (
-                                <Tooltip content="You don't have permission to edit products. Contact your administrator.">
+                                <Tooltip content="You don&apos;t have permission to edit products. Contact your administrator.">
                                   <button 
                                     disabled
                                     className="p-2 text-gray-400 rounded-lg cursor-not-allowed"
@@ -1176,9 +1182,11 @@ export default function ProductsPage() {
               </div>
               
               <div className="text-center">
-                <img
+                <Image
                   src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/${qrCodeProductId}/qr`}
                   alt="Product QR Code"
+                  width={256}
+                  height={256}
                   className="w-64 h-64 mx-auto mb-6 border border-gray-200 rounded-lg"
                 />
                 

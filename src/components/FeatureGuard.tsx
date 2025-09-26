@@ -12,12 +12,16 @@ interface FeatureGuardProps {
   planRequired?: 'Basic' | 'Pro' | 'Enterprise';
 }
 
+type PlanLimits = {
+  currentPlan?: 'Basic' | 'Pro' | 'Enterprise';
+  features?: Record<string, boolean>;
+};
+
 export default function FeatureGuard({ 
   children, 
   requiredFeature, 
   fallback, 
-  showUpgradePrompt = true,
-  planRequired
+  showUpgradePrompt = true
 }: FeatureGuardProps) {
   const userContext = useUser();
   const [hasFeature, setHasFeature] = useState(false);
@@ -37,20 +41,26 @@ export default function FeatureGuard({
     const checkFeature = async () => {
       try {
         setError(null);
-        const limits = await apiGet('/billing/limits') as any;
+        const limits = await apiGet('/billing/limits') as PlanLimits;
         setCurrentPlan(limits?.currentPlan || 'Basic');
         
         // Check if user has the specific feature
         const featureEnabled = limits?.features?.[requiredFeature] || false;
         setHasFeature(featureEnabled);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error checking feature access:', error);
-        
-        if (error?.message?.includes('Unauthorized') || error?.status === 401) {
+
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          (
+            ('message' in error && typeof (error as { message?: string }).message === 'string' && (error as { message: string }).message.includes('Unauthorized')) ||
+            ('status' in error && typeof (error as { status?: number }).status === 'number' && (error as { status: number }).status === 401)
+          )
+        ) {
           setError('Please log in to access this feature');
           setHasFeature(false);
         } else {
-          // For other errors, default to allowing access
           setHasFeature(true);
         }
       } finally {
@@ -244,4 +254,4 @@ export default function FeatureGuard({
       </div>
     </div>
   );
-} 
+}

@@ -1,8 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import { FaCreditCard, FaKey, FaEye, FaEyeSlash, FaSave, FaInfoCircle, FaMagic, FaDollarSign, FaCheck, FaTimes } from "react-icons/fa";
+
+interface StripeStatusResponse {
+  isConfigured: boolean;
+}
+
+interface StripeKeysResponse {
+  secretKey: string;
+  publishableKey: string;
+  webhookSecret: string;
+}
 
 interface StripeKeys {
   secretKey: string;
@@ -36,19 +46,35 @@ export default function StripeConfigPage() {
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [autoCreateProducts, setAutoCreateProducts] = useState(true);
 
-  useEffect(() => {
-    fetchStripeConfig();
-  }, []);
-
   async function fetchStripeConfig() {
     try {
       setLoading(true);
       setError("");
-      
+
       const [statusResponse, keysResponse] = await Promise.all([
-        apiGet("/tenant/configurations/stripe/status"),
-        apiGet("/tenant/configurations/stripe/keys"),
+        apiGet<StripeStatusResponse>("/tenant/configurations/stripe/status"),
+        apiGet<StripeKeysResponse>("/tenant/configurations/stripe/keys"),
       ]);
+
+      if (!statusResponse || !keysResponse) {
+        throw new Error('Failed to load Stripe configuration: Invalid response');
+      }
+
+      if (!('isConfigured' in statusResponse) || typeof statusResponse.isConfigured !== 'boolean') {
+        throw new Error('Failed to load Stripe configuration: Invalid status response');
+      }
+
+      if (!('secretKey' in keysResponse) || typeof keysResponse.secretKey !== 'string') {
+        throw new Error('Failed to load Stripe configuration: Invalid keys response');
+      }
+
+      if (!('publishableKey' in keysResponse) || typeof keysResponse.publishableKey !== 'string') {
+        throw new Error('Failed to load Stripe configuration: Invalid keys response');
+      }
+
+      if (!('webhookSecret' in keysResponse) || typeof keysResponse.webhookSecret !== 'string') {
+        throw new Error('Failed to load Stripe configuration: Invalid keys response');
+      }
 
       setIsConfigured(statusResponse.isConfigured);
       setStripeKeys({
@@ -56,8 +82,9 @@ export default function StripeConfigPage() {
         publishableKey: keysResponse.publishableKey || '',
         webhookSecret: keysResponse.webhookSecret === '[CONFIGURED]' ? '' : keysResponse.webhookSecret || '',
       });
-    } catch (err: any) {
-      setError(err.message || "Failed to load Stripe configuration");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load Stripe configuration';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -79,8 +106,9 @@ export default function StripeConfigPage() {
 
       setSuccess("Stripe configuration saved successfully!");
       await fetchStripeConfig(); // Refresh status
-    } catch (err: any) {
-      setError(err.message || "Failed to save Stripe configuration");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save Stripe configuration';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -96,9 +124,9 @@ export default function StripeConfigPage() {
       
       setSuccess("Stripe products and prices created successfully!");
       await fetchStripeConfig(); // Refresh status
-    } catch (err: unknown) {
-      const error = err as Error;
-      setError(error.message || "Failed to create Stripe products");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create Stripe products';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -311,7 +339,7 @@ export default function StripeConfigPage() {
               </div>
               
               <p className="text-sm text-gray-600">
-                When enabled, we'll automatically create the Basic, Pro, and Enterprise products in your Stripe account with the prices below.
+                When enabled, we&apos;ll automatically create the Basic, Pro, and Enterprise products in your Stripe account with the prices below.
               </p>
             </div>
           </div>

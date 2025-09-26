@@ -1,7 +1,10 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { apiGet, apiPost, apiPut } from '@/utils/api';
-import { FaCrown, FaPalette, FaCode, FaShieldAlt, FaHeadset, FaDownload, FaUpload, FaKey, FaGlobe, FaLock, FaHistory, FaCloud, FaPlug } from 'react-icons/fa';
+import { apiGet, apiPut } from '@/utils/api';
+import { 
+  FaCrown, FaPalette, FaCode, FaShieldAlt, FaHeadset, 
+} from 'react-icons/fa';
+import Image from 'next/image';
 
 interface EnterpriseFeatures {
   customBranding: {
@@ -199,9 +202,11 @@ export default function EnterpriseFeatures() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Company Logo</label>
                     <div className="flex items-center gap-4">
                       {brandingSettings.logoUrl && (
-                        <img
+                        <Image
                           src={brandingSettings.logoUrl}
                           alt="Company Logo"
+                          width={64}
+                          height={64}
                           className="w-16 h-16 object-contain border border-gray-200 rounded"
                         />
                       )}
@@ -534,4 +539,4 @@ export default function EnterpriseFeatures() {
       </div>
     </div>
   );
-} 
+}

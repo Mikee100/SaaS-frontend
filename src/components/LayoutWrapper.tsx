@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import PlanBasedNav from "@/components/PlanBasedNav";
-import { UserProvider } from "@/components/UserContext";
+
 import { SidebarProvider, useSidebar } from "@/components/SidebarContext";
 
 function LayoutContent({ children }: { children: React.ReactNode }) {
@@ -43,3 +43,4 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     </SidebarProvider>
   );
 }
+

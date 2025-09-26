@@ -1,14 +1,13 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { apiGet } from '@/utils/api';
-import PlanGuard from '@/components/PlanGuard';
 import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
 import PerformanceMetrics from '@/components/PerformanceMetrics';
 import InventoryAnalytics from '@/components/InventoryAnalytics';
 import AIInsights from '@/components/AIInsights';
 import AdvancedSegments from '@/components/AdvancedSegments';
-import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaShare, FaCrown, FaStar, FaLock, FaArrowUp, FaBrain, FaUsers, FaBox } from 'react-icons/fa';
+import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaShare, FaCrown, FaStar, FaArrowUp, FaBrain, FaUsers, FaBox } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
@@ -124,7 +123,7 @@ export default function AnalyticsPage() {
         <div className="text-center py-12">
           <FaChartLine className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don't have permission to view analytics.</p>
+          <p className="text-gray-600 mb-4">You don&apos;t have permission to view analytics.</p>
           <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>
@@ -391,16 +390,16 @@ export default function AnalyticsPage() {
                   <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
                     <div>
                       <p className="font-medium text-purple-800">Revenue Today</p>
-                      <p className="text-sm text-purple-600">Today's earnings</p>
+                      <p className="text-sm text-purple-600">Todays earnings</p>
                     </div>
                     <p className="text-2xl font-bold text-purple-900">${enterpriseData.realTimeData?.revenueToday.toLocaleString() || '0'}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Export & Share Options */}
+              {/* Export &amp; Share Options */}
               <div className="bg-white rounded-xl shadow-sm border p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Export & Share</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Export &amp; Share</h3>
                 <div className="space-y-3">
                   <button className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <FaDownload className="w-4 h-4 text-gray-600" />

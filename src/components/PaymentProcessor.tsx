@@ -10,10 +10,16 @@ interface PaymentProcessorProps {
   description: string;
   onSuccess?: (paymentId: string) => void;
   onError?: (error: string) => void;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   isSubscription?: boolean;
   buttonText?: string;
 }
+
+type StripePaymentIntent = {
+  id: string;
+  amount: number;
+  status: string;
+};
 
 interface PaymentMethod {
   id: string;
@@ -34,7 +40,6 @@ function PaymentForm({
   onSuccess, 
   onError,
   metadata = {},
-  isSubscription = true,
   buttonText = 'Pay Now'
 }: PaymentProcessorProps) {
   const stripe = useStripe();
@@ -43,12 +48,16 @@ function PaymentForm({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
+ 
   useEffect(() => {
     const loadPaymentMethods = async () => {
       try {
         const methods = await apiGet('/payments/methods');
-        setSavedPaymentMethods(methods);
+        if (Array.isArray(methods)) {
+          setSavedPaymentMethods(methods as PaymentMethod[]);
+        } else {
+          setSavedPaymentMethods([]);
+        }
       } catch (err) {
         console.error('Error loading payment methods:', err);
       }
@@ -87,14 +96,16 @@ function PaymentForm({
           throw new Error('Card element not found');
         }
 
+        const paymentIntentResponse = await apiPost('/payments/create-payment-intent', {
+          amount,
+          currency,
+          description,
+          metadata,
+          savePaymentMethod: true
+        }) as { clientSecret: string };
+
         const { error: submitError, paymentIntent: createdPaymentIntent } = await stripe.confirmCardPayment(
-          (await apiPost('/payments/create-payment-intent', {
-            amount,
-            currency,
-            description,
-            metadata,
-            savePaymentMethod: true
-          })).clientSecret,
+          paymentIntentResponse.clientSecret,
           {
             payment_method: {
               card: cardElement,
@@ -112,16 +123,21 @@ function PaymentForm({
         paymentIntent = createdPaymentIntent;
       }
 
-      if (paymentIntent.status === 'succeeded') {
-        // Record the payment
-        const result = await apiPost('/payments/record-one-time-payment', {
-          paymentId: paymentIntent.id,
-          amount: paymentIntent.amount,
+      const pi = paymentIntent as StripePaymentIntent;
+      if (
+        paymentIntent &&
+        typeof paymentIntent === 'object' &&
+        'status' in paymentIntent &&
+        pi.status === 'succeeded'
+      ) {
+        await apiPost('/payments/record-one-time-payment', {
+          paymentId: pi.id,
+          amount: pi.amount,
           description,
           metadata
         });
 
-        onSuccess?.(paymentIntent.id);
+        onSuccess?.(pi.id);
       } else {
         throw new Error('Payment failed. Please try again.');
       }

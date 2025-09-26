@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState, useContext } from "react";
-import { apiGet, apiPost, apiPut } from "@/utils/api";
+import { useEffect, useState } from "react";
+import { apiGet, apiPut } from "@/utils/api";
 import { FaListAlt, FaShieldAlt, FaCog, FaLock, FaPlus, FaEdit } from 'react-icons/fa';
 import Link from "next/link";
 import { useUser } from "@/components/UserContext";
@@ -86,18 +86,23 @@ export default function PermissionsSettings() {
 
       setRoles(rolesData as Role[]);
       const mappedPermissions = Array.isArray(permissionsData)
-        ? permissionsData.map((p: any) => ({
-            ...p,
-            key: p.key || p.name
-          }))
+        ? permissionsData.map((p: unknown) => {
+            const obj = p as { id?: string; key?: string; name?: string; description?: string };
+            return {
+              id: obj.id || '',
+              key: obj.key || obj.name || '',
+              description: obj.description
+            };
+          })
         : [];
       setPermissions(mappedPermissions);
       setUsers(usersData as User[]);
       setBranches(branchesData as Branch[]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // LOG: Error details
       console.error("Failed to load data:", err);
-      setError(err?.message || "Failed to load data");
+      const message = err instanceof Error ? err.message : "Failed to load data";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -144,9 +149,10 @@ export default function PermissionsSettings() {
       setShowCreateRole(false);
       await loadData();
       setSuccess(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to create role:", err);
-      setError(err.message || "Failed to create role. Please check the console for more details.");
+      const message = err instanceof Error ? err.message : "Failed to create role. Please check the console for more details.";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -178,7 +184,7 @@ export default function PermissionsSettings() {
         <div className="text-center py-12">
           <FaLock className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don't have permission to manage permissions.</p>
+          <p className="text-gray-600 mb-4">You don&apos;t have permission to manage permissions.</p>
           <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>
@@ -192,10 +198,6 @@ export default function PermissionsSettings() {
     if (!usersByBranch[branchKey]) usersByBranch[branchKey] = [];
     usersByBranch[branchKey].push(user);
   });
-
-  function setEditingRole(role: Role): void {
-    throw new Error("Function not implemented.");
-  }
 
   return (
     <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
@@ -234,8 +236,9 @@ export default function PermissionsSettings() {
                   setShowManagePermissions(null);
                   await loadData();
                   setSuccess(true);
-                } catch (err: any) {
-                  setError(err.message || "Failed to update user permissions");
+                } catch (err: unknown) {
+                  const message = err instanceof Error ? err.message : "Failed to update user permissions";
+                  setError(message);
                 } finally {
                   setLoading(false);
                 }
@@ -486,9 +489,9 @@ export default function PermissionsSettings() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setEditingRole(role)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
-                        title="Edit Role"
+                        disabled
+                        className="p-2 text-gray-400 cursor-not-allowed rounded-full"
+                        title="Edit Role (Coming Soon)"
                       >
                         <FaEdit />
                       </button>

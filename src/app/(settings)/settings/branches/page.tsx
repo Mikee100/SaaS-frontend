@@ -1,15 +1,36 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, ChangeEvent, FormEvent } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { FaPlus, FaEye, FaEdit, FaTrash, FaMapMarkerAlt, FaPhone, FaEnvelope, FaUser, FaClock, FaGlobe, FaBuilding, FaTimes, FaSearch } from "react-icons/fa";
 
+interface Branch {
+  id: string;
+  name: string;
+  street: string;
+  city: string;
+  state: string;
+  country: string;
+  postalCode: string;
+  phone: string;
+  email: string;
+  manager: string;
+  openingHours: string;
+  status: 'active' | 'inactive';
+  logo?: string | null;
+  customField?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+
+
 export default function BranchesPage() {
-  const [branches, setBranches] = useState<any[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState<any | null>(null);
-  const [showEditModal, setShowEditModal] = useState<any | null>(null);
+  const [showViewModal, setShowViewModal] = useState<Branch | null>(null);
+  const [showEditModal, setShowEditModal] = useState<Branch | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -38,7 +59,7 @@ export default function BranchesPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await apiGet("/api/branches");
+      const data = await apiGet<Branch[]>("/api/branches");
       setBranches(data);
     } catch {
       setError("Failed to load branches");
@@ -47,8 +68,9 @@ export default function BranchesPage() {
     }
   };
 
-  const handleFormChange = (e: any) => {
-    const { name, value, files } = e.target;
+  const handleFormChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    const files = (e.target as HTMLInputElement).files;
     setForm(f => ({
       ...f,
       [name]: files ? files[0] : value
@@ -82,14 +104,15 @@ export default function BranchesPage() {
       });
       setShowCreateModal(false);
       fetchBranches();
-    } catch (err: any) {
-      setFormError(err.message || "Failed to create branch");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setFormError(error.message || "Failed to create branch");
     } finally {
       setFormLoading(false);
     }
   };
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!showEditModal) return;
     
@@ -103,8 +126,9 @@ export default function BranchesPage() {
       setFormSuccess("Branch updated successfully!");
       setShowEditModal(null);
       fetchBranches();
-    } catch (err: any) {
-      setFormError(err.message || "Failed to update branch");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setFormError(error.message || "Failed to update branch");
     } finally {
       setFormLoading(false);
     }
@@ -117,12 +141,13 @@ export default function BranchesPage() {
       await apiDelete(`/api/branches/${id}`);
       setFormSuccess("Branch deleted successfully!");
       fetchBranches();
-    } catch (err: any) {
-      setFormError(err.message || "Failed to delete branch");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setFormError(error.message || "Failed to delete branch");
     }
   };
 
-  const openEditModal = (branch: any) => {
+  const openEditModal = (branch: Branch) => {
     setShowEditModal(branch);
     setForm({
       name: branch.name || "",

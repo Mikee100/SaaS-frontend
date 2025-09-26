@@ -106,8 +106,8 @@ export default function SystemHealthPage() {
         apiGet("/admin/health"),
         apiGet("/admin/health/metrics")
       ]);
-      setHealth(healthData);
-      setMetrics(metricsData);
+      setHealth(healthData as SystemHealth);
+      setMetrics(metricsData as PerformanceMetrics);
     } catch (error) {
       console.error("Failed to fetch health data:", error);
     } finally {

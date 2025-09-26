@@ -6,26 +6,54 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import React, { useEffect, useState } from "react";
 
+type SaleItem = {
+  productId: string;
+  name: string;
+  quantity: number;
+  price: number;
+};
+
+type MpesaTransaction = {
+  phoneNumber: string;
+  amount: number;
+  status: string;
+  mpesaReceipt?: string;
+};
+
+type Sale = {
+  saleId: string;
+  date: string;
+  total: number;
+  paymentType: string;
+  customerName?: string;
+  customerPhone?: string;
+  cashier?: string;
+  items: SaleItem[];
+  mpesaTransaction?: MpesaTransaction;
+};
+
 function unique<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
 }
 
-function toCSV(rows: any[], columns: string[]): string {
-  const escape = (v: any) => `"${String(v).replace(/"/g, '""')}"`;
+function toCSV(rows: Record<string, unknown>[], columns: string[]): string {
+  const escape = (v: unknown) => `"${String(v).replace(/"/g, '""')}"`;
   const header = columns.join(',');
   const body = rows.map(row => columns.map(col => escape(row[col] ?? '')).join(',')).join('\n');
   return header + '\n' + body;
 }
 
 export default function SalesHistoryPage() {
-  const [sales, setSales] = useState<any[]>([]);
+
+const [sales, setSales] = useState<Sale[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   // Branch state
-  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
-  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [branches] = useState<{ id: string; name: string }[]>([]);
+  const [branchesLoading] = useState(true);
   const [selectedBranchId, setSelectedBranchId] = useState<string>("");
 
   // Filter state
@@ -52,25 +80,22 @@ export default function SalesHistoryPage() {
   const pagedSales = filteredSales.slice((page - 1) * perPage, page * perPage);
 
   // Fetch branches
-  useEffect(() => {
-    setBranchesLoading(true);
-    apiGet("/api/branches")
-      .then((data) => {
-        setBranches(data);
-        if (data.length > 0 && !selectedBranchId) setSelectedBranchId(data[0].id);
-      })
-      .catch(() => setBranches([]))
-      .finally(() => setBranchesLoading(false));
-  }, []);
+useEffect(() => {
+  setLoading(true);
+  apiGet("/sales", selectedBranchId ? { "x-branch-id": selectedBranchId } : undefined)
+    .then((data) => setSales(data as Sale[]))
+    .catch((err) => setError(err.message || "Failed to fetch sales"))
+    .finally(() => setLoading(false));
+}, [selectedBranchId]);
 
   // Fetch sales (filtered by branch)
-  useEffect(() => {
-    setLoading(true);
-    apiGet("/sales", selectedBranchId ? { "x-branch-id": selectedBranchId } : undefined)
-      .then(setSales)
-      .catch((err) => setError(err.message || "Failed to fetch sales"))
-      .finally(() => setLoading(false));
-  }, [selectedBranchId]);
+useEffect(() => {
+  setLoading(true);
+  apiGet("/sales", selectedBranchId ? { "x-branch-id": selectedBranchId } : undefined)
+    .then((data) => setSales(data as Sale[]))
+    .catch((err) => setError(err.message || "Failed to fetch sales"))
+    .finally(() => setLoading(false));
+}, [selectedBranchId]);
 
   // Summary calculations
   const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total || 0), 0);
@@ -526,7 +551,7 @@ export default function SalesHistoryPage() {
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-100">
-                                    {sale.items.map((item: any) => (
+                                    {sale.items.map((item: SaleItem) => (
                                       <tr key={item.productId}>
                                         <td className="py-2 px-3">{item.name}</td>
                                         <td className="py-2 px-3 text-right">{item.quantity}</td>

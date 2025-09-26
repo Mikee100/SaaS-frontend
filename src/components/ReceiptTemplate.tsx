@@ -1,5 +1,5 @@
 "use client";
-import { ReceiptLogo, EtimsQrCode } from './LogoUsage';
+import { EtimsQrCode } from './LogoUsage';
 import { FaPrint, FaDownload, FaShare } from 'react-icons/fa';
 
 interface ReceiptItem {

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import type { StripeCardElementOptions } from "@stripe/stripe-js";
+import Image from "next/image";
 
 interface PaymentMethod {
   id: string;
@@ -10,8 +11,10 @@ interface PaymentMethod {
   card?: {
     brand: string;
     last4: string;
-    expMonth: number;
-    expYear: number;
+    expMonth?: number;
+    expYear?: number;
+    exp_month?: number;
+    exp_year?: number;
   };
 }
 
@@ -34,13 +37,40 @@ interface PaymentMethodResponse {
 }
 
 const cardBrandIcon = (brand: string) => {
-  switch (brand.toLowerCase()) {
+  const brandLower = brand.toLowerCase();
+  const size = 24; // Width and height in pixels
+  
+  switch (brandLower) {
     case "visa":
-      return <img src="/globe.svg" alt="Visa" className="inline w-6 h-6 mr-2" />;
+      return (
+        <Image 
+          src="/globe.svg" 
+          alt="Visa" 
+          width={size} 
+          height={size}
+          className="inline mr-2"
+        />
+      );
     case "mastercard":
-      return <img src="/window.svg" alt="Mastercard" className="inline w-6 h-6 mr-2" />;
+      return (
+        <Image 
+          src="/window.svg" 
+          alt="Mastercard" 
+          width={size} 
+          height={size}
+          className="inline mr-2"
+        />
+      );
     default:
-      return <img src="/icon.svg" alt={brand} className="inline w-6 h-6 mr-2" />;
+      return (
+        <Image 
+          src="/icon.svg" 
+          alt={brand} 
+          width={size} 
+          height={size}
+          className="inline mr-2"
+        />
+      );
   }
 };
 

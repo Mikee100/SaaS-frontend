@@ -12,6 +12,11 @@ interface PlanGuardProps {
   showUpgradePrompt?: boolean;
 }
 
+type PlanLimits = {
+  currentPlan?: 'Basic' | 'Pro' | 'Enterprise';
+  features?: Record<string, boolean>;
+};
+
 export default function PlanGuard({ 
   children, 
   requiredPlan, 
@@ -20,7 +25,7 @@ export default function PlanGuard({
   showUpgradePrompt = true 
 }: PlanGuardProps) {
   const userContext = useUser();
-  const [planLimits, setPlanLimits] = useState<any>(null);
+
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +44,8 @@ export default function PlanGuard({
     const checkAccess = async () => {
       try {
         setError(null);
-        const limits = await apiGet('/billing/limits') as any;
-        setPlanLimits(limits);
+        const limits = await apiGet('/billing/limits') as PlanLimits;
+       
         
         if (requiredPlan) {
           const planHierarchy: Record<string, number> = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
@@ -53,15 +58,20 @@ export default function PlanGuard({
         } else {
           setHasAccess(true);
         }
-      } catch (error: any) {
+          } catch (error: unknown) {
         console.error('Error checking plan access:', error);
-        
-        // Handle unauthorized error
-        if (error?.message?.includes('Unauthorized') || error?.status === 401) {
+
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          (
+            ('message' in error && typeof (error as { message?: string }).message === 'string' && (error as { message: string }).message.includes('Unauthorized')) ||
+            ('status' in error && typeof (error as { status?: number }).status === 'number' && (error as { status: number }).status === 401)
+          )
+        ) {
           setError('Please log in to access this feature');
           setHasAccess(false);
         } else {
-          // For other errors, default to allowing access
           setHasAccess(true);
         }
       } finally {
@@ -130,4 +140,4 @@ export default function PlanGuard({
       </a>
     </div>
   );
-} 
+}

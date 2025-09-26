@@ -41,7 +41,7 @@ export default function CustomerModal({ isOpen, onClose, onSelectCustomer, selec
     try {
       setLoading(true);
       const data = await apiGet('/users/customers');
-      setCustomers(data);
+      setCustomers(data as Customer[]);
     } catch (error) {
       console.error('Failed to fetch customers:', error);
     } finally {
@@ -52,7 +52,7 @@ export default function CustomerModal({ isOpen, onClose, onSelectCustomer, selec
   const handleAddCustomer = async () => {
     try {
       setLoading(true);
-      const customer = await apiPost('/users/customers', newCustomer);
+      const customer = await apiPost('/users/customers', newCustomer) as Customer;
       setCustomers(prev => [customer, ...prev]);
       setNewCustomer({ name: '', phone: '', email: '' });
       setShowAddForm(false);

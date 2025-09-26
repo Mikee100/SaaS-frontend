@@ -9,7 +9,7 @@ interface OneTimePaymentProps {
   amount: number;
   description: string;
   onSuccess?: (paymentId: string) => void;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   buttonText?: string;
   successMessage?: string;
 }
@@ -24,11 +24,9 @@ export default function OneTimePayment({
 }: OneTimePaymentProps) {
   const [error, setError] = useState<string | null>(null);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const handlePaymentSuccess = async (paymentId: string) => {
     try {
-      setLoading(true);
       setError(null);
       
       // Record the successful payment in your backend
@@ -37,7 +35,7 @@ export default function OneTimePayment({
         amount,
         description,
         metadata,
-      });
+      }) as { success: boolean; error?: string };
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to record payment');
@@ -48,11 +46,13 @@ export default function OneTimePayment({
       if (onSuccess) {
         onSuccess(paymentId);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error recording payment:', err);
-      setError(err.message || 'Failed to record payment');
-    } finally {
-      setLoading(false);
+      if (err instanceof Error) {
+        setError(err.message || 'Failed to record payment');
+      } else {
+        setError('Failed to record payment');
+      }
     }
   };
 

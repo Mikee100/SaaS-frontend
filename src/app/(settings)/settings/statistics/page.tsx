@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Bar, Pie } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import {
 	Chart as ChartJS,
 	CategoryScale,
@@ -18,13 +18,9 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, PointElement, LineElement, ArcElement);
 
-const STAT_ENDPOINTS = [
-	{ key: 'dashboard', label: 'Dashboard Analytics', url: '/api/analytics/dashboard' },
-];
-
 interface StatCardProps {
 	title: string;
-	value: any;
+	value: string | number | undefined;
 }
 
 function StatCard({ title, value }: StatCardProps) {
@@ -63,19 +59,15 @@ type AdvancedStats = {
 	predictiveAnalytics?: PredictiveAnalytics;
 	inventoryAnalytics?: InventoryAnalytics;
 };
-type EnterpriseStats = {
-	realTimeData?: any;
-};
-type Stats = {
-	basic?: BasicStats;
-	advanced?: AdvancedStats;
-	enterprise?: EnterpriseStats;
-	[key: string]: any;
-};
 
+interface CustomerRetention {
+	totalCustomers?: number;
+	repeatCustomers?: number;
+	retentionRate?: number;
+}
 
 export default function StatisticsPage() {
-   const [stats, setStats] = useState<any>({});
+   const [stats, setStats] = useState<BasicStats & AdvancedStats & { customerRetention?: CustomerRetention }>({});
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string | null>(null);
 
@@ -86,7 +78,7 @@ export default function StatisticsPage() {
 		   try {
 			   const response = await axios.get('/api/analytics/dashboard');
 			   setStats(response.data);
-		   } catch (err) {
+		   } catch {
 			   setError('Failed to fetch statistics');
 		   } finally {
 			   setLoading(false);
@@ -129,11 +121,11 @@ export default function StatisticsPage() {
    // Top Products Chart
    const topProducts = Array.isArray(stats.topProducts) ? stats.topProducts : [];
    const topProductChart = {
-	   labels: topProducts.length > 0 ? topProducts.map((p: any) => p.name) : ['No Data'],
+	   labels: topProducts.length > 0 ? topProducts.map((p: TopProduct) => p.name) : ['No Data'],
 	   datasets: [
 		   {
 			   label: 'Revenue',
-			   data: topProducts.length > 0 ? topProducts.map((p: any) => p.revenue) : [0],
+			   data: topProducts.length > 0 ? topProducts.map((p: TopProduct) => p.revenue) : [0],
 			   backgroundColor: '#ffb347',
 		   },
 	   ],

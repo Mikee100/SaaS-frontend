@@ -80,9 +80,9 @@ export default function RegisterPage() {
     ownerRole: "owner"
   });
 
-  const updateFormData = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+const updateFormData = (field: string, value: string | string[] | boolean | number) => {
+  setFormData(prev => ({ ...prev, [field]: value }));
+};
 
   const handleProductToggle = (product: string, isPrimary: boolean) => {
     if (isPrimary) {
@@ -172,7 +172,8 @@ export default function RegisterPage() {
       }
       
       // Send the request with the properly formatted data
-      const res = await apiPost<{ tenant: any }>('/tenant', requestData);
+      type Tenant = { id: string; [key: string]: unknown };
+const res = await apiPost<{ tenant: Tenant }>('/tenant', requestData);
       console.log('Tenant created successfully:', res);
 
       // Ensure a valid tenant was returned before proceeding
@@ -185,30 +186,34 @@ export default function RegisterPage() {
       // Registration successful - redirect to login page with success message
       console.log('Registration completed successfully!');
       router.push('/login?message=Registration successful! Please log in with your credentials.');
-    } catch (err: any) {
-      console.error('Registration error:', err);
-      
-      // Extract and display the error message from the response if available
-      let errorMessage = "Registration failed. Please try again.";
-      
-      try {
-        // Try to parse the error response for more details
-        if (err.message && err.message.includes('{')) {
-          const errorObj = JSON.parse(err.message.split(' - ')[1] || '{}');
-          if (errorObj.message) {
-            errorMessage = errorObj.message;
-          }
-        } else if (err.response?.data?.message) {
-          errorMessage = err.response.data.message;
-        } else {
-          errorMessage = err.message || errorMessage;
-        }
-      } catch (parseError) {
-        console.error('Error parsing error message:', parseError);
+    } catch (err: unknown) {
+  console.error('Registration error:', err);
+
+  let errorMessage = "Registration failed. Please try again.";
+
+  try {
+    if (err instanceof Error && err.message && err.message.includes('{')) {
+      const errorObj = JSON.parse(err.message.split(' - ')[1] || '{}');
+      if (errorObj.message) {
+        errorMessage = errorObj.message;
       }
-      
-      setError(errorMessage);
-    } finally {
+  
+    } else if (
+      typeof err === "object" &&
+      err !== null &&
+      "response" in err &&
+      typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
+    ) {
+      errorMessage = (err as { response: { data: { message: string } } }).response.data.message;
+    } else if (err instanceof Error) {
+      errorMessage = err.message || errorMessage;
+    }
+  } catch (parseError) {
+    console.error('Error parsing error message:', parseError);
+  }
+
+  setError(errorMessage);
+}finally {
       setLoading(false);
     }
   };

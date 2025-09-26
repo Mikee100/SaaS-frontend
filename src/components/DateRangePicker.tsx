@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { format, subDays, subMonths, isSameDay, isWithinInterval, startOfMonth, endOfMonth } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronDown, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -35,22 +35,7 @@ export default function DateRangePicker({
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Initialize with default range
-  useEffect(() => {
-    applyPreset('thisWeek');
-  }, []);
-
-  // Close popover when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const applyPreset = (preset: string) => {
+  const applyPreset = useCallback((preset: string) => {
     const today = new Date();
     let start: Date | null = null;
     let end: Date | null = null;
@@ -90,7 +75,22 @@ export default function DateRangePicker({
     setTempRange({ start, end });
     onDateRangeChange({ start, end });
     setShowCustomPicker(false);
-  };
+  }, [onDateRangeChange]);
+
+  useEffect(() => {
+    applyPreset('thisWeek');
+  }, [applyPreset]);
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleDateSelect = (date: Date) => {
     if (!tempRange.start || (tempRange.start && tempRange.end)) {

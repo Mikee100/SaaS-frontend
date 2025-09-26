@@ -119,9 +119,10 @@ export function useLogoRequirements() {
     const checkRequirements = async () => {
       try {
         const data = await apiGet("/tenant/logo/validation");
+        const typedData = data as { requirements?: Record<string, boolean> };
         setRequirements({
-          required: data.requirements ? Object.keys(data.requirements).filter(key => data.requirements[key]) : [],
-          optional: data.requirements ? Object.keys(data.requirements).filter(key => !data.requirements[key]) : []
+          required: typedData.requirements ? Object.keys(typedData.requirements).filter(key => typedData.requirements![key]) : [],
+          optional: typedData.requirements ? Object.keys(typedData.requirements).filter(key => !typedData.requirements![key]) : []
         });
       } catch (err) {
         console.error("Error checking logo requirements:", err);

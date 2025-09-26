@@ -30,12 +30,12 @@ export default function SettingsPage() {
       try {
         setLoading(true);
         const [tenantData, usersData] = await Promise.all([
-          apiGet('/tenant/me'),
-          apiGet('/user')
+          apiGet<Tenant>('/tenant/me'),
+          apiGet<User[]>('/user')
         ]);
         setTenant(tenantData);
         setUsers(usersData);
-      } catch (err) {
+      } catch {
         setError('Failed to load settings data.');
       } finally {
         setLoading(false);
@@ -50,7 +50,7 @@ export default function SettingsPage() {
     setError(null);
     try {
       await apiPut('/tenant/me', tenant);
-    } catch (err) {
+    } catch {
       setError('Failed to save changes.');
     } finally {
       setSaving(false);

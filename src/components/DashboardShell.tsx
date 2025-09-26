@@ -1,17 +1,20 @@
 "use client";
 import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiGet } from '@/utils/api';
-import dynamic from "next/dynamic";
-import { FaChartLine, FaDollarSign, FaBox, FaClipboardList, FaUsers, FaCashRegister, FaHistory, FaCog, FaSignOutAlt, FaBell } from "react-icons/fa";
+
+import { FaChartLine, FaBox, FaClipboardList, FaUsers, FaCashRegister, FaHistory, FaCog, FaSignOutAlt, FaBell } from "react-icons/fa";
 import { usePathname } from "next/navigation";
 
-const AnalyticsSidebarSummary = dynamic(() => import("./AnalyticsSidebarSummary"), { ssr: false });
+type User = {
+  name: string;
+  email: string;
+  // Add other fields as needed
+};
 
 export default function DashboardShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 

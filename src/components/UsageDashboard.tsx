@@ -59,9 +59,9 @@ export default function UsageDashboard() {
     );
   }
 
-  const usersPercentage = getUsagePercentage('users');
-  const productsPercentage = getUsagePercentage('products');
-  const salesPercentage = getUsagePercentage('sales');
+  const usersPercentage = getUsagePercentage();
+  const productsPercentage = getUsagePercentage();
+  const salesPercentage = getUsagePercentage();
 
   const getProgressColor = (percentage: number) => {
     if (percentage >= 90) return 'bg-red-500';

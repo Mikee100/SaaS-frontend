@@ -47,18 +47,16 @@ export default function ResetPasswordPage() {
       setTimeout(() => {
         router.push("/login");
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || "Failed to reset password");
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (typeof err === 'string') {
+        setError(err);
+      } else {
+        setError('Failed to reset password');
+      }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleError = (error: unknown) => {
-    if (error instanceof Error) {
-      setError(error.message);
-    } else {
-      setError("An unknown error occurred");
     }
   };
 

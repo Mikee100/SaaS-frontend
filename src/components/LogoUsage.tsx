@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
 import { FaImage, FaSpinner } from 'react-icons/fa';
 import { useUser } from "./UserContext";
+import Image from 'next/image';
 
 interface LogoUsageProps {
   type?: 'main' | 'favicon' | 'receiptLogo' | 'etimsQrCode' | 'watermark';
@@ -100,14 +101,12 @@ export default function LogoUsage({
   if (section && logoData?.sectionLogos?.[section]?.url) {
     const sectionLogo = logoData.sectionLogos[section];
     return (
-      <img
+      <Image
         src={sectionLogo.url}
         alt={sectionLogo.altText || alt || `${section} logo`}
         className={`${sizeClasses[size]} object-contain ${className}`}
-        style={{
-          width: sectionLogo.width ? `${sectionLogo.width}px` : undefined,
-          height: sectionLogo.height ? `${sectionLogo.height}px` : undefined,
-        }}
+        width={sectionLogo.width}
+        height={sectionLogo.height}
         onError={() => setError(true)}
       />
     );
@@ -128,11 +127,13 @@ export default function LogoUsage({
   }
 
   return (
-    <img
+    <Image
       src={logoUrl}
       alt={alt || `${type} logo`}
       className={`${sizeClasses[size]} object-contain ${className}`}
       onError={() => setError(true)}
+      width={64} // or your preferred width
+      height={64} // or your preferred height
     />
   );
 }
@@ -179,4 +180,4 @@ export function useLogoData() {
   }, []);
 
   return { logoData, loading };
-} 
+}

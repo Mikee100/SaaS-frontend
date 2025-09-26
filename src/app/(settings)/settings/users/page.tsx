@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { FaUsers, FaEdit, FaTrash, FaEye, FaLock, FaUserEdit, FaUserPlus } from 'react-icons/fa';
+import { FaUsers, FaEdit, FaTrash, FaUserPlus } from 'react-icons/fa';
 import Link from "next/link";
 
 interface User {
@@ -50,37 +50,37 @@ export default function UsersSettings() {
     try {
       // Get the selected branch from localStorage or use the first available branch
       const selectedBranchId = localStorage.getItem('selectedBranchId');
-      const branchesData = await apiGet("/api/branches");
-      setBranches(branchesData as Branch[]);
+      const branchesData = await apiGet<Branch[]>("/api/branches");
+      setBranches(branchesData);
       
       // If no branch is selected and we have branches, select the first one
       const effectiveBranchId = selectedBranchId || (branchesData.length > 0 ? branchesData[0].id : '');
       
       // Fetch users for the current branch (tenant is handled by the backend)
       const [usersData, rolesData] = await Promise.all([
-        apiGet(effectiveBranchId ? `/user?branchId=${effectiveBranchId}` : '/user'),
-        apiGet("/roles"),
+        apiGet<User[]>(effectiveBranchId ? `/user?branchId=${effectiveBranchId}` : '/user'),
+        apiGet<Role[]>("/roles"),
       ]);
       
-      setUsers(usersData as User[]);
-      setRoles(rolesData as Role[]);
+      setUsers(usersData);
+      setRoles(rolesData);
       
       // Set the current branch ID in state
       if (effectiveBranchId) {
         setBranchId(effectiveBranchId);
       }
-    } catch (err) {
+    } catch {
       setError("Failed to load users, roles, or branches");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e: any) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
     setError("");
@@ -91,14 +91,15 @@ export default function UsersSettings() {
       setBranchId("");
       await loadData();
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || "Failed to create user");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || "Failed to create user");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleEditUser = async (e: any) => {
+  const handleEditUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingUser) return;
     
@@ -114,8 +115,9 @@ export default function UsersSettings() {
       setShowEditModal(false);
       setEditingUser(null);
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || "Failed to update user");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || "Failed to update user");
     } finally {
       setSaving(false);
     }
@@ -132,8 +134,9 @@ export default function UsersSettings() {
       setShowDeleteModal(false);
       setUserToDelete(null);
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || "Failed to delete user");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || "Failed to delete user");
     } finally {
       setSaving(false);
     }
@@ -319,7 +322,7 @@ export default function UsersSettings() {
                     <td className="py-3 px-4 text-gray-600">{user.email}</td>
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {(user.userRoles || []).map((ur: any) => ur.role?.name).filter(Boolean).join(', ') || 'No Role'}
+                        {(user.userRoles || []).map((ur: { role: { name: string } }) => ur.role?.name).filter(Boolean).join(', ') || 'No Role'}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-gray-600">

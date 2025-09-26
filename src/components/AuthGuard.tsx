@@ -83,7 +83,7 @@ export default function AuthGuard({ children, fallback, adminOnly = false }: Aut
       return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-gray-600 text-lg">Access Denied. You don't have permission to view this page.</p>
+            <p className="text-gray-600 text-lg">Access Denied. You don&apos;t have permission to view this page.</p>
           </div>
         </div>
       );

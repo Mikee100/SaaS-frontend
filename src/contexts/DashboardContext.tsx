@@ -69,13 +69,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
       try {
         const cachedPrefs = await db.get('preferences', 'user-dashboard');
         if (cachedPrefs) {
-          setPreferences(cachedPrefs);
+          setPreferences({ ...defaultPreferences, ...cachedPrefs });
         }
 
         if (navigator.onLine) {
           const response = await apiClient.get('/user/me');
-          if (response.data?.dashboardPreferences) {
-            const fetchedPrefs = { ...defaultPreferences, ...response.data.dashboardPreferences };
+          // Assert the type of response to inform TypeScript
+          const typedResponse = response as { data?: { dashboardPreferences?: Partial<DashboardPreferences> } };
+          if (typedResponse.data?.dashboardPreferences) {
+            const fetchedPrefs = { ...defaultPreferences, ...typedResponse.data.dashboardPreferences };
             setPreferences(fetchedPrefs);
             await db.set('preferences', { id: 'user-dashboard', ...fetchedPrefs });
           }
@@ -90,7 +92,8 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
     fetchPreferences();
   }, []);
 
-  const savePreferences = useCallback(async (prefsToSave: DashboardPreferences) => {
+const savePreferences = useCallback(
+  async (prefsToSave: DashboardPreferences) => {
     // Optimistically update state and local DB
     setPreferences(prefsToSave);
     await db.set('preferences', { id: 'user-dashboard', ...prefsToSave });
@@ -105,9 +108,15 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
       });
       setError('You are offline. Your changes have been saved locally and will sync when you reconnect.');
       
-      if ('serviceWorker' in navigator && 'SyncManager' in window) {
-        navigator.serviceWorker.ready.then(reg => reg.sync.register('sync-offline-operations'));
-      }
+     // ...existing code...
+if ('serviceWorker' in navigator && 'SyncManager' in window) {
+  navigator.serviceWorker.ready.then(reg => {
+   (reg as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register('sync-offline-operations');
+
+  });
+}
+// ...existing code...
+
       return;
     }
 
@@ -124,10 +133,14 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
         timestamp: new Date().getTime(),
       });
       if ('serviceWorker' in navigator && 'SyncManager' in window) {
-        navigator.serviceWorker.ready.then(reg => reg.sync.register('sync-offline-operations'));
+        navigator.serviceWorker.ready.then(reg => {
+          (reg as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register('sync-offline-operations');
+        });
       }
     }
-  }, [isOnline]);
+  },
+  [isOnline]
+);
 
   const updatePreferences = (updates: Partial<DashboardPreferences>) => {
     const newPrefs = { ...preferences, ...updates };

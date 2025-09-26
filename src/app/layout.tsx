@@ -2,7 +2,6 @@ import React from 'react';
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import ClientLayout from "./ClientLayout";
 import AuthPageWrapper from "@/components/AuthPageWrapper";
 
 // Configure Inter font with optimized loading

@@ -78,10 +78,16 @@ export default function SupportTicketsPage() {
 
   const fetchTicketResponses = async (ticketId: string) => {
     try {
-      const data = await apiGet(`/admin/support/tickets/${ticketId}/responses`);
-      setResponses(data);
+      const data = await apiGet<TicketResponse[]>(`/admin/support/tickets/${ticketId}/responses`);
+      if (Array.isArray(data)) {
+        setResponses(data);
+      } else {
+        console.error('Invalid response format for ticket responses');
+        setResponses([]);
+      }
     } catch (error) {
       console.error("Failed to fetch responses:", error);
+      setResponses([]);
     }
   };
 

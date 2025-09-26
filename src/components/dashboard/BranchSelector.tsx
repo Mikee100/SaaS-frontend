@@ -31,7 +31,7 @@ export function BranchSelector() {
   useEffect(() => {
     async function loadBranches() {
       try {
-        const data = await apiGet('/api/branches');
+        const data = await apiGet('/api/branches') as Branch[];
         setBranches(data);
       } catch (error) {
         console.error('Failed to load branches:', error);
@@ -47,7 +47,7 @@ export function BranchSelector() {
   }, [user]);
 
   const handleBranchSwitch = async (branchId: string) => {
-    if (branchId === user?.branch?.id) return;
+    if (branchId === user?.branchId) return;
     
     setIsSwitching(true);
     try {
@@ -83,10 +83,11 @@ export function BranchSelector() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2" disabled={isSwitching}>
           <Building className="h-4 w-4" />
-          <span>{user.branch?.name || 'Select Branch'}</span>
+          <span>{branches.find(b => b.id === user.branchId)?.name || 'Select Branch'}</span>
           <ChevronDown className="h-4 w-4" />
+          {isSwitching && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
@@ -97,7 +98,7 @@ export function BranchSelector() {
             className="flex justify-between"
           >
             <span>{branch.name}</span>
-            {user.branch?.id === branch.id && <Check className="h-4 w-4" />}
+            {user.branchId === branch.id && <Check className="h-4 w-4" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

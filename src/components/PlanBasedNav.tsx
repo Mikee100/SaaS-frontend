@@ -12,7 +12,7 @@ import { FaTachometerAlt } from 'react-icons/fa';
 
 export default function PlanBasedNav() {
   const userContext = useUser();
-  const { limits, hasFeature, loading: limitsLoading } = usePlanLimits();
+  const { limits, loading: limitsLoading } = usePlanLimits();
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -20,50 +20,55 @@ export default function PlanBasedNav() {
   // Debug logs
 
   // Always call hooks at top level!
-  const navigationItems = [
+  const navigationItems = React.useMemo(() => [
   { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
     { name: 'Products', href: '/products', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_products' },
     { name: 'Inventory', href: '/inventory', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_inventory' },
     { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
     { name: 'Sales History', href: '/sales/history', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
     { name: 'M-Pesa Transactions', href: '/mpesa-transactions', icon: FaMobile, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan:null, requiredPermission: 'view_analytics' },
+    { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan: null, requiredPermission: 'view_analytics' },
     { name: 'Reports', href: '/reports', icon: FaFileAlt, requiredPlan: null, requiredPermission: 'view_reports' },
     { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
     { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
-  ];
+  ], []);
 
-  const planHierarchy: Record<string, number> = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
-  const currentPlan = limits?.currentPlan || 'Basic';
+  type PlanName = 'Basic' | 'Pro' | 'Enterprise';
+
+  const planHierarchy: Record<PlanName, number> = React.useMemo(() => ({
+    'Basic': 1,
+    'Pro': 2,
+    'Enterprise': 3
+  }), []);
+
+  const currentPlan: PlanName = (limits?.currentPlan as PlanName) || 'Basic';
   const currentLevel = planHierarchy[currentPlan] || 0;
+
   const accessibleItems = React.useMemo(() => {
     return navigationItems.filter((item) => {
       // Check plan requirements
       if (item.requiredPlan) {
-        const requiredLevel = planHierarchy[item.requiredPlan] || 0;
+        const requiredLevel = planHierarchy[item.requiredPlan as PlanName] || 0;
         if (currentLevel < requiredLevel) return false;
       }
       // Check permission requirements
       if (item.requiredPermission && userContext?.user) {
         const hasPerm = hasPermission(userContext.user, item.requiredPermission);
-  // ...existing code...
         return hasPerm;
       }
       return true;
     });
-  }, [limits, userContext.user, currentLevel]);
-{/* ...existing code... */}
+  }, [userContext.user, currentLevel, navigationItems, planHierarchy]);
+
   // Hide sidebar on settings pages
   const isSettingsPage = pathname?.startsWith('/settings');
   if (isSettingsPage) {
-  // ...existing code...
     return null;
   }
 
   // Use a regular variable for loading skeleton
   const isLoading = userContext?.loading || limitsLoading || !userContext?.user || !limits;
   if (isLoading) {
-  // ...existing code...
     return (
       <div className={`fixed top-0 left-0 h-full bg-white shadow-lg border-r z-50 transition-all duration-300 ${
         sidebarCollapsed ? 'w-16' : 'w-64'
@@ -248,4 +253,4 @@ export default function PlanBasedNav() {
       )}
     </>
   );
-} 
+}

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { FaUsers, FaChartPie, FaUserFriends, FaUserClock, FaUserCheck, FaUserShield } from 'react-icons/fa';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+
 
 interface Segment {
   name: string;

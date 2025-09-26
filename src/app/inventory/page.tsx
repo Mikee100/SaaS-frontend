@@ -1,7 +1,7 @@
 "use client";
 import { apiGet, apiPost } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
-import { FaBox, FaSearch, FaFilter, FaDownload, FaPlus, FaMinus, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaChartBar, FaHistory, FaEdit, FaEye } from 'react-icons/fa';
+import { FaBox, FaSearch,  FaPlus, FaExclamationTriangle, FaCheckCircle, FaTimesCircle,FaEdit } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
@@ -22,16 +22,10 @@ interface InventoryItem {
   updatedAt: string;
 }
 
-interface InventoryStats {
-  totalProducts: number;
-  inStock: number;
-  outOfStock: number;
-  lowStock: number;
-  totalValue: number;
-}
+
 
 export default function InventoryPage() {
-  const { user } = useUser([]); // Pass an empty array as required by the hook
+  const { user } = useUser(); // Pass an empty array as required by the hook
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
   const setSelectedBranchId = branchContext?.setSelectedBranchId;
@@ -53,10 +47,6 @@ export default function InventoryPage() {
   const [modalError, setModalError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Quick actions
-  const [showBulkModal, setShowBulkModal] = useState(false);
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(true);
 
@@ -69,8 +59,8 @@ export default function InventoryPage() {
       apiGet("/inventory", headers),
     ])
       .then(([products, inventory]) => {
-        setProducts(products || []);
-        setInventory(inventory || []);
+        setProducts(Array.isArray(products) ? products : []);
+        setInventory(Array.isArray(inventory) ? inventory : []);
       })
       .catch(error => {
         console.error("Error fetching inventory data:", error);
@@ -84,10 +74,14 @@ export default function InventoryPage() {
       setBranchesLoading(true);
       try {
         const data = await apiGet('/api/branches');
-        setBranches(data);
-        // Auto-select first branch if none selected
-        if (!selectedBranchId && data.length > 0) {
-          setSelectedBranchId(data[0].id);
+        if (Array.isArray(data)) {
+          setBranches(data as { id: string; name: string }[]);
+          // Auto-select first branch if none selected
+          if (!selectedBranchId && data.length > 0) {
+            setSelectedBranchId(data[0].id);
+          }
+        } else {
+          setBranches([]);
         }
       } catch (err) {
         console.error('Error fetching branches:', err);
@@ -96,7 +90,7 @@ export default function InventoryPage() {
       }
     }
     fetchBranches();
-  }, []);
+  }, [selectedBranchId, setSelectedBranchId]);
 
   // Helper: get inventory record for a product
   function getInv(productId: string) {
@@ -165,7 +159,7 @@ export default function InventoryPage() {
       setModalProduct(null);
       setModalQuantity(0);
       setTimeout(() => {
-        apiGet("/inventory").then((data: InventoryItem[]) => setInventory(data));
+        apiGet("/inventory").then((data) => setInventory(data as InventoryItem[]));
       }, 300);
     } catch (err: unknown) {
       const error = err as Error;
@@ -237,7 +231,7 @@ export default function InventoryPage() {
               Update Stock
             </button>
           ) : (
-            <Tooltip content="You don't have permission to edit inventory. Contact your administrator.">
+            <Tooltip content="You don&apos;t have permission to edit inventory. Contact your administrator.">
               <button
                 disabled
                 className="w-full px-3 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed text-sm font-medium"
@@ -267,7 +261,7 @@ export default function InventoryPage() {
         <div className="text-center py-12">
           <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don't have permission to view inventory.</p>
+          <p className="text-gray-600 mb-4">You don&apos;t have permission to view inventory.</p>
           <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>
@@ -305,7 +299,7 @@ export default function InventoryPage() {
           
           {hasPermission(user, 'create_inventory') && (
             <button
-              onClick={() => setShowBulkModal(true)}
+              onClick={() => setShowModal(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <FaPlus className="w-4 h-4 inline mr-2" />

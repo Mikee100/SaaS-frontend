@@ -2,17 +2,53 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
 
-export default function InvoicesPage() {
-	const [invoices, setInvoices] = useState<any[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState("");
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  // Add other plan properties as needed
+}
 
-	useEffect(() => {
-		apiGet("/billing/invoices")
-			.then(setInvoices)
-			.catch(() => setError("Failed to load invoices"))
-			.finally(() => setLoading(false));
-	}, []);
+interface Subscription {
+  id: string;
+  plan?: SubscriptionPlan;
+  // Add other subscription properties as needed
+}
+
+interface Invoice {
+  id: string;
+  number: string;
+  amount: number;
+  status: 'paid' | 'unpaid' | 'void' | 'refunded' | 'failed';
+  dueDate?: string;
+  createdAt: string;
+  subscription?: Subscription;
+  // Add other invoice properties as needed
+}
+
+export default function InvoicesPage() {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      try {
+        const data = await apiGet<Invoice[]>("/billing/invoices");
+        if (Array.isArray(data)) {
+          setInvoices(data);
+        } else {
+          throw new Error('Invalid response format');
+        }
+      } catch (err) {
+        setError("Failed to load invoices");
+        console.error('Error fetching invoices:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInvoices();
+  }, []);
 
 	if (loading) return <div className="p-8">Loading invoices...</div>;
 

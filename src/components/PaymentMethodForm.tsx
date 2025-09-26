@@ -54,9 +54,13 @@ const PaymentMethodForm: React.FC<PaymentMethodFormProps> = ({ onPaymentMethodSa
       if (!res.ok) throw new Error('Failed to save payment method');
       setSuccess(true);
       if (onPaymentMethodSaved) onPaymentMethodSaved(paymentMethod.id);
-    } catch (err: any) {
-      setError(err.message || 'Failed to save payment method');
-    } finally {
+    } catch (err: unknown) {
+  if (err instanceof Error) {
+    setError(err.message || 'Failed to save payment method');
+  } else {
+    setError('Failed to save payment method');
+  }
+} finally {
       setLoading(false);
     }
   };

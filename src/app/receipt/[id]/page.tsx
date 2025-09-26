@@ -7,6 +7,7 @@ import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { Download, Printer, Share2 } from "lucide-react";
+import Image from "next/image";
 
 // Add this CSS for better print styling
 const printStyles = `
@@ -202,7 +203,7 @@ export default function DigitalReceiptPage() {
           text: 'View your digital receipt',
           url: receiptUrl,
         });
-      } catch (e) {
+      } catch {
         // Sharing was cancelled
       }
     } else {
@@ -280,12 +281,15 @@ export default function DigitalReceiptPage() {
         >
           {/* Receipt Header */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 text-center">
-            {businessInfo?.logoUrl && (
-              <img 
-                src={businessInfo.logoUrl} 
-                alt="Business Logo" 
+              {businessInfo?.logoUrl && (
+              <Image
+                src={businessInfo.logoUrl}
+                alt="Business Logo"
+                width={128}
+                height={64}
                 className="mx-auto mb-2 max-h-16 w-auto max-w-full"
-                style={{ objectFit: 'contain' }} 
+                style={{ objectFit: 'contain' }}
+                priority
               />
             )}
             <h1 className="text-xl font-bold tracking-wide">{businessInfo?.name || 'Business Name'}</h1>

@@ -1,11 +1,11 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { apiPost, apiGet } from '@/utils/api';
-import { FaMobile, FaSpinner, FaCheckCircle, FaTimesCircle, FaExclamationTriangle, FaClock } from 'react-icons/fa';
+import { FaMobile, FaSpinner, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
 
 interface MpesaPaymentProps {
   amount: number;
-  saleData?: any;
+  saleData?: Record<string, unknown>;
   onSuccess: (transactionId: string) => void;
   onCancel: () => void;
 }
@@ -27,7 +27,7 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: 
   const [currentTransaction, setCurrentTransaction] = useState<MpesaTransaction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
-
+  
   // Status polling with exponential backoff
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -48,8 +48,21 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: 
         const response = await apiGet(`/mpesa/status/${currentTransaction.checkoutRequestId}`);
         console.log('Payment status response:', response);
         
-        if (response.success && response.data) {
-          const updatedTransaction = response.data;
+        type MpesaStatusResponse = {
+          success: boolean;
+          data: MpesaTransaction;
+          error?: string;
+        };
+
+        const resp = response as MpesaStatusResponse;
+        if (
+          typeof response === 'object' &&
+          response !== null &&
+          'success' in response &&
+          resp.success &&
+          'data' in response
+        ) {
+          const updatedTransaction = resp.data;
           console.log('Updated transaction status:', updatedTransaction.status);
           
           if (currentTransaction.status !== updatedTransaction.status) {
@@ -227,27 +240,44 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: 
 
       console.log('Payment initiation response:', response);
 
-      if (response.success) {
-        console.log('Payment initiated successfully, starting polling...');
-        setCurrentTransaction({
-          id: response.data.transactionId,
-          phoneNumber: formattedPhone,
-          amount: Math.ceil(amount),
-          status: 'pending',
-          checkoutRequestId: response.data.checkoutRequestId,
-          message: 'Payment request sent to your phone',
-          createdAt: new Date().toISOString()
-        });
-        
-        setStatusMessage('Payment request sent to your phone. Please check your M-Pesa app and enter your PIN.');
+      // Type guard for response
+      if (
+        typeof response === 'object' &&
+        response !== null &&
+        'success' in response
+      ) {
+        const res = response as {
+          success: boolean;
+          data?: { transactionId: string; checkoutRequestId: string };
+          error?: string;
+        };
+
+        if (res.success) {
+          console.log('Payment initiated successfully, starting polling...');
+          setCurrentTransaction({
+            id: res.data!.transactionId,
+            phoneNumber: formattedPhone,
+            amount: Math.ceil(amount),
+            status: 'pending',
+            checkoutRequestId: res.data!.checkoutRequestId,
+            message: 'Payment request sent to your phone',
+            createdAt: new Date().toISOString()
+          });
+
+          setStatusMessage('Payment request sent to your phone. Please check your M-Pesa app and enter your PIN.');
+        } else {
+          console.error('Payment initiation failed:', res.error);
+          throw new Error(res.error || 'Failed to initiate payment');
+        }
       } else {
-        console.error('Payment initiation failed:', response.error);
-        throw new Error(response.error || 'Failed to initiate payment');
+        throw new Error('Unexpected response from server');
       }
-    } catch (err: any) {
-      console.error('Error in handleInitiatePayment:', err);
-      setError(err.message || 'Failed to initiate payment. Please try again.');
-      setIsProcessing(false);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || 'Failed to process payment');
+      } else {
+        setError('Failed to process payment');
+      }
     }
   };
 
@@ -417,7 +447,7 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: 
           {currentTransaction.status === 'pending' && (
             <div className="mt-4">
               <div className="text-xs text-gray-500 mb-2">
-                Haven't received the request?
+                Haven&apos;t received the request?
               </div>
               <button
                 type="button"
@@ -454,6 +484,11 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: 
               </button>
             </div>
           )}
+        </div>
+      )}
+      {currentTransaction?.status === 'failed' && (
+        <div className="mt-4 text-center">
+          <p>We couldn&apos;t process your payment. Please try again.</p>
         </div>
       )}
     </div>

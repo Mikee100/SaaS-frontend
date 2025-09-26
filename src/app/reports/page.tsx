@@ -40,12 +40,14 @@ type TopProduct = { id: string; name: string; unitsSold: number; revenue: number
 type Customer = { name: string; phone: string; total: number; count: number; lastPurchase?: Date };
 type Forecast = { forecast_months: string[]; forecast_sales: number[] };
 
+type Product = { id: string; name: string; stock?: number };
+
 type Metrics = {
   totalSales: number;
   totalRevenue: number;
   avgSaleValue: number;
   topProducts: TopProduct[];
-  lowStock: any[];
+  lowStock: Product[];
   paymentBreakdown: Record<string, number>;
   salesByMonth: Record<string, number>;
   topCustomers: Customer[];
@@ -96,7 +98,8 @@ export default function ReportsPage() {
     forecast: { forecast_months: [], forecast_sales: [] },
     customerSegments: [],
   });
-  const [products, setProducts] = useState<any[]>([]);
+  type Product = { id: string; name: string; stock?: number };
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,7 +113,7 @@ export default function ReportsPage() {
   const canViewReports = !permissionsLoading && hasPermission(user, 'view_reports');
 
   useEffect(() => {
-    apiGet("/products").then((data) => setProducts(data as any[])).catch(() => setProducts([]));
+    apiGet("/products").then((data) => setProducts(data as Product[])).catch(() => setProducts([]));
   }, []);
 
   useEffect(() => {
@@ -118,7 +121,7 @@ export default function ReportsPage() {
     setError(null);
     apiGet(`/analytics/dashboard`)
       .then((data) => setMetrics(data as Metrics))
-      .catch((err) => setError(err.message || "An error occurred while fetching data."))
+      .catch((err: unknown) => setError((err as Error).message || "An error occurred while fetching data."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -253,7 +256,7 @@ export default function ReportsPage() {
         <div className="text-center py-12">
           <FaChartBar className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don't have permission to view reports.</p>
+         <p className="text-gray-600 mb-4">You don&apos;t have permission to view reports.</p>
           <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>

@@ -1,15 +1,16 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { apiGet, apiPut, apiDelete } from "@/utils/api";
-import { FaImage, FaUpload, FaTrash, FaCheck, FaExclamationTriangle, FaInfoCircle } from 'react-icons/fa';
+import { apiGet, apiPut } from "@/utils/api";
+import { FaImage, FaUpload, FaTrash, FaExclamationTriangle, FaInfoCircle } from 'react-icons/fa';
 import Link from "next/link";
+import Image from 'next/image';
 
 interface LogoConfig {
-  mainLogo?: string;
-  favicon?: string;
-  receiptLogo?: string;
-  etimsQrCode?: string;
-  watermark?: string;
+  mainLogo?: string | null;
+  favicon?: string | null;
+  receiptLogo?: string | null;
+  etimsQrCode?: string | null;
+  watermark?: string | null;
 }
 
 interface LogoValidation {
@@ -28,6 +29,13 @@ export default function LogoSettings() {
   const [validation, setValidation] = useState<{ [key: string]: LogoValidation }>({});
   const [activeTab, setActiveTab] = useState<string>('main');
   const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  
+  // Create ref objects for each input
+  const createInputRef = (type: string) => (el: HTMLInputElement | null) => {
+    if (el) {
+      inputRefs.current[type] = el;
+    }
+  };
   const [loading, setLoading] = useState(true);
 
   const logoTypes = {
@@ -73,28 +81,36 @@ export default function LogoSettings() {
     }
   };
 
+  interface TenantData {
+    logoUrl?: string;
+    favicon?: string;
+    receiptLogo?: string;
+    etimsQrUrl?: string;
+    watermark?: string;
+  }
+
   useEffect(() => {
     const fetchTenant = async () => {
-      try {
-        const data = await apiGet<any>("/tenant/me");
-        setLogoConfig({
-          mainLogo: data.logoUrl || null,
-          favicon: data.favicon || null,
-          receiptLogo: data.receiptLogo || null,
-          etimsQrCode: data.etimsQrUrl || null,
-          watermark: data.watermark || null
-        });
-      } catch (err) {
-        console.error("Error fetching tenant:", err);
-        setError("Failed to load tenant settings.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTenant();
-  }, []);
+        try {
+          const data = await apiGet<TenantData>("/tenant/me");
+          setLogoConfig({
+            mainLogo: data.logoUrl || null,
+            favicon: data.favicon || null,
+            receiptLogo: data.receiptLogo || null,
+            etimsQrCode: data.etimsQrUrl || null,
+            watermark: data.watermark || null
+          });
+        } catch (err: unknown) {
+          console.error("Error fetching tenant:", err);
+          setError("Failed to load tenant settings.");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchTenant();
+    }, []);
 
-  const validateFile = (file: File, type: string): LogoValidation => {
+  const validateFile = (file: File, type: string): Promise<LogoValidation> => {
     const config = logoTypes[type as keyof typeof logoTypes];
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -116,14 +132,13 @@ export default function LogoSettings() {
       errors.push(`${config.label} is required`);
     }
 
-    // Validate image dimensions
-    return new Promise((resolve) => {
-      const img = new Image();
+    return new Promise((resolveValidation) => {
+      const img = new window.Image();
       img.onload = () => {
         if (img.width > config.dimensions.width || img.height > config.dimensions.height) {
           warnings.push(`Recommended size: ${config.dimensions.width}x${config.dimensions.height}px`);
         }
-        resolve({
+        resolveValidation({
           isValid: errors.length === 0,
           errors,
           warnings
@@ -131,33 +146,37 @@ export default function LogoSettings() {
       };
       img.onerror = () => {
         errors.push('Invalid image file');
-        resolve({
-          isValid: errors.length === 0,
+        resolveValidation({
+          isValid: false,
           errors,
-          warnings
+          warnings: []
         });
       };
       img.src = URL.createObjectURL(file);
     });
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
-    const f = e.target.files?.[0];
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: keyof LogoConfig) => {
+    const target = e.target as HTMLInputElement;
+    const f = target.files?.[0];
     if (f) {
-      setFile({ ...file, [type]: f });
-      setPreview({ ...preview, [type]: URL.createObjectURL(f) });
+      setFile(prev => ({ ...prev, [type]: f }));
+      setPreview(prev => ({ ...prev, [type]: URL.createObjectURL(f) }));
       setSuccess(false);
       setError(null);
 
       // Validate file
-      const validation = await validateFile(f, type);
-      setValidation({ ...validation, [type]: validation });
+      const validationResult = await validateFile(f, type);
+      setValidation(prev => ({
+        ...prev,
+        [type]: validationResult
+      }));
     }
   };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    const filesToUpload = Object.entries(file).filter(([_, f]) => f !== null);
+    const filesToUpload = Object.entries(file).filter(([f]) => f !== null);
     
     if (filesToUpload.length === 0) return;
     
@@ -188,7 +207,7 @@ export default function LogoSettings() {
         }
 
         const data = await res.json();
-        setLogoConfig(prev => ({ ...prev, [type]: data.logoUrl }));
+        setLogoConfig(prev => ({ ...prev, [type as keyof LogoConfig]: data.logoUrl }));
       }
 
       setSuccess(true);
@@ -200,35 +219,26 @@ export default function LogoSettings() {
       Object.values(inputRefs.current).forEach(ref => {
         if (ref) ref.value = "";
       });
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || "Upload failed");
     } finally {
       setUploading(false);
     }
   };
 
-  const handleRemoveLogo = async (type: string) => {
+  const handleRemoveLogo = async (type: keyof LogoConfig) => {
     try {
       await apiPut("/tenant/me", { [type]: null });
       setLogoConfig(prev => ({ ...prev, [type]: null }));
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || "Failed to remove logo");
     }
   };
 
-  const getValidationStatus = (type: string) => {
-    const val = validation[type];
-    if (!val) return null;
-    
-    if (!val.isValid) {
-      return { type: 'error', icon: FaExclamationTriangle, color: 'text-red-500' };
-    }
-    if (val.warnings.length > 0) {
-      return { type: 'warning', icon: FaInfoCircle, color: 'text-yellow-500' };
-    }
-    return { type: 'success', icon: FaCheck, color: 'text-green-500' };
-  };
+
 
   if (loading) return (
     <div className="flex justify-center items-center min-h-[300px]">
@@ -292,12 +302,12 @@ export default function LogoSettings() {
                       {config.required ? 'Required' : 'Optional'} • Max {config.maxSize}MB • {config.formats.join(', ')}
                     </p>
                     <input
-                      ref={el => inputRefs.current[key] = el}
                       type="file"
                       accept={config.formats.map(f => `.${f}`).join(',')}
-                      onChange={(e) => handleFileChange(e, key)}
+                      onChange={(e) => handleFileChange(e, key as keyof LogoConfig)}
                       className="hidden"
                       id={`file-${key}`}
+                      ref={createInputRef(key)}
                     />
                     <label
                       htmlFor={`file-${key}`}
@@ -329,22 +339,30 @@ export default function LogoSettings() {
                 {/* Preview Section */}
                 <div>
                   <h4 className="font-medium text-gray-700 mb-3">Preview</h4>
-                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative h-40 flex items-center justify-center">
                     {preview[key] ? (
-                      <img
-                        src={preview[key]}
-                        alt={`${config.label} preview`}
-                        className="max-w-full h-auto max-h-32 object-contain"
-                      />
+                      <div className="relative w-full h-full">
+                        <Image
+                          src={preview[key]}
+                          alt={`${config.label} preview`}
+                          fill
+                          style={{ objectFit: 'contain' }}
+                          sizes="(max-width: 768px) 100vw, 50vw"
+                        />
+                      </div>
                     ) : logoConfig[key as keyof LogoConfig] ? (
                       <div className="text-center">
-                        <img
-                          src={logoConfig[key as keyof LogoConfig] || ''}
-                          alt={`Current ${config.label}`}
-                          className="max-w-full h-auto max-h-32 object-contain mx-auto"
-                        />
+                        <div className="relative w-full h-32">
+                          <Image
+                            src={logoConfig[key as keyof LogoConfig] || ''}
+                            alt={`Current ${config.label}`}
+                            fill
+                            style={{ objectFit: 'contain' }}
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                          />
+                        </div>
                         <button
-                          onClick={() => handleRemoveLogo(key)}
+                          onClick={() => handleRemoveLogo(key as keyof LogoConfig)}
                           className="mt-2 text-red-600 hover:text-red-700 text-sm flex items-center gap-1 mx-auto"
                         >
                           <FaTrash className="w-3 h-3" />

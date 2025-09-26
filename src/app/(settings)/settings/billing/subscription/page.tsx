@@ -2,10 +2,49 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 
+interface Plan {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  interval: string;
+  description?: string;
+  maxUsers?: number;
+  maxProducts?: number;
+  maxSalesPerMonth?: number;
+  analyticsEnabled?: boolean;
+  advancedReports?: boolean;
+  prioritySupport?: boolean;
+  customBranding?: boolean;
+  apiAccess?: boolean;
+}
+
+interface Subscription {
+  id: string;
+  status: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  plan: Plan;
+  cancelAtPeriodEnd?: boolean;
+  invoices?: Invoice[];
+}
+
+interface Invoice {
+  id: string;
+  number: string;
+  amount: number;
+  currency: string;
+  createdAt: string;
+  status: string;
+  url?: string;
+}
+
+
+
 export default function SubscriptionPage() {
-  const [subscription, setSubscription] = useState<any>(null);
-  const [plans, setPlans] = useState<any[]>([]);
-  const [history, setHistory] = useState<any[]>([]);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [history, setHistory] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [changing, setChanging] = useState(false);
@@ -13,13 +52,13 @@ export default function SubscriptionPage() {
 
   useEffect(() => {
     Promise.all([
-      apiGet("/billing/subscription-details"),
-      apiGet("/billing/plans"),
-      apiGet("/subscriptions/history")
+      apiGet<Subscription>("/billing/subscription-details"),
+      apiGet<Plan[]>("/billing/plans"),
+      apiGet<Subscription[]>("/subscriptions/history")
     ])
       .then(([sub, plans, history]) => {
-        setSubscription(sub);
-        setPlans(plans);
+        if (sub) setSubscription(sub);
+        if (plans) setPlans(plans);
         setHistory(Array.isArray(history) ? history : []);
         setSelectedPlan(sub?.plan?.id || "");
       })
@@ -34,8 +73,9 @@ export default function SubscriptionPage() {
     try {
       await apiPost("/billing/create-subscription", { planId: selectedPlan });
       window.location.reload();
-    } catch (err: any) {
-      setError(err.message || "Failed to change plan");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error?.message || "Failed to change plan");
     } finally {
       setChanging(false);
     }
@@ -47,8 +87,9 @@ export default function SubscriptionPage() {
     try {
       await apiPost("/billing/cancel-subscription", {});
       window.location.reload();
-    } catch (err: any) {
-      setError(err.message || "Failed to cancel subscription");
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error?.message || "Failed to cancel subscription");
     } finally {
       setChanging(false);
     }
@@ -83,7 +124,7 @@ export default function SubscriptionPage() {
                   <td className="py-2 px-4">
                     {sub.invoices && sub.invoices.length > 0 ? (
                       <ul className="list-disc ml-4">
-                        {sub.invoices.map((inv: any) => (
+                        {sub.invoices?.map((inv: Invoice) => (
                           <li key={inv.id}>
                             #{inv.number} - ${inv.amount} ({new Date(inv.createdAt).toLocaleDateString()})
                           </li>

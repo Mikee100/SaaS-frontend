@@ -1,5 +1,5 @@
 "use client";
-import { FaCalculator, FaHistory, FaUser, FaPrint, FaDownload, FaUpload, FaCog, FaQrcode, FaBarcode, FaKeyboard } from 'react-icons/fa';
+import { FaCalculator, FaHistory, FaUser, FaPrint, FaDownload, FaQrcode, FaKeyboard } from 'react-icons/fa';
 
 interface QuickActionProps {
   icon: React.ReactNode;

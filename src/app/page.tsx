@@ -392,7 +392,7 @@ export default function DashboardPage() {
           salesByMonth: stats.salesByMonth,
           salesByWeek: stats.salesByWeek,
           salesByDay: stats.salesByDay,
-          topProducts: stats.topProducts?.map((p: any) => ({
+          topProducts: stats.topProducts?.map((p: { name: string; sales: number; revenue: number; margin?: number; cost?: number }) => ({
             name: p.name,
             sales: p.sales,
             revenue: p.revenue,
@@ -412,7 +412,7 @@ export default function DashboardPage() {
 
         const activities: Array<{ type: string; description: string; date: string }> = [];
         if (stats.recentActivity?.sales) {
-          stats.recentActivity.sales.forEach((sale: any) => {
+          stats.recentActivity.sales.forEach((sale: { amount: number; customer: string; date: string }) => {
             activities.push({
               type: 'sale',
               description: `Sale: $${sale.amount.toLocaleString()} to ${sale.customer}`,
@@ -421,7 +421,7 @@ export default function DashboardPage() {
           });
         }
         if (stats.recentActivity?.products) {
-          stats.recentActivity.products.forEach((product: any) => {
+          stats.recentActivity.products.forEach((product: { name: string; date: string }) => {
             activities.push({
               type: 'product',
               description: `New product: ${product.name}`,
@@ -473,8 +473,8 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
               <p className="text-gray-600 mt-1">
-                Welcome back! Here's what's happening with your business.
-              </p>
+  Welcome back! Here&apos;s what&apos;s happening with your business.
+</p>
             </div>
             <div className="flex items-center gap-3">
               <BranchSwitcher />

@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState, useMemo } from 'react';
-import { FaChartLine, FaChartBar, FaChartPie, FaFilter, FaBoxes, FaUsers, FaDollarSign, FaShoppingCart } from 'react-icons/fa';
-import { FiTrendingUp, FiTrendingDown } from 'react-icons/fi';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { useState, useMemo } from 'react';
+import {FaBoxes, FaUsers, FaDollarSign, FaShoppingCart } from 'react-icons/fa';
+
+import { Line} from 'react-chartjs-2';
 import KPICard from './KPICard';
 import MiniChart from './MiniChart';
 import DateRangePicker from './DateRangePicker';
@@ -32,17 +32,7 @@ ChartJS.register(
   Filler
 );
 
-interface ChartData {
-  labels: string[];
-  datasets: Array<{
-    label: string;
-    data: number[];
-    backgroundColor?: string | string[];
-    borderColor?: string;
-    tension?: number;
-    borderRadius?: number;
-  }>;
-}
+
 
 type AnalyticsChartsProps = {
   salesData?: Record<string, number>;
@@ -61,9 +51,7 @@ export default function AnalyticsCharts({
   dailySalesData = {}, 
   weeklySalesData = {},
   productData = [], 
-  inventoryAnalytics = {},
   customerRetention = { totalCustomers: 0, repeatCustomers: 0, retentionRate: 0 },
-  salesByCategory = {},
   customerGrowth = {},
   orderData = []
 }: AnalyticsChartsProps) {
@@ -185,7 +173,7 @@ export default function AnalyticsCharts({
     };
 
     // Calculate trend line (simple moving average)
-    const values = sortedEntries.map(([_, value]) => value);
+    const values = sortedEntries.map(([, value]) => value);
     const period = Math.min(3, values.length); // 3-point moving average
     const movingAverages = values.map((_, i) => {
       const start = Math.max(0, i - period + 1);
@@ -201,7 +189,7 @@ export default function AnalyticsCharts({
           label: filter === 'day' ? 'Daily Sales' : filter === 'week' ? 'Weekly Sales' : 'Monthly Sales',
           data: values,
           borderColor: '#4F46E5',
-          backgroundColor: (context: any) => {
+          backgroundColor: (context: { chart: { ctx: CanvasRenderingContext2D } }) => {
             const ctx = context.chart.ctx;
             const gradient = ctx.createLinearGradient(0, 0, 0, 300);
             gradient.addColorStop(0, 'rgba(79, 70, 229, 0.3)');
@@ -232,291 +220,7 @@ export default function AnalyticsCharts({
     };
   }, [salesData, dailySalesData, weeklySalesData, filter, dateRange]);
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: 'index' as const,
-      intersect: false,
-    },
-    plugins: {
-      legend: {
-        position: 'top' as const,
-        labels: {
-          usePointStyle: true,
-          padding: 20,
-        },
-      },
-      tooltip: {
-        backgroundColor: 'white',
-        titleColor: '#1F2937',
-        bodyColor: '#4B5563',
-        borderColor: '#E5E7EB',
-        borderWidth: 1,
-        padding: 12,
-        usePointStyle: true,
-        callbacks: {
-          label: function(context: any) {
-            return `${context.dataset.label}: $${context.parsed.y.toLocaleString()}`;
-          },
-          title: function(context: any) {
-            return context[0].label;
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          color: '#6B7280',
-        },
-      },
-      y: {
-        grid: {
-          color: '#F3F4F6',
-          borderDash: [5, 5],
-          drawBorder: false,
-        },
-        ticks: {
-          color: '#6B7280',
-          callback: function(value: any) {
-            return '$' + value.toLocaleString();
-          },
-        },
-      },
-    },
-  };
 
-  const productChartData: ChartData = {
-    labels: productData ? productData.map(p => p.name) : [],
-    datasets: [
-      {
-        label: 'Units Sold',
-        data: productData ? productData.map(p => p.unitsSold) : [],
-        backgroundColor: '#6366F1',
-        borderRadius: 4,
-      },
-      {
-        label: 'Revenue',
-        data: productData ? productData.map(p => p.revenue) : [],
-        backgroundColor: '#10B981',
-        borderRadius: 4,
-      },
-    ],
-  };
-
-  const marginChartData: ChartData = {
-    labels: productData ? productData.map(p => p.name) : [],
-    datasets: [
-      {
-        label: 'Profit Margin (%)',
-        data: productData ? productData.map(p => (p.margin ?? 0) * 100) : [],
-        backgroundColor: productData ? productData.map(p => (p.margin ?? 0) * 100 > 30 ? '#10B981' : (p.margin ?? 0) * 100 > 15 ? '#F59E0B' : '#EF4444') : [],
-        borderRadius: 4,
-      },
-    ],
-  };
-
-  const inventoryChartData: ChartData = {
-    labels: ['Low Stock', 'Overstock', 'Turnover', 'Stockout Rate'],
-    datasets: [
-      {
-        label: 'Inventory Metrics',
-        data: [
-          inventoryAnalytics?.lowStockItems ?? 0,
-          inventoryAnalytics?.overstockItems ?? 0,
-          inventoryAnalytics?.inventoryTurnover ?? 0,
-          (inventoryAnalytics?.stockoutRate ?? 0) * 100
-        ],
-        backgroundColor: [
-          '#F59E0B',
-          '#EF4444',
-          '#10B981',
-          '#6366F1'
-        ],
-        borderRadius: 4,
-      },
-    ],
-  };
-
-  const retentionChartData: ChartData = {
-    labels: ['Retention Rate', 'Churn Rate'],
-    datasets: [
-      {
-        label: 'Customer Retention',
-        data: [
-          (customerRetention?.retentionRate ?? 0) * 100,
-          (1 - (customerRetention?.retentionRate ?? 0)) * 100
-        ],
-        backgroundColor: ['#10B981', '#EF4444'],
-      },
-    ],
-  };
-
-  const categoryChartData: ChartData = {
-    labels: salesByCategory ? Object.keys(salesByCategory) : [],
-    datasets: [
-      {
-        label: 'Sales by Category',
-        data: salesByCategory ? Object.values(salesByCategory) : [],
-        backgroundColor: [
-          '#6366F1',
-          '#10B981',
-          '#F59E0B',
-          '#EF4444',
-          '#3B82F6'
-        ],
-      },
-    ],
-  };
-
-  const growthChartData: ChartData = {
-    labels: customerGrowth ? Object.keys(customerGrowth) : [],
-    datasets: [
-      {
-        label: 'Customer Growth',
-        data: customerGrowth ? Object.values(customerGrowth) : [],
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.2)',
-        tension: 0.4,
-        fill: true,
-      },
-    ],
-  };
-
-  const { revenueTrendData, aovData } = useMemo(() => {
-    const groupedOrders = orderData.reduce((acc, order) => {
-      const date = new Date(order.date);
-      let key;
-      
-      if (filter === 'day') {
-        key = date.toLocaleDateString();
-      } else if (filter === 'week') {
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        key = `Week ${Math.ceil((date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay()) / 7)}`;
-      } else {
-        key = date.toLocaleString('default', { month: 'short' });
-      }
-      
-      if (!acc[key]) {
-        acc[key] = { totalAmount: 0, orderCount: 0 };
-      }
-      
-      acc[key].totalAmount += order.amount;
-      acc[key].orderCount += 1;
-      
-      return acc;
-    }, {} as Record<string, { totalAmount: number; orderCount: number }>);
-
-    const aovLabels = Object.keys(groupedOrders);
-    const aovValues = aovLabels.map(key => 
-      groupedOrders[key].orderCount > 0 
-        ? groupedOrders[key].totalAmount / groupedOrders[key].orderCount 
-        : 0
-    );
-
-    const revenueLabels = Object.keys(salesData || {});
-    const revenueValues = Object.values(salesData || {});
-
-    return {
-      revenueTrendData: {
-        labels: revenueLabels,
-        datasets: [{
-          label: 'Revenue',
-          data: revenueValues,
-          borderColor: '#4F46E5',
-          backgroundColor: 'rgba(79, 70, 229, 0.1)',
-          tension: 0.4,
-          fill: true,
-        }]
-      },
-      aovData: {
-        labels: aovLabels,
-        datasets: [{
-          label: 'Average Order Value',
-          data: aovValues,
-          borderColor: '#10B981',
-          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-          tension: 0.4,
-          fill: true,
-        }]
-      }
-    };
-  }, [salesData, orderData, filter]);
-
-  const categoryData = useMemo(() => ({
-    labels: Object.keys(salesByCategory),
-    datasets: [{
-      data: Object.values(salesByCategory),
-      backgroundColor: [
-        '#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
-        '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#8B5CF6'
-      ],
-      borderWidth: 1,
-    }]
-  }), [salesByCategory]);
-
-  const topProductsData = useMemo(() => {
-    const sortedProducts = [...(productData || [])]
-      .sort((a, b) => b.unitsSold - a.unitsSold)
-      .slice(0, 5);
-
-    return {
-      labels: sortedProducts.map(p => p.name),
-      datasets: [{
-        label: 'Units Sold',
-        data: sortedProducts.map(p => p.unitsSold),
-        backgroundColor: '#4F46E5',
-        borderRadius: 4,
-      }]
-    };
-  }, [productData]);
-
-  const tabs = [
-    { id: 'sales', label: 'Revenue Trend', icon: <FaChartLine /> },
-    { id: 'category', label: 'Sales by Category', icon: <FaChartPie /> },
-    { id: 'products', label: 'Top Products', icon: <FaChartBar /> },
-    { id: 'aov', label: 'Avg Order Value', icon: <FaDollarSign /> },
-    { id: 'inventory', label: 'Inventory', icon: <FaBoxes /> },
-    { id: 'customers', label: 'Customers', icon: <FaUsers /> },
-  ];
-
-  const summaryCards = [
-    {
-      title: 'Total Sales',
-      value: `$${Object.values(salesData || {}).reduce((a, b) => a + b, 0).toLocaleString()}`,
-      change: 12.5,
-      icon: <FaDollarSign className="text-indigo-500" />,
-      trend: 'up'
-    },
-    {
-      title: 'Top Product',
-      value: (Array.isArray(productData) && productData.length > 0)
-        ? productData.reduce((prev, current) => (prev.revenue > current.revenue) ? prev : current, productData[0]).name
-        : 'N/A',
-      change: 8.2,
-      icon: <FaBoxes className="text-green-500" />,
-      trend: 'up'
-    },
-    {
-      title: 'Customer Retention',
-      value: `${((customerRetention?.retentionRate || 0) * 100).toFixed(1)}%`,
-      change: ((customerRetention?.retentionRate || 0) * 100) - 75,
-      icon: <FaUsers className="text-blue-500" />,
-      trend: ((customerRetention?.retentionRate || 0) * 100) > 75 ? 'up' : 'down'
-    },
-    {
-      title: 'Inventory Issues',
-      value: `${inventoryAnalytics?.lowStockItems || 0} items`,
-      change: -5.3,
-      icon: <FaBoxes className="text-amber-500" />,
-      trend: 'down'
-    }
-  ];
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
@@ -590,7 +294,7 @@ export default function AnalyticsCharts({
             <div className="flex items-center gap-2">
               <select
                 value={filter}
-                onChange={(e) => setFilter(e.target.value as any)}
+                onChange={(e) => setFilter(e.target.value as 'day' | 'week' | 'month')}
                 className="text-sm border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="day">Daily</option>

@@ -48,8 +48,9 @@ export default function MakePayment() {
       } else {
         setStatus(data.error || "Payment failed");
       }
-    } catch (err: any) {
-      setStatus(err.message || "Payment failed");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Payment failed';
+      setStatus(errorMessage);
     } finally {
       setLoading(false);
     }

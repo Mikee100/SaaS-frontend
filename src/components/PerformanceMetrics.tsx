@@ -1,5 +1,6 @@
 "use client";
-import { FaChartLine, FaUsers, FaDollarSign, FaHeart, FaShieldAlt, FaRocket } from 'react-icons/fa';
+import { FaChartLine, FaUsers, FaDollarSign, FaHeart, FaRocket } from 'react-icons/fa';
+
 
 interface PerformanceMetricsProps {
   metrics: {
@@ -80,4 +81,4 @@ export default function PerformanceMetrics({ metrics }: PerformanceMetricsProps)
       </div>
     </div>
   );
-} 
+}

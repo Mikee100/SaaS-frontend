@@ -48,17 +48,17 @@ export default function BulkOperationsPage() {
     }
   }, [user]);
 
-  const fetchOperations = async () => {
-    try {
-      setLoadingOperations(true);
-      const data = await apiGet("/admin/bulk/operations");
-      setOperations(data);
-    } catch (error) {
-      console.error("Failed to fetch operations:", error);
-    } finally {
-      setLoadingOperations(false);
-    }
-  };
+const fetchOperations = async () => {
+  try {
+    setLoadingOperations(true);
+    const data = await apiGet("/admin/bulk/operations");
+    setOperations(data as BulkOperation[]);
+  } catch (error) {
+    console.error("Failed to fetch operations:", error);
+  } finally {
+    setLoadingOperations(false);
+  }
+};
 
   const bulkActions: BulkAction[] = [
     {

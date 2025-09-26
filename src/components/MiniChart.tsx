@@ -39,7 +39,7 @@ export default function MiniChart({
   fill = true,
 }: MiniChartProps) {
   const chartData = {
-    labels: labels || data.map((_, i) => i + 1),
+    labels: labels || data.map((_, i) => (i + 1).toString()),
     datasets: [
       {
         data,
@@ -51,17 +51,17 @@ export default function MiniChart({
         pointBackgroundColor: color,
         pointBorderColor: '#fff',
         pointBorderWidth: 1,
-        fill: fill ? {
-          target: 'origin',
-          above: (context: ScriptableContext<"line">) => {
-            const { ctx, chartArea } = context.chart;
-            if (!chartArea) return;
-            const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-            gradient.addColorStop(0, `${color}00`);
-            gradient.addColorStop(1, `${color}33`);
-            return gradient;
-          },
-        } : false,
+        fill: fill,
+        backgroundColor: fill
+          ? (context: ScriptableContext<"line">) => {
+              const { ctx, chartArea } = context.chart;
+              if (!chartArea) return undefined;
+              const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+              gradient.addColorStop(0, `${color}00`);
+              gradient.addColorStop(1, `${color}33`);
+              return gradient;
+            }
+          : undefined,
       },
     ],
   };

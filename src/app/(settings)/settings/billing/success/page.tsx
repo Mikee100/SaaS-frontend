@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { FaCrown, FaStar, FaCheck, FaTimes, FaCreditCard, FaDownload, FaHistory, FaArrowUp, FaArrowDown } from 'react-icons/fa';
+import { FaCrown, FaStar, FaCheck, FaCreditCard, FaDownload, FaHistory, FaArrowUp, FaArrowDown } from 'react-icons/fa';
 
 interface Plan {
   id: string;
@@ -230,7 +230,7 @@ export default function BillingSettings() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-xl font-semibold text-gray-800">Current Plan</h2>
-              <p className="text-gray-600">You're currently on the Basic plan</p>
+              <p className="text-gray-600">You&apos;re currently on the Basic plan</p>
             </div>
             <div className="flex items-center gap-2">
               <FaStar className="w-6 h-6 text-blue-600" />

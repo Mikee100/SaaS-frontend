@@ -1,13 +1,12 @@
 "use client";
 
-import { ReactNode, Suspense, useEffect, useState, useCallback } from "react";
+import { ReactNode, Suspense, useEffect } from "react";
 import { UserProvider, useUser } from "@/components/UserContext";
 import { BranchProvider } from "@/contexts/BranchContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { DashboardProvider } from "@/contexts/DashboardContext";
 import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 import dynamic from "next/dynamic";
-import AuthPageWrapper from "@/components/AuthPageWrapper";
 import { usePathname } from "next/navigation";
 
 // Dynamically import client-side components with no SSR

@@ -49,8 +49,14 @@ export default function TenantBillingPage() {
     try {
       setLoading(true);
       setError('');
-  const data = await apiGet('/billing/admin/billing/tenants');
-      setTenants(data);
+      const data = await apiGet<Tenant[]>('/billing/admin/billing/tenants');
+      
+      // Validate the response is an array before setting state
+      if (Array.isArray(data)) {
+        setTenants(data);
+      } else {
+        throw new Error('Invalid data format received from server: expected an array of tenants');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load tenants');
     } finally {

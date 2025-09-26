@@ -56,8 +56,14 @@ export default function BillingSettingsPage() {
     try {
       setLoading(true);
       setError('');
-      const data = await apiGet('/admin/billing/settings');
-      setSettings(data);
+      const data = await apiGet<BillingSettings>('/admin/billing/settings');
+      
+      // Validate the response data matches our expected type
+      if (data && typeof data === 'object') {
+        setSettings(data as BillingSettings);
+      } else {
+        throw new Error('Invalid billing settings format received from server');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load billing settings');
     } finally {

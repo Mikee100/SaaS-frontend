@@ -119,9 +119,9 @@ export default function MigrationBackupPage() {
         apiGet('/admin/tenants')
       ]);
 
-      setBackups(backupsData || []);
-      setMigrations(migrationsData || []);
-      setTenants(tenantsData || []);
+      setBackups(Array.isArray(backupsData) ? backupsData : []);
+      setMigrations(Array.isArray(migrationsData) ? migrationsData : []);
+      setTenants(Array.isArray(tenantsData) ? tenantsData : []);
     } catch (error) {
       console.error("Failed to fetch migration/backup data:", error);
     } finally {

@@ -1,9 +1,8 @@
 'use client';
 import React from 'react';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
-import { usePlanLimits } from '@/hooks/usePlanLimits';
 import PlanGuard from '@/components/PlanGuard';
 import AuthGuard from '@/components/AuthGuard';
 import LogoEnforcement from '@/components/LogoEnforcement';
@@ -11,7 +10,6 @@ import BranchSwitcher from '@/components/BranchSwitcher';
 import {
   FiTrendingUp,
   FiRefreshCw,
-  FiTrendingDown,
   FiUserPlus,
   FiPlus,
   FiFileText,
@@ -62,95 +60,21 @@ interface AnalyticsData {
   };
 }
 
-interface UsageLimit {
-  label: string;
-  value: number;
-  limit: number;
-}
-
-const colors = {
-  primary: 'rgba(99, 102, 241, 1)',
-  success: 'rgba(16, 185, 129, 1)',
-  warning: 'rgba(245, 158, 11, 1)',
-  danger: 'rgba(239, 68, 68, 1)',
-  info: 'rgba(59, 130, 246, 1)',
+type SalesTrends = {
+  trends: {
+    date: string;
+    totalSales: number;
+    totalOrders: number;
+    averageOrderValue: number;
+  }[];
+  summary: {
+    totalSales: number;
+    totalOrders: number;
+    averageOrderValue: number;
+  };
 };
 
-function StatCard({
-  icon,
-  label,
-  value,
-  trend,
-  trendDirection = 'up',
-  color = 'primary'
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  trend?: string;
-  trendDirection?: 'up' | 'down';
-  color?: keyof typeof colors;
-}) {
-  return (
-    <motion.div
-      className="bg-white rounded-xl p-6 shadow-sm ring-1 ring-gray-200"
-      whileHover={{ y: -2 }}
-      transition={{ type: 'spring', stiffness: 300 }}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-500">{label}</p>
-          <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
-        </div>
-        <div className="rounded-lg p-3" style={{ backgroundColor: `${colors[color]}10` }}>
-          {icon}
-        </div>
-      </div>
-      {trend && (
-        <div className="mt-4 flex items-center">
-          <span className={`flex items-center text-sm font-medium ${
-            trendDirection === 'up' ? 'text-green-600' : 'text-red-600'
-          }`}>
-            {trendDirection === 'up' ? (
-              <FiTrendingUp className="mr-1 h-4 w-4" />
-            ) : (
-              <FiTrendingDown className="mr-1 h-4 w-4" />
-            )}
-            {trend}
-          </span>
-          <span className="ml-2 text-sm text-gray-500">vs last period</span>
-        </div>
-      )}
-    </motion.div>
-  );
-}
-
-function UsageLimitCard({ label, value, limit }: { label: string; value: number; limit: number }) {
-  const percentage = Math.min(Math.round((value / limit) * 100), 100);
-  const isOverLimit = value > limit;
-
-  return (
-    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        <span className="text-sm font-medium text-gray-900">
-          {value} / {limit}
-        </span>
-      </div>
-      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-        <div
-          className={`h-full ${isOverLimit ? 'bg-red-500' : 'bg-indigo-600'}`}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-      <p className={`mt-1 text-xs ${isOverLimit ? 'text-red-600' : 'text-gray-500'}`}>
-        {isOverLimit ? 'Limit exceeded' : `${percentage}% of limit`}
-      </p>
-    </div>
-  );
-}
-
-function QuickActions() {
+const QuickActions = () => {
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
       {[
@@ -173,7 +97,7 @@ function QuickActions() {
       ))}
     </div>
   );
-}
+};
 
 
 
@@ -181,29 +105,12 @@ export default function DashboardPage() {
   const [dateRange, setDateRange] = useState('30d');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({});
-  const [salesTrends, setSalesTrends] = useState<any>(null);
+  const [salesTrends, setSalesTrends] = useState<SalesTrends | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { limits } = usePlanLimits();
-  const { currentPlan, usage, features } = limits || {};
-
-  // Mock data for demonstration
-  const recentActivities = [
-    { type: 'sale', description: 'New sale to John Doe', date: '2 min ago' },
-    { type: 'customer', description: 'New customer registered', date: '1 hour ago' },
-    { type: 'sale', description: 'Order #1234 completed', date: '3 hours ago' },
-  ];
-
-  const usageLimits: UsageLimit[] = [
-    { label: 'Users', value: usage.users.current, limit: usage.users.limit },
-    { label: 'Products', value: usage.products?.current || 0, limit: usage.products?.limit || 100 },
-    { label: 'Sales', value: usage.sales.current, limit: usage.sales.limit },
-  ];
 
   const fetchAnalyticsData = async () => {
     try {
       setLoading(true);
-      setError(null);
       console.log('Fetching analytics and sales trends...');
       
       // First try to get sales trends directly
@@ -305,7 +212,7 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <p className="mt-2 text-sm text-gray-500">
-                  Welcome back! Here's what's happening with your business today.
+                  Welcome back! Here&apos;s what&apos;s happening with your business today.
                 </p>
               </div>
               <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-3">
@@ -478,3 +385,4 @@ export default function DashboardPage() {
     </AuthGuard>
   );
 }
+

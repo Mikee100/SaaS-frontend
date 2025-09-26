@@ -31,6 +31,16 @@ const EXPORT_FORMATS = [
   { value: "csv", label: "CSV" },
 ];
 
+interface UserPreferences {
+  notificationPreferences?: { email: boolean; sms: boolean };
+  language: string;
+  region: string;
+}
+
+interface StockConfig {
+  value: string;
+}
+
 export default function PreferencesSettings() {
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,7 +48,7 @@ export default function PreferencesSettings() {
   const [success, setSuccess] = useState(false);
 
   const { theme, setTheme, loading: themeLoading, error: themeError } = useTheme();
-  const { preferences: dashboardPrefs, updatePreferences: updateDashboardPrefs, toggleWidgetVisibility, loading: dashboardLoading, error: dashboardError } = useDashboard();
+  const { preferences: dashboardPrefs, toggleWidgetVisibility, loading: dashboardLoading, error: dashboardError } = useDashboard();
   
   const [showColorPicker, setShowColorPicker] = useState(false);
 
@@ -62,15 +72,17 @@ export default function PreferencesSettings() {
     Promise.all([
       apiGet("/user/me"),
       apiGet("/tenant/configurations/stockThreshold")
-    ]).then(([user, config]: [any, any]) => {
+    ]).then(([user, config]) => {
+      const userPrefs = user as UserPreferences;
+      const stockConfig = config as StockConfig;
       setPrefs({
         notificationPreferences: {
-          email: user.notificationPreferences?.email ?? true,
-          sms: user.notificationPreferences?.sms ?? false,
+          email: userPrefs.notificationPreferences?.email ?? true,
+          sms: userPrefs.notificationPreferences?.sms ?? false,
         },
-        language: user.language || "en",
-        region: user.region || "ke",
-        stockThreshold: config?.value ? Number(config.value) : 15,
+        language: userPrefs.language || "en",
+        region: userPrefs.region || "ke",
+        stockThreshold: stockConfig?.value ? Number(stockConfig.value) : 15,
         dashboardDefaultDateRange: "last_30_days",
         dashboardAutoRefresh: false,
         posDefaultPaymentMethod: "cash",
@@ -80,7 +92,10 @@ export default function PreferencesSettings() {
         reportingDefaultExportFormat: "pdf",
         securitySessionTimeout: 30,
       });
-    }).catch(() => setError("Failed to load preferences"))
+    }).catch((err: unknown) => {
+      console.error(err);
+      setError("Failed to load preferences");
+    })
       .finally(() => setPageLoading(false));
   }, []);
 
@@ -90,17 +105,8 @@ export default function PreferencesSettings() {
     setError("");
     setSuccess(false);
     try {
-      const { 
-        stockThreshold, 
-        dashboardDefaultDateRange, 
-        dashboardAutoRefresh, 
-        posDefaultPaymentMethod, 
-        posAutoPrintReceipt,
-        inventoryLowStockAlertEmail,
-        inventoryAllowNegativeStock,
-        reportingDefaultExportFormat,
-        securitySessionTimeout, 
-        ...userPrefs 
+      const {
+        ...userPrefs
       } = prefs;
       await Promise.all([
         apiPut("/user/me/preferences", userPrefs),
@@ -108,8 +114,9 @@ export default function PreferencesSettings() {
         // TODO: Add API calls for new preferences later
       ]);
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || "Failed to save preferences");
+    } catch (err: unknown) {
+      console.error(err);
+      setError((err as Error).message || "Failed to save preferences");
     } finally {
       setSaving(false);
     }

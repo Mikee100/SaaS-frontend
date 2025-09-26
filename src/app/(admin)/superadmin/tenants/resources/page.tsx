@@ -60,6 +60,8 @@ interface ResourcePlan {
   features: string[];
 }
 
+type FilterType = 'all' | 'over_limit' | 'under_utilized' | 'optimal';
+
 export default function ResourceAllocationPage() {
   const { user, loading } = useUser();
   const router = useRouter();
@@ -69,9 +71,11 @@ export default function ResourceAllocationPage() {
   const [selectedTenant, setSelectedTenant] = useState<string>("");
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
-  const [filter, setFilter] = useState<'all' | 'over_limit' | 'under_utilized' | 'optimal'>('all');
+  const [filter, setFilter] = useState<FilterType>('all');
 
-  React.useEffect(() => {
+
+
+  useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
       router.replace("/");
     }
@@ -220,7 +224,7 @@ export default function ResourceAllocationPage() {
         <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
           <select
             value={filter}
-            onChange={(e) => setFilter(e.target.value as any)}
+            onChange={(e) => setFilter(e.target.value as FilterType)}
             style={{ padding: "0.5rem", borderRadius: "4px", border: "1px solid #d1d5db" }}
           >
             <option value="all">All Tenants</option>

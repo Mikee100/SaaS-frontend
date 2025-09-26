@@ -4,28 +4,55 @@ import { apiGet } from "@/utils/api";
 import { FaClipboardList } from 'react-icons/fa';
 import Link from "next/link";
 
+interface AuditLogUser {
+  name?: string;
+  email?: string;
+}
+
+interface AuditLogDetails {
+  [key: string]: unknown;
+  timestamp?: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
 interface AuditLog {
   id: string | number;
   createdAt: string;
-  user?: {
-    name?: string;
-    email?: string;
-  };
+  user?: AuditLogUser;
   action: string;
-  details: any;
+  details: AuditLogDetails | string;
 }
 
 export default function AuditLogsSettings() {
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    apiGet("/audit-logs").then((value) => setLogs(value as any[])).catch(() => setError("Failed to load logs")).finally(() => setLoading(false));
+    const fetchLogs = async () => {
+      try {
+        const data = await apiGet<AuditLog[]>("/audit-logs");
+        if (Array.isArray(data)) {
+          setLogs(data);
+        } else {
+          setError("Invalid data format received");
+        }
+      } catch (err) {
+        setError("Failed to load logs");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLogs();
   }, []);
 
-  const handleRowClick = () => {
-    // Handle row click
+  const handleRowClick = (log: AuditLog) => (event: React.MouseEvent<HTMLTableRowElement>) => {
+    event.preventDefault();
+    // Handle row click with typed log data
+    console.log('Audit log clicked:', log);
   };
 
 
@@ -62,11 +89,17 @@ export default function AuditLogsSettings() {
             </thead>
             <tbody>
               {logs.map(log => (
-                <tr key={log.id} style={{ borderBottom: '1px solid #f0f0f0' }} onClick={handleRowClick}>
+                <tr 
+                  key={log.id} 
+                  style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }} 
+                  onClick={handleRowClick(log)}
+                >
                   <td style={{ padding: '8px 0', color: '#555' }}>{new Date(log.createdAt).toLocaleString()}</td>
                   <td style={{ padding: '8px 0', color: '#555' }}>{log.user?.name || log.user?.email || '-'}</td>
                   <td style={{ padding: '8px 0', color: '#555' }}>{log.action}</td>
-                  <td style={{ padding: '8px 0', color: '#555', fontSize: 14 }}>{typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}</td>
+                  <td style={{ padding: '8px 0', color: '#555', fontSize: 14 }}>
+                    {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
+                  </td>
                 </tr>
               ))}
             </tbody>

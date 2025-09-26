@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 
 
 interface StripeConfig {
@@ -12,8 +13,19 @@ interface StripeConfig {
   };
 }
 
+interface SessionUser {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  isSuperadmin?: boolean;
+}
+
+interface SessionData {
+  user?: SessionUser;
+  [key: string]: unknown;
+}
 export function useStripeConfig() {
-  const { data: session } = useSession();
+  const { data: session } = useSession() as { data: SessionData | null };
   const [config, setConfig] = useState<StripeConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

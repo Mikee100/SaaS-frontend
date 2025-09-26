@@ -1,12 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { apiGet } from "@/utils/api";
 import { FaCrown, FaPalette, FaCode, FaShieldAlt, FaHeadset, FaCheck, FaTimes, FaArrowRight, FaLock } from 'react-icons/fa';
 import EnterpriseFeatures from '@/components/EnterpriseFeatures';
 import PlanGuard from '@/components/PlanGuard';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
-import Tooltip from '@/components/Tooltip';
 
 interface EnterpriseStatus {
   customBranding: boolean;
@@ -25,14 +24,24 @@ export default function EnterprisePage() {
   const [enterpriseStatus, setEnterpriseStatus] = useState<EnterpriseStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchEnterpriseStatus();
-  }, []);
+  interface BillingLimits {
+    features?: {
+      custom_branding?: boolean;
+      api_access?: boolean;
+      advanced_security?: boolean;
+      dedicated_support?: boolean;
+      white_label?: boolean;
+      sso_enabled?: boolean;
+      audit_logs?: boolean;
+      backup_restore?: boolean;
+      custom_integrations?: boolean;
+    };
+  }
 
-  const fetchEnterpriseStatus = async () => {
+  const fetchEnterpriseStatus = useCallback(async () => {
     try {
       setLoading(true);
-      const limits = await apiGet('/billing/limits') as any;
+      const limits = await apiGet<BillingLimits>('/billing/limits');
       setEnterpriseStatus({
         customBranding: limits?.features?.custom_branding || false,
         apiAccess: limits?.features?.api_access || false,
@@ -44,12 +53,16 @@ export default function EnterprisePage() {
         backupRestore: limits?.features?.backup_restore || false,
         customIntegrations: limits?.features?.custom_integrations || false,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error fetching enterprise status:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // No dependencies needed
+
+  useEffect(() => {
+    fetchEnterpriseStatus();
+  }, [fetchEnterpriseStatus]);
 
   // Permission checks
   const canViewSettings = hasPermission(user, 'view_settings');
@@ -69,7 +82,7 @@ export default function EnterprisePage() {
         <div className="text-center py-12">
           <FaLock className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don't have permission to view enterprise features.</p>
+          <p className="text-gray-600 mb-4">You don&apos;t have permission to view enterprise features.</p>
           <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
         </div>
       </div>
@@ -331,4 +344,4 @@ export default function EnterprisePage() {
       </div>
     </div>
   );
-} 
+}

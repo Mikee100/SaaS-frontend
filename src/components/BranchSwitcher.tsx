@@ -4,10 +4,12 @@ import { apiGet, apiPut } from "@/utils/api";
 import { useBranch } from "@/contexts/BranchContext";
 import { useUser } from "@/components/UserContext";
 
+type Branch = { id: string; name: string };
+
 export default function BranchSwitcher() {
   const { selectedBranchId, setSelectedBranchId } = useBranch();
-  const { refreshUser } = useUser([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const { refreshUser } = useUser();
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,13 +17,14 @@ export default function BranchSwitcher() {
       setLoading(true);
       try {
         const data = await apiGet("/api/branches");
-        setBranches(data);
+        const branchData = data as Branch[];
+        setBranches(branchData);
         // Try to restore last selected branch from localStorage
         const last = localStorage.getItem("selectedBranchId");
-        if (last && data.find((b: any) => b.id === last)) {
+        if (last && branchData.find((b) => b.id === last)) {
           setSelectedBranchId(last);
-        } else if (data.length > 0 && !selectedBranchId) {
-          setSelectedBranchId(data[0].id);
+        } else if (branchData.length > 0 && !selectedBranchId) {
+          setSelectedBranchId(branchData[0].id);
         }
       } finally {
         setLoading(false);
@@ -31,7 +34,7 @@ export default function BranchSwitcher() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleChange = async (e: any) => {
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const branchId = e.target.value;
     console.log('[BranchSwitcher] User selected branchId:', branchId);
     setSelectedBranchId(branchId);

@@ -1,5 +1,5 @@
 import { FaCrown, FaLock, FaArrowUp } from 'react-icons/fa';
-import { usePlanLimits } from '@/hooks/usePlanLimits';
+
 
 interface BillingFeatureCardProps {
   title: string;
@@ -20,7 +20,7 @@ export default function BillingFeatureCard({
   onUpgrade,
   children
 }: BillingFeatureCardProps) {
-  const { limits } = usePlanLimits();
+
   
   const planOrder = { 'Basic': 1, 'Pro': 2, 'Enterprise': 3 };
   const currentPlanLevel = planOrder[currentPlan as keyof typeof planOrder] || 0;

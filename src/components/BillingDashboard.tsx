@@ -1,10 +1,10 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useBilling } from '@/hooks/useBilling';
 import BillingPlans, { BillingPlan } from './BillingPlans';
 import PaymentMethodForm from './PaymentMethodForm';
 import { apiGet } from '@/utils/api';
-import { FaChartLine, FaCreditCard, FaReceipt, FaDownload, FaCalendar, FaDollarSign, FaUsers, FaExclamationTriangle } from 'react-icons/fa';
+import { FaChartLine, FaCreditCard, FaReceipt, FaDollarSign, FaUsers } from 'react-icons/fa';
 
 interface PaymentAnalytics {
   period: string;
@@ -33,22 +33,64 @@ interface BillingDashboardProps {
   tenantId: string;
 }
 
-export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
+interface Plan {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  features: string[];
+  stripePriceId?: string;
+}
+
+interface SubscriptionHistory {
+  id: string;
+  plan?: { name?: string };
+  status: string;
+  currentPeriodStart?: string;
+  currentPeriodEnd?: string;
+  invoices?: Invoice[];
+}
+
+interface Invoice {
+  id: string;
+  number: string;
+  amount: number;
+  createdAt: string;
+}
+
+export default function BillingDashboard({  }: BillingDashboardProps) {
   const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month');
   const [selectedTab, setSelectedTab] = useState<'overview' | 'history' | 'methods' | 'plans'>('overview');
-  const { billingData, loading, error, fetchBillingData, createCheckoutSession } = useBilling();
-  const [analytics, setAnalytics] = useState<PaymentAnalytics | null>(null);
+  // Define the expected shape of billingData
+  interface BillingData {
+    plans?: Plan[];
+    analytics?: PaymentAnalytics;
+    subscription?: {
+      planId?: string;
+      plan?: { name?: string };
+      status?: string;
+      currentPeriodEnd?: string;
+      history?: SubscriptionHistory[];
+    };
+  }
+
+  const { billingData, loading, fetchBillingData: originalFetchBillingData, createCheckoutSession } = useBilling();
   const [history, setHistory] = useState<PaymentHistory[]>([]);
+  // Explicitly type billingData to avoid 'never' errors
+  const typedBillingData: BillingData | null = billingData as BillingData | null;
+
+  const fetchBillingData = useCallback(async () => {
+    originalFetchBillingData();
+    // Fetch subscription history from backend API
+    const data = await apiGet('/subscriptions/history');
+    if (Array.isArray(data)) {
+      setHistory(data);
+    }
+  }, [originalFetchBillingData]);
 
   useEffect(() => {
     fetchBillingData();
-    // Fetch subscription history from backend API
-    apiGet('/subscriptions/history').then((data) => {
-      if (Array.isArray(data)) {
-        setHistory(data);
-      }
-    });
-  }, [period, tenantId]);
+  }, [fetchBillingData]);
 
   const formatCurrency = (amount: number, currency: string = 'usd') => {
     return new Intl.NumberFormat('en-US', {
@@ -65,26 +107,11 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-      case 'paid':
-        return 'text-green-600 bg-green-50';
-      case 'pending':
-        return 'text-yellow-600 bg-yellow-50';
-      case 'failed':
-      case 'canceled':
-        return 'text-red-600 bg-red-50';
-      default:
-        return 'text-gray-600 bg-gray-50';
-    }
-  };
-
   // Helper to map backend plans to BillingPlan type
-  const mapPlans = (plans: any[], currentPlanId?: string): BillingPlan[] => {
+  const mapPlans = (plans: Plan[], currentPlanId?: string): BillingPlan[] => {
     if (!plans) return [];
-    return plans.map((plan: any) => ({
-      id: plan.stripePriceId || plan.id || plan.name, // Use stripePriceId for upgrade actions
+    return plans.map((plan: Plan) => ({
+      id: plan.stripePriceId || plan.id || plan.name,
       name: plan.name,
       price: plan.price,
       currency: plan.currency || 'usd',
@@ -130,7 +157,7 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setSelectedTab(tab.id as any)}
+              onClick={() => setSelectedTab(tab.id as 'overview' | 'history' | 'methods' | 'plans')}
               className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
                 selectedTab === tab.id
                   ? 'border-blue-500 text-blue-600'
@@ -143,48 +170,48 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
           ))}
         </nav>
       </div>
-
-      {/* Plans Tab */}
-      {selectedTab === 'plans' && billingData?.plans && (
+      {selectedTab === 'plans' && typedBillingData?.plans && (
         <BillingPlans
-          plans={mapPlans(billingData.plans, billingData.subscription?.planId)}
-          currentPlanId={billingData.subscription?.planId}
-          onUpgrade={async (stripePriceId) => {
-            const url = await createCheckoutSession(stripePriceId);
+          plans={mapPlans(typedBillingData.plans, typedBillingData.subscription?.planId)}
+          currentPlanId={typedBillingData.subscription?.planId}
+          onUpgrade={async () => {
+            const url = await createCheckoutSession();
             if (url) window.location.href = url;
           }}
+    
         />
       )}
 
       {/* Overview Tab */}
-      {selectedTab === 'overview' && analytics && (
+      {selectedTab === 'overview' && (
         (() => {
-          if (!analytics) return null;
+          if (!typedBillingData || !typedBillingData.analytics) return null;
+          const analytics = typedBillingData.analytics;
           return (
             <div className="space-y-6">
               {/* Key Metrics */}
               <div className="mb-8">
-                {billingData?.subscription && (
+                {typedBillingData?.subscription && (
                   <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">Current Subscription</h3>
                     <div className="flex flex-col md:flex-row md:items-center md:space-x-6">
                       <div>
-                        <span className="font-bold">Plan:</span> {billingData.subscription.plan?.name || 'N/A'}
+                        <span className="font-bold">Plan:</span> {typedBillingData.subscription.plan?.name || 'N/A'}
                       </div>
                       <div>
-                        <span className="font-bold">Status:</span> {billingData.subscription.status || 'N/A'}
+                        <span className="font-bold">Status:</span> {typedBillingData.subscription.status || 'N/A'}
                       </div>
                       <div>
-                        <span className="font-bold">Renewal Date:</span> {billingData.subscription.currentPeriodEnd ? formatDate(billingData.subscription.currentPeriodEnd) : 'N/A'}
+                        <span className="font-bold">Renewal Date:</span> {typedBillingData.subscription.currentPeriodEnd ? formatDate(typedBillingData.subscription.currentPeriodEnd) : 'N/A'}
                       </div>
                     </div>
                   </div>
                 )}
-                {Array.isArray(billingData?.subscription?.history) && billingData.subscription.history.length > 0 && (
+                {Array.isArray(typedBillingData?.subscription?.history) && typedBillingData.subscription.history.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm border p-6">
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">Subscription History</h3>
                     <ul className="divide-y divide-gray-200">
-                      {billingData.subscription.history.map((sub: any) => (
+                      {typedBillingData.subscription.history.map((sub: SubscriptionHistory) => (
                         <li key={sub.id} className="py-2 flex justify-between items-center">
                           <span>{sub.plan?.name || 'N/A'}</span>
                           <span>{sub.status}</span>
@@ -281,7 +308,7 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {history.map((sub: any) => (
+                {history.map((sub: SubscriptionHistory) => (
                   <tr key={sub.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sub.plan?.name || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sub.status}</td>
@@ -291,7 +318,7 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {sub.invoices && sub.invoices.length > 0 ? (
                         <ul className="list-disc ml-4">
-                          {sub.invoices.map((inv: any) => (
+                          {sub.invoices.map((inv: Invoice) => (
                             <li key={inv.id}>
                               #{inv.number} - {formatCurrency(inv.amount, 'usd')} ({formatDate(inv.createdAt)})
                             </li>
@@ -327,7 +354,6 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
             <p className="mb-4 text-gray-600 text-sm">Save your card to enable subscriptions and faster payments.</p>
             {/* You must wrap this in <Elements> higher up in your app for Stripe to work! */}
             <div className="mb-8">
-              {/* @ts-ignore-next-line: Stripe context required */}
               <PaymentMethodForm />
             </div>
           </div>
@@ -335,4 +361,4 @@ export default function BillingDashboard({ tenantId }: BillingDashboardProps) {
       )}
     </div>
   );
-} 
+}

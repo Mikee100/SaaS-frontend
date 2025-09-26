@@ -15,7 +15,7 @@ interface BillingPlansProps {
   onUpgrade?: (planId: string) => void;
 }
 
-const BillingPlans: React.FC<BillingPlansProps> = ({ plans, currentPlanId, onUpgrade }) => {
+const BillingPlans: React.FC<BillingPlansProps> = ({ plans, onUpgrade }) => {
   return (
     <div className="space-y-8">
       <h3 className="text-xl font-bold text-gray-900 mb-4">Available Plans</h3>

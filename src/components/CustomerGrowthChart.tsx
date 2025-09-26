@@ -41,15 +41,11 @@ export default function CustomerGrowthChart({
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>('1M');
   const chartRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const updateDimensions = () => {
       if (chartRef.current) {
-        setDimensions({
-          width: chartRef.current.offsetWidth,
-          height: chartRef.current.offsetHeight
-        });
+        // Removed setDimensions and related code
       }
     };
 
@@ -77,7 +73,7 @@ export default function CustomerGrowthChart({
           </div>
           <h3 className="text-gray-700 font-medium mb-1">No Customer Data</h3>
           <p className="text-gray-500 text-sm max-w-xs">
-            There's no customer data available for the selected time period.
+            There&apos;s no customer data available for the selected time period.
           </p>
         </div>
       </div>
@@ -103,7 +99,6 @@ export default function CustomerGrowthChart({
   const growthRate = ((values[values.length - 1] - values[0]) / (values[0] || 1)) * 100;
   const isPositive = growthRate >= 0;
   const totalChange = values[values.length - 1] - values[0];
-  const avgChange = values.length > 1 ? totalChange / (values.length - 1) : 0;
 
   // Generate points for the line
   const points = sortedData.map((item, i) => {

@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { apiGet } from '@/utils/api';
 import AuthGuard from '@/components/AuthGuard';
-import { FaMobile, FaCheckCircle, FaTimesCircle, FaClock, FaExclamationTriangle, FaEye, FaDownload } from 'react-icons/fa';
+import { FaMobile, FaCheckCircle, FaTimesCircle, FaClock, FaExclamationTriangle, FaEye } from 'react-icons/fa';
 
 interface MpesaTransaction {
   id: string;
@@ -21,6 +21,10 @@ interface MpesaTransaction {
     customerPhone?: string;
   };
 }
+type MpesaTransactionsResponse = {
+  success: boolean;
+  data: MpesaTransaction[];
+};
 
 export default function MpesaTransactionsPage() {
   const [transactions, setTransactions] = useState<MpesaTransaction[]>([]);
@@ -33,20 +37,20 @@ export default function MpesaTransactionsPage() {
   }, []);
 
   const fetchTransactions = async () => {
-    try {
-      setLoading(true);
-      const response = await apiGet('/mpesa/tenant/transactions');
-      if (response.success) {
-        setTransactions(response.data);
-      } else {
-        setError('Failed to load transactions');
-      }
-    } catch (err) {
+  try {
+    setLoading(true);
+    const response = await apiGet('/mpesa/tenant/transactions') as MpesaTransactionsResponse;
+    if (response && response.success) {
+      setTransactions(response.data);
+    } else {
       setError('Failed to load transactions');
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch {
+    setError('Failed to load transactions');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getStatusIcon = (status: string) => {
     switch (status) {

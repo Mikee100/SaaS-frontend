@@ -47,7 +47,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     const fetchTheme = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get('/user/me');
+        const response = await apiClient.get('/user/me') as { data?: { themePreferences?: Partial<Theme> } };
         if (response.data?.themePreferences) {
           const fetchedTheme = { ...defaultTheme, ...response.data.themePreferences };
           setThemeState(fetchedTheme);

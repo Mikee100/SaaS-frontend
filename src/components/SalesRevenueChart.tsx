@@ -45,46 +45,7 @@ export default function SalesRevenueChart({
   const [activeFilter, setActiveFilter] = useState<string>('1M');
   const chartRef = useRef<HTMLDivElement>(null);
 
-
-
-  if (!salesData || Object.keys(salesData).length === 0) {
-    return (
-      <div 
-        ref={chartRef}
-        className={`bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm transition-all duration-300 ${
-          isExpanded ? 'fixed inset-4 z-50 m-auto max-w-6xl max-h-[90vh]' : 'h-full'
-        } ${className}`}
-        style={{
-          height: isExpanded ? '90vh' : `${height}px`,
-          width: isExpanded ? '90vw' : '100%',
-          maxWidth: isExpanded ? '1200px' : 'none',
-        }}
-      >
-        {isExpanded && (
-          <div className="absolute top-4 right-4 z-10">
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
-              aria-label="Minimize chart"
-            >
-              <FiMinimize2 size={20} />
-            </button>
-          </div>
-        )}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 text-center flex flex-col items-center justify-center" style={{ minHeight: `${height}px` }}>
-          <div className="bg-gray-100 p-3 rounded-full mb-3">
-            <FiDollarSign className="text-gray-400" size={24} />
-          </div>
-          <h3 className="text-gray-700 font-medium mb-1">No Sales Data</h3>
-          <p className="text-gray-500 text-sm max-w-xs">
-            There's no sales data available for the selected time period.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Format and sort data
+  // Move all hooks above any conditional returns
   const sortedData = React.useMemo(() => {
     return Object.entries(salesData)
       .map(([date, amount]) => {
@@ -104,7 +65,6 @@ export default function SalesRevenueChart({
       .sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [salesData]);
 
-  // Calculate metrics
   const { totalRevenue, maxRevenue, minRevenue, avgRevenue, percentChange } = React.useMemo(() => {
     const total = sortedData.reduce((sum, item) => sum + item.amount, 0);
     const max = Math.max(...sortedData.map(item => item.amount), 0);
@@ -128,7 +88,6 @@ export default function SalesRevenueChart({
     };
   }, [sortedData]);
 
-  // Generate SVG paths and points
   const { points, areaPath, linePath } = React.useMemo(() => {
     if (sortedData.length === 0) return { points: [], areaPath: '', linePath: '' };
     
@@ -209,6 +168,44 @@ export default function SalesRevenueChart({
   const toggleExpanded = () => {
     setIsExpanded(!isExpanded);
   };
+
+  // Now you can safely do the early return
+  if (!salesData || Object.keys(salesData).length === 0) {
+    return (
+      <div 
+        ref={chartRef}
+        className={`bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm transition-all duration-300 ${
+          isExpanded ? 'fixed inset-4 z-50 m-auto max-w-6xl max-h-[90vh]' : 'h-full'
+        } ${className}`}
+        style={{
+          height: isExpanded ? '90vh' : `${height}px`,
+          width: isExpanded ? '90vw' : '100%',
+          maxWidth: isExpanded ? '1200px' : 'none',
+        }}
+      >
+        {isExpanded && (
+          <div className="absolute top-4 right-4 z-10">
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+              aria-label="Minimize chart"
+            >
+              <FiMinimize2 size={20} />
+            </button>
+          </div>
+        )}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 text-center flex flex-col items-center justify-center" style={{ minHeight: `${height}px` }}>
+          <div className="bg-gray-100 p-3 rounded-full mb-3">
+            <FiDollarSign className="text-gray-400" size={24} />
+          </div>
+          <h3 className="text-gray-700 font-medium mb-1">No Sales Data</h3>
+          <p className="text-gray-500 text-sm max-w-xs">
+            There&apos;s no sales data available for the selected time period.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 

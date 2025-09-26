@@ -1,25 +1,40 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { getSession } from 'next-auth/react';
+import { Session } from 'next-auth';
+
+// Extend Session type to include accessToken
+interface CustomSession extends Session {
+  accessToken?: string;
+}
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_REPORTING_SERVICE_URL || 'http://localhost:3001/api';
 
+interface AxiosInstanceConfig {
+  baseURL: string;
+  headers?: Record<string, string>;
+}
+
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+  headers: {},
+} as AxiosInstanceConfig);
 
-// Request interceptor to add auth token
+// Remove custom AxiosRequestConfigWithAuth interface and use InternalAxiosRequestConfig from axios
+import type { InternalAxiosRequestConfig } from 'axios';
+
 axiosInstance.interceptors.request.use(
-  async (config) => {
-    const session = await getSession();
+  async (config: InternalAxiosRequestConfig) => {
+    const session = await getSession() as CustomSession;
     if (session?.accessToken) {
-      config.headers.Authorization = `Bearer ${session.accessToken}`;
+      if (config.headers && typeof config.headers.set === 'function') {
+        config.headers.set('Authorization', `Bearer ${session.accessToken}`);
+      } else if (config.headers) {
+        config.headers['Authorization'] = `Bearer ${session.accessToken}`;
+      }
     }
     return config;
   },
-  (error) => {
+  (error: unknown) => {
     return Promise.reject(error);
   }
 );
