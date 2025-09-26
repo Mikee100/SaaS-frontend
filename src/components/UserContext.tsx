@@ -159,7 +159,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     setError(null);
 
     try {
-      const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000' || 'http://13.51.56.67:9000'   ).replace(/\/+$/, '');
+      const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://13.51.56.67:9000'  || 'http://localhost:9000'   ).replace(/\/+$/, '');
       const loginUrl = `${apiUrl}/auth/login`;
       console.log('Attempting to login to:', loginUrl);
 
