@@ -58,21 +58,21 @@ export default function RootLayout({
           __html: `
             console.log('RootLayout - Client-side path:', window.location.pathname);
             console.log('RootLayout - Document referrer:', document.referrer);
-            
+
             // Log all redirects
             const originalPush = history.pushState;
             history.pushState = function(...args) {
               console.log('History pushState called:', args);
               return originalPush.apply(history, args);
             };
-            
+
             // Log all redirects via router
             const originalReplaceState = history.replaceState;
             history.replaceState = function(...args) {
               console.log('History replaceState called:', args);
               return originalReplaceState.apply(history, args);
             };
-            
+
             // Log all link clicks
             document.addEventListener('click', (e) => {
               const target = e.target as HTMLElement;
@@ -88,6 +88,7 @@ export default function RootLayout({
             }, true);
           `
         }} />
+        <script src="https://www.google.com/recaptcha/api.js?render=explicit" async defer></script>
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />

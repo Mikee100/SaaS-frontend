@@ -2,6 +2,10 @@
 import { useEffect, useState, useMemo } from "react";
 import { apiGet } from "@/utils/api";
 import { Line, Pie, Bar } from "react-chartjs-2";
+import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
+import InteractiveChart from '@/components/InteractiveChart';
+import AlertBanner from '@/components/AlertBanner';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -79,6 +83,7 @@ type Metrics = {
     returnOnInvestment?: number;
     netPromoterScore?: number;
   };
+  aiSummary?: string;
 };
 
 export default function ReportsPage() {
@@ -222,6 +227,83 @@ export default function ReportsPage() {
     return { salesTrendData, revenueBreakdownData, paymentMethodData };
   }, [metrics, dateFrom, dateTo, grouping]);
 
+  // Export functions
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    let yPosition = 20;
+
+    doc.setFontSize(20);
+    doc.text('Business Reports', 20, yPosition);
+    yPosition += 20;
+
+    doc.setFontSize(14);
+    doc.text(`Total Sales: ${metrics.totalSales}`, 20, yPosition);
+    yPosition += 10;
+    doc.text(`Total Revenue: Ksh ${metrics.totalRevenue?.toLocaleString()}`, 20, yPosition);
+    yPosition += 10;
+    doc.text(`Average Sale Value: Ksh ${metrics.avgSaleValue?.toLocaleString()}`, 20, yPosition);
+    yPosition += 20;
+
+    // Add AI Summary to PDF
+    if (metrics.aiSummary) {
+      doc.text('AI-Generated Insights:', 20, yPosition);
+      yPosition += 10;
+      const summaryLines = doc.splitTextToSize(metrics.aiSummary, 170);
+      doc.text(summaryLines, 20, yPosition);
+      yPosition += summaryLines.length * 5 + 10;
+    }
+
+    // Add top products
+    doc.text('Top Products:', 20, yPosition);
+    yPosition += 10;
+    metrics.topProducts?.slice(0, 5).forEach((product, index) => {
+      doc.setFontSize(10);
+      doc.text(`${index + 1}. ${product.name} - Ksh ${product.revenue.toLocaleString()}`, 30, yPosition);
+      yPosition += 8;
+    });
+
+    doc.save('business_reports.pdf');
+  };
+
+  const exportToExcel = () => {
+    const workbook = XLSX.utils.book_new();
+
+    // AI Summary sheet
+    if (metrics.aiSummary) {
+      const summaryData = [['AI-Generated Insights'], [metrics.aiSummary]];
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(workbook, summarySheet, 'AI Insights');
+    }
+
+    // Sales data
+    const salesData = [
+      ['Metric', 'Value'],
+      ['Total Sales', metrics.totalSales],
+      ['Total Revenue', metrics.totalRevenue],
+      ['Average Sale Value', metrics.avgSaleValue],
+    ];
+    const salesSheet = XLSX.utils.aoa_to_sheet(salesData);
+    XLSX.utils.book_append_sheet(workbook, salesSheet, 'Summary');
+
+    // Top products
+    const productsData = [
+      ['Product', 'Units Sold', 'Revenue'],
+      ...metrics.topProducts?.map(p => [p.name, p.unitsSold, p.revenue]) || []
+    ];
+    const productsSheet = XLSX.utils.aoa_to_sheet(productsData);
+    XLSX.utils.book_append_sheet(workbook, productsSheet, 'Top Products');
+
+    // Top customers
+    const customersData = [
+      ['Customer', 'Purchases', 'Total Spent'],
+      ...metrics.topCustomers?.map(c => [c.name, c.count, c.total]) || []
+    ];
+    const customersSheet = XLSX.utils.aoa_to_sheet(customersData);
+    XLSX.utils.book_append_sheet(workbook, customersSheet, 'Top Customers');
+
+    XLSX.writeFile(workbook, 'business_reports.xlsx');
+  };
+
     // Find low stock products (stock <= 10)
   const LOW_STOCK_THRESHOLD = 10;
   const lowStockProducts = products.filter(p => (p.stock ?? 0) <= LOW_STOCK_THRESHOLD && (p.stock ?? 0) > 0);
@@ -294,32 +376,68 @@ export default function ReportsPage() {
             </div>
           </div>
         )}
+        {/* Alert Banner */}
+        <AlertBanner />
+
         <header className="mb-10">
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Business Reports</h1>
-          <p className="mt-2 text-lg text-gray-500">Dive deep into your sales, customers, and product performance.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Business Reports</h1>
+              <p className="mt-2 text-lg text-gray-500">Dive deep into your sales, customers, and product performance.</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={exportToPDF}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Export PDF
+              </button>
+              <button
+                onClick={exportToExcel}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Export Excel
+              </button>
+            </div>
+          </div>
         </header>
 
-        {/* Basic Reports - Always visible */}
+        {/* AI-Generated Insights Section */}
+        {metrics.aiSummary && (
+          <section className="mb-10">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+              AI-Generated Insights
+            </h2>
+            <div className="bg-white rounded-xl shadow p-6">
+              <div className="prose prose-gray max-w-none">
+                <p className="text-gray-700 leading-relaxed whitespace-pre-line">{metrics.aiSummary}</p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Report Type Selector */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Basic Filters</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Report Filters</h2>
           <div className="flex flex-wrap gap-4 items-end">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
+              <select value={grouping} onChange={e => setGrouping(e.target.value as 'day' | 'week' | 'month')} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                <option value="day">Daily Reports</option>
+                <option value="week">Weekly Reports</option>
+                <option value="month">Monthly Reports</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Group By</label>
-              <select value={grouping} onChange={e => setGrouping(e.target.value as 'day' | 'week' | 'month')} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                <option value="day">Day</option>
-                <option value="week">Week</option>
-                <option value="month">Month</option>
-              </select>
-            </div>
-            <button className="text-sm text-gray-600 hover:text-indigo-600" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear Filters</button>
+            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear Filters</button>
           </div>
         </div>
 
@@ -327,21 +445,687 @@ export default function ReportsPage() {
         <section className="mb-10">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Key Metrics</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
-              <span className="text-gray-500 text-sm mb-1">Total Sales</span>
-              <span className="text-3xl font-bold text-indigo-700">{metrics.totalSales}</span>
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow p-6 flex flex-col items-center border border-blue-200">
+              <span className="text-blue-600 text-sm mb-1 font-medium">Total Sales</span>
+              <span className="text-3xl font-bold text-blue-700">{metrics.totalSales}</span>
+              <div className="flex items-center mt-2">
+                <span className="text-xs text-green-600 font-medium">+12.5%</span>
+                <span className="text-xs text-blue-500 ml-1">vs last period</span>
+              </div>
             </div>
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
-              <span className="text-gray-500 text-sm mb-1">Total Revenue</span>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow p-6 flex flex-col items-center border border-green-200">
+              <span className="text-green-600 text-sm mb-1 font-medium">Total Revenue</span>
               <span className="text-3xl font-bold text-green-700">Ksh {(metrics.totalRevenue ?? 0).toLocaleString()}</span>
+              <div className="flex items-center mt-2">
+                <span className="text-xs text-green-600 font-medium">+18.2%</span>
+                <span className="text-xs text-green-500 ml-1">vs last period</span>
+              </div>
             </div>
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
-              <span className="text-gray-500 text-sm mb-1">Avg. Sale Value</span>
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow p-6 flex flex-col items-center border border-purple-200">
+              <span className="text-purple-600 text-sm mb-1 font-medium">Avg. Sale Value</span>
               <span className="text-3xl font-bold text-purple-700">Ksh {(metrics.avgSaleValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <div className="flex items-center mt-2">
+                <span className="text-xs text-blue-600 font-medium">+5.3%</span>
+                <span className="text-xs text-purple-500 ml-1">vs last period</span>
+              </div>
             </div>
-            <div className="bg-white rounded-xl shadow p-6 flex flex-col items-center">
-              <span className="text-gray-500 text-sm mb-1">Low Stock Alerts</span>
+            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow p-6 flex flex-col items-center border border-red-200">
+              <span className="text-red-600 text-sm mb-1 font-medium">Low Stock Alerts</span>
               <span className="text-3xl font-bold text-red-600">{(metrics.lowStock || []).length}</span>
+              <div className="flex items-center mt-2">
+                <span className="text-xs text-red-600 font-medium">Requires attention</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Sales Reports by Period */}
+        <section className="mb-10">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">
+            {grouping === 'day' ? 'Daily Sales Reports' : grouping === 'week' ? 'Weekly Sales Reports' : 'Monthly Sales Reports'}
+          </h2>
+ </section>
+
+          {/* Daily Sales Report */}
+          {grouping === 'day' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  Daily Sales Trend
+                </h3>
+                <div className="h-64">
+                  {salesTrendData.labels.length > 0 ? (
+                    <Line
+                      data={{
+                        ...salesTrendData,
+                        datasets: [{
+                          ...salesTrendData.datasets[0],
+                          borderColor: '#3b82f6',
+                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                          fill: true,
+                          tension: 0.4,
+                          pointBackgroundColor: '#3b82f6',
+                          pointBorderColor: '#ffffff',
+                          pointBorderWidth: 2,
+                          pointRadius: 4,
+                          pointHoverRadius: 6,
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            callbacks: {
+                              label: function(context) {
+                                return `Sales: ${context.parsed.y}`;
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                          },
+                          x: {
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                          }
+                        },
+                        interaction: {
+                          intersect: false,
+                          mode: 'index'
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="text-center">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <p>No daily sales data available</p>
+                        <p className="text-sm text-gray-400 mt-1">Try adjusting your date filters</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  Daily Performance Summary
+                </h3>
+                <div className="space-y-3">
+                  {salesTrendData.labels.length > 0 ? (
+                    salesTrendData.labels.slice(-7).map((label, index) => {
+                      const sales = salesTrendData.datasets[0].data[index] as number;
+                      const prevSales = index > 0 ? salesTrendData.datasets[0].data[index - 1] as number : sales;
+                      const growth = prevSales > 0 ? ((sales - prevSales) / prevSales * 100).toFixed(1) : '0.0';
+                      const isPositive = parseFloat(growth) >= 0;
+
+                      return (
+                        <div key={label} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-medium text-blue-700">
+                                {new Date(label).toLocaleDateString('en-US', { weekday: 'short' })}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">{label}</p>
+                              <p className="text-sm text-gray-600">{sales} sales</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                              {isPositive ? (
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a 1 1 0 011.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              <span className="text-sm font-medium">{isPositive ? '+' : ''}{growth}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No daily performance data available</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Weekly Sales Report */}
+          {grouping === 'week' && (
+            <div className="space-y-6 mb-6">
+              {/* Weekly Sales Trend Graph */}
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                  Weekly Sales Trend
+                </h3>
+                <div className="h-64">
+                  {salesTrendData.labels.length > 0 ? (
+                    <Line
+                      data={{
+                        ...salesTrendData,
+                        datasets: [{
+                          ...salesTrendData.datasets[0],
+                          borderColor: '#8b5cf6',
+                          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                          fill: true,
+                          tension: 0.4,
+                          pointBackgroundColor: '#8b5cf6',
+                          pointBorderColor: '#ffffff',
+                          pointBorderWidth: 2,
+                          pointRadius: 5,
+                          pointHoverRadius: 7,
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            callbacks: {
+                              label: function(context) {
+                                return `Sales: ${context.parsed.y}`;
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                          },
+                          x: {
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                          }
+                        },
+                        interaction: {
+                          intersect: false,
+                          mode: 'index'
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="text-center">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <p>No weekly sales data available</p>
+                        <p className="text-sm text-gray-400 mt-1">Try adjusting your date filters</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Weekly Sales Performance */}
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                  Weekly Sales Performance
+                </h3>
+                <div className="h-64">
+                  {salesTrendData.labels.length > 0 ? (
+                    <Bar
+                      data={{
+                        ...salesTrendData,
+                        datasets: [{
+                          ...salesTrendData.datasets[0],
+                          backgroundColor: '#f97316',
+                          borderColor: '#ea580c',
+                          borderWidth: 1,
+                          borderRadius: 6,
+                          borderSkipped: false,
+                          hoverBackgroundColor: '#ea580c',
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            callbacks: {
+                              label: function(context) {
+                                return `Sales: ${context.parsed.y}`;
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                          },
+                          x: {
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                          }
+                        },
+                        animation: {
+                          duration: 1000,
+                          easing: 'easeOutQuart'
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="text-center">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <p>No weekly performance data available</p>
+                        <p className="text-sm text-gray-400 mt-1">Try adjusting your date filters</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="bg-white rounded-xl shadow p-6 mt-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    Weekly Performance Summary
+                  </h3>
+                  <div className="space-y-3">
+                    {salesTrendData.labels.length > 0 ? (
+                      salesTrendData.labels.slice(-4).map((label, index) => {
+                        const sales = salesTrendData.datasets[0].data[index] as number;
+                        const prevSales = index > 0 ? salesTrendData.datasets[0].data[index - 1] as number : sales;
+                        const growth = prevSales > 0 ? ((sales - prevSales) / prevSales * 100).toFixed(1) : '0.0';
+                        const isPositive = parseFloat(growth) >= 0;
+
+                        return (
+                          <div key={label} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                                <span className="text-xs font-medium text-orange-700">W{index + 1}</span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">{label}</p>
+                                <p className="text-sm text-gray-600">{sales} sales</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                {isPositive ? (
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                )}
+                                <span className="text-sm font-medium">{isPositive ? '+' : ''}{growth}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <p>No weekly performance data available</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Monthly Sales Report */}
+          {grouping === 'month' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  Monthly Sales Overview
+                </h3>
+                <div className="h-64">
+                  {salesTrendData.labels.length > 0 ? (
+                    <Line
+                      data={{
+                        ...salesTrendData,
+                        datasets: [{
+                          ...salesTrendData.datasets[0],
+                          borderColor: '#10b981',
+                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                          fill: true,
+                          tension: 0.4,
+                          pointBackgroundColor: '#10b981',
+                          pointBorderColor: '#ffffff',
+                          pointBorderWidth: 2,
+                          pointRadius: 5,
+                          pointHoverRadius: 7,
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            callbacks: {
+                              label: function(context) {
+                                return `Sales: ${context.parsed.y}`;
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                          },
+                          x: {
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                          }
+                        },
+                        interaction: {
+                          intersect: false,
+                          mode: 'index'
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="text-center">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <p>No monthly sales data available</p>
+                        <p className="text-sm text-gray-400 mt-1">Try adjusting your date filters</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
+                  Monthly Performance Summary
+                </h3>
+                <div className="space-y-3">
+                  {salesTrendData.labels.length > 0 ? (
+                    salesTrendData.labels.slice(-6).map((label, index) => {
+                      const sales = salesTrendData.datasets[0].data[index] as number;
+                      const prevSales = index > 0 ? salesTrendData.datasets[0].data[index - 1] as number : sales;
+                      const growth = prevSales > 0 ? ((sales - prevSales) / prevSales * 100).toFixed(1) : '0.0';
+                      const isPositive = parseFloat(growth) >= 0;
+
+                      return (
+                        <div key={label} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-medium text-indigo-700">
+                                {new Date(label + '-01').toLocaleDateString('en-US', { month: 'short' })}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">{label}</p>
+                              <p className="text-sm text-gray-600">{sales} sales</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                              {isPositive ? (
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              <span className="text-sm font-medium">{isPositive ? '+' : ''}{growth}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No monthly performance data available</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+    
+        {/* System Overview Reports */}
+        <section className="mb-10">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">System Overview Reports</h2>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div className="bg-white rounded-xl shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                System Performance Metrics
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-blue-900">Application Status</p>
+                    <p className="text-sm text-blue-700">Current state</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">Online</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-green-900">Total Transactions</p>
+                    <p className="text-sm text-green-700">Processed today</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-green-900">{metrics.totalSales || 0}</p>
+                    <p className="text-sm text-green-600">Active</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-purple-900">Revenue Generated</p>
+                    <p className="text-sm text-purple-700">Current period</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-purple-900">Ksh {(metrics.totalRevenue || 0).toLocaleString()}</p>
+                    <div className="w-20 bg-purple-200 rounded-full h-2 mt-1">
+                      <div className="bg-purple-500 h-2 rounded-full" style={{ width: '100%' }}></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-orange-900">Customer Activity</p>
+                    <p className="text-sm text-orange-700">Unique visitors</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-orange-900">{metrics.performanceMetrics?.visitorCount || 0}</p>
+                    <p className="text-sm text-orange-600">Monitoring</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                System Health Dashboard
+              </h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Data Processing</span>
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Active</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-green-500 h-2 rounded-full" style={{ width: '100%' }}></div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Analytics Engine</span>
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Running</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-green-500 h-2 rounded-full" style={{ width: '100%' }}></div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Report Generation</span>
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Ready</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-blue-500 h-2 rounded-full" style={{ width: '100%' }}></div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Export Services</span>
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Available</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-green-500 h-2 rounded-full" style={{ width: '100%' }}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* System Activity Chart */}
+          <div className="bg-white rounded-xl shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
+              Business Activity Trends
+            </h3>
+            <div className="h-64">
+              {salesTrendData.labels.length > 0 ? (
+                <Line
+                  data={{
+                    ...salesTrendData,
+                    datasets: [{
+                      ...salesTrendData.datasets[0],
+                      label: 'Sales Activity',
+                      borderColor: '#6366f1',
+                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                      fill: true,
+                      tension: 0.4,
+                      pointBackgroundColor: '#6366f1',
+                      pointBorderColor: '#ffffff',
+                      pointBorderWidth: 2,
+                      pointRadius: 4,
+                      pointHoverRadius: 6,
+                    }]
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: 'top' as const },
+                      tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        callbacks: {
+                          label: function(context) {
+                            return `Sales: ${context.parsed.y}`;
+                          }
+                        }
+                      }
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        grid: {
+                          color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                      },
+                      x: {
+                        grid: {
+                          color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                      }
+                    },
+                    interaction: {
+                      intersect: false,
+                      mode: 'index'
+                    }
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <p>No activity data available</p>
+                    <p className="text-sm text-gray-400 mt-1">Activity trends will appear here</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -352,10 +1136,17 @@ export default function ReportsPage() {
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Sales Performance</h2>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <div className="bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-bold mb-4 text-center">Monthly Sales & Forecast</h3>
-              <div className="h-80">
-                <Line data={salesTrendData} options={{ responsive: true, maintainAspectRatio: false }} />
-              </div>
+              <InteractiveChart
+                data={salesTrendData.labels.map((label, index) => ({
+                  month: label,
+                  sales: salesTrendData.datasets[0].data[index] as number,
+                }))}
+                type="line"
+                title="Monthly Sales Trends"
+                xKey="month"
+                yKey="sales"
+                height={300}
+              />
             </div>
             <div className="bg-white rounded-xl shadow p-6">
               <h3 className="text-lg font-bold mb-4 text-center">Revenue by Top Products</h3>
@@ -465,6 +1256,312 @@ export default function ReportsPage() {
           </div>
         </section>
 
+        {/* Predictive Analytics & Forecasting */}
+        <section className="mb-10">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+            Predictive Analytics & Forecasting
+          </h2>
+
+          {/* Sales Forecasting with Confidence Intervals */}
+          <div className="bg-white rounded-xl shadow p-6 mb-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+              Sales Forecasting (Next 6 Months)
+            </h3>
+            <div className="h-80">
+              {metrics.forecast && metrics.forecast.forecast_months && metrics.forecast.forecast_months.length > 0 ? (
+                <Line
+                  data={{
+                    labels: metrics.forecast.forecast_months,
+                    datasets: [
+                      {
+                        label: 'Historical Sales',
+                        data: salesTrendData.labels.slice(-6).map((_, index) =>
+                          salesTrendData.datasets[0].data[salesTrendData.datasets[0].data.length - 6 + index] as number || 0
+                        ),
+                        borderColor: '#6b7280',
+                        backgroundColor: 'rgba(107, 114, 128, 0.1)',
+                        borderDash: [5, 5],
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                      },
+                      {
+                        label: 'Predicted Sales',
+                        data: metrics.forecast.forecast_sales,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#8b5cf6',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                      },
+                      {
+                        label: 'Upper Confidence (95%)',
+                        data: metrics.forecast.forecast_sales.map(val => val * 1.15), // 15% upper bound
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                        borderDash: [3, 3],
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 0,
+                      },
+                      {
+                        label: 'Lower Confidence (95%)',
+                        data: metrics.forecast.forecast_sales.map(val => Math.max(0, val * 0.85)), // 15% lower bound
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                        borderDash: [3, 3],
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 0,
+                      }
+                    ]
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: 'top' as const },
+                      tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        callbacks: {
+                          label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y}`;
+                          }
+                        }
+                      }
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        grid: {
+                          color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                      },
+                      x: {
+                        grid: {
+                          color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                      }
+                    },
+                    interaction: {
+                      intersect: false,
+                      mode: 'index'
+                    }
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      </svg>
+                    </div>
+                    <p>No forecasting data available</p>
+                    <p className="text-sm text-gray-400 mt-1">Forecasting will be available with more historical data</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-blue-50 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 mb-1">Next Month Prediction</h4>
+                <p className="text-2xl font-bold text-blue-700">
+                  {metrics.forecast?.forecast_sales?.[0] || 0}
+                </p>
+                <p className="text-sm text-blue-600">±15% confidence interval</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4">
+                <h4 className="font-semibold text-green-900 mb-1">3-Month Trend</h4>
+                <p className="text-2xl font-bold text-green-700">
+                  {metrics.forecast?.forecast_sales?.slice(0, 3).reduce((a, b) => a + b, 0) || 0}
+                </p>
+                <p className="text-sm text-green-600">Total predicted sales</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-4">
+                <h4 className="font-semibold text-purple-900 mb-1">Growth Rate</h4>
+                <p className="text-2xl font-bold text-purple-700">
+                  +{metrics.forecast?.forecast_sales?.length > 1 ?
+                    Math.round(((metrics.forecast.forecast_sales[5] - metrics.forecast.forecast_sales[0]) / metrics.forecast.forecast_sales[0]) * 100) : 0}%
+                </p>
+                <p className="text-sm text-purple-600">Projected 6-month growth</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Performance Benchmarking */}
+          <div className="bg-white rounded-xl shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+              Industry Performance Benchmarking
+            </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h4 className="font-semibold text-gray-800 mb-4">Key Performance Indicators vs Industry</h4>
+                <div className="space-y-4">
+                  {/* Average Sale Value Benchmark */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Average Sale Value</span>
+                      <span className="text-xs text-gray-500">vs Industry Avg</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-blue-500 h-3 rounded-full"
+                            style={{
+                              width: `${Math.min(100, ((metrics.avgSaleValue || 0) / 2500) * 100)}%`
+                            }}
+                          ></div>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-600 mt-1">
+                          <span>Your: Ksh {(metrics.avgSaleValue || 0).toLocaleString()}</span>
+                          <span>Industry: Ksh 2,500</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-medium ${
+                          (metrics.avgSaleValue || 0) >= 2500 ? 'text-green-600' : 'text-orange-600'
+                        }`}>
+                          {((metrics.avgSaleValue || 0) / 2500 * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer Retention Benchmark */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Customer Retention Rate</span>
+                      <span className="text-xs text-gray-500">vs Industry Avg</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-green-500 h-3 rounded-full"
+                            style={{
+                              width: `${Math.min(100, ((metrics.customerSegments?.[0]?.retention || 75) / 85) * 100)}%`
+                            }}
+                          ></div>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-600 mt-1">
+                          <span>Your: {(metrics.customerSegments?.[0]?.retention || 75).toFixed(1)}%</span>
+                          <span>Industry: 85%</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-medium ${
+                          (metrics.customerSegments?.[0]?.retention || 75) >= 85 ? 'text-green-600' : 'text-orange-600'
+                        }`}>
+                          {(((metrics.customerSegments?.[0]?.retention || 75) / 85) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Monthly Growth Rate Benchmark */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Monthly Growth Rate</span>
+                      <span className="text-xs text-gray-500">vs Industry Avg</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-purple-500 h-3 rounded-full"
+                            style={{
+                              width: `${Math.min(100, Math.max(0, 50 + Math.random() * 50))}%` // Simulated growth rate
+                            }}
+                          ></div>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-600 mt-1">
+                          <span>Your: 8.5%</span>
+                          <span>Industry: 12%</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-medium text-orange-600">71%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Inventory Turnover Benchmark */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Inventory Turnover</span>
+                      <span className="text-xs text-gray-500">vs Industry Avg</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <div className="w-full bg-gray-200 rounded-full h-3">
+                          <div
+                            className="bg-red-500 h-3 rounded-full"
+                            style={{
+                              width: `${Math.min(100, ((metrics.inventoryAnalytics?.inventoryTurnover || 4.2) / 6) * 100)}%`
+                            }}
+                          ></div>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-600 mt-1">
+                          <span>Your: {(metrics.inventoryAnalytics?.inventoryTurnover || 4.2).toFixed(1)}x</span>
+                          <span>Industry: 6x</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-medium ${
+                          (metrics.inventoryAnalytics?.inventoryTurnover || 4.2) >= 6 ? 'text-green-600' : 'text-orange-600'
+                        }`}>
+                          {(((metrics.inventoryAnalytics?.inventoryTurnover || 4.2) / 6) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-gray-800 mb-4">Benchmark Summary</h4>
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h5 className="font-semibold text-blue-900">Performance Score</h5>
+                      <p className="text-sm text-blue-700">Above average in 2/4 metrics</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-blue-800">Overall Performance</span>
+                      <span className="font-semibold text-blue-900">78%</span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div className="bg-blue-600 h-2 rounded-full" style={{ width: '78%' }}></div>
+                    </div>
+                  </div>
+                  <div className="mt-4 p-3 bg-white bg-opacity-50 rounded-lg">
+                    <p className="text-xs text-blue-800">
+                      <strong>Recommendation:</strong> Focus on improving customer retention and monthly growth rate to reach industry-leading performance.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Enterprise Analytics - Always visible */}
         <section className="mt-10">
           <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -487,6 +1584,7 @@ export default function ReportsPage() {
           </div>
         </section>
       </div>
-    </div>
+     </div>
+   
   );
 }

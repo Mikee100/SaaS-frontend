@@ -7,9 +7,9 @@ import { v4 as uuidv4 } from 'uuid';
 import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
 import { useRouter } from "next/navigation";
-import { 
-  FaLock, FaStore, FaQrcode, FaDownload, FaSearch, 
-  FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaChevronLeft, 
+import {
+  FaLock, FaStore, FaQrcode, FaDownload, FaSearch,
+  FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaChevronLeft,
   FaChevronRight, FaKeyboard, FaHistory, FaUser, FaUndo, FaRedo,
   FaStar, FaClock, FaChartLine, FaExclamationTriangle,
   FaFilter, FaSort, FaTh, FaList, FaPlus, FaMinus
@@ -21,6 +21,8 @@ import Tooltip from '@/components/Tooltip';
 
 import ProductSkeleton from '@/components/ProductSkeleton';
 import { useBranch } from "@/contexts/BranchContext";
+import { productCache } from '@/lib/productCache';
+
 
 
 type Product = { 
@@ -69,7 +71,10 @@ export default function SalesPage() {
   // New state for enhanced features
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "price" | "stock">("name");
+  const [sortOrder] = useState('asc');
+
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [recentSales, setRecentSales] = useState<Record<string, unknown>[]>([]);
   const [cartHistory, setCartHistory] = useState<CartItem[][]>([]);
@@ -85,15 +90,39 @@ export default function SalesPage() {
   // Constants
   const productsPerPage = 12;
   const filteredProducts = products
-    .filter(product => 
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      (selectedCategory === "all" || product.category === selectedCategory)
-    )
+    .filter(product => {
+      const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
+      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           product.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           product.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    })
     .sort((a, b) => {
+      let aValue: string | number;
+      let bValue: string | number;
+
       switch (sortBy) {
-        case "price": return a.price - b.price;
-        case "stock": return b.stock - a.stock;
-        default: return a.name.localeCompare(b.name);
+        case 'price':
+          aValue = a.price;
+          bValue = b.price;
+          break;
+        case 'stock':
+          aValue = a.stock;
+          bValue = b.stock;
+          break;
+        default:
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+      }
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+      }
+
+      if (sortOrder === 'asc') {
+        return (aValue as number) - (bValue as number);
+      } else {
+        return (bValue as number) - (aValue as number);
       }
     });
   
@@ -108,24 +137,91 @@ export default function SalesPage() {
   const cartTotal = cartSubtotal + vatAmount;
   const categories = ["all", ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
 
+  // ProductCard component for virtualized list
+  const ProductCard = ({ product, style, isVirtualized = false }: { product: Product; style?: React.CSSProperties; isVirtualized?: boolean }) => (
+    <div
+      style={style}
+      className={`group relative bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 hover:border-blue-100 ${
+        isVirtualized ? 'w-full h-full' : 'mx-2 mb-4'
+      }`}
+    >
+      <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4 relative">
+        <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <FaShoppingCart className="w-8 h-8 opacity-70" />
+        </div>
+        <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 text-xs font-medium text-gray-700">
+          ${product.price.toFixed(2)}
+        </div>
+        <div className={`absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 text-xs font-medium ${
+          product.stock > 10 ? 'text-green-700' : product.stock > 0 ? 'text-orange-700' : 'text-red-700'
+        }`}>
+          {product.stock} in stock
+        </div>
+      </div>
+      <div className="p-3">
+        <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10 mb-2">
+          {product.name}
+        </h3>
+
+        <div className="flex justify-between items-center">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(product.id);
+            }}
+            className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+            aria-label={favoriteProducts.includes(product.id) ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <FaStar
+              className={`w-4 h-4 ${
+                favoriteProducts.includes(product.id)
+                  ? 'text-yellow-400 fill-current'
+                  : 'text-gray-300 hover:text-yellow-400'
+              }`}
+            />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              addToCart(product);
+            }}
+            disabled={product.stock <= 0}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+              product.stock > 0
+                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
+                : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            {product.stock > 0 ? 'Add to Cart' : 'Out of stock'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [products, businessInfo, recentSalesData] = await Promise.all([
-          apiGet("/products"),
+        // Fetch products using cache
+        const products = await productCache.getProducts(() => apiGet("/products"));
+        setProducts(products);
+
+        // Fetch other data in parallel
+        const [businessInfo, recentSalesData] = await Promise.all([
           apiGet("/tenant/me"),
           apiGet("/sales/recent").catch(() => [])
         ]);
-        setProducts(products as Product[]);
+
         setBusinessInfo(businessInfo as Record<string, unknown>);
-       setRecentSales(recentSalesData as Record<string, unknown>[]);
-      } catch  {
+        setRecentSales(recentSalesData as Record<string, unknown>[]);
+      } catch (error) {
+        console.error('Error loading data:', error);
         setError("Failed to load data. Please try again.");
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
 
@@ -332,18 +428,25 @@ const clearCart = useCallback(() => {
       const sale = (response as SaleResponse).data || response;
       console.log("Sale created successfully:", sale);
       
+      // Update cache with new stock levels
+      const stockUpdates = cart.map(item => ({
+        id: item.id,
+        updates: { stock: item.stock - item.quantity }
+      }));
+      productCache.updateProducts(stockUpdates);
+
       // Reset form state
       clearCart();
       setCheckoutOpen(false);
       setCustomerName("");
       setCustomerPhone("");
       setAmountReceived(0);
-      
+
       // Redirect to receipt page with the sale ID
       const saleObj = sale as { id?: string; saleId?: string; _id?: string };
       const saleId = (saleObj as { id?: string; saleId?: string; _id?: string }).id || saleObj.saleId || saleObj._id;
       console.log("Extracted sale ID:", saleId);
-      
+
       if (saleId) {
         router.push(`/sales/receipt/${saleId}`);
       } else {
@@ -652,6 +755,29 @@ const clearCart = useCallback(() => {
                   </div>
                 </div>
 
+                {/* Search Bar */}
+                <div className="mb-4">
+                  <div className="relative">
+                    <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      id="search-input"
+                      type="text"
+                      placeholder="Search products by name, SKU, or description..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <FaTimes className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 {/* Enhanced Filters */}
                 <div className="flex items-center gap-4">
                   {/* Category Filter */}
@@ -734,104 +860,57 @@ const clearCart = useCallback(() => {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {paginatedProducts.map((product) => (
-                      <div 
-                        key={product.id}
-                        className="group relative bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 hover:border-blue-100"
-                      >
-                        <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4 relative">
-                          <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            <FaShoppingCart className="w-8 h-8 opacity-70" />
-                          </div>
-                          <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 text-xs font-medium text-gray-700">
-                            ${product.price.toFixed(2)}
-                          </div>
-                          <div className={`absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 text-xs font-medium ${
-                            product.stock > 10 ? 'text-green-700' : product.stock > 0 ? 'text-orange-700' : 'text-red-700'
-                          }`}>
-                            {product.stock} in stock
-                          </div>
-                        </div>
-                        <div className="p-3">
-                          <h3 className="text-sm font-medium text-gray-900 line-clamp-2 h-10 mb-2">
-                            {product.name}
-                          </h3>
-                          
-                          <div className="flex justify-between items-center">
-                            <button
-                              onClick={() => toggleFavorite(product.id)}
-                              className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-                              aria-label={favoriteProducts.includes(product.id) ? 'Remove from favorites' : 'Add to favorites'}
-                            >
-                              <FaStar
-                                className={`w-4 h-4 ${
-                                  favoriteProducts.includes(product.id)
-                                    ? 'text-yellow-400 fill-current'
-                                    : 'text-gray-300 hover:text-yellow-400'
-                                }`}
-                              />
-                            </button>
-                            <button
-                              onClick={() => addToCart(product)}
-                              disabled={product.stock <= 0}
-                              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                                product.stock > 0
-                                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
-                                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                              }`}
-                            >
-                              {product.stock > 0 ? 'Add to Cart' : 'Out of stock'}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* Enhanced Pagination */}
-                {pageCount > 1 && (
-                  <div className="px-4 py-3 border-t border-gray-200 flex justify-between items-center">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-100 rounded-lg transition"
-                    >
-                      <FaChevronLeft className="w-3 h-3" />
-                      Previous
-                    </button>
-                    
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
-                        const page = i + 1;
-                        return (
-                          <button
-                            key={page}
-                            onClick={() => setCurrentPage(page)}
-                            className={`w-8 h-8 text-sm rounded-lg transition ${
-                              currentPage === page
-                                ? 'bg-blue-600 text-white shadow-sm'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        );
-                      })}
-                      {pageCount > 5 && (
-                        <span className="px-2 text-gray-500">...</span>
-                      )}
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {paginatedProducts.map((product) => (
+                        <ProductCard key={product.id} product={product} />
+                      ))}
                     </div>
-                    
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
-                      disabled={currentPage === pageCount}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-100 rounded-lg transition"
-                    >
-                      Next
-                      <FaChevronRight className="w-3 h-3" />
-                    </button>
-                  </div>
+                    {/* Enhanced Pagination */}
+                    {pageCount > 1 && (
+                      <div className="px-4 py-3 border-t border-gray-200 flex justify-between items-center mt-4">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-100 rounded-lg transition"
+                        >
+                          <FaChevronLeft className="w-3 h-3" />
+                          Previous
+                        </button>
+
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
+                            const page = i + 1;
+                            return (
+                              <button
+                                key={page}
+                                onClick={() => setCurrentPage(page)}
+                                className={`w-8 h-8 text-sm rounded-lg transition ${
+                                  currentPage === page
+                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            );
+                          })}
+                          {pageCount > 5 && (
+                            <span className="px-2 text-gray-500">...</span>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
+                          disabled={currentPage === pageCount}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-gray-100 rounded-lg transition"
+                        >
+                          Next
+                          <FaChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

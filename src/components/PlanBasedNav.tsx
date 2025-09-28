@@ -4,7 +4,7 @@ import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
-import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaUser, FaCaretDown, FaBars, FaTimes, FaFileAlt, FaChevronLeft, FaChevronRight, FaMobile } from 'react-icons/fa';
+import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaUser, FaCaretDown, FaBars, FaTimes, FaFileAlt, FaChevronLeft, FaChevronRight, FaMobile, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
@@ -16,14 +16,41 @@ export default function PlanBasedNav() {
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
   const pathname = usePathname();
+
+  // Close dropdowns when navigating to a different page
+  React.useEffect(() => {
+    setOpenDropdowns(new Set());
+  }, [pathname]);
+
   // Debug logs
 
   // Always call hooks at top level!
   const navigationItems = React.useMemo(() => [
-  { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
-    { name: 'Products', href: '/products', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_products' },
-    { name: 'Inventory', href: '/inventory', icon: FaBox, requiredPlan: 'Basic', requiredPermission: 'view_inventory' },
+    { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
+    {
+      name: 'Products',
+      href: '/products',
+      icon: FaBox,
+      requiredPlan: 'Basic',
+      requiredPermission: 'view_products',
+      subItems: [
+        { name: 'Product List', href: '/products', requiredPermission: 'view_products' },
+        { name: 'Analytics', href: '/products/analytics', requiredPermission: 'view_products' }
+      ]
+    },
+    {
+      name: 'Inventory',
+      href: '/inventory',
+      icon: FaBox,
+      requiredPlan: 'Basic',
+      requiredPermission: 'view_inventory',
+      subItems: [
+        { name: 'Basic Inventory', href: '/inventory', requiredPermission: 'view_inventory' },
+        { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory' }
+      ]
+    },
     { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
     { name: 'Sales History', href: '/sales/history', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
     { name: 'M-Pesa Transactions', href: '/mpesa-transactions', icon: FaMobile, requiredPlan: null, requiredPermission: 'view_sales' },
@@ -51,13 +78,31 @@ export default function PlanBasedNav() {
         const requiredLevel = planHierarchy[item.requiredPlan as PlanName] || 0;
         if (currentLevel < requiredLevel) return false;
       }
-      // Check permission requirements
+      // Check permission requirements for main item
       if (item.requiredPermission && userContext?.user) {
         const hasPerm = hasPermission(userContext.user, item.requiredPermission);
         return hasPerm;
       }
+      // For items with subItems, check if any subItem is accessible
+      if (item.subItems && userContext?.user) {
+        const accessibleSubItems = item.subItems.filter(subItem => {
+          if (subItem.requiredPermission) {
+            return hasPermission(userContext.user, subItem.requiredPermission);
+          }
+          return true;
+        });
+        return accessibleSubItems.length > 0;
+      }
       return true;
-    });
+    }).map(item => ({
+      ...item,
+      subItems: item.subItems ? item.subItems.filter(subItem => {
+        if (subItem.requiredPermission && userContext?.user) {
+          return hasPermission(userContext.user, subItem.requiredPermission);
+        }
+        return true;
+      }) : undefined
+    }));
   }, [userContext.user, currentLevel, navigationItems, planHierarchy]);
 
   // Hide sidebar on settings pages
@@ -144,33 +189,115 @@ export default function PlanBasedNav() {
             <div className="space-y-1">
               {accessibleItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
-                const linkContent = (
-                  <a
-                    key={item.name}
-                    href={item.href}
-                    className={`flex items-center transition-all duration-200 rounded text-sm font-medium ${
-                      sidebarCollapsed ? 'justify-center px-2 py-3' : 'space-x-3 px-3 py-2'
-                    } ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    {!sidebarCollapsed && (
-                      <span className="whitespace-nowrap">{item.name}</span>
-                    )}
-                  </a>
-                );
+                const hasSubItems = item.subItems && item.subItems.length > 0;
+                const isDropdownOpen = openDropdowns.has(item.name);
+                const isActive = pathname === item.href || (hasSubItems && item.subItems?.some(subItem => pathname === subItem.href));
 
-                return sidebarCollapsed ? (
-                  <Tooltip key={item.name} content={item.name} position="right">
-                    {linkContent}
-                  </Tooltip>
-                ) : (
-                  linkContent
-                );
+                if (hasSubItems) {
+                  // Dropdown item
+                  const dropdownContent = (
+                    <div key={item.name}>
+                      <button
+                        onClick={() => {
+                          const newOpenDropdowns = new Set(openDropdowns);
+                          if (isDropdownOpen) {
+                            newOpenDropdowns.delete(item.name);
+                          } else {
+                            newOpenDropdowns.add(item.name);
+                          }
+                          setOpenDropdowns(newOpenDropdowns);
+                        }}
+                        className={`flex items-center justify-between transition-all duration-200 rounded text-sm font-medium w-full ${
+                          sidebarCollapsed ? 'justify-center px-2 py-3' : 'space-x-3 px-3 py-2'
+                        } ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Icon className="w-5 h-5 flex-shrink-0" />
+                          {!sidebarCollapsed && (
+                            <span className="whitespace-nowrap">{item.name}</span>
+                          )}
+                        </div>
+                        {!sidebarCollapsed && (
+                          <div className="flex-shrink-0">
+                            {isDropdownOpen ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
+                          </div>
+                        )}
+                      </button>
+
+                      {!sidebarCollapsed && isDropdownOpen && (
+                        <div className="ml-6 mt-1 space-y-1">
+                          {item.subItems?.map((subItem) => {
+                            const isSubActive = pathname === subItem.href;
+                            return (
+                              <a
+                                key={subItem.name}
+                                href={subItem.href}
+                                className={`flex items-center space-x-3 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                  isSubActive
+                                    ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                              >
+                                <span className="whitespace-nowrap">{subItem.name}</span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+
+                  return sidebarCollapsed ? (
+                    <Tooltip key={item.name} content={item.name} position="right">
+                      <a
+                        href={item.href}
+                        className={`flex items-center transition-all duration-200 rounded text-sm font-medium ${
+                          'justify-center px-2 py-3'
+                        } ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5 flex-shrink-0" />
+                      </a>
+                    </Tooltip>
+                  ) : (
+                    dropdownContent
+                  );
+                } else {
+                  // Regular link
+                  const linkContent = (
+                    <a
+                      key={item.name}
+                      href={item.href}
+                      className={`flex items-center transition-all duration-200 rounded text-sm font-medium ${
+                        sidebarCollapsed ? 'justify-center px-2 py-3' : 'space-x-3 px-3 py-2'
+                      } ${
+                        isActive
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {!sidebarCollapsed && (
+                        <span className="whitespace-nowrap">{item.name}</span>
+                      )}
+                    </a>
+                  );
+
+                  return sidebarCollapsed ? (
+                    <Tooltip key={item.name} content={item.name} position="right">
+                      {linkContent}
+                    </Tooltip>
+                  ) : (
+                    linkContent
+                  );
+                }
               })}
             </div>
           </nav>

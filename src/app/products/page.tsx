@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { apiGet, apiPost, apiDelete, apiPut } from "@/utils/api";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import PlanGuard from '@/components/PlanGuard';
 import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
-import { FaPlus, FaBox, FaExclamationTriangle, FaSearch, FaDownload, FaTrash, FaEdit, FaQrcode, FaUpload, FaLock, FaSortAmountDown, FaPrint, FaTimes, FaChevronLeft, FaChevronRight, FaEye, FaStore, FaChartLine, FaLayerGroup, FaMoneyBillWave, FaChevronDown } from 'react-icons/fa';
+import { FaPlus, FaBox, FaExclamationTriangle, FaSearch, FaDownload, FaTrash, FaEdit, FaQrcode, FaUpload, FaLock, FaSortAmountDown, FaPrint, FaTimes, FaChevronLeft, FaChevronRight, FaEye, FaStore, FaLayerGroup, FaChevronDown, FaChartBar } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
@@ -18,6 +19,7 @@ interface Product {
   name: string;
   sku: string;
   price: number;
+  cost: number;
   stock: number;
   description?: string;
   customFields?: Record<string, string | number | boolean>;
@@ -45,7 +47,7 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [sortField, setSortField] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'sku', 'price', 'stock']);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'sku', 'price', 'cost', 'stock']);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const itemsPerPage = 20;
   
@@ -165,6 +167,7 @@ export default function ProductsPage() {
         name: formData.get("name"),
         sku: formData.get("sku"),
         price: parseFloat(formData.get("price") as string),
+        cost: parseFloat(formData.get("cost") as string) || 0,
         stock: parseInt(formData.get("stock") as string),
         description: formData.get("description"),
         branchId: selectedBranchId, // Add branchId to payload
@@ -190,6 +193,7 @@ export default function ProductsPage() {
           name: formData.get("name"),
           sku: formData.get("sku"),
           price: parseFloat(formData.get("price") as string),
+          cost: parseFloat(formData.get("cost") as string) || 0,
           stock: parseInt(formData.get("stock") as string),
           description: formData.get("description"),
         }, { 'x-branch-id': selectedBranchId || '' });
@@ -316,7 +320,7 @@ export default function ProductsPage() {
   function downloadTemplate() {
     // Create a simple template with required fields
     const ws = XLSX.utils.json_to_sheet([
-      { name: "Sample Product", sku: "SKU001", price: 10.99, description: "Sample desc", stock: 100, customField1: "value" }
+      { name: "Sample Product", sku: "SKU001", price: 10.99, cost: 7.50, description: "Sample desc", stock: 100, customField1: "value" }
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Products");
@@ -373,10 +377,19 @@ export default function ProductsPage() {
   }, [search]);
 
   // Helper to flatten product fields for table display
-  function flattenProduct(product: Product): { [key: string]: string | number | boolean | undefined } {
+  function flattenProduct(product: Product): { [key: string]: string | number | boolean | undefined; margin: string } {
     // Exclude 'customFields' property to match the index signature
     const { customFields, ...rest } = product;
-    return { ...rest, ...(customFields || {}) };
+    const flat: { [key: string]: string | number | boolean | undefined; margin: string } = { ...rest, ...(customFields || {}), margin: '' };
+
+    // Compute margin
+    if (product.price > 0) {
+      flat.margin = ((product.price - product.cost) / product.price * 100).toFixed(1);
+    } else {
+      flat.margin = 'N/A';
+    }
+
+    return flat;
   }
 
   // Dynamically determine all unique columns
@@ -388,6 +401,8 @@ export default function ProductsPage() {
       }
     });
   });
+  // Ensure margin is always available
+  allColumnsSet.add('margin');
   const allColumns = Array.from(allColumnsSet);
 
   const toggleColumnVisibility = (column: string) => {
@@ -397,6 +412,7 @@ export default function ProductsPage() {
         : [...prev, column]
     );
   };
+
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -550,60 +566,17 @@ export default function ProductsPage() {
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-200 rounded-lg">
-                <FaBox className="w-4 h-4 text-blue-700" />
-              </div>
-              <div>
-                <p className="text-sm text-blue-700 font-medium">Total Products</p>
-                <p className="text-2xl font-bold text-blue-900">{products.length}</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-xl border border-green-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-200 rounded-lg">
-                <FaMoneyBillWave className="w-4 h-4 text-green-700" />
-              </div>
-              <div>
-                <p className="text-sm text-green-700 font-medium">Average Price</p>
-                <p className="text-2xl font-bold text-green-900">
-                  ${products.length ? (products.reduce((sum, p) => sum + p.price, 0) / products.length).toFixed(2) : '0.00'}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-200 rounded-lg">
-                <FaChartLine className="w-4 h-4 text-purple-700" />
-              </div>
-              <div>
-                <p className="text-sm text-purple-700 font-medium">Total Stock</p>
-                <p className="text-2xl font-bold text-purple-900">
-                  {products.reduce((sum, p) => sum + p.stock, 0)}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gradient-to-r from-orange-50 to-orange-100 p-4 rounded-xl border border-orange-100">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-200 rounded-lg">
-                <FaExclamationTriangle className="w-4 h-4 text-orange-700" />
-              </div>
-              <div>
-                <p className="text-sm text-orange-700 font-medium">Low Stock</p>
-                <p className="text-2xl font-bold text-orange-900">
-                  {products.filter(p => p.stock < 10).length}
-                </p>
-              </div>
-            </div>
+        {/* Navigation to Analytics */}
+        <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-blue-800">Product Management</h2>
+            <Link 
+              href="/products/analytics" 
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <FaChartBar className="w-4 h-4" />
+              View Analytics
+            </Link>
           </div>
         </div>
 
@@ -749,6 +722,17 @@ export default function ProductsPage() {
                     min="0"
                     defaultValue={editProduct?.price || ''}
                     required
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
+                  <input
+                    type="number"
+                    name="cost"
+                    step="0.01"
+                    min="0"
+                    defaultValue={editProduct?.cost || ''}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -913,6 +897,16 @@ export default function ProductsPage() {
                     <span className="text-gray-600">Price:</span>
                     <span className="font-semibold text-gray-800">${product.price.toFixed(2)}</span>
                   </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Cost:</span>
+                    <span className="font-semibold text-gray-800">${product.cost.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Margin:</span>
+                    <span className={`font-semibold ${product.price > 0 ? (product.price - product.cost) / product.price * 100 >= 20 ? 'text-green-600' : 'text-amber-600' : 'text-gray-800'}`}>
+                      {product.price > 0 ? `${((product.price - product.cost) / product.price * 100).toFixed(1)}%` : 'N/A'}
+                    </span>
+                  </div>
                   {product.description && (
                     <div className="text-sm text-gray-600 line-clamp-2">
                       {product.description}
@@ -1020,11 +1014,22 @@ export default function ProductsPage() {
                       const flat = flattenProduct(product);
                       return (
                         <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                          {allColumns.filter(col => visibleColumns.includes(col)).map(col => (
-                            <td key={col} className="px-4 py-3 whitespace-nowrap">
-                              {col === 'price' ? `$${flat[col]}` : flat[col] ?? '-'}
-                            </td>
-                          ))}
+                          {allColumns.filter(col => visibleColumns.includes(col)).map(col => {
+                            let displayValue: string | number | boolean | undefined = flat[col] ?? '-';
+                            let className = '';
+                            if (col === 'price' || col === 'cost') {
+                              displayValue = `$${typeof flat[col] === 'number' ? flat[col].toFixed(2) : flat[col]}`;
+                            } else if (col === 'margin') {
+                              const marginValue = typeof flat[col] === 'string' && flat[col] !== 'N/A' ? parseFloat(flat[col]) : 0;
+                              className = marginValue >= 20 ? 'text-green-600 font-semibold' : marginValue >= 0 ? 'text-amber-600 font-semibold' : 'text-red-600 font-semibold';
+                              displayValue = flat[col] === 'N/A' ? 'N/A' : `${flat[col]}%`;
+                            }
+                            return (
+                              <td key={col} className={`px-4 py-3 whitespace-nowrap ${className}`}>
+                                {displayValue}
+                              </td>
+                            );
+                          })}
                           <td className="px-4 py-3">
                             <div className="flex justify-end gap-2">
                               {canEditProducts ? (

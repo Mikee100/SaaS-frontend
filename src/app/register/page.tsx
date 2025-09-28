@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost } from "@/utils/api";
+import { apiPost, apiGet } from "@/utils/api";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
+
+
 
 // Business categories and subcategories
 const BUSINESS_CATEGORIES = {
@@ -27,6 +29,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [csrfToken, setCsrfToken] = useState("");
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -38,41 +41,55 @@ export default function RegisterPage() {
       console.log("User is authenticated but can still register a new business");
     }
   }, []);
+
+  // Fetch CSRF token on component mount
+  useEffect(() => {
+    const fetchCsrfToken = async () => {
+      try {
+        const response = await apiGet<{ csrfToken: string }>('/tenant/csrf-token');
+        setCsrfToken(response.csrfToken);
+      } catch (error) {
+        console.error('Failed to fetch CSRF token:', error);
+      }
+    };
+    fetchCsrfToken();
+  }, []);
   // Form state
   const [formData, setFormData] = useState({
     // Business Info
     businessName: "",
+    branchName: "",
     businessCategory: "",
     businessSubcategory: "",
     businessType: "",
     businessDescription: "",
-    
+
     // Contact Info
     contactEmail: "",
     contactPhone: "",
     website: "",
-    
+
     // Location
     address: "",
     city: "",
     state: "",
     country: "Kenya",
     postalCode: "",
-    
+
     // Business Details
     foundedYear: "",
     employeeCount: "",
     annualRevenue: "",
-    
+
     // Products/Services
     primaryProducts: [] as string[],
     secondaryProducts: [] as string[],
-    
+
     // Legal
     kraPin: "",
     vatNumber: "",
     businessLicense: "",
-    
+
     // Owner Info
     ownerName: "",
     ownerEmail: "",
@@ -111,53 +128,62 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
     setError("");
 
     try {
+
       // Log the current form state
       console.log('Current form data:', JSON.stringify(formData, null, 2));
       
       // Prepare the request data with the correct field mappings
       const requestData = {
-        name: formData.businessName,
-        businessType: formData.businessType,
-        businessCategory: formData.businessCategory,
-        businessSubcategory: formData.businessSubcategory,
-        businessDescription: formData.businessDescription,
-        contactEmail: formData.contactEmail,
-        contactPhone: formData.contactPhone,
-        website: formData.website,
-        address: formData.address,
-        city: formData.city,
-        state: formData.state,
-        country: formData.country,
-        postalCode: formData.postalCode,
+        name: formData.businessName.trim(),
+        branchName: formData.branchName.trim(),
+        businessType: formData.businessType.trim(),
+        businessCategory: formData.businessCategory.trim(),
+        businessSubcategory: formData.businessSubcategory.trim(),
+        businessDescription: formData.businessDescription.trim(),
+        contactEmail: formData.contactEmail.trim(),
+        contactPhone: formData.contactPhone.trim(),
+        website: formData.website.trim(),
+        address: formData.address.trim(),
+        city: formData.city.trim(),
+        state: formData.state.trim(),
+        country: formData.country.trim(),
+        postalCode: formData.postalCode.trim(),
         foundedYear: formData.foundedYear ? parseInt(formData.foundedYear) : undefined,
         employeeCount: formData.employeeCount,
         annualRevenue: formData.annualRevenue,
         primaryProducts: formData.primaryProducts,
         secondaryProducts: formData.secondaryProducts,
-        kraPin: formData.kraPin,
-        vatNumber: formData.vatNumber,
-        businessLicense: formData.businessLicense,
-        ownerName: formData.ownerName,
-        ownerEmail: formData.ownerEmail,
-        ownerPassword: formData.ownerPassword,
+        kraPin: formData.kraPin.trim(),
+        vatNumber: formData.vatNumber.trim(),
+        businessLicense: formData.businessLicense.trim(),
+        owner: {
+          name: formData.ownerName.trim(),
+          email: formData.ownerEmail.trim(),
+          password: formData.ownerPassword,
+        },
+        csrfToken,
       };
       
       console.log('Sending registration data:', JSON.stringify(requestData, null, 2));
       
       // Log each field individually for debugging
       console.log('Field values being sent:');
-      console.log('ownerName:', requestData.ownerName);
-      console.log('ownerEmail:', requestData.ownerEmail);
-      console.log('ownerPassword:', requestData.ownerPassword ? '***' : 'MISSING');
+      console.log('ownerName:', requestData.owner.name);
+      console.log('ownerEmail:', requestData.owner.email);
+      console.log('ownerPassword:', requestData.owner.password ? '***' : 'MISSING');
+
+      console.log('csrfToken:', csrfToken ? 'Present' : 'Missing');
       
       // Check for empty strings
       const requiredFields = [
         { key: 'name', value: requestData.name, label: 'Business Name' },
+        { key: 'branchName', value: requestData.branchName, label: 'Branch Name' },
         { key: 'businessType', value: requestData.businessType, label: 'Business Type' },
         { key: 'contactEmail', value: requestData.contactEmail, label: 'Contact Email' },
-        { key: 'ownerName', value: requestData.ownerName, label: 'Owner Name' },
-        { key: 'ownerEmail', value: requestData.ownerEmail, label: 'Owner Email' },
-        { key: 'ownerPassword', value: requestData.ownerPassword, label: 'Owner Password' },
+        { key: 'owner.name', value: requestData.owner.name, label: 'Owner Name' },
+        { key: 'owner.email', value: requestData.owner.email, label: 'Owner Email' },
+        { key: 'owner.password', value: requestData.owner.password, label: 'Owner Password' },
+
       ];
       
       const missingFields = requiredFields
@@ -168,12 +194,17 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
         const errorMessage = `Missing required fields: ${missingFields.join(', ')}`;
         console.error('Validation failed:', errorMessage);
         setError(errorMessage);
+        setLoading(false);
         return;
       }
       
-      // Send the request with the properly formatted data
+      // Send the request with the properly formatted data and CSRF header
+      const headers: Record<string, string> = {};
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
       type Tenant = { id: string; [key: string]: unknown };
-const res = await apiPost<{ tenant: Tenant }>('/tenant', requestData);
+      const res = await apiPost<{ tenant: Tenant }>('/tenant', requestData, headers);
       console.log('Tenant created successfully:', res);
 
       // Ensure a valid tenant was returned before proceeding
@@ -187,33 +218,32 @@ const res = await apiPost<{ tenant: Tenant }>('/tenant', requestData);
       console.log('Registration completed successfully!');
       router.push('/login?message=Registration successful! Please log in with your credentials.');
     } catch (err: unknown) {
-  console.error('Registration error:', err);
+      console.error('Registration error:', err);
 
-  let errorMessage = "Registration failed. Please try again.";
+      let errorMessage = "Registration failed. Please try again.";
 
-  try {
-    if (err instanceof Error && err.message && err.message.includes('{')) {
-      const errorObj = JSON.parse(err.message.split(' - ')[1] || '{}');
-      if (errorObj.message) {
-        errorMessage = errorObj.message;
+      try {
+        if (err instanceof Error && err.message && err.message.includes('{')) {
+          const errorObj = JSON.parse(err.message.split(' - ')[1] || '{}');
+          if (errorObj.message) {
+            errorMessage = errorObj.message;
+          }
+        } else if (
+          typeof err === "object" &&
+          err !== null &&
+          "response" in err &&
+          typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
+        ) {
+          errorMessage = (err as { response: { data: { message: string } } }).response.data.message;
+        } else if (err instanceof Error) {
+          errorMessage = err.message || errorMessage;
+        }
+      } catch (parseError) {
+        console.error('Error parsing error message:', parseError);
       }
-  
-    } else if (
-      typeof err === "object" &&
-      err !== null &&
-      "response" in err &&
-      typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
-    ) {
-      errorMessage = (err as { response: { data: { message: string } } }).response.data.message;
-    } else if (err instanceof Error) {
-      errorMessage = err.message || errorMessage;
-    }
-  } catch (parseError) {
-    console.error('Error parsing error message:', parseError);
-  }
 
-  setError(errorMessage);
-}finally {
+      setError(errorMessage);
+    } finally {
       setLoading(false);
     }
   };
@@ -237,6 +267,18 @@ const res = await apiPost<{ tenant: Tenant }>('/tenant', requestData);
             onChange={e => updateFormData('businessName', e.target.value)}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Enter your business name"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Main Branch Name *</label>
+          <input
+            type="text"
+            value={formData.branchName}
+            onChange={e => updateFormData('branchName', e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="e.g., Headquarters, Main Office"
             required
           />
         </div>
@@ -612,6 +654,8 @@ const res = await apiPost<{ tenant: Tenant }>('/tenant', requestData);
             </select>
           </div>
         </div>
+
+
       </div>
     </div>
   );

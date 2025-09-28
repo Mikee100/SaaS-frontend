@@ -1,13 +1,13 @@
 "use client";
 
 import { ReactNode, Suspense, useEffect } from "react";
-import { UserProvider, useUser } from "@/components/UserContext";
+import { useUser } from "@/components/UserContext";
 import { BranchProvider } from "@/contexts/BranchContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { DashboardProvider } from "@/contexts/DashboardContext";
 import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 // Dynamically import client-side components with no SSR
 const LayoutWrapper = dynamic(() => import("@/components/LayoutWrapper"), { ssr: false });
@@ -17,6 +17,7 @@ const ServiceWorkerWrapper = dynamic(() => import("@/components/ServiceWorkerWra
 function ClientContent({ children }: { children: ReactNode }) {
   const { user, loading } = useUser();
   const pathname = usePathname();
+  const router = useRouter();
 
   // Debug logging
   useEffect(() => {
@@ -37,7 +38,14 @@ function ClientContent({ children }: { children: ReactNode }) {
       console.log('ClientContent - User roles content:', JSON.stringify(user.roles));
     }
   }, [user, loading, pathname]);
-  
+
+  // Redirect to login if no user, not loading, and no token
+  useEffect(() => {
+    if (!loading && !user && !localStorage.getItem('token')) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
   // Log component mount/unmount
   useEffect(() => {
     console.log('ClientContent - Mounted');
@@ -68,11 +76,9 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
     <ReactQueryProvider>
       <ThemeProvider>
         <DashboardProvider>
-          <UserProvider>
-            <ClientContent>
-              {children}
-            </ClientContent>
-          </UserProvider>
+          <ClientContent>
+            {children}
+          </ClientContent>
         </DashboardProvider>
       </ThemeProvider>
     </ReactQueryProvider>
