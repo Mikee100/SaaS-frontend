@@ -1,26 +1,20 @@
+"use client";
 import SettingsSidebar from '@/components/SettingsSidebar';
+import { useState } from 'react';
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   return (
     <div style={{
       display: 'flex',
       minHeight: '100vh',
       background: '#f7fafd'
     }}>
-      <aside style={{
-        width: 240,
-        minHeight: '100vh',
-        background: '#f7fafd',
-        borderRight: '1px solid #e5e7eb',
-        padding: '2rem 0.5rem',
-        position: 'sticky',
-        top: 0,
-        left: 0,
-        display: 'flex',
-        flexDirection: 'column',
-      }}>
-        <SettingsSidebar />
-      </aside>
+      <SettingsSidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
       <main style={{
         flex: 1,
         padding: '2.5rem 2rem',
@@ -32,9 +26,11 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         minHeight: 'calc(100vh - 4rem)',
         display: 'flex',
         flexDirection: 'column',
+        marginLeft: sidebarCollapsed ? '4rem' : '15rem', // Adjust margin based on collapsed state
+        transition: 'margin-left 0.3s ease',
       }}>
         {children}
       </main>
     </div>
   );
-} 
+}

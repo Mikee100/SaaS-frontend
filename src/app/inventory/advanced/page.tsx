@@ -109,8 +109,7 @@ export default function AdvancedInventoryPage() {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showAlertSettings, setShowAlertSettings] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [setSelectedInventory] = useState<InventoryItem | null>(null);
-
+  
   // Form states
   const [movementForm, setMovementForm] = useState({
     type: 'in' as 'in' | 'out' | 'adjustment' | 'transfer',
@@ -596,7 +595,7 @@ export default function AdvancedInventoryPage() {
                                     <button
                                       onClick={() => {
                                         setSelectedProduct(item.product);
-                                        setSelectedInventory(item);
+                                        
                                         setShowMovementModal(true);
                                       }}
                                       className="text-blue-600 hover:text-blue-900"
@@ -608,7 +607,7 @@ export default function AdvancedInventoryPage() {
                                       <button
                                         onClick={() => {
                                           setSelectedProduct(item.product);
-                                          setSelectedInventory(item);
+                                         
                                         }}
                                         className="text-green-600 hover:text-green-900"
                                         title="Edit Stock"

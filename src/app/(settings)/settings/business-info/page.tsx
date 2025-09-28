@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPut } from "@/utils/api";
 import { FaBuilding, FaLock } from 'react-icons/fa';
+import LogoUploader from '@/components/LogoUploader';
 import Link from 'next/link';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
@@ -115,7 +116,7 @@ export default function BusinessInfoSettings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [validation, setValidation] = useState<{ kraPin?: boolean; vatNumber?: boolean }>({});
+  const [validation, setValidation] = useState<{ kraPin?: boolean; vatNumber?: boolean; email?: boolean; phone?: boolean; website?: boolean }>({});
 
   useEffect(() => {
     apiGet<Partial<BusinessInfoForm>>("/tenant/me")
@@ -132,7 +133,7 @@ export default function BusinessInfoSettings() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    
+
     // Convert number fields to integers
     if (e.target.type === 'number') {
       const numValue = value === '' ? null : parseInt(value, 10);
@@ -140,12 +141,22 @@ export default function BusinessInfoSettings() {
     } else {
       setForm({ ...form, [name]: value });
     }
-    
+
+    // Real-time validation
     if (name === 'kraPin') {
       setValidation((v) => ({ ...v, kraPin: validateKraPin(value) }));
     }
     if (name === 'vatNumber') {
       setValidation((v) => ({ ...v, vatNumber: validateVatNumber(value) }));
+    }
+    if (name === 'contactEmail') {
+      setValidation((v) => ({ ...v, email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) || value === '' }));
+    }
+    if (name === 'contactPhone') {
+      setValidation((v) => ({ ...v, phone: /^\+?[\d\s-()]{10,}$/.test(value) || value === '' }));
+    }
+    if (name === 'website') {
+      setValidation((v) => ({ ...v, website: /^https?:\/\/.+/.test(value) || value === '' }));
     }
   };
 
@@ -178,7 +189,10 @@ export default function BusinessInfoSettings() {
   const renderField = (field: FormField) => {
     const isRequired = field.required;
     const hasError = (field.name === 'kraPin' && form.kraPin && validation.kraPin === false) ||
-                    (field.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false);
+                    (field.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false) ||
+                    (field.name === 'contactEmail' && form.contactEmail && validation.email === false) ||
+                    (field.name === 'contactPhone' && form.contactPhone && validation.phone === false) ||
+                    (field.name === 'website' && form.website && validation.website === false);
     
     // Get the value for the field, handling null/undefined for number fields
     const getFieldValue = (fieldName: string, fieldType?: string) => {
@@ -237,6 +251,15 @@ export default function BusinessInfoSettings() {
         )}
         {field.name === 'vatNumber' && form.vatNumber && validation.vatNumber === false && (
           <span className="text-red-500 text-sm">Invalid VAT Number format (e.g., P051234567A)</span>
+        )}
+        {field.name === 'contactEmail' && form.contactEmail && validation.email === false && (
+          <span className="text-red-500 text-sm">Invalid email format</span>
+        )}
+        {field.name === 'contactPhone' && form.contactPhone && validation.phone === false && (
+          <span className="text-red-500 text-sm">Invalid phone format (e.g., +254712345678)</span>
+        )}
+        {field.name === 'website' && form.website && validation.website === false && (
+          <span className="text-red-500 text-sm">Invalid URL format (must start with http:// or https://)</span>
         )}
       </div>
     );
@@ -307,15 +330,29 @@ export default function BusinessInfoSettings() {
         <div className="bg-white rounded-xl shadow p-10 w-full">
           <h3 className="text-lg font-semibold text-gray-800 mb-6">Legal and Compliance</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-            {legalFields.map(renderField)}
+            {legalFields.filter(field =>
+              form.country?.toLowerCase() === 'kenya' || !['kraPin', 'vatNumber', 'etimsQrUrl'].includes(field.name)
+            ).map(renderField)}
           </div>
+          {form.country?.toLowerCase() !== 'kenya' && (
+            <p className="text-sm text-gray-500 mt-4">
+              KRA-specific fields (PIN, VAT, eTIMS) are only shown for Kenyan businesses.
+            </p>
+          )}
         </div>
 
         {/* Financial Settings */}
         <div className="bg-white rounded-xl shadow p-10 w-full">
           <h3 className="text-lg font-semibold text-gray-800 mb-6">Financial Settings</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-            {financialFields.map(renderField)}
+            {financialFields.filter(f => f.name !== 'logoUrl').map(renderField)}
+          </div>
+          <div className="mt-8">
+            <label className="block text-sm font-medium text-gray-700 mb-4">Business Logo</label>
+            <LogoUploader
+              onUpload={(url) => setForm({ ...form, logoUrl: url })}
+              initialLogo={form.logoUrl}
+            />
           </div>
         </div>
 

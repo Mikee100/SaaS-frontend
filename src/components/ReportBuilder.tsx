@@ -135,7 +135,7 @@ export default function ReportBuilder({ availableElements, onSave }: ReportBuild
     const workbook = XLSX.utils.book_new();
 
     reportElements.forEach((element) => {
-      const worksheet = XLSX.utils.json_to_sheet(element.data || []);
+      const worksheet = XLSX.utils.json_to_sheet(Array.isArray(element.data) ? element.data : []);
       XLSX.utils.book_append_sheet(workbook, worksheet, element.title.substring(0, 31));
     });
 

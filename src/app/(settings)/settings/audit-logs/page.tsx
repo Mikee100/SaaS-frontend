@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
-import { FaClipboardList } from 'react-icons/fa';
+import { FaClipboardList, FaSearch, FaDownload } from 'react-icons/fa';
 import Link from "next/link";
 
 interface AuditLogUser {
@@ -28,6 +28,8 @@ export default function AuditLogsSettings() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterAction, setFilterAction] = useState("");
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -36,10 +38,10 @@ export default function AuditLogsSettings() {
         if (Array.isArray(data)) {
           setLogs(data);
         } else {
-          setError("Invalid data format received");
+          setLogs([]);
         }
       } catch (err) {
-        setError("Failed to load logs");
+        setError("Failed to load audit logs");
         console.error(err);
       } finally {
         setLoading(false);
@@ -49,13 +51,34 @@ export default function AuditLogsSettings() {
     fetchLogs();
   }, []);
 
-  const handleRowClick = (log: AuditLog) => (event: React.MouseEvent<HTMLTableRowElement>) => {
-    event.preventDefault();
-    // Handle row click with typed log data
-    console.log('Audit log clicked:', log);
+  const filteredLogs = logs.filter(log => {
+    const matchesSearch = searchTerm === "" ||
+      log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (log.user?.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (log.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesFilter = filterAction === "" || log.action === filterAction;
+
+    return matchesSearch && matchesFilter;
+  });
+
+  const uniqueActions = [...new Set(logs.map(log => log.action))];
+
+  const exportLogs = () => {
+    const csvContent = "data:text/csv;charset=utf-8," +
+      "Date,User,Action,Details\n" +
+      filteredLogs.map(log =>
+        `"${new Date(log.createdAt).toLocaleString()}","${log.user?.name || log.user?.email || '-'}","${log.action}","${typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}"`
+      ).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "audit-logs.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
-
-
 
   if (loading) return (
     <div className="flex justify-center items-center min-h-[300px]">
@@ -64,7 +87,7 @@ export default function AuditLogsSettings() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto py-10 px-4 min-h-[80vh]">
+    <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <FaClipboardList className="text-blue-600 text-2xl" />
@@ -72,38 +95,98 @@ export default function AuditLogsSettings() {
         </div>
         <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
       </div>
+
       <div className="bg-white rounded-xl shadow p-8 w-full">
-        {error ? (
-          <div style={{ color: 'red', marginBottom: 16 }}>{error}</div>
-        ) : logs.length === 0 ? (
-          <div style={{ color: '#888' }}>No audit logs found.</div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #e5e7eb', color: '#444' }}>
-                <th style={{ textAlign: 'left', padding: '8px 0' }}>Date</th>
-                <th style={{ textAlign: 'left', padding: '8px 0' }}>User</th>
-                <th style={{ textAlign: 'left', padding: '8px 0' }}>Action</th>
-                <th style={{ textAlign: 'left', padding: '8px 0' }}>Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map(log => (
-                <tr 
-                  key={log.id} 
-                  style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }} 
-                  onClick={handleRowClick(log)}
-                >
-                  <td style={{ padding: '8px 0', color: '#555' }}>{new Date(log.createdAt).toLocaleString()}</td>
-                  <td style={{ padding: '8px 0', color: '#555' }}>{log.user?.name || log.user?.email || '-'}</td>
-                  <td style={{ padding: '8px 0', color: '#555' }}>{log.action}</td>
-                  <td style={{ padding: '8px 0', color: '#555', fontSize: 14 }}>
-                    {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
-                  </td>
-                </tr>
+        {/* Filters and Search */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <FaSearch className="absolute left-3 top-3 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search logs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex gap-2">
+            <select
+              value={filterAction}
+              onChange={(e) => setFilterAction(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All Actions</option>
+              {uniqueActions.map(action => (
+                <option key={action} value={action}>{action}</option>
               ))}
-            </tbody>
-          </table>
+            </select>
+            <button
+              onClick={exportLogs}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <FaDownload className="w-4 h-4" />
+              Export CSV
+            </button>
+          </div>
+        </div>
+
+        {error ? (
+          <div className="text-center py-8">
+            <div className="text-red-600 mb-2">{error}</div>
+            <p className="text-gray-600">Please try refreshing the page or contact support if the issue persists.</p>
+          </div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="text-center py-12">
+            <FaClipboardList className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {logs.length === 0 ? "No audit logs available" : "No logs match your filters"}
+            </h3>
+            <p className="text-gray-600">
+              {logs.length === 0
+                ? "Audit logs will appear here once users perform actions in the system."
+                : "Try adjusting your search or filter criteria."
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Date</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">User</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Action</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLogs.map(log => (
+                  <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4 text-gray-600">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">
+                      {log.user?.name || log.user?.email || '-'}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-600 text-sm max-w-xs truncate">
+                      {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {filteredLogs.length > 0 && (
+          <div className="mt-4 text-sm text-gray-600">
+            Showing {filteredLogs.length} of {logs.length} audit logs
+          </div>
         )}
       </div>
     </div>
