@@ -202,8 +202,12 @@ export default function SalesPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch products using cache
-        const products = await productCache.getProducts(() => apiGet("/products"), user?.tenantId);
+        // Clear cache for current tenant to ensure fresh data
+        productCache.invalidateCache(user?.tenantId);
+
+        // Fetch products using cache with branch header
+        const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
+        const products = await productCache.getProducts(() => apiGet("/products", headers), user?.tenantId);
         setProducts(products);
 
         // Fetch other data in parallel
@@ -222,8 +226,10 @@ export default function SalesPage() {
       }
     };
 
-    fetchData();
-  }, []);
+    if (user?.tenantId) {
+      fetchData();
+    }
+  }, [selectedBranchId, user?.tenantId]);
 
   useEffect(() => {
     const fetchBranches = async () => {

@@ -23,6 +23,7 @@ import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { FaCrown,  FaChartBar } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
+import { useBranch } from "@/contexts/BranchContext";
 
 
 ChartJS.register(
@@ -91,6 +92,8 @@ export default function ReportsPage() {
   const [showLowStockAlert, setShowLowStockAlert] = useState(true);
   const { user } = useUser();
   const { limits } = usePlanLimits();
+  const branchContext = useBranch();
+  const selectedBranchId = branchContext?.selectedBranchId;
   const [metrics, setMetrics] = useState<Metrics>({
     totalSales: 0,
     totalRevenue: 0,
@@ -118,8 +121,9 @@ export default function ReportsPage() {
   const canViewReports = !permissionsLoading && hasPermission(user, 'view_reports');
 
   useEffect(() => {
-    apiGet("/products").then((data) => setProducts(data as Product[])).catch(() => setProducts([]));
-  }, []);
+    const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
+    apiGet("/products", headers).then((data) => setProducts(data as Product[])).catch(() => setProducts([]));
+  }, [selectedBranchId]);
 
   useEffect(() => {
     setLoading(true);

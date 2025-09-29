@@ -52,8 +52,8 @@ export default function InventoryPage() {
 
   useEffect(() => {
     setLoading(true);
-    const headers: Record<string, string> = selectedBranchId ? { 'X-Branch-Id': selectedBranchId } : {};
-    
+    const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
+
     Promise.all([
       apiGet("/products", headers),
       apiGet("/inventory", headers),
@@ -159,7 +159,8 @@ export default function InventoryPage() {
       setModalProduct(null);
       setModalQuantity(0);
       setTimeout(() => {
-        apiGet("/inventory").then((data) => setInventory(data as InventoryItem[]));
+        const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
+        apiGet("/inventory", headers).then((data) => setInventory(data as InventoryItem[]));
       }, 300);
     } catch (err: unknown) {
       const error = err as Error;
