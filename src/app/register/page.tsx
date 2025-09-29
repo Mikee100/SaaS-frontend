@@ -57,15 +57,15 @@ export default function RegisterPage() {
   // Form state
   const [formData, setFormData] = useState({
     // Business Info
-    businessName: "",
-    branchName: "",
+    businessName: "Test Business",
+    branchName: "Main Branch",
     businessCategory: "",
     businessSubcategory: "",
-    businessType: "",
+    businessType: "Retail",
     businessDescription: "",
 
     // Contact Info
-    contactEmail: "",
+    contactEmail: "test@example.com",
     contactPhone: "",
     website: "",
 
@@ -91,14 +91,38 @@ export default function RegisterPage() {
     businessLicense: "",
 
     // Owner Info
-    ownerName: "",
-    ownerEmail: "",
-    ownerPassword: "",
-    ownerRole: "owner"
+    ownerName: "Test Owner",
+    ownerEmail: "owner@example.com",
+    ownerPassword: "", // User must enter their own password
+    ownerPasswordConfirm: "", // Password confirmation
+    ownerRole: "owner",
+
+    // Security
+    recaptchaToken: "test-recaptcha-token" // For development/testing
   });
 
 const updateFormData = (field: string, value: string | string[] | boolean | number) => {
   setFormData(prev => ({ ...prev, [field]: value }));
+};
+
+// Password validation function
+const validatePassword = (password: string): { isValid: boolean; message: string } => {
+  if (password.length < 8) {
+    return { isValid: false, message: 'Password must be at least 8 characters long' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { isValid: false, message: 'Password must contain at least one uppercase letter' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { isValid: false, message: 'Password must contain at least one lowercase letter' };
+  }
+  if (!/\d/.test(password)) {
+    return { isValid: false, message: 'Password must contain at least one number' };
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    return { isValid: false, message: 'Password must contain at least one special character' };
+  }
+  return { isValid: true, message: 'Password is valid' };
 };
 
   const handleProductToggle = (product: string, isPrimary: boolean) => {
@@ -161,6 +185,7 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
           email: formData.ownerEmail.trim(),
           password: formData.ownerPassword,
         },
+        recaptchaToken: formData.recaptchaToken,
         csrfToken,
       };
       
@@ -185,15 +210,22 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
         { key: 'owner.password', value: requestData.owner.password, label: 'Owner Password' },
 
       ];
-      
+
       const missingFields = requiredFields
         .filter(({ value }) => !value || (typeof value === 'string' && value.trim() === ''))
         .map(({ label }) => label);
-      
+
       if (missingFields.length > 0) {
         const errorMessage = `Missing required fields: ${missingFields.join(', ')}`;
         console.error('Validation failed:', errorMessage);
         setError(errorMessage);
+        setLoading(false);
+        return;
+      }
+
+      // Check password confirmation
+      if (formData.ownerPassword !== formData.ownerPasswordConfirm) {
+        setError('Passwords do not match. Please try again.');
         setLoading(false);
         return;
       }
@@ -204,11 +236,11 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
         headers['X-CSRF-Token'] = csrfToken;
       }
       type Tenant = { id: string; [key: string]: unknown };
-      const res = await apiPost<{ tenant: Tenant }>('/tenant', requestData, headers);
+      const res = await apiPost<{ success: boolean; data: { tenant: Tenant; branch: any; user: any } }>('/tenant', requestData, headers);
       console.log('Tenant created successfully:', res);
 
       // Ensure a valid tenant was returned before proceeding
-      if (!res || !res.tenant || !res.tenant.id) {
+      if (!res || !res.data || !res.data.tenant || !res.data.tenant.id) {
         setError('Registration failed: No tenant was created. Please try again.');
         setLoading(false);
         return;
@@ -216,6 +248,8 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
 
       // Registration successful - redirect to login page with success message
       console.log('Registration completed successfully!');
+      console.log('Created tenant:', res.data.tenant);
+      console.log('Created user:', res.data.user);
       router.push('/login?message=Registration successful! Please log in with your credentials.');
     } catch (err: unknown) {
       console.error('Registration error:', err);
@@ -639,20 +673,35 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
               placeholder="Create a strong password"
               required
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Password must contain at least 8 characters with uppercase, lowercase, number, and special character.
+            </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-            <select
-              value={formData.ownerRole}
-              onChange={e => updateFormData('ownerRole', e.target.value)}
+            <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password *</label>
+            <input
+              type="password"
+              value={formData.ownerPasswordConfirm}
+              onChange={e => updateFormData('ownerPasswordConfirm', e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="owner">Owner</option>
-              <option value="manager">Manager</option>
-              <option value="admin">Administrator</option>
-            </select>
+              placeholder="Confirm your password"
+              required
+            />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+          <select
+            value={formData.ownerRole}
+            onChange={e => updateFormData('ownerRole', e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="owner">Owner</option>
+            <option value="manager">Manager</option>
+            <option value="admin">Administrator</option>
+          </select>
         </div>
 
 

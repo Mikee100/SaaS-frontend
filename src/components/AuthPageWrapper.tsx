@@ -21,8 +21,9 @@ export default function AuthPageWrapper({ children }: AuthPageWrapperProps) {
     }
     
     const authPaths = [
-      '/login', 
-      '/forgot-password', 
+      '/login',
+      '/register',
+      '/forgot-password',
       '/reset-password',
       '/api/auth',
       '/_next',

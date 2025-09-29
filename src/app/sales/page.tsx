@@ -203,7 +203,7 @@ export default function SalesPage() {
     const fetchData = async () => {
       try {
         // Fetch products using cache
-        const products = await productCache.getProducts(() => apiGet("/products"));
+        const products = await productCache.getProducts(() => apiGet("/products"), user?.tenantId);
         setProducts(products);
 
         // Fetch other data in parallel
@@ -433,7 +433,7 @@ const clearCart = useCallback(() => {
         id: item.id,
         updates: { stock: item.stock - item.quantity }
       }));
-      productCache.updateProducts(stockUpdates);
+      productCache.updateProducts(stockUpdates, user?.tenantId);
 
       // Reset form state
       clearCart();
