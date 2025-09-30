@@ -105,26 +105,6 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
   setFormData(prev => ({ ...prev, [field]: value }));
 };
 
-// Password validation function
-const validatePassword = (password: string): { isValid: boolean; message: string } => {
-  if (password.length < 8) {
-    return { isValid: false, message: 'Password must be at least 8 characters long' };
-  }
-  if (!/[A-Z]/.test(password)) {
-    return { isValid: false, message: 'Password must contain at least one uppercase letter' };
-  }
-  if (!/[a-z]/.test(password)) {
-    return { isValid: false, message: 'Password must contain at least one lowercase letter' };
-  }
-  if (!/\d/.test(password)) {
-    return { isValid: false, message: 'Password must contain at least one number' };
-  }
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
-    return { isValid: false, message: 'Password must contain at least one special character' };
-  }
-  return { isValid: true, message: 'Password is valid' };
-};
-
   const handleProductToggle = (product: string, isPrimary: boolean) => {
     if (isPrimary) {
       const updated = formData.primaryProducts.includes(product)
@@ -236,7 +216,17 @@ const validatePassword = (password: string): { isValid: boolean; message: string
         headers['X-CSRF-Token'] = csrfToken;
       }
       type Tenant = { id: string; [key: string]: unknown };
-      const res = await apiPost<{ success: boolean; data: { tenant: Tenant; branch: any; user: any } }>('/tenant', requestData, headers);
+      type Branch = { id: string; name: string; [key: string]: unknown };
+      type User = { id: string; name: string; email: string; [key: string]: unknown };
+
+      const res = await apiPost<{
+        success: boolean;
+        data: {
+          tenant: Tenant;
+          branch: Branch;
+          user: User;
+        };
+      }>('/tenant', requestData, headers);
       console.log('Tenant created successfully:', res);
 
       // Ensure a valid tenant was returned before proceeding

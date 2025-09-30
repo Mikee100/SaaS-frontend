@@ -23,7 +23,6 @@ interface Product {
   stock: number;
   description?: string;
   customFields?: Record<string, string | number | boolean>;
-  images?: string[];
 }
 
 export default function ProductsPage() {
@@ -50,9 +49,6 @@ export default function ProductsPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'sku', 'price', 'cost', 'stock']);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState<string | null>(null);
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const itemsPerPage = 20;
   
   const { limits, canCreate, getUsagePercentage } = usePlanLimits();
@@ -100,32 +96,41 @@ export default function ProductsPage() {
 
   // Fetch products when selected branch changes
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
-        console.log('Fetching products for branch:', selectedBranchId || 'all');
-        const data = await apiGet(`/products`, headers);
-        setProducts(Array.isArray(data) ? data : []);
-        setError('');
-      } catch (err: unknown) {
+    if (selectedBranchId) {
+      const fetchData = async () => {
+        try {
+          setLoading(true);
+          console.log('Fetching products for branch:', selectedBranchId);
+          const data = await apiGet(`/products?branchId=${selectedBranchId}`);
+          setProducts(Array.isArray(data) ? data : []);
+          setError('');
+        } catch (err: unknown) {
   const error = err as Error;
   setError(error.message || "Failed to fetch products");
   setProducts([]);
 } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+          setLoading(false);
+        }
+      };
+      
+      fetchData();
+    } else {
+      // If no branch is selected, clear products
+      setProducts([]);
+      setLoading(false);
+    }
   }, [selectedBranchId]);
 
   const fetchProducts = useCallback(async () => {
+    if (!selectedBranchId) {
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
-      const data = await apiGet(`/products`, headers);
+      const data = await apiGet(`/products`, { 'x-branch-id': selectedBranchId || '' });
       setProducts(data as Product[]);
     } catch (err: unknown) {
       const error = err as Error;
@@ -167,35 +172,13 @@ export default function ProductsPage() {
         description: formData.get("description"),
         branchId: selectedBranchId, // Add branchId to payload
       }, { 'x-branch-id': selectedBranchId || '' }) as Product;
-
-      // Upload images if selected
-      if (selectedImages.length > 0) {
-        setUploadingImages(newProduct.id);
-        const imageFormData = new FormData();
-        selectedImages.forEach((file, index) => {
-          imageFormData.append('images', file);
-        });
-
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/upload-images/${newProduct.id}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: imageFormData,
-        });
-        setUploadingImages(null);
-      }
-
       setProducts([newProduct, ...products]);
       setShowAddForm(false);
-      setSelectedImages([]);
-      setImagePreview(null);
     } catch (err: unknown) {
       const error = err as Error;
       setError(error.message || "Failed to create/update product");
     } finally {
       setSaving(false);
-      setUploadingImages(null);
     }
   };
 
@@ -206,7 +189,6 @@ export default function ProductsPage() {
     try {
       const formData = new FormData(e.target as HTMLFormElement);
       if (editProduct) {
-        // Update product details first
         await apiPut(`/products/${editProduct.id}`, {
           name: formData.get("name"),
           sku: formData.get("sku"),
@@ -215,78 +197,27 @@ export default function ProductsPage() {
           stock: parseInt(formData.get("stock") as string),
           description: formData.get("description"),
         }, { 'x-branch-id': selectedBranchId || '' });
-
-        // Upload images if selected
-        if (selectedImages.length > 0) {
-          setUploadingImages(editProduct.id);
-          const imageFormData = new FormData();
-          selectedImages.forEach((file, index) => {
-            imageFormData.append('images', file);
-          });
-
-          await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/upload-images/${editProduct.id}`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            },
-            body: imageFormData,
-          });
-          setUploadingImages(null);
-        }
-
         setEditProduct(null);
       }
       setShowAddForm(false);
-      setSelectedImages([]);
-      setImagePreview(null);
       fetchProducts();
     } catch (err: unknown) {
   const error = err as Error;
       setError(error.message || "Failed to update product");
     } finally {
       setSaving(false);
-      setUploadingImages(null);
     }
   }
 
   function openEditModal(product: Product) {
     setEditProduct(product);
     setShowAddForm(true);
-    setSelectedImages([]);
-    setImagePreview(null);
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this product?")) return;
-    const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
-    await apiDelete(`/products/${id}`, headers);
+    await apiDelete(`/products/${id}`, { 'x-branch-id': selectedBranchId || '' });
     fetchProducts();
-  }
-
-  async function handleDeleteImage(imageUrl: string) {
-    if (!editProduct || !confirm("Delete this image?")) return;
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/delete-image/${editProduct.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          ...(selectedBranchId && { 'x-branch-id': selectedBranchId }),
-        },
-        body: JSON.stringify({ imageUrl }),
-      });
-      if (!response.ok) {
-        throw new Error('Failed to delete image');
-      }
-      // Update the editProduct state to remove the deleted image
-      setEditProduct({
-        ...editProduct,
-        images: editProduct.images ? editProduct.images.filter(img => img !== imageUrl) : []
-      });
-    } catch (err: unknown) {
-      const error = err as Error;
-      setError(error.message || "Failed to delete image");
-    }
   }
 
   async function handleBulkUpload(e: React.FormEvent<HTMLFormElement>) {
@@ -447,8 +378,8 @@ export default function ProductsPage() {
 
   // Helper to flatten product fields for table display
   function flattenProduct(product: Product): { [key: string]: string | number | boolean | undefined; margin: string } {
-    // Exclude 'customFields' and 'images' properties to match the index signature
-    const { customFields, images, ...rest } = product;
+    // Exclude 'customFields' property to match the index signature
+    const { customFields, ...rest } = product;
     const flat: { [key: string]: string | number | boolean | undefined; margin: string } = { ...rest, ...(customFields || {}), margin: '' };
 
     // Compute margin
@@ -826,63 +757,6 @@ export default function ProductsPage() {
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-
-              {/* Image Upload Section */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Product Images</label>
-                <div className="space-y-3">
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      setSelectedImages(files);
-                      if (files.length > 0) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => setImagePreview(e.target?.result as string);
-                        reader.readAsDataURL(files[0]);
-                      } else {
-                        setImagePreview(null);
-                      }
-                    }}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  {imagePreview && (
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="w-20 h-20 object-cover rounded-lg border border-gray-200"
-                      />
-                      <div className="text-sm text-gray-600">
-                        {selectedImages.length} image{selectedImages.length !== 1 ? 's' : ''} selected
-                      </div>
-                    </div>
-                  )}
-                  {editProduct?.images && editProduct.images.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {editProduct.images.map((image, index) => (
-                        <div key={index} className="relative">
-                          <img
-                            src={image}
-                            alt={`Product ${index + 1}`}
-                            className="w-20 h-20 object-cover rounded-lg border border-gray-200"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteImage(image)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
-                            title="Delete image"
-                          >
-                            <FaTimes className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
               
               {/* Custom Fields Section - Only for Pro+ */}
               <FeatureGuard requiredFeature="custom_fields" fallback={
@@ -999,17 +873,6 @@ export default function ProductsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {currentProducts.map((product) => (
               <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow">
-                {/* Product Image */}
-                  {product.images && product.images.length > 0 && (
-                    <div className="mb-4">
-                      <img
-                        src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}${product.images[0]}`}
-                        alt={product.name}
-                        className="w-full h-48 object-contain rounded-lg border border-gray-200 bg-white p-2"
-                      />
-                    </div>
-                  )}
-
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-blue-100 rounded-lg">
@@ -1021,8 +884,8 @@ export default function ProductsPage() {
                     </div>
                   </div>
                   <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    product.stock > 10 ? 'bg-green-100 text-green-800' :
-                    product.stock > 0 ? 'bg-amber-100 text-amber-800' :
+                    product.stock > 10 ? 'bg-green-100 text-green-800' : 
+                    product.stock > 0 ? 'bg-amber-100 text-amber-800' : 
                     'bg-red-100 text-red-800'
                   }`}>
                     {product.stock} in stock
