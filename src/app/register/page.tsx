@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost, apiGet } from "@/utils/api";
+import { apiPost } from "@/utils/api";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 
@@ -29,7 +29,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [csrfToken, setCsrfToken] = useState("");
+
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -44,15 +44,7 @@ export default function RegisterPage() {
 
   // Fetch CSRF token on component mount
   useEffect(() => {
-    const fetchCsrfToken = async () => {
-      try {
-        const response = await apiGet<{ csrfToken: string }>('/tenant/csrf-token');
-        setCsrfToken(response.csrfToken);
-      } catch (error) {
-        console.error('Failed to fetch CSRF token:', error);
-      }
-    };
-    fetchCsrfToken();
+    // Removed CSRF token fetching as CSRF protection is disabled
   }, []);
   // Form state
   const [formData, setFormData] = useState({
@@ -166,7 +158,6 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
           password: formData.ownerPassword,
         },
         recaptchaToken: formData.recaptchaToken,
-        csrfToken,
       };
       
       console.log('Sending registration data:', JSON.stringify(requestData, null, 2));
@@ -177,7 +168,7 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
       console.log('ownerEmail:', requestData.owner.email);
       console.log('ownerPassword:', requestData.owner.password ? '***' : 'MISSING');
 
-      console.log('csrfToken:', csrfToken ? 'Present' : 'Missing');
+
       
       // Check for empty strings
       const requiredFields = [
@@ -210,11 +201,8 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
         return;
       }
       
-      // Send the request with the properly formatted data and CSRF header
+      // Send the request with the properly formatted data
       const headers: Record<string, string> = {};
-      if (csrfToken) {
-        headers['x-csrf-token'] = csrfToken;
-      }
       type Tenant = { id: string; [key: string]: unknown };
       type Branch = { id: string; name: string; [key: string]: unknown };
       type User = { id: string; name: string; email: string; [key: string]: unknown };

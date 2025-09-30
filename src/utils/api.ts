@@ -38,7 +38,7 @@ class EnhancedAPI {
       headers: {
         ...headers,
         Authorization: (headers as Record<string, string>).Authorization ? 'Bearer [REDACTED]' : undefined,
-        'X-CSRF-Token': (headers as Record<string, string>)['X-CSRF-Token'] ? 'Present' : 'Not present'
+
       },
       body: options.body ? JSON.parse(options.body as string) : undefined
     });
