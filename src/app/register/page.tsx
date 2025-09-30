@@ -213,7 +213,7 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
       // Send the request with the properly formatted data and CSRF header
       const headers: Record<string, string> = {};
       if (csrfToken) {
-        headers['X-CSRF-Token'] = csrfToken;
+        headers['x-csrf-token'] = csrfToken;
       }
       type Tenant = { id: string; [key: string]: unknown };
       type Branch = { id: string; name: string; [key: string]: unknown };

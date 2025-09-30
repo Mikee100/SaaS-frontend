@@ -34,12 +34,13 @@ class EnhancedAPI {
       ...options.headers,
     };
     
-    console.log(`[API] ${options.method || 'GET'} ${url}`, { 
+    console.log(`[API] ${options.method || 'GET'} ${url}`, {
       headers: {
         ...headers,
-        Authorization: (headers as Record<string, string>).Authorization ? 'Bearer [REDACTED]' : undefined
+        Authorization: (headers as Record<string, string>).Authorization ? 'Bearer [REDACTED]' : undefined,
+        'X-CSRF-Token': (headers as Record<string, string>)['X-CSRF-Token'] ? 'Present' : 'Not present'
       },
-      body: options.body ? JSON.parse(options.body as string) : undefined 
+      body: options.body ? JSON.parse(options.body as string) : undefined
     });
     
     try {
