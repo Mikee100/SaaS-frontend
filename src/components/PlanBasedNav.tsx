@@ -4,7 +4,7 @@ import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
-import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaBars, FaTimes, FaFileAlt, FaChevronLeft, FaChevronRight, FaMobile, FaChevronDown, FaChevronUp, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, FaMapMarkerAlt } from 'react-icons/fa';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
 import { FaTachometerAlt } from 'react-icons/fa';
@@ -73,7 +73,7 @@ export default function PlanBasedNav() {
   const navigationItems = React.useMemo(() => [
     { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
     {
-      name: 'Products',
+      name: 'Products & Inventory',
       href: '/products',
       icon: FaBox,
       requiredPlan: 'Basic',
@@ -82,26 +82,34 @@ export default function PlanBasedNav() {
         { name: 'Product List', href: '/products', requiredPermission: 'view_products' },
         { name: 'Bulk Upload', href: '/products/bulk-add', requiredPermission: 'create_products' },
         { name: 'Bulk Upload Records', href: '/products/bulk-upload-records', requiredPermission: 'view_products' },
-        { name: 'Analytics', href: '/products/analytics', requiredPermission: 'view_products' }
-      ]
-    },
-    {
-      name: 'Inventory',
-      href: '/inventory',
-      icon: FaBox,
-      requiredPlan: 'Basic',
-      requiredPermission: 'view_inventory',
-      subItems: [
         { name: 'Basic Inventory', href: '/inventory', requiredPermission: 'view_inventory' },
         { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory' },
         { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory' }
       ]
     },
-    { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'Sales History', href: '/sales/history', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'M-Pesa Transactions', href: '/mpesa-transactions', icon: FaMobile, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'Analytics', href: '/analytics', icon: FaChartLine, requiredPlan: null, requiredPermission: 'view_analytics' },
-    { name: 'Reports', href: '/reports', icon: FaFileAlt, requiredPlan: null, requiredPermission: 'view_reports' },
+    {
+      name: 'Transactions',
+      href: '/sales',
+      icon: FaShoppingCart,
+      requiredPlan: null,
+      requiredPermission: 'view_sales',
+      subItems: [
+        { name: 'Sales', href: '/sales', requiredPermission: 'view_sales' },
+        { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales' },
+        { name: 'M-Pesa Transactions', href: '/mpesa-transactions', requiredPermission: 'view_sales' }
+      ]
+    },
+    {
+      name: 'Reports & Analytics',
+      href: '/analytics',
+      icon: FaChartLine,
+      requiredPlan: null,
+      requiredPermission: 'view_analytics',
+      subItems: [
+        { name: 'Analytics', href: '/analytics', requiredPermission: 'view_analytics' },
+        { name: 'Reports', href: '/reports', requiredPermission: 'view_reports' }
+      ]
+    },
     { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
     { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
   ], []);
@@ -202,30 +210,31 @@ export default function PlanBasedNav() {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       } ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
         {/* Desktop collapse/expand button */}
-        <div className="hidden lg:block absolute right-2 z-50">
-          <Tooltip content={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} position="bottom">
+        <div className="hidden lg:block absolute -right-3 top-4 z-50">
+          <Tooltip content={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} position="right">
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-2 bg-white rounded-lg shadow-lg border hover:bg-gray-50 transition-colors"
+              className="w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors shadow-sm"
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              {sidebarCollapsed ? <FaChevronRight className="w-4 h-4" /> : <FaChevronLeft className="w-4 h-4" />}
+              {sidebarCollapsed ? <FaChevronRight className="w-3 h-3" /> : <FaChevronLeft className="w-3 h-3" />}
             </button>
           </Tooltip>
         </div>
         <div className="flex flex-col h-full relative">
           {/* Header */}
           <div className={`border-b border-gray-200 transition-all duration-300 ${
-            sidebarCollapsed ? 'p-4' : 'p-6'
+            sidebarCollapsed ? 'p-3' : 'p-4'
           }`}>
-            <div className="flex flex-col items-center justify-center space-y-3">
+            <div className="flex flex-col items-center justify-center space-y-2">
               {/* Logo */}
               {!sidebarCollapsed && !sidebarOpen && tenant?.logoUrl && (
-                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
                   <Image
                     src={tenant.logoUrl}
                     alt={`${tenant.name} logo`}
-                    width={48}
-                    height={48}
+                    width={32}
+                    height={32}
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
@@ -237,12 +246,12 @@ export default function PlanBasedNav() {
               {/* Business and Branch Info */}
               {!sidebarCollapsed && !sidebarOpen && (
                 <div className="text-center">
-                  <h1 className="text-lg font-bold text-gray-900 leading-tight">
+                  <h1 className="text-sm font-semibold text-gray-900 leading-tight">
                     {tenant?.name || 'Business Name'}
                   </h1>
-                  <div className="flex items-center justify-center mt-2 space-x-1">
+                  <div className="flex items-center justify-center mt-1 space-x-1">
                     <FaMapMarkerAlt className="w-3 h-3 text-gray-500" />
-                    <p className="text-xs text-gray-600 font-medium">
+                    <p className="text-xs text-gray-600">
                       {branch?.name || 'Branch'}
                     </p>
                   </div>

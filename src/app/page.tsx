@@ -4,19 +4,16 @@ import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
-import LogoEnforcement from '@/components/LogoEnforcement';
 import BranchSwitcher from '@/components/BranchSwitcher';
-import AnalyticsCharts from '@/components/AnalyticsCharts';
-import { 
-  FiTrendingUp, 
-  FiDollarSign, 
-  FiPackage, 
-  FiUsers, 
-  FiAlertCircle, 
-  FiRefreshCw, 
-  FiBell, 
-  FiUserPlus, 
-  FiFileText, 
+import {
+  FiTrendingUp,
+  FiDollarSign,
+  FiPackage,
+  FiUsers,
+  FiAlertCircle,
+  FiRefreshCw,
+  FiUserPlus,
+  FiFileText,
   FiShoppingCart,
   FiTrendingDown,
 } from 'react-icons/fi';
@@ -37,10 +34,9 @@ const ChartComponents = {
   )
 };
 
-const { 
-  CustomerGrowthChart, 
-  SalesRevenueChart, 
-  SalesTrendsAnalysis 
+const {
+  CustomerGrowthChart,
+  SalesRevenueChart,
 } = ChartComponents;
 
 // Helper function to generate mock customer growth data if not provided by the API
@@ -48,25 +44,25 @@ function generateMockCustomerGrowth(totalCustomers: number): Record<string, numb
   const months = 12;
   const result: Record<string, number> = {};
   const now = new Date();
-  
+
   // Start with 30% of current customers 12 months ago
   let customers = Math.floor(totalCustomers * 0.3);
-  
+
   for (let i = months - 1; i >= 0; i--) {
     const date = new Date(now);
     date.setMonth(now.getMonth() - i);
     const monthYear = date.toISOString().split('T')[0];
-    
+
     // Add random growth between 2% and 8% each month
     const growthRate = 1 + (Math.random() * 0.06 + 0.02);
     customers = Math.min(totalCustomers, Math.floor(customers * growthRate));
-    
+
     // Ensure we don't exceed the total customers
     if (i === 0) customers = totalCustomers;
-    
+
     result[monthYear] = customers;
   }
-  
+
   return result;
 }
 
@@ -115,27 +111,15 @@ interface AnalyticsData {
   };
 };
 
-interface SubscriptionPlan {
-  id: string;
-  name: string;
-  price: number;
-  interval: string;
-  features: string[];
-}
 
-interface Subscription {
-  id: string;
-  status: string;
-  plan: SubscriptionPlan;
-  startDate: string;
-  endDate: string;
-}
 
-function StatCard({ icon, label, value, trend, trendDirection, loading = false }: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: string | number; 
-  trend?: string; 
+
+
+function StatCard({ icon, label, value, trend, trendDirection, loading = false }: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  trend?: string;
   trendDirection?: 'up' | 'down';
   loading?: boolean;
 }) {
@@ -152,7 +136,7 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false }
   }
 
   return (
-    <motion.div 
+    <motion.div
       whileHover={{ y: -2 }}
       className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 h-full"
     >
@@ -162,8 +146,8 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false }
         </div>
         {trend && (
           <span className={`flex items-center text-xs font-medium gap-1 px-2 py-1 rounded-full ${
-            trendDirection === 'up' 
-              ? 'text-green-600 bg-green-50' 
+            trendDirection === 'up'
+              ? 'text-green-600 bg-green-50'
               : 'text-red-600 bg-red-50'
           }`}>
             {trendDirection === 'up' ? <FiTrendingUp className="w-3 h-3" /> : ""}
@@ -176,34 +160,6 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false }
         <div className="text-2xl font-bold text-gray-900 mt-1">{value}</div>
       </div>
     </motion.div>
-  );
-}
-
-function UsageLimitCard({ label, value, limit }: { label: string; value: number; limit: number }) {
-  const percent = Math.min(100, (value / limit) * 100);
-  const over = value > limit;
-  
-  return (
-    <div className="flex flex-col gap-2 p-3 bg-white rounded-lg border border-gray-200">
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-gray-500 font-medium">{label}</span>
-        <span className={`text-xs font-medium ${over ? 'text-red-600' : 'text-gray-700'}`}>
-          {value}/{limit}
-        </span>
-      </div>
-      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div 
-          className={`h-1.5 rounded-full ${over ? 'bg-red-400' : 'bg-indigo-500'}`} 
-          style={{ width: `${percent}%` }} 
-        />
-      </div>
-      {over && (
-        <span className="text-xs text-red-600 flex items-center gap-1">
-          <FiAlertCircle className="w-3 h-3" />
-          Limit exceeded
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -252,65 +208,6 @@ function QuickActions() {
   );
 }
 
-function RecentActivities({ activities }: { activities: Array<{ type: string; description: string; date: string }> }) {
-  if (!activities || activities.length === 0) return null;
-  
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <FiBell className="w-5 h-5 text-gray-600" />
-        <h2 className="text-lg font-semibold text-gray-800">Recent Activities</h2>
-      </div>
-      <div className="space-y-3">
-        {activities.slice(0, 5).map((a, i) => (
-          <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-            <div className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-gray-600 mt-1">
-              <FiBell className="w-4 h-4" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-800">{a.description}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                {new Date(a.date).toLocaleString()}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SubscriptionCard({ subscription }: { subscription: Subscription | null }) {
-  if (!subscription) return null;
-  
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-lg font-semibold text-gray-800">Current Plan: {subscription.plan.name}</span>
-        <span className="ml-auto px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium capitalize">
-          {subscription.status}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-4 mb-3">
-        <div>
-          <p className="text-xs text-gray-500">Price</p>
-          <p className="text-sm font-semibold text-gray-900">
-            ${subscription.plan.price}/{subscription.plan.interval}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500">Next Billing</p>
-          <p className="text-sm font-semibold text-gray-900">
-            {subscription.endDate ? new Date(subscription.endDate).toLocaleDateString() : 'N/A'}
-          </p>
-        </div>
-      </div>
-      <button className="w-full px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">
-        Manage Subscription
-      </button>
-    </div>
-  );
-}
 
 function SkeletonLoader() {
   return (
@@ -363,18 +260,9 @@ export default function DashboardPage() {
 
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const { limits, loading: limitsLoading } = usePlanLimits();
+  const {  loading: limitsLoading } = usePlanLimits();
   const [stockThreshold, setStockThreshold] = useState<number>(15);
   const lowStockProducts = (analyticsData?.topProducts || []).filter((p) => (p.sales ?? 0) < stockThreshold);
-
-  const usageLimits = [
-    { label: 'Users', value: limits?.usage?.users?.current || 0, limit: limits?.usage?.users?.limit || 1 },
-    { label: 'Products', value: limits?.usage?.products?.current || 0, limit: limits?.usage?.products?.limit || 1 },
-    { label: 'Sales', value: limits?.usage?.sales?.current || 0, limit: limits?.usage?.sales?.limit || 1 },
-  ];
-
-  const [recentActivities, setRecentActivities] = useState<Array<{ type: string; description: string; date: string }>>([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -382,7 +270,7 @@ export default function DashboardPage() {
         setLoading(true);
         const config = await apiGet<{ value?: number | string }>('/tenant/configurations/stockThreshold');
         setStockThreshold(config?.value ? Number(config.value) : 15);
-        
+
         const stats = await apiGet('/analytics/dashboard') as AnalyticsData;
         setAnalyticsData({
           totalSales: stats.totalSales,
@@ -429,21 +317,11 @@ export default function DashboardPage() {
             });
           });
         }
-        setRecentActivities(activities);
-        
-        try {
-          // Use the correct endpoint with permissions
-          const sub = await apiGet('/billing/subscription-with-permissions') as Subscription;
-          setSubscription(sub);
-        } catch (billingError) {
-          console.error('Error fetching subscription:', billingError);
-          setSubscription(null);
-        }
+       
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         setAnalyticsData(null);
-        setRecentActivities([]);
-        setSubscription(null);
+        
       } finally {
         setLoading(false);
       }
@@ -466,19 +344,19 @@ export default function DashboardPage() {
   }
 
   return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
-          <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-              <p className="text-gray-600 mt-1">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Dashboard</h1>
+              <p className="text-gray-600 mt-2 text-lg">
   Welcome back! Here&apos;s what&apos;s happening with your business.
 </p>
             </div>
             <div className="flex items-center gap-3">
               <BranchSwitcher />
-              <button 
+              <button
                 onClick={() => window.location.reload()}
                 className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
                 title="Refresh data"
@@ -488,45 +366,35 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Logo Compliance */}
-          <LogoEnforcement showBanner={true} showStats={true} className="mb-8" />
-
           {/* Quick Actions */}
           <div className="mb-8">
             <QuickActions />
           </div>
 
-          {/* Usage Limits */}
-          <div className="mb-8 flex flex-wrap gap-3">
-            {usageLimits.map((u) => (
-              <UsageLimitCard key={u.label} {...u} />
-            ))}
-          </div>
-
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-            <StatCard 
+            <StatCard
               icon={<FiDollarSign className="w-5 h-5" />}
               label="Total Sales"
               value={analyticsData?.totalSales?.toLocaleString() || '0'}
               trend="12.5%"
               trendDirection="up"
             />
-            <StatCard 
+            <StatCard
               icon={<FiTrendingUp className="w-5 h-5" />}
               label="Total Revenue"
               value={`$${analyticsData?.totalRevenue?.toLocaleString() || '0'}`}
               trend="8.2%"
               trendDirection="up"
             />
-            <StatCard 
+            <StatCard
               icon={<FiPackage className="w-5 h-5" />}
               label="Products"
               value={analyticsData?.totalProducts?.toLocaleString() || '0'}
               trend="3.1%"
               trendDirection="up"
             />
-            <StatCard 
+            <StatCard
               icon={<FiUsers className="w-5 h-5" />}
               label="Customers"
               value={analyticsData?.totalCustomers?.toLocaleString() || '0'}
@@ -539,15 +407,15 @@ export default function DashboardPage() {
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Revenue & Growth</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              <SalesRevenueChart 
-                salesData={analyticsData?.salesByMonth || {}} 
+              <SalesRevenueChart
+                salesData={analyticsData?.salesByMonth || {}}
                 title="Monthly Revenue"
                 height={400}
               />
               <div className="space-y-6">
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                  <CustomerGrowthChart 
-                    growthData={analyticsData?.customerGrowth || {}} 
+                  <CustomerGrowthChart
+                    growthData={analyticsData?.customerGrowth || {}}
                     title="Customer Growth"
                     height={400}
                   />
@@ -574,7 +442,7 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                  
+
                   {analyticsData?.performanceMetrics && (
                     <div className="bg-white rounded-xl border border-gray-200 p-5">
                       <div className="flex items-center gap-2 mb-3">
@@ -590,7 +458,7 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </div>
-                
+
                 {analyticsData?.customerRetention && (
                   <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-100">
                     <h3 className="text-sm font-medium text-purple-800 mb-2">Customer Retention</h3>
@@ -615,100 +483,39 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Sales Trends Analysis Section */}
-          <div className="mb-8">
-            <SalesTrendsAnalysis 
-              salesData={analyticsData?.salesByMonth || {}}
-              title="Sales Trends & Performance Analysis"
-              className="mb-8"
-            />
-          </div>
-
-          {/* Additional Analytics Charts */}
-          <div className="mb-8">
-            <AnalyticsCharts 
-              salesData={analyticsData?.salesByMonth}
-              productData={analyticsData?.topProducts?.map(p => ({
-                name: p.name,
-                unitsSold: p.sales ?? 0,
-                revenue: p.revenue ?? 0,
-                margin: p.margin ?? 0,
-                cost: p.cost ?? 0
-              }))}
-              inventoryAnalytics={analyticsData?.inventoryAnalytics}
-              customerRetention={analyticsData?.customerRetention}
-            />
-          </div>
-
-          {/* Additional Metrics */}
-          {(analyticsData?.inventoryAnalytics || analyticsData?.performanceMetrics) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              {analyticsData.inventoryAnalytics && (
-                <div className="bg-white rounded-lg border border-gray-200 p-5">
-                  <h2 className="text-lg font-semibold text-gray-800 mb-4">Inventory Overview</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <MetricCard 
-                      title="Low Stock Items" 
-                      value={analyticsData.inventoryAnalytics.lowStockItems} 
-                    />
-                    <MetricCard 
-                      title="Overstock Items" 
-                      value={analyticsData.inventoryAnalytics.overstockItems} 
-                    />
-                    <MetricCard 
-                      title="Inventory Turnover" 
-                      value={analyticsData.inventoryAnalytics.inventoryTurnover} 
-                    />
-                    <MetricCard 
-                      title="Stockout Rate" 
-                      value={Math.round(analyticsData.inventoryAnalytics.stockoutRate * 100)} 
-                      unit="%"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {analyticsData.performanceMetrics && (
-                <div className="bg-white rounded-lg border border-gray-200 p-5">
-                  <h2 className="text-lg font-semibold text-gray-800 mb-4">Performance Metrics</h2>
-                  <div className="grid grid-cols-2 gap-4">
-                    <MetricCard 
-                      title="Customer Lifetime Value" 
-                      value={Math.round(analyticsData.performanceMetrics.customerLifetimeValue)} 
-                      unit="$"
-                    />
-                    <MetricCard 
-                      title="Acquisition Cost" 
-                      value={Math.round(analyticsData.performanceMetrics.customerAcquisitionCost)} 
-                      unit="$"
-                    />
-                    <MetricCard 
-                      title="Return on Investment" 
-                      value={Math.round(analyticsData.performanceMetrics.returnOnInvestment * 100)} 
-                      unit="%"
-                    />
-                    <MetricCard 
-                      title="Net Promoter Score" 
-                      value={Math.round(analyticsData.performanceMetrics.netPromoterScore)} 
-                    />
-                  </div>
-                </div>
-              )}
+          {/* Inventory Overview */}
+          {analyticsData?.inventoryAnalytics && (
+            <div className="bg-white rounded-lg border border-gray-200 p-5 mb-8">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Inventory Overview</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <MetricCard
+                  title="Low Stock Items"
+                  value={analyticsData.inventoryAnalytics.lowStockItems}
+                />
+                <MetricCard
+                  title="Overstock Items"
+                  value={analyticsData.inventoryAnalytics.overstockItems}
+                />
+                <MetricCard
+                  title="Inventory Turnover"
+                  value={analyticsData.inventoryAnalytics.inventoryTurnover}
+                />
+                <MetricCard
+                  title="Stockout Rate"
+                  value={Math.round(analyticsData.inventoryAnalytics.stockoutRate * 100)}
+                  unit="%"
+                />
+              </div>
             </div>
           )}
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content Area */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Recent Activities */}
-              <RecentActivities activities={recentActivities} />
-            </div>
+          
 
             {/* Sidebar */}
             <div className="space-y-6">
-              <SubscriptionCard subscription={subscription} />
-              
               {/* Low Stock Notification */}
               {lowStockProducts.length > 0 && (
                 <div className="bg-white rounded-lg border border-gray-200 p-5">
