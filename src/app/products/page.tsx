@@ -23,7 +23,14 @@ interface Product {
   stock: number;
   description?: string;
   customFields?: Record<string, string | number | boolean>;
+  supplierId?: string;
+  supplier?: {
+    id: string;
+    name: string;
+  };
 }
+
+
 
 export default function ProductsPage() {
   const { user } = useUser();
@@ -170,6 +177,7 @@ export default function ProductsPage() {
         cost: parseFloat(formData.get("cost") as string) || 0,
         stock: parseInt(formData.get("stock") as string),
         description: formData.get("description"),
+        supplier: formData.get("supplier"),
         branchId: selectedBranchId, // Add branchId to payload
       }, { 'x-branch-id': selectedBranchId || '' }) as Product;
       setProducts([newProduct, ...products]);
@@ -196,6 +204,7 @@ export default function ProductsPage() {
           cost: parseFloat(formData.get("cost") as string) || 0,
           stock: parseInt(formData.get("stock") as string),
           description: formData.get("description"),
+          supplier: formData.get("supplier"),
         }, { 'x-branch-id': selectedBranchId || '' });
         setEditProduct(null);
       }
@@ -378,9 +387,14 @@ export default function ProductsPage() {
 
   // Helper to flatten product fields for table display
   function flattenProduct(product: Product): { [key: string]: string | number | boolean | undefined; margin: string } {
-    // Exclude 'customFields' property to match the index signature
-    const { customFields, ...rest } = product;
+    // Exclude 'customFields' and 'supplier' properties to match the index signature
+    const { customFields, supplier, ...rest } = product;
     const flat: { [key: string]: string | number | boolean | undefined; margin: string } = { ...rest, ...(customFields || {}), margin: '' };
+
+    // Add supplier name if exists
+    if (supplier) {
+      flat.supplier = supplier.name;
+    }
 
     // Compute margin
     if (product.price > 0) {
@@ -450,9 +464,9 @@ export default function ProductsPage() {
 
   return (
     <AuthGuard>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-screen-2xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
         {/* Header Section */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-3 bg-blue-100 rounded-xl">
@@ -544,7 +558,7 @@ export default function ProductsPage() {
 
         {/* Usage Warning */}
         {isNearLimit && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg">
+          <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg">
             <div className="flex items-center gap-3">
               <FaExclamationTriangle className="text-amber-600 w-5 h-5" />
               <div>
@@ -567,7 +581,7 @@ export default function ProductsPage() {
         )}
 
         {/* Navigation to Analytics */}
-        <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+        <div className="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-blue-800">Product Management</h2>
             <Link 
@@ -581,7 +595,7 @@ export default function ProductsPage() {
         </div>
 
         {/* Search and Bulk Actions */}
-        <div className="mb-6 p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="mb-6 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">Search Products</label>
@@ -622,7 +636,6 @@ export default function ProductsPage() {
                 </form>
               
               
-               
                 <button onClick={handleClearAll} className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200 hover:bg-red-100 font-medium text-sm text-red-700 transition">
                   <FaTrash className="w-4 h-4" />
                   Clear All
@@ -744,6 +757,15 @@ export default function ProductsPage() {
                     min="0"
                     defaultValue={editProduct?.stock || ''}
                     required
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+                  <input
+                    type="text"
+                    name="supplier"
+                    defaultValue={editProduct?.supplier?.name || ''}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>

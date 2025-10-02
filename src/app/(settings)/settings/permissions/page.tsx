@@ -113,17 +113,32 @@ export default function PermissionsSettings() {
   const handleCreateRole = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
+
     try {
       if (!user?.tenantId) {
         throw new Error("Tenant ID is missing. Please log in again.")
       }
-      
+
+      const trimmedName = newRole.name.trim();
+      if (!trimmedName) {
+        throw new Error("Role name is required.");
+      }
+
+      // Check for duplicate role names locally
+      const existingRole = roles.find(role =>
+        role.name.toLowerCase() === trimmedName.toLowerCase()
+      );
+      if (existingRole) {
+        throw new Error("A role with this name already exists. Please choose a different name.");
+      }
+
       console.log('Sending role creation request with:', {
-        name: newRole.name,
+        name: trimmedName,
         description: newRole.description,
         tenantId: user.tenantId
       });
-      
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/roles`, {
         method: 'POST',
         headers: {
@@ -132,19 +147,22 @@ export default function PermissionsSettings() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          name: newRole.name,
+          name: trimmedName,
           description: newRole.description,
           tenantId: user.tenantId
         })
       });
-      
+
       const responseData = await response.json().catch(() => ({}));
-      
+
       if (!response.ok) {
         console.error('Role creation failed with status:', response.status, 'Response:', responseData);
+        if (response.status === 400 && responseData.message?.includes('already exists')) {
+          throw new Error("A role with this name already exists for your organization. Please choose a different name.");
+        }
         throw new Error(responseData.message || `Failed to create role: ${response.statusText}`);
       }
-      
+
       setNewRole({ name: "", description: "" });
       setShowCreateRole(false);
       await loadData();
@@ -562,15 +580,15 @@ export default function PermissionsSettings() {
 
       {/* Create Role Modal */}
       {showCreateRole && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">Create New Role</h3>
+        <div className="fixed inset-0 bg-gray-100 bg-opacity-90 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg mx-4">
+            <h3 className="text-xl font-semibold mb-6 text-gray-900">Create New Role</h3>
             <form onSubmit={handleCreateRole}>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Default Role</label>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">Select Default Role</label>
                   <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-2"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-600 focus:border-blue-600 mb-3"
                     value={selectedDefaultRole}
                     onChange={e => {
                       setSelectedDefaultRole(e.target.value);
@@ -582,7 +600,7 @@ export default function PermissionsSettings() {
                       <option key={role} value={role}>{role}</option>
                     ))}
                   </select>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Or Enter Custom Role Name</label>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">Or Enter Custom Role Name</label>
                   <input
                     type="text"
                     value={newRole.name}
@@ -590,32 +608,32 @@ export default function PermissionsSettings() {
                       setNewRole({ ...newRole, name: e.target.value });
                       setSelectedDefaultRole("");
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-600 focus:border-blue-600"
                     placeholder="Custom role name"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">Description</label>
                   <textarea
                     value={newRole.description}
                     onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-600 focus:border-blue-600"
+                    rows={4}
                   />
                 </div>
               </div>
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-4 mt-8">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                 >
                   Create Role
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowCreateRole(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                  className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition"
                 >
                   Cancel
                 </button>

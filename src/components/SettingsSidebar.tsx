@@ -1,7 +1,7 @@
 "use client";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaBuilding, FaCogs, FaClipboardList, FaCreditCard, FaUserShield, FaChartBar, FaUsers, FaKey, FaImage, FaCrown, FaBell, FaPlug, FaShieldAlt, FaBars, FaTimes } from 'react-icons/fa';
+import { FaBuilding, FaCogs, FaClipboardList, FaCreditCard, FaUserShield, FaChartBar, FaUsers, FaKey, FaImage, FaCrown, FaBell, FaPlug, FaShieldAlt, FaBars, FaTimes, FaEnvelope } from 'react-icons/fa';
 import { useState } from 'react';
 
 interface SettingsSidebarProps {
@@ -47,6 +47,12 @@ export default function SettingsSidebar({ collapsed = false, onToggle }: Setting
       header: 'Audit',
       items: [
         { href: "/settings/audit-logs", label: "Audit Logs", icon: FaClipboardList },
+      ]
+    },
+    {
+      header: 'Support',
+      items: [
+        { href: "/settings/contact", label: "Contact Admin", icon: FaEnvelope },
       ]
     }
   ];

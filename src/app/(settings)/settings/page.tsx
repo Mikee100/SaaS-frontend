@@ -1,7 +1,7 @@
 "use client";
 import PlanGuard from '@/components/PlanGuard';
 import UsageDashboard from '@/components/UsageDashboard';
-import { FaCog, FaUsers, FaChartLine, FaCrown, FaDownload, FaShare, FaSearch, FaBell, FaShieldAlt, FaPlug, FaTrash, FaPlus } from 'react-icons/fa';
+import { FaCog, FaUsers, FaChartLine, FaCrown, FaDownload, FaShare, FaSearch, FaBell, FaShieldAlt, FaPlug, FaTrash, FaPlus, FaEnvelope } from 'react-icons/fa';
 import { useEffect, useState } from 'react';
 import { apiGet, apiPut, apiPost, apiDelete } from '@/utils/api';
 
@@ -58,7 +58,7 @@ export default function SettingsPage() {
     apiAccess: false,
     customBranding: false,
   });
- 
+
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
 
   useEffect(() => {
@@ -234,7 +234,7 @@ export default function SettingsPage() {
                   <FaCog className="w-6 h-6 text-blue-600" />
                   <h2 className="text-xl font-semibold text-gray-800">Basic Settings</h2>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
@@ -245,7 +245,7 @@ export default function SettingsPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <input
@@ -255,7 +255,7 @@ export default function SettingsPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                     <input
@@ -266,9 +266,9 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="mt-6">
-                  <button 
+                  <button
                     onClick={handleSaveBasic}
                     disabled={saving}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300"
@@ -288,7 +288,7 @@ export default function SettingsPage() {
                   <h2 className="text-xl font-semibold text-gray-800">User Management</h2>
                   <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Basic+</span>
                 </div>
-                
+
                 <div className="space-y-4 mb-4">
                   <input
                     type="text"
@@ -298,7 +298,7 @@ export default function SettingsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   />
                 </div>
-                
+
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {filteredUsers.map(user => (
                     <div key={user.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -323,7 +323,7 @@ export default function SettingsPage() {
                     </div>
                   ))}
                 </div>
-                
+
                 <div className="mt-6">
                   <button onClick={handleAddUser} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                     <FaPlus className="inline mr-2" /> Add User
@@ -341,7 +341,7 @@ export default function SettingsPage() {
                   <h2 className="text-xl font-semibold text-gray-800">Advanced Analytics</h2>
                   <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">Pro Feature</span>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 p-4 bg-purple-50 rounded-lg">
                     <input
@@ -356,7 +356,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-purple-600">Schedule automated reports</p>
                     </label>
                   </div>
-                  
+
                   <div className="flex items-center gap-3 p-4 bg-purple-50 rounded-lg">
                     <input
                       type="checkbox"
@@ -371,7 +371,7 @@ export default function SettingsPage() {
                     </label>
                   </div>
                 </div>
-                
+
                 <div className="mt-6 flex gap-3">
                   <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
                     <FaDownload className="w-4 h-4" /> Export Data
@@ -392,7 +392,7 @@ export default function SettingsPage() {
                   <h2 className="text-xl font-semibold text-gray-800">Enterprise Features</h2>
                   <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Enterprise</span>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-lg">
                     <input
@@ -407,7 +407,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-yellow-600">Full API access for integrations</p>
                     </label>
                   </div>
-                  
+
                   <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-lg">
                     <input
                       type="checkbox"
@@ -421,20 +421,20 @@ export default function SettingsPage() {
                       <p className="text-sm text-yellow-600">White-label your experience</p>
                     </label>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div className="p-4 bg-yellow-50 rounded-lg">
                       <h3 className="font-medium text-yellow-800 mb-2">Priority Support</h3>
                       <p className="text-sm text-yellow-600">24/7 dedicated support</p>
                     </div>
-                    
+
                     <div className="p-4 bg-yellow-50 rounded-lg">
                       <h3 className="font-medium text-yellow-800 mb-2">Advanced Security</h3>
                       <p className="text-sm text-yellow-600">Enhanced security features</p>
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="mt-6">
                   <button className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
                     Configure Enterprise Features
@@ -452,7 +452,7 @@ export default function SettingsPage() {
                   <h2 className="text-xl font-semibold text-gray-800">Notification Preferences</h2>
                   <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">Basic+</span>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 p-4 bg-orange-50 rounded-lg">
                     <input
@@ -467,7 +467,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-orange-600">Receive notifications via email</p>
                     </label>
                   </div>
-                  
+
                   <div className="flex items-center gap-3 p-4 bg-orange-50 rounded-lg">
                     <input
                       type="checkbox"
@@ -481,7 +481,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-orange-600">Receive SMS notifications (Pro+)</p>
                     </label>
                   </div>
-                  
+
                   <div className="flex items-center gap-3 p-4 bg-orange-50 rounded-lg">
                     <input
                       type="checkbox"
@@ -496,9 +496,9 @@ export default function SettingsPage() {
                     </label>
                   </div>
                 </div>
-                
+
                 <div className="mt-6">
-                  <button 
+                  <button
                     onClick={handleSaveBasic}
                     className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
                   >
@@ -508,12 +508,14 @@ export default function SettingsPage() {
               </div>
             </PlanGuard>
           )}
+
+
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6 overflow-y-auto max-h-[80vh] pr-2">
           <UsageDashboard />
-          
+
           {/* Quick Actions - Filtered */}
           <div className="bg-white rounded-xl shadow-sm border p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
@@ -526,6 +528,7 @@ export default function SettingsPage() {
                 { href: "/settings/notifications", label: "Notifications", icon: <FaBell className="w-4 h-4 text-orange-600" />, plan: "Basic" as const },
                 { href: "/settings/integrations", label: "Integrations", icon: <FaPlug className="w-4 h-4 text-indigo-600" />, plan: "Pro" as const },
                 { href: "/settings/security", label: "Security", icon: <FaShieldAlt className="w-4 h-4 text-red-600" />, plan: "Enterprise" as const },
+                { href: "/settings/contact", label: "Contact Admin", icon: <FaEnvelope className="w-4 h-4 text-blue-600" />, plan: undefined },
               ].filter(action =>
                 !searchQuery || action.label.toLowerCase().includes(searchQuery.toLowerCase())
               ).map((action, index) => (

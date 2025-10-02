@@ -1,18 +1,21 @@
 "use client";
 import { apiGet, apiPost } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
-import { FaBox, FaSearch,  FaPlus, FaExclamationTriangle, FaCheckCircle, FaTimesCircle,FaEdit } from 'react-icons/fa';
+import { FaBox, FaSearch,  FaPlus, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaEdit, FaCalculator, FaChartLine, FaPercentage, FaDownload } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
 import { useBranch } from "@/contexts/BranchContext";
 import { useEffect, useState } from "react";
+import * as XLSX from 'xlsx';
 
 interface Product {
   id: string;
   name: string;
   price?: number;
+  cost?: number;
   category?: string;
+  sku?: string;
 }
 
 interface InventoryItem {
@@ -118,7 +121,31 @@ export default function InventoryPage() {
     totalValue: products.reduce((sum, p) => {
       const inv = getInv(p.id);
       return sum + ((inv?.quantity || 0) * (p.price || 0));
-    }, 0)
+    }, 0),
+    totalCostValue: products.reduce((sum, p) => {
+      const inv = getInv(p.id);
+      return sum + ((inv?.quantity || 0) * (p.cost || 0));
+    }, 0),
+    totalProfit: products.reduce((sum, p) => {
+      const inv = getInv(p.id);
+      const quantity = inv?.quantity || 0;
+      const price = p.price || 0;
+      const cost = p.cost || 0;
+      return sum + (quantity * (price - cost));
+    }, 0),
+    averageMargin: (() => {
+      const productsWithCost = products.filter(p => p.cost && p.price && p.cost > 0);
+      if (productsWithCost.length === 0) return 0;
+      const totalMargin = productsWithCost.reduce((sum, p) => {
+        return sum + (((p.price! - p.cost!) / p.price!) * 100);
+      }, 0);
+      return totalMargin / productsWithCost.length;
+    })(),
+    lowMarginProducts: products.filter(p => {
+      if (!p.cost || !p.price || p.price === 0) return false;
+      const margin = ((p.price - p.cost) / p.price) * 100;
+      return margin < 20; // Low margin threshold
+    }).length
   };
 
   // Filtering
@@ -196,46 +223,102 @@ export default function InventoryPage() {
     const inv = getInv(product.id);
     const stockStatus = getStockStatus(inv?.quantity || 0);
     const canEditInventory = hasPermission(user, 'edit_inventory');
-    
+
+    const quantity = inv?.quantity || 0;
+    const cost = product.cost || 0;
+    const price = product.price || 0;
+    const profitPerUnit = price - cost;
+    const totalValue = quantity * price;
+   
+    const totalProfit = quantity * profitPerUnit;
+    const marginPercent = price > 0 ? ((profitPerUnit / price) * 100) : 0;
+
+    const getMarginColor = (margin: number) => {
+      if (margin >= 30) return 'text-green-600';
+      if (margin >= 20) return 'text-yellow-600';
+      if (margin >= 0) return 'text-orange-600';
+      return 'text-red-600';
+    };
+
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
-            <p className="text-sm text-gray-600">{product.category || 'Uncategorized'}</p>
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-sm text-gray-600">{product.category || 'Uncategorized'}</p>
+              {product.sku && (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                  {product.sku}
+                </span>
+              )}
+            </div>
           </div>
           <div className={`px-2 py-1 rounded-full text-xs font-medium ${stockStatus.color} ${stockStatus.bg}`}>
             {stockStatus.text}
           </div>
         </div>
-        
-        <div className="space-y-2">
+
+        <div className="space-y-2 mb-4">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Stock:</span>
-            <span className="font-medium">{inv?.quantity || 0}</span>
+            <span className="font-medium">{quantity}</span>
           </div>
-          {product.price && (
+
+          {price > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Value:</span>
-              <span className="font-medium">${((inv?.quantity || 0) * product.price).toFixed(2)}</span>
+              <span className="text-gray-600">Price:</span>
+              <span className="font-medium">${price.toFixed(2)}</span>
+            </div>
+          )}
+
+          {cost > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Cost:</span>
+              <span className="font-medium">${cost.toFixed(2)}</span>
+            </div>
+          )}
+
+          {profitPerUnit !== 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Margin:</span>
+              <span className={`font-medium ${getMarginColor(marginPercent)}`}>
+                {marginPercent.toFixed(1)}%
+              </span>
+            </div>
+          )}
+
+          {totalValue > 0 && (
+            <div className="flex justify-between text-sm border-t pt-2">
+              <span className="text-gray-600">Total Value:</span>
+              <span className="font-semibold text-green-600">${totalValue.toFixed(2)}</span>
+            </div>
+          )}
+
+          {totalProfit !== 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Total Profit:</span>
+              <span className={`font-semibold ${totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                ${totalProfit.toFixed(2)}
+              </span>
             </div>
           )}
         </div>
-        
-        <div className="mt-4 pt-3 border-t border-gray-100">
+
+        <div className="flex gap-2">
           {canEditInventory ? (
             <button
               onClick={() => openStockModal(product)}
-              className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
             >
               <FaEdit className="w-3 h-3 inline mr-1" />
               Update Stock
             </button>
           ) : (
-            <Tooltip content="You don&apos;t have permission to edit inventory. Contact your administrator.">
+            <Tooltip content="You don't have permission to edit inventory. Contact your administrator.">
               <button
                 disabled
-                className="w-full px-3 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed text-sm font-medium"
+                className="flex-1 px-3 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed text-sm font-medium"
               >
                 <FaEdit className="w-3 h-3 inline mr-1" />
                 Update Stock
@@ -294,50 +377,114 @@ export default function InventoryPage() {
 
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Inventory</h1>
-            <p className="text-gray-600">Manage stock levels and inventory</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Smart Inventory</h1>
+            <p className="text-gray-600">Advanced stock management with cost analysis and profit tracking</p>
           </div>
-          
-          {hasPermission(user, 'create_inventory') && (
+
+          <div className="flex gap-3">
             <button
-              onClick={() => setShowModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => {
+                const data = filtered.map(product => {
+                  const inv = getInv(product.id);
+                  const quantity = inv?.quantity || 0;
+                  const cost = product.cost || 0;
+                  const price = product.price || 0;
+                  const profitPerUnit = price - cost;
+                  const totalValue = quantity * price;
+                  const totalProfit = quantity * profitPerUnit;
+                  const marginPercent = price > 0 ? ((profitPerUnit / price) * 100) : 0;
+
+                  return {
+                    'Product Name': product.name,
+                    'SKU': product.sku || '',
+                    'Category': product.category || '',
+                    'Stock': quantity,
+                    'Cost': cost,
+                    'Price': price,
+                    'Margin %': marginPercent.toFixed(1),
+                    'Total Value': totalValue.toFixed(2),
+                    'Total Profit': totalProfit.toFixed(2),
+                    'Status': quantity === 0 ? 'Out of Stock' : quantity <= 5 ? 'Low Stock' : 'In Stock'
+                  };
+                });
+
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
+                XLSX.writeFile(wb, `inventory-${new Date().toISOString().split('T')[0]}.xlsx`);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
-              <FaPlus className="w-4 h-4 inline mr-2" />
-              Bulk Update
+              <FaDownload className="w-4 h-4" />
+              Export
             </button>
-          )}
+
+            {hasPermission(user, 'create_inventory') && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <FaPlus className="w-4 h-4" />
+                Bulk Update
+              </button>
+            )}
+          </div>
         </div>
 
           {/* Statistics */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <StatCard 
-              title="Total Products" 
-              value={stats.totalProducts} 
-              icon={<FaBox className="w-5 h-5" />} 
-              color="text-blue-600" 
-              bg="bg-blue-50" 
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <StatCard
+              title="Total Products"
+              value={stats.totalProducts}
+              icon={<FaBox className="w-5 h-5" />}
+              color="text-blue-600"
+              bg="bg-blue-50"
             />
-            <StatCard 
-              title="In Stock" 
-              value={stats.inStock} 
-              icon={<FaCheckCircle className="w-5 h-5" />} 
-              color="text-green-600" 
-              bg="bg-green-50" 
+            <StatCard
+              title="Inventory Value"
+              value={`$${stats.totalValue.toLocaleString()}`}
+              icon={<FaCalculator className="w-5 h-5" />}
+              color="text-green-600"
+              bg="bg-green-50"
             />
-            <StatCard 
-              title="Out of Stock" 
-              value={stats.outOfStock} 
-              icon={<FaTimesCircle className="w-5 h-5" />} 
-              color="text-red-600" 
-              bg="bg-red-50" 
+            <StatCard
+              title="Total Profit"
+              value={`$${stats.totalProfit.toLocaleString()}`}
+              icon={<FaChartLine className="w-5 h-5" />}
+              color={stats.totalProfit >= 0 ? "text-emerald-600" : "text-red-600"}
+              bg={stats.totalProfit >= 0 ? "bg-emerald-50" : "bg-red-50"}
             />
-            <StatCard 
-              title="Low Stock" 
-              value={stats.lowStock} 
-              icon={<FaExclamationTriangle className="w-5 h-5" />} 
-              color="text-orange-600" 
-              bg="bg-orange-50" 
+            <StatCard
+              title="Avg Margin"
+              value={`${stats.averageMargin.toFixed(1)}%`}
+              icon={<FaPercentage className="w-5 h-5" />}
+              color={stats.averageMargin >= 20 ? "text-green-600" : "text-orange-600"}
+              bg={stats.averageMargin >= 20 ? "bg-green-50" : "bg-orange-50"}
+            />
+          </div>
+
+          {/* Secondary Statistics */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <StatCard
+              title="In Stock"
+              value={stats.inStock}
+              icon={<FaCheckCircle className="w-5 h-5" />}
+              color="text-green-600"
+              bg="bg-green-50"
+            />
+            <StatCard
+              title="Out of Stock"
+              value={stats.outOfStock}
+              icon={<FaTimesCircle className="w-5 h-5" />}
+              color="text-red-600"
+              bg="bg-red-50"
+            />
+            <StatCard
+              title="Low Margin Products"
+              value={stats.lowMarginProducts}
+              icon={<FaExclamationTriangle className="w-5 h-5" />}
+              color="text-orange-600"
+              bg="bg-orange-50"
             />
           </div>
         </div>

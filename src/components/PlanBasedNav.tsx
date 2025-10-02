@@ -1,28 +1,71 @@
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
-import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaUser, FaCaretDown, FaBars, FaTimes, FaFileAlt, FaChevronLeft, FaChevronRight, FaMobile, FaChevronDown, FaChevronUp } from 'react-icons/fa';
-import { useState } from 'react';
+import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaBars, FaTimes, FaFileAlt, FaChevronLeft, FaChevronRight, FaMobile, FaChevronDown, FaChevronUp, FaMapMarkerAlt } from 'react-icons/fa';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
 import { FaTachometerAlt } from 'react-icons/fa';
+import { apiGet } from '@/utils/api';
+import Image from 'next/image';
+
+
+
+interface Tenant {
+  name: string;
+  logoUrl?: string;
+  // Add other fields as needed
+}
+
+interface Branch {
+  name: string;
+  // Add other fields as needed
+}
 
 export default function PlanBasedNav() {
   const userContext = useUser();
   const { limits, loading: limitsLoading } = usePlanLimits();
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [branch, setBranch] = useState<Branch | null>(null);
+  const [tenantBranchLoading, setTenantBranchLoading] = useState(true);
   const pathname = usePathname();
 
   // Close dropdowns when navigating to a different page
   React.useEffect(() => {
     setOpenDropdowns(new Set());
   }, [pathname]);
+
+  // Fetch tenant and branch data
+  useEffect(() => {
+    const fetchTenantAndBranch = async () => {
+      if (!userContext.user?.tenantId || !userContext.user?.branchId) {
+        setTenantBranchLoading(false);
+        return;
+      }
+
+      try {
+        const [tenantData, branchData] = await Promise.all([
+          apiGet('/tenant/me'),
+          apiGet(`/api/branches/${userContext.user.branchId}`)
+        ]);
+        setTenant(tenantData as Tenant);
+        setBranch(branchData as Branch);
+      } catch (error) {
+        console.error('Error fetching tenant or branch:', error);
+      } finally {
+        setTenantBranchLoading(false);
+      }
+    };
+
+    if (userContext.user) {
+      fetchTenantAndBranch();
+    }
+  }, [userContext.user]);
 
   // Debug logs
 
@@ -37,6 +80,8 @@ export default function PlanBasedNav() {
       requiredPermission: 'view_products',
       subItems: [
         { name: 'Product List', href: '/products', requiredPermission: 'view_products' },
+        { name: 'Bulk Upload', href: '/products/bulk-add', requiredPermission: 'create_products' },
+        { name: 'Bulk Upload Records', href: '/products/bulk-upload-records', requiredPermission: 'view_products' },
         { name: 'Analytics', href: '/products/analytics', requiredPermission: 'view_products' }
       ]
     },
@@ -48,7 +93,8 @@ export default function PlanBasedNav() {
       requiredPermission: 'view_inventory',
       subItems: [
         { name: 'Basic Inventory', href: '/inventory', requiredPermission: 'view_inventory' },
-        { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory' }
+        { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory' },
+        { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory' }
       ]
     },
     { name: 'Sales', href: '/sales', icon: FaShoppingCart, requiredPlan: null, requiredPermission: 'view_sales' },
@@ -112,16 +158,16 @@ export default function PlanBasedNav() {
   }
 
   // Use a regular variable for loading skeleton
-  const isLoading = userContext?.loading || limitsLoading || !userContext?.user || !limits;
+  const isLoading = userContext?.loading || limitsLoading || !userContext?.user || !limits || tenantBranchLoading;
   if (isLoading) {
     return (
       <div className={`fixed top-0 left-0 h-full bg-white shadow-lg border-r z-50 transition-all duration-300 ${
         sidebarCollapsed ? 'w-16' : 'w-64'
       }`}>
-        <div className="p-4">
-          <div className="flex items-center space-x-2 mb-8">
-         
-            {!sidebarCollapsed && <span className="text-xl font-bold text-gray-900">SaaS Platform</span>}
+          <div className="p-4">
+            <div className="flex items-center space-x-2 mb-8">
+
+            {!sidebarCollapsed && <span className="text-xl font-bold text-gray-900">Loading...</span>}
           </div>
           <div className="animate-pulse space-y-4">
             <div className="h-4 bg-gray-200 rounded"></div>
@@ -151,38 +197,61 @@ export default function PlanBasedNav() {
         </button>
       </div>
 
-      {/* Desktop collapse/expand button */}
-      <div className="hidden lg:block fixed top-4 left-4 z-50">
-        <Tooltip content={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} position="bottom">
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-2 bg-white rounded-lg shadow-lg border hover:bg-gray-50 transition-colors"
-          >
-            {sidebarCollapsed ? <FaChevronRight className="w-4 h-4" /> : <FaChevronLeft className="w-4 h-4" />}
-          </button>
-        </Tooltip>
-      </div>
-
       {/* Sidebar */}
       <div className={`fixed top-0 left-0 h-full bg-white shadow-lg border-r z-30 transition-all duration-300 ease-in-out ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       } ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
+        {/* Desktop collapse/expand button */}
+        <div className="hidden lg:block absolute right-2 z-50">
+          <Tooltip content={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} position="bottom">
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-2 bg-white rounded-lg shadow-lg border hover:bg-gray-50 transition-colors"
+            >
+              {sidebarCollapsed ? <FaChevronRight className="w-4 h-4" /> : <FaChevronLeft className="w-4 h-4" />}
+            </button>
+          </Tooltip>
+        </div>
         <div className="flex flex-col h-full relative">
           {/* Header */}
           <div className={`border-b border-gray-200 transition-all duration-300 ${
             sidebarCollapsed ? 'p-4' : 'p-6'
           }`}>
-            <div className="flex items-center space-x-2">
-              <div className={sidebarCollapsed ? "w-6 h-6 flex items-center justify-center" : "w-32 h-8"}>
-              
-              </div>
+            <div className="flex flex-col items-center justify-center space-y-3">
+              {/* Logo */}
+              {!sidebarCollapsed && !sidebarOpen && tenant?.logoUrl && (
+                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                  <Image
+                    src={tenant.logoUrl}
+                    alt={`${tenant.name} logo`}
+                    width={48}
+                    height={48}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Business and Branch Info */}
               {!sidebarCollapsed && !sidebarOpen && (
-                <span className="text-xl font-bold text-gray-900 whitespace-nowrap">SaaS Platform</span>
+                <div className="text-center">
+                  <h1 className="text-lg font-bold text-gray-900 leading-tight">
+                    {tenant?.name || 'Business Name'}
+                  </h1>
+                  <div className="flex items-center justify-center mt-2 space-x-1">
+                    <FaMapMarkerAlt className="w-3 h-3 text-gray-500" />
+                    <p className="text-xs text-gray-600 font-medium">
+                      {branch?.name || 'Branch'}
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
           </div>
 
-         
+
 
           {/* Navigation */}
           <nav className="flex-1 p-2 overflow-y-auto">
@@ -302,50 +371,7 @@ export default function PlanBasedNav() {
             </div>
           </nav>
 
-          {/* User Menu - Only show when expanded */}
-          {!sidebarCollapsed && (
-            <div className="p-3 border-t border-gray-200">
-              <div className="relative">
-                <button
-                  onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center space-x-2 w-full p-2 rounded hover:bg-gray-50 transition-colors text-xs"
-                >
-                  <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-medium">
-                      {userContext.user?.name?.charAt(0) || 'U'}
-                    </span>
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className="text-xs font-medium text-gray-900">
-                      {userContext.user?.name || 'User'}
-                    </p>
-                    <p className="text-[10px] text-gray-500">
-                      {userContext.user?.email || 'user@example.com'}
-                    </p>
-                  </div>
-                  <FaCaretDown className="w-3 h-3 text-gray-400" />
-                </button>
-                {showUserMenu && (
-                  <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
-                    <a
-                      href="/settings"
-                      className="flex items-center px-3 py-2 text-xs text-gray-700 hover:bg-gray-100"
-                    >
-                      <FaUser className="w-4 h-4 mr-2" />
-                      Profile Settings
-                    </a>
-                    <button
-                      onClick={handleLogout}
-                      className="flex items-center w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50"
-                    >
-                      <FaSignOutAlt className="w-4 h-4 mr-2" />
-                      Sign Out
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+
 
           {/* Fixed Logout Button at Bottom - Show in both states */}
           <div className="absolute bottom-0 left-0 w-full border-t border-gray-200 bg-white">
