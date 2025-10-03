@@ -13,6 +13,7 @@ import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
 import { useBranch } from "@/contexts/BranchContext";
 import Image from 'next/image';
+import API_BASE_URL from '../../config/apiConfig';
 
 interface Product {
   id: string;
@@ -248,7 +249,7 @@ export default function ProductsPage() {
       // Use XMLHttpRequest for upload progress
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/bulk-upload`);
+        xhr.open("POST", `${API_BASE_URL}/products/bulk-upload`);
         xhr.setRequestHeader("Authorization", `Bearer ${localStorage.getItem("token")}`);
         xhr.setRequestHeader("x-branch-id", selectedBranchId || "");
         xhr.upload.onprogress = (event) => {
@@ -295,7 +296,7 @@ export default function ProductsPage() {
     const token = localStorage.getItem("token");
     while (!finished) {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/bulk-upload-progress/${uploadId}`,
+        const res = await fetch(`${API_BASE_URL}/products/bulk-upload-progress/${uploadId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -340,7 +341,7 @@ export default function ProductsPage() {
     if (!confirm("Are you sure you want to delete ALL products? This cannot be undone.")) return;
     setClearMsg("");
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/clear-all`, {
+      const res = await fetch(`${API_BASE_URL}/products/clear-all`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
       });
@@ -1210,7 +1211,7 @@ export default function ProductsPage() {
               
               <div className="text-center">
                 <Image
-                  src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/${qrCodeProductId}/qr`}
+                  src={`${API_BASE_URL}/products/${qrCodeProductId}/qr`}
                   alt="Product QR Code"
                   width={256}
                   height={256}
@@ -1223,7 +1224,7 @@ export default function ProductsPage() {
                       const printWindow = window.open('', '', 'height=400,width=400');
                       if (printWindow) {
                         printWindow.document.write('<html><head><title>Print QR Code</title></head><body style="text-align:center;">');
-                        printWindow.document.write(`<img src="${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/${qrCodeProductId}/qr" />`);
+                        printWindow.document.write(`<img src="${API_BASE_URL}/products/${qrCodeProductId}/qr" />`);
                         printWindow.document.write('</body></html>');
                         printWindow.document.close();
                         printWindow.focus();

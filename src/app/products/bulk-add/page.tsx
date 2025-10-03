@@ -8,6 +8,7 @@ import { useBranch } from "@/contexts/BranchContext";
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import AuthGuard from '@/components/AuthGuard';
+import API_BASE_URL from '../../../config/apiConfig';
 
 interface ProductPreview {
   id: string;
@@ -199,7 +200,7 @@ const BulkAddProductsPage: React.FC = () => {
       const formData = new FormData();
       formData.append('file', blob, 'products.xlsx');
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/products/bulk-upload`, {
+      const response = await fetch(`${API_BASE_URL}/products/bulk-upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
