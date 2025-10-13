@@ -18,6 +18,11 @@ import {
   FiTrendingDown,
 } from 'react-icons/fi';
 
+import AnomalyDetectionPanel from '@/components/AnomalyDetectionPanel';
+import CustomerSegmentationPanel from '@/components/CustomerSegmentationPanel';
+import ChurnPredictionPanel from '@/components/ChurnPredictionPanel';
+import AISummaryPanel from '@/components/AISummaryPanel';
+
 // Dynamically import components with no SSR for better performance
 const ChartComponents = {
   CustomerGrowthChart: dynamic(
@@ -109,6 +114,25 @@ interface AnalyticsData {
     repeatCustomers: number;
     retentionRate: number;
   };
+  aiSummary?: string;
+  anomalies?: Array<{ date: string; value: number; anomaly: boolean }>;
+  customerSegmentsAI?: Array<{
+    name: string;
+    total: number;
+    count: number;
+    last_purchase: string;
+    segment_label: string;
+    clv: number;
+    churn_risk: number;
+  }>;
+  churnPrediction?: Array<{
+    name: string;
+    total: number;
+    count: number;
+    last_purchase: string;
+    churn_probability: number;
+    churn_risk: number;
+  }>;
 };
 
 
@@ -412,74 +436,154 @@ export default function DashboardPage() {
                 title="Monthly Revenue"
                 height={400}
               />
-              <div className="space-y-6">
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                  <CustomerGrowthChart
-                    growthData={analyticsData?.customerGrowth || {}}
-                    title="Customer Growth"
-                    height={400}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <FiUsers className="w-5 h-5 text-purple-500" />
-                      <h3 className="text-sm font-medium text-gray-700">Total Customers</h3>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {analyticsData?.totalCustomers?.toLocaleString() || '0'}
-                    </p>
-                    {analyticsData?.customerRetention && (
-                      <div className="mt-2 flex items-center text-sm">
-                        <span className={`inline-flex items-center ${analyticsData.customerRetention.retentionRate >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {analyticsData.customerRetention.retentionRate >= 0 ? (
-                            <FiTrendingUp className="mr-1" />
-                          ) : (
-                            <FiTrendingDown className="mr-1" />
-                          )}
-                          {Math.abs(Math.round(analyticsData.customerRetention.retentionRate * 100))}% from last period
-                        </span>
-                      </div>
-                    )}
-                  </div>
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                <CustomerGrowthChart
+                  growthData={analyticsData?.customerGrowth || {}}
+                  title="Customer Growth"
+                  height={400}
+                />
+              </div>
+            </div>
 
-                  {analyticsData?.performanceMetrics && (
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                      <div className="flex items-center gap-2 mb-3">
-                        <FiDollarSign className="w-5 h-5 text-purple-500" />
-                        <h3 className="text-sm font-medium text-gray-700">Avg. Value</h3>
-                      </div>
-                      <p className="text-2xl font-bold text-gray-900">
-                        ${Math.round(analyticsData.performanceMetrics.customerLifetimeValue).toLocaleString()}
-                      </p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        per customer
-                      </p>
+            {/* Full-width Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+              <motion.div
+                whileHover={{ y: -2, scale: 1.02 }}
+                transition={{ duration: 0.2 }}
+                className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl border border-purple-200 p-6 shadow-sm hover:shadow-lg transition-all duration-300"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-white rounded-xl shadow-sm">
+                      <FiUsers className="w-6 h-6 text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-purple-800">Total Customers</h3>
+                      <p className="text-xs text-purple-600">Active user base</p>
+                    </div>
+                  </div>
+                  {analyticsData?.customerRetention && (
+                    <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                      analyticsData.customerRetention.retentionRate >= 0
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}>
+                      {analyticsData.customerRetention.retentionRate >= 0 ? (
+                        <FiTrendingUp className="w-3 h-3" />
+                      ) : (
+                        <FiTrendingDown className="w-3 h-3" />
+                      )}
+                      {Math.abs(Math.round(analyticsData.customerRetention.retentionRate * 100))}%
                     </div>
                   )}
                 </div>
+                <div className="text-3xl font-bold text-purple-900 mb-2">
+                  {analyticsData?.totalCustomers?.toLocaleString() || '0'}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-purple-600 font-medium">Registered users</span>
+                  <div className="flex items-center gap-1 text-xs text-purple-500">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                    Live data
+                  </div>
+                </div>
+              </motion.div>
 
-                {analyticsData?.customerRetention && (
-                  <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-100">
-                    <h3 className="text-sm font-medium text-purple-800 mb-2">Customer Retention</h3>
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <p className="text-3xl font-bold text-purple-900">
-                          {Math.round(analyticsData.customerRetention.retentionRate * 100)}%
-                        </p>
-                        <p className="text-xs text-purple-700">
-                          {analyticsData.customerRetention.repeatCustomers.toLocaleString()} repeat customers
-                        </p>
+              {analyticsData?.performanceMetrics && (
+                <motion.div
+                  whileHover={{ y: -2, scale: 1.02 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl border border-emerald-200 p-6 shadow-sm hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-white rounded-xl shadow-sm">
+                        <FiDollarSign className="w-6 h-6 text-emerald-600" />
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-purple-600">
-                          of {analyticsData.customerRetention.totalCustomers.toLocaleString()} total
-                        </p>
+                      <div>
+                        <h3 className="text-sm font-semibold text-emerald-800">Avg. Customer Value</h3>
+                        <p className="text-xs text-emerald-600">Lifetime value</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
+                      <FiTrendingUp className="w-3 h-3" />
+                      CLV
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold text-emerald-900 mb-2">
+                    ${Math.round(analyticsData.performanceMetrics.customerLifetimeValue).toLocaleString()}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-emerald-600 font-medium">Per customer</span>
+                    <div className="flex items-center gap-1 text-xs text-emerald-500">
+                      <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                      Calculated
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {analyticsData?.customerRetention && (
+                <motion.div
+                  whileHover={{ y: -2, scale: 1.01 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-2xl p-6 border border-indigo-200 shadow-sm hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-white rounded-xl shadow-sm">
+                        <FiTrendingUp className="w-6 h-6 text-indigo-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-indigo-800">Customer Retention</h3>
+                        <p className="text-xs text-indigo-600">Repeat customer rate</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">
+                      <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
+                      Active
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-between mb-4">
+                    <div>
+                      <p className="text-4xl font-bold text-indigo-900 mb-1">
+                        {Math.round(analyticsData.customerRetention.retentionRate * 100)}%
+                      </p>
+                      <div className="flex items-center gap-2 text-sm text-indigo-700">
+                        <span className="font-medium">{analyticsData.customerRetention.repeatCustomers.toLocaleString()}</span>
+                        <span>repeat customers</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-indigo-600 font-medium">
+                        of {analyticsData.customerRetention.totalCustomers.toLocaleString()} total
+                      </p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <div className="w-20 h-2 bg-indigo-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000"
+                            style={{
+                              width: `${Math.round(analyticsData.customerRetention.retentionRate * 100)}%`
+                            }}
+                          ></div>
+                        </div>
+                        <span className="text-xs text-indigo-500 font-medium">
+                          {Math.round(analyticsData.customerRetention.retentionRate * 100)}%
+                        </span>
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
+                  <div className="flex items-center justify-between pt-4 border-t border-indigo-200">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                      <span className="text-xs text-indigo-600 font-medium">Healthy retention rate</span>
+                    </div>
+                    <div className="text-xs text-indigo-500">
+                      Last 30 days
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </div>
           </div>
 
@@ -509,10 +613,35 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* AI Insights Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">AI Insights</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <AISummaryPanel
+                summary={analyticsData?.aiSummary || ''}
+                loading={loading}
+              />
+              <AnomalyDetectionPanel
+                anomalies={analyticsData?.anomalies || []}
+                loading={loading}
+              />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <CustomerSegmentationPanel
+                segments={analyticsData?.customerSegmentsAI || []}
+                loading={loading}
+              />
+              <ChurnPredictionPanel
+                predictions={analyticsData?.churnPrediction || []}
+                loading={loading}
+              />
+            </div>
+          </div>
+
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content Area */}
-          
+
 
             {/* Sidebar */}
             <div className="space-y-6">

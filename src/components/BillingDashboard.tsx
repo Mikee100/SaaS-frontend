@@ -5,6 +5,11 @@ import BillingPlans, { BillingPlan } from './BillingPlans';
 import PaymentMethodForm from './PaymentMethodForm';
 import { apiGet } from '@/utils/api';
 import { FaChartLine, FaCreditCard, FaReceipt, FaDollarSign, FaUsers } from 'react-icons/fa';
+import { Elements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+
+// Initialize Stripe
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
 interface PaymentAnalytics {
   period: string;
@@ -352,10 +357,11 @@ export default function BillingDashboard({  }: BillingDashboardProps) {
           <div className="max-w-md mx-auto">
             {/* Stripe Elements Card Form */}
             <p className="mb-4 text-gray-600 text-sm">Save your card to enable subscriptions and faster payments.</p>
-            {/* You must wrap this in <Elements> higher up in your app for Stripe to work! */}
-            <div className="mb-8">
-              <PaymentMethodForm />
-            </div>
+            <Elements stripe={stripePromise}>
+              <div className="mb-8">
+                <PaymentMethodForm />
+              </div>
+            </Elements>
           </div>
         </div>
       )}

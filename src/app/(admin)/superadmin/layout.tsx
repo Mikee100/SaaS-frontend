@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { useUser } from "@/components/UserContext";
 import { useRouter, usePathname } from "next/navigation";
-import { FiHome, FiUsers, FiServer, FiSettings, FiMonitor, FiLifeBuoy, FiDatabase, FiBarChart2, FiCpu, FiFileText } from "react-icons/fi";
+import { FiHome, FiUsers, FiServer, FiSettings, FiMonitor, FiLifeBuoy, FiBarChart2, FiFileText } from "react-icons/fi";
 
 // Custom NavLink component with icon and active state
 function NavLink({ href, icon, children, active }: { href: string; icon: React.ReactNode; children: React.ReactNode; active: boolean }) {
@@ -30,7 +30,7 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
-    if (!loading && (!user || !user.isSuperadmin)) {
+    if (!loading && (!user || (!user.isSuperadmin && !user.roles?.includes('superadmin')))) {
       router.replace("/");
     }
   }, [user, loading, router]);
@@ -90,58 +90,50 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
           <nav className="flex-1 space-y-3 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
             <div className="space-y-1">
               <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Overview</h3>
-              <NavLink href="/superadmin" icon={<FiHome />} active={isActive('/superadmin')}>
+              <NavLink href="/admin/superadmin" icon={<FiHome />} active={isActive('/admin/superadmin')}>
                 Dashboard
               </NavLink>
             </div>
-            
+
             <div className="space-y-1">
               <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Management</h3>
-              <NavLink href="/superadmin/tenants" icon={<FiServer />} active={isActive('/superadmin/tenants')}>
+              <NavLink href="/admin/superadmin/tenants" icon={<FiServer />} active={isActive('/admin/superadmin/tenants')}>
                 Tenants
               </NavLink>
-              <NavLink href="/superadmin/tenants/analytics" icon={<FiBarChart2 />} active={isActive('/superadmin/tenants/analytics')}>
-                Tenant Analytics
-              </NavLink>
-              <NavLink href="/superadmin/tenants/migration" icon={<FiDatabase />} active={isActive('/superadmin/tenants/migration')}>
-                Migration & Backup
-              </NavLink>
-              <NavLink href="/superadmin/tenants/resources" icon={<FiCpu />} active={isActive('/superadmin/tenants/resources')}>
-                Resource Management
-              </NavLink>
-              <NavLink href="/superadmin/users" icon={<FiUsers />} active={isActive('/superadmin/users')}>
-                Users
-              </NavLink><NavLink href="/superadmin/billing" icon={<FiUsers />} active={isActive('/superadmin/billing')}>
+              <NavLink href="/admin/superadmin/billing" icon={<FiBarChart2 />} active={isActive('/admin/superadmin/billing')}>
                 Billing
               </NavLink>
+              <NavLink href="/admin/superadmin/users" icon={<FiUsers />} active={isActive('/admin/superadmin/users')}>
+                Users
+              </NavLink>
             </div>
-            
+
             <div className="space-y-1">
               <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Support & Operations</h3>
-              <NavLink href="/superadmin/support" icon={<FiLifeBuoy />} active={isActive('/superadmin/support')}>
+              <NavLink href="/admin/superadmin/support" icon={<FiLifeBuoy />} active={isActive('/admin/superadmin/support')}>
                 Support Tickets
               </NavLink>
-              <NavLink href="/superadmin/bulk" icon={<FiFileText />} active={isActive('/superadmin/bulk')}>
+              <NavLink href="/admin/superadmin/bulk" icon={<FiFileText />} active={isActive('/admin/superadmin/bulk')}>
                 Bulk Operations
               </NavLink>
             </div>
-            
+
             <div className="space-y-1">
               <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Monitoring</h3>
-              <NavLink href="/superadmin/health" icon={<FiMonitor />} active={isActive('/superadmin/health')}>
+              <NavLink href="/admin/superadmin/health" icon={<FiMonitor />} active={isActive('/admin/superadmin/health')}>
                 System Health
               </NavLink>
-              <NavLink href="/superadmin/logs" icon={<FiFileText />} active={isActive('/superadmin/logs')}>
+              <NavLink href="/admin/superadmin/logs" icon={<FiFileText />} active={isActive('/admin/superadmin/logs')}>
                 Audit Logs
               </NavLink>
             </div>
-            
+
             <div className="space-y-1">
               <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Settings</h3>
-              <NavLink href="/superadmin/settings" icon={<FiSettings />} active={isActive('/superadmin/settings')}>
+              <NavLink href="/admin/superadmin/settings" icon={<FiSettings />} active={isActive('/admin/superadmin/settings')}>
                 Platform Settings
               </NavLink>
-              <NavLink href="/superadmin/configurations" icon={<FiSettings />} active={isActive('/superadmin/configurations')}>
+              <NavLink href="/admin/superadmin/configurations" icon={<FiSettings />} active={isActive('/admin/superadmin/configurations')}>
                 System Configurations
               </NavLink>
             </div>

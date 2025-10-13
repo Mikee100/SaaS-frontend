@@ -218,12 +218,22 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
           if (user.branchId) {
             localStorage.setItem('selectedBranchId', user.branchId);
           }
-        }
 
-        // Refresh user data from the server
-        await fetchUser();
-        // Redirect to the dashboard (app page)
-        router.push('/');
+          // Refresh user data from the server
+          await fetchUser();
+
+          // Redirect based on user role
+          const isSuperAdmin = normalizedUser.isSuperadmin || normalizedUser.roles?.includes('superadmin');
+          const isAdmin = normalizedUser.roles?.includes('admin');
+
+          if (isSuperAdmin) {
+            router.push('/admin/superadmin');
+          } else if (isAdmin) {
+            router.push('/admin');
+          } else {
+            router.push('/');
+          }
+        }
       } else {
         throw new Error('No access token received in response');
       }

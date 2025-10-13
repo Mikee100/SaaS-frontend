@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/components/UserContext";
-import { FaSpinner, FaCheck } from "react-icons/fa";
+import { FaSpinner, FaCheck, FaEye, FaEyeSlash } from "react-icons/fa";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 
@@ -16,21 +16,19 @@ export default function LoginPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [formVisible, setFormVisible] = useState(false);
   const [shakeForm, setShakeForm] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const animationStartedRef = useRef(false);
 
   useEffect(() => {
     setYear(new Date().getFullYear());
 
-    // Check for success message in URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const message = urlParams.get('message');
     if (message) {
       setSuccessMessage(message);
-      // Clear the URL parameter
       window.history.replaceState({}, '', '/login');
     }
 
-    // Trigger form slide-in animation
     const timer = setTimeout(() => setFormVisible(true), 100);
     return () => clearTimeout(timer);
   }, [router]);
@@ -45,7 +43,6 @@ export default function LoginPage() {
         const currentPath = window.location.pathname;
         console.log('Current path in login page effect:', currentPath);
         
-        // If we're on the register page, don't redirect
         if (currentPath === '/register') {
           console.log('Allowing access to register page');
           setShowLoginAnimation(false);
@@ -53,7 +50,6 @@ export default function LoginPage() {
           return;
         }
         
-        // Only redirect if we're on the login page
         if (currentPath === '/login') {
           console.log('Redirecting authenticated user from login page');
           const isSuperAdmin = user.roles?.includes('superadmin') || user.isSuperadmin;
@@ -67,7 +63,6 @@ export default function LoginPage() {
             router.push("/");
           }
         } else {
-          // If we're on some other page, just clear the animation
           setShowLoginAnimation(false);
           animationStartedRef.current = false;
         }
@@ -80,7 +75,6 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await login(email, password);
-    // user and error will update via context
   };
 
   useEffect(() => {
@@ -91,30 +85,42 @@ export default function LoginPage() {
     }
   }, [error]);
 
-  // Clear error on input change
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEmail(e.target.value);
     if (error) clearError();
   };
+
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPassword(e.target.value);
     if (error) clearError();
   };
 
-  // Show loading animation overlay
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   if (showLoginAnimation) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="text-center text-white bg-white rounded-lg p-8 border border-gray-200">
+      <div className="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
+        <div className="text-center text-white bg-gray-800 rounded-2xl p-8 border border-gray-700 shadow-2xl">
           <div className="flex justify-center mb-6">
-            <FaSpinner className="w-12 h-12 animate-spin text-blue-600" />
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              </div>
+            </div>
           </div>
-          <h2 className="text-2xl font-semibold mb-2 text-gray-900">Processing Login...</h2>
-          <p className="text-gray-600 mb-4">Authenticating your credentials</p>
-          <div className="mt-4 flex justify-center space-x-2">
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+          <h2 className="text-2xl font-semibold mb-2 text-white">Accessing Your POS</h2>
+          <p className="text-gray-400 mb-4">Securing your business dashboard</p>
+          <div className="mt-6 flex justify-center space-x-1">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+                style={{ animationDelay: `${i * 0.2}s` }}
+              ></div>
+            ))}
           </div>
         </div>
       </div>
@@ -124,115 +130,167 @@ export default function LoginPage() {
   return (
     <ReactQueryProvider>
       <ThemeProvider>
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 flex items-center justify-center p-4 relative overflow-hidden">
-          {/* Floating POS Elements */}
+        <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4 relative overflow-hidden">
+          {/* Modern Geometric Background */}
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-20 left-10 animate-bounce" style={{ animationDelay: '0s', animationDuration: '3s' }}>
-              <div className="w-8 h-8 bg-blue-600 rounded-full opacity-30 flex items-center justify-center">
-                <span className="text-white text-xs">🛒</span>
-              </div>
-            </div>
-            <div className="absolute top-40 right-20 animate-bounce" style={{ animationDelay: '1s', animationDuration: '4s' }}>
-              <div className="w-6 h-6 bg-slate-600 rounded-full opacity-30 flex items-center justify-center">
-                <span className="text-white text-xs">📊</span>
-              </div>
-            </div>
-            <div className="absolute bottom-32 left-20 animate-bounce" style={{ animationDelay: '2s', animationDuration: '3.5s' }}>
-              <div className="w-7 h-7 bg-blue-700 rounded-full opacity-30 flex items-center justify-center">
-                <span className="text-white text-xs">💳</span>
-              </div>
-            </div>
-            <div className="absolute bottom-20 right-10 animate-bounce" style={{ animationDelay: '0.5s', animationDuration: '4.5s' }}>
-              <div className="w-5 h-5 bg-slate-700 rounded-full opacity-30 flex items-center justify-center">
-                <span className="text-white text-xs">🧾</span>
-              </div>
+            <div className="absolute top-0 left-0 w-72 h-72 bg-blue-600/5 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 right-0 w-96 h-96 bg-slate-700/5 rounded-full blur-3xl"></div>
+            
+            {/* Grid Pattern */}
+            <div className="absolute inset-0 opacity-10">
+              <div className="w-full h-full" style={{
+                backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                                 linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+                backgroundSize: '50px 50px'
+              }}></div>
             </div>
           </div>
 
-          <div className={`w-full max-w-md bg-white rounded-lg p-8 flex flex-col items-center relative
-            transition-all duration-700 ease-in-out
-            ${formVisible ? "translate-x-0 opacity-100" : "-translate-x-20 opacity-0"}
+          {/* Main Login Card */}
+          <div className={`w-full max-w-md relative
+            transition-all duration-700 ease-out
+            ${formVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}
             ${shakeForm ? "animate-shake" : ""}
-            border border-gray-200
           `}>
-            <div className="mb-8 text-center">
-              <div className="text-4xl font-bold text-gray-900 mb-1">
-                SaaS POS
+            {/* Card Background with Glass Effect */}
+            <div className="bg-gray-800/80 backdrop-blur-xl rounded-3xl border border-gray-700/50 shadow-2xl p-8">
+              
+              {/* Header */}
+              <div className="text-center mb-8">
+                <div className="flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center mr-3">
+                    <span className="text-white font-bold text-lg">₿</span>
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold text-white">POS System</h1>
+                    <p className="text-gray-400 text-sm">Business Dashboard</p>
+                  </div>
+                </div>
+                <p className="text-gray-500 text-sm">Sign in to manage your point of sale</p>
               </div>
-              <div className="text-gray-600 text-sm">Point of Sale System</div>
-              <div className="text-gray-500 text-xs mt-1">Secure login to your dashboard</div>
-            </div>
 
-            {successMessage && (
-              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm text-center">
-                <FaCheck className="inline mr-2" />
-                {successMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="w-full space-y-6">
-              {error && (
-                <div className="text-red-600 text-sm text-center flex flex-col gap-2 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <span className="font-semibold">{error}</span>
-                  <button type="button" className="text-xs underline text-red-500 hover:text-red-600" onClick={clearError}>Clear</button>
+              {/* Success Message */}
+              {successMessage && (
+                <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl text-green-400 text-sm text-center">
+                  <FaCheck className="inline mr-2" />
+                  {successMessage}
                 </div>
               )}
-              <div className="relative">
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={handleEmailChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all duration-300 bg-white text-gray-900 placeholder-gray-500 text-base"
-                  required
-                />
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">
-                  📧
-                </div>
-              </div>
-              <div className="relative">
-                <input
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={handlePasswordChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all duration-300 bg-white text-gray-900 placeholder-gray-500 text-base"
-                  required
-                />
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">
-                  🔒
-                </div>
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold text-base hover:bg-blue-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={loading}
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center">
-                    <FaSpinner className="animate-spin mr-2" />
-                    <span>Processing...</span>
+
+              {/* Login Form */}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {error && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">{error}</span>
+                      <button 
+                        type="button" 
+                        className="text-red-400 hover:text-red-300 text-xs font-medium"
+                        onClick={clearError}
+                      >
+                        DISMISS
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <span>Login to Dashboard</span>
                 )}
-              </button>
-            </form>
-            <div className="w-full flex justify-end mt-4">
-              <a href="/forgot-password" className="text-gray-500 hover:text-gray-700 hover:underline text-sm">Forgot Password?</a>
+
+                {/* Email Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={handleEmailChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl 
+                               focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 
+                               outline-none transition-all duration-300 text-white placeholder-gray-500
+                               hover:border-gray-500"
+                      placeholder="business@example.com"
+                      required
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                      ✉️
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={handlePasswordChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl 
+                               focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 
+                               outline-none transition-all duration-300 text-white placeholder-gray-500
+                               hover:border-gray-500 pr-12"
+                      placeholder="Enter your password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={togglePasswordVisibility}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
+                    >
+                      {showPassword ? <FaEyeSlash /> : <FaEye />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-sm
+                           hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed
+                           transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.99]
+                           shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40"
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center">
+                      <FaSpinner className="animate-spin mr-3" />
+                      <span>Authenticating...</span>
+                    </div>
+                  ) : (
+                    <span>Access Dashboard</span>
+                  )}
+                </button>
+              </form>
+
+              {/* Footer Links */}
+              <div className="mt-6 space-y-4">
+                <div className="flex justify-between items-center text-sm">
+                  <a 
+                    href="/forgot-password" 
+                    className="text-gray-400 hover:text-blue-400 transition-colors font-medium"
+                  >
+                    Forgot Password?
+                  </a>
+                  <a 
+                    href="/register" 
+                    className="text-blue-400 hover:text-blue-300 font-medium flex items-center"
+                  >
+                    Create Account →
+                  </a>
+                </div>
+                
+                <div className="pt-4 border-t border-gray-700/50">
+                  <p className="text-center text-xs text-gray-500">
+                    &copy; {year ?? ""} POS System • Secure Business Platform
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="mt-6 text-sm text-gray-600">
-              Don&apos;t have an account?{" "}
-              <a href="/register" className="text-blue-600 hover:text-blue-800 hover:underline font-medium">
-                Register
-              </a>
-            </div>
-            <footer className="absolute -bottom-8 left-0 right-0 text-center text-xs text-gray-500">
-              &copy; {year ?? ""} SaaS POS. All rights reserved.
-            </footer>
           </div>
         </div>
       </ThemeProvider>
     </ReactQueryProvider>
   );
-} 
+}

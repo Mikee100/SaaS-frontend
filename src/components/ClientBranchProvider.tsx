@@ -2,8 +2,6 @@
 import React from "react";
 import { BranchProvider } from "@/contexts/BranchContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import LayoutWrapper from "@/components/LayoutWrapper";
-
 
 export default function ClientBranchProvider({ children }: { children: React.ReactNode }) {
   const [initialBranchId, setInitialBranchId] = React.useState("");
@@ -16,10 +14,7 @@ export default function ClientBranchProvider({ children }: { children: React.Rea
   return (
     <BranchProvider initialBranchId={initialBranchId}>
       <ThemeProvider>
-        <LayoutWrapper>
-          {children}
-        </LayoutWrapper>
-        
+        {children}
       </ThemeProvider>
     </BranchProvider>
   );

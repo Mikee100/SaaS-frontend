@@ -4,7 +4,7 @@ import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
-import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, FaMapMarkerAlt, FaCreditCard, FaRobot } from 'react-icons/fa';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
 import { FaTachometerAlt } from 'react-icons/fa';
@@ -69,24 +69,32 @@ export default function PlanBasedNav() {
 
   // Debug logs
 
-  // Always call hooks at top level!
-  const navigationItems = React.useMemo(() => [
-    { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
-    {
-      name: 'Products & Inventory',
-      href: '/products',
-      icon: FaBox,
-      requiredPlan: 'Basic',
-      requiredPermission: 'view_products',
-      subItems: [
-        { name: 'Product List', href: '/products', requiredPermission: 'view_products' },
-        { name: 'Bulk Upload', href: '/products/bulk-add', requiredPermission: 'create_products' },
-        { name: 'Bulk Upload Records', href: '/products/bulk-upload-records', requiredPermission: 'view_products' },
-        { name: 'Basic Inventory', href: '/inventory', requiredPermission: 'view_inventory' },
-        { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory' },
-        { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory' }
-      ]
-    },
+    // Always call hooks at top level!
+    const navigationItems = React.useMemo(() => [
+      { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
+      {
+        name: 'AI Assistant',
+        href: '/ai-assistant',
+        icon: FaRobot,
+        requiredPlan: 'Basic',
+        requiredPermission: null
+      },
+      {
+        name: 'Products & Inventory',
+        href: '/products',
+        icon: FaBox,
+        requiredPlan: 'Basic',
+        requiredPermission: 'view_products',
+        subItems: [
+          { name: 'Product List', href: '/products', requiredPermission: 'view_products' },
+          { name: 'Bulk Upload', href: '/products/bulk-add', requiredPermission: 'create_products' },
+          { name: 'Bulk Upload Records', href: '/products/bulk-upload-records', requiredPermission: 'view_products' },
+          { name: 'Basic Inventory', href: '/inventory', requiredPermission: 'view_inventory' },
+          { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory' },
+          { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory' },
+           { name: 'Reports', href: '/products/reports', requiredPermission: 'view_inventory' }
+        ]
+      },
     {
       name: 'Transactions',
       href: '/sales',
@@ -112,6 +120,7 @@ export default function PlanBasedNav() {
     },
     { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
     { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
+    { name: 'Billing & Subscription', href: '/account/billing', icon: FaCreditCard, requiredPlan: null, requiredPermission: null },
   ], []);
 
   type PlanName = 'Basic' | 'Pro' | 'Enterprise';

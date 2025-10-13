@@ -29,6 +29,7 @@ interface Tenant {
     apiAccess: boolean;
     customBranding: boolean;
   };
+
 }
 
 interface NotificationPrefs {
@@ -58,6 +59,7 @@ export default function SettingsPage() {
     apiAccess: false,
     customBranding: false,
   });
+
 
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
 
@@ -444,6 +446,8 @@ export default function SettingsPage() {
             </PlanGuard>
           )}
 
+
+
           {activeTab === 'notifications' && (
             <PlanGuard requiredPlan="Basic">
               <div className="bg-white rounded-xl shadow-sm border p-6">
@@ -524,6 +528,7 @@ export default function SettingsPage() {
                 { href: "/settings/billing", label: "Billing & Plans", icon: <FaCog className="w-4 h-4 text-blue-600" />, plan: undefined },
                 { href: "/settings/users", label: "User Management", icon: <FaUsers className="w-4 h-4 text-green-600" />, plan: "Basic" as const },
                 { href: "/settings/analytics", label: "Analytics Settings", icon: <FaChartLine className="w-4 h-4 text-purple-600" />, plan: "Pro" as const },
+                { href: "/settings/pdf-templates", label: "PDF Templates", icon: <FaDownload className="w-4 h-4 text-blue-600" />, plan: undefined },
                 { href: "/settings/branches", label: "Branches", icon: <FaCog className="w-4 h-4 text-yellow-600" />, plan: undefined },
                 { href: "/settings/notifications", label: "Notifications", icon: <FaBell className="w-4 h-4 text-orange-600" />, plan: "Basic" as const },
                 { href: "/settings/integrations", label: "Integrations", icon: <FaPlug className="w-4 h-4 text-indigo-600" />, plan: "Pro" as const },
