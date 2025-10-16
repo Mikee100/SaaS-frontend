@@ -1,5 +1,4 @@
 'use client';
-
 import { useState } from 'react';
 import { FaRobot, FaPaperPlane, FaSpinner, FaLightbulb, FaChartLine, FaBuilding, FaStore, FaBox, FaUsers, FaUser, FaInfoCircle, FaCopy, FaRedo } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';

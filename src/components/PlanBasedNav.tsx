@@ -134,7 +134,17 @@ export default function PlanBasedNav() {
   const currentPlan: PlanName = (limits?.currentPlan as PlanName) || 'Basic';
   const currentLevel = planHierarchy[currentPlan] || 0;
 
+  // Check if tenant has an active subscription
+  const hasActiveSubscription = React.useMemo(() => {
+    return limits && limits.currentPlan && limits.currentPlan !== 'Basic'; // Assuming 'Basic' means no paid plan
+  }, [limits]);
+
   const accessibleItems = React.useMemo(() => {
+    // If no active subscription, only show Dashboard
+    if (!hasActiveSubscription) {
+      return navigationItems.filter(item => item.name === 'Dashboard');
+    }
+
     return navigationItems.filter((item) => {
       // Check plan requirements
       if (item.requiredPlan) {
@@ -166,7 +176,7 @@ export default function PlanBasedNav() {
         return true;
       }) : undefined
     }));
-  }, [userContext.user, currentLevel, navigationItems, planHierarchy]);
+  }, [userContext.user, currentLevel, navigationItems, planHierarchy, hasActiveSubscription]);
 
   // Hide sidebar on settings pages
   const isSettingsPage = pathname?.startsWith('/settings');

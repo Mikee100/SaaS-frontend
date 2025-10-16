@@ -27,7 +27,7 @@ function ClientContent({ children }: { children: ReactNode }) {
       userId: user?.id,
       userRoles: user?.roles,
       userBranchId: user?.branchId,
-      canChangeBranch: user?.roles?.includes('owner') || user?.roles?.includes('admin'),
+      canChangeBranch: user?.roles?.includes('owner'),
       loading: loading
     });
 
@@ -57,7 +57,7 @@ function ClientContent({ children }: { children: ReactNode }) {
   return (
     <BranchProvider
       initialBranchId={user?.branchId}
-      canChangeBranch={user?.roles?.includes('owner') || user?.roles?.includes('admin')}
+      canChangeBranch={user?.roles?.includes('owner')}
     >
       <ClientBranchProvider>
         <Suspense fallback={<div>Loading...</div>}>

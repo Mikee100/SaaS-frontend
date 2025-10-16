@@ -76,23 +76,23 @@ type SalesTrends = {
 
 const QuickActions = () => {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {[
-        { icon: <FiPlus className="h-5 w-5" />, label: 'New Sale', onClick: () => {} },
-        { icon: <FiUserPlus className="h-5 w-5" />, label: 'Add Customer', onClick: () => {} },
-        { icon: <FiPackage className="h-5 w-5" />, label: 'Add Product', onClick: () => {} },
-        { icon: <FiFileText className="h-5 w-5" />, label: 'Generate Report', onClick: () => {} },
+        { icon: <FiPlus className="h-4 w-4" />, label: 'New Sale', onClick: () => {} },
+        { icon: <FiUserPlus className="h-4 w-4" />, label: 'Add Customer', onClick: () => {} },
+        { icon: <FiPackage className="h-4 w-4" />, label: 'Add Product', onClick: () => {} },
+        { icon: <FiFileText className="h-4 w-4" />, label: 'Generate Report', onClick: () => {} },
       ].map((action, index) => (
         <motion.button
           key={index}
-          whileHover={{ y: -2 }}
+          whileHover={{ y: -1 }}
           whileTap={{ scale: 0.98 }}
-          className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-4 text-center transition-colors hover:bg-gray-50"
+          className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-white p-3 text-center transition-colors hover:bg-gray-50"
         >
-          <div className="mb-2 rounded-lg bg-indigo-50 p-2 text-indigo-600">
+          <div className="mb-1.5 rounded-md bg-indigo-50 p-1.5 text-indigo-600">
             {action.icon}
           </div>
-          <span className="text-sm font-medium text-gray-700">{action.label}</span>
+          <span className="text-xs font-medium text-gray-700">{action.label}</span>
         </motion.button>
       ))}
     </div>
@@ -201,17 +201,17 @@ export default function DashboardPage() {
           <LogoEnforcement />
           <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
             {/* Header */}
-            <div className="mb-8 flex flex-col justify-between sm:flex-row sm:items-center">
-              <div className="mb-4 sm:mb-0">
+            <div className="mb-6 flex flex-col justify-between sm:flex-row sm:items-center">
+              <div className="mb-3 sm:mb-0">
                 <div className="flex items-center">
-                  <h1 className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-3xl font-bold text-transparent">
+                  <h1 className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-2xl font-bold text-transparent">
                     Dashboard
                   </h1>
-                  <span className="ml-3 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800">
+                  <span className="ml-2 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">
                     {dateRange === '7d' ? '7D' : dateRange === '30d' ? '30D' : dateRange === '90d' ? '90D' : '12M'}
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500">
                   Welcome back! Here&apos;s what&apos;s happening with your business today.
                 </p>
               </div>
@@ -249,63 +249,63 @@ export default function DashboardPage() {
             </div>
 
             {/* Quick Actions */}
-            <div className="mb-8">
-              <h2 className="mb-4 text-lg font-semibold text-gray-900">Quick Actions</h2>
+            <div className="mb-6">
+              <h2 className="mb-3 text-base font-semibold text-gray-900">Quick Actions</h2>
               <QuickActions />
             </div>
 
             {/* Charts Section */}
             {/* Sales Trends Chart */}
             {salesTrends && (
-              <div className="mb-8">
+              <div className="mb-6">
                 <ChartComponents.SalesTrendsChart data={salesTrends} />
               </div>
             )}
 
             {/* Customer Segmentation Section */}
-            <div className="mb-8">
-              <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-                <div className="mb-6 flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">Customer Segmentation</h2>
+            <div className="mb-6">
+              <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Customer Segmentation</h2>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div className="lg:col-span-2">
                     <ChartComponents.CustomerSegmentation />
                   </div>
-                  <div className="space-y-4">
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="space-y-3">
+                    <div className="p-3 bg-blue-50 rounded-md">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-blue-800">Top Spending Segment</p>
-                          <p className="text-2xl font-bold text-blue-600">Champions</p>
+                          <p className="text-xs font-medium text-blue-800">Top Spending Segment</p>
+                          <p className="text-lg font-bold text-blue-600">Champions</p>
                           <p className="text-xs text-blue-600">15% of customers, 45% of revenue</p>
                         </div>
-                        <div className="p-3 bg-blue-100 rounded-full">
-                          <FiDollarSign className="w-6 h-6 text-blue-600" />
+                        <div className="p-2 bg-blue-100 rounded-full">
+                          <FiDollarSign className="w-4 h-4 text-blue-600" />
                         </div>
                       </div>
                     </div>
-                    <div className="p-4 bg-amber-50 rounded-lg">
+                    <div className="p-3 bg-amber-50 rounded-md">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-amber-800">Growth Opportunity</p>
-                          <p className="text-2xl font-bold text-amber-600">Potential Loyalists</p>
+                          <p className="text-xs font-medium text-amber-800">Growth Opportunity</p>
+                          <p className="text-lg font-bold text-amber-600">Potential Loyalists</p>
                           <p className="text-xs text-amber-600">30% of customers, 25% of revenue</p>
                         </div>
-                        <div className="p-3 bg-amber-100 rounded-full">
-                          <FiTrendingUp className="w-6 h-6 text-amber-600" />
+                        <div className="p-2 bg-amber-100 rounded-full">
+                          <FiTrendingUp className="w-4 h-4 text-amber-600" />
                         </div>
                       </div>
                     </div>
-                    <div className="p-4 bg-rose-50 rounded-lg">
+                    <div className="p-3 bg-rose-50 rounded-md">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-rose-800">At Risk</p>
-                          <p className="text-2xl font-bold text-rose-600">18% of customers</p>
+                          <p className="text-xs font-medium text-rose-800">At Risk</p>
+                          <p className="text-lg font-bold text-rose-600">18% of customers</p>
                           <p className="text-xs text-rose-600">Last purchase 30-60 days ago</p>
                         </div>
-                        <div className="p-3 bg-rose-100 rounded-full">
-                          <FiAlertCircle className="w-6 h-6 text-rose-600" />
+                        <div className="p-2 bg-rose-100 rounded-full">
+                          <FiAlertCircle className="w-4 h-4 text-rose-600" />
                         </div>
                       </div>
                     </div>
@@ -314,52 +314,52 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* Sales Chart */}
               <div className="lg:col-span-2">
-                <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900">Sales Overview</h3>
+                <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-gray-900">Sales Overview</h3>
                     <div className="flex items-center space-x-2">
-                      <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                      <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
                         <FiTrendingUp className="mr-1 h-3 w-3" />
                         12.5% from last month
                       </span>
                     </div>
                   </div>
-                  <div className="h-80">
+                  <div className="h-72">
                     <ChartComponents.SalesTrendsAnalysis salesData={analyticsData.salesByMonth || {}} />
                   </div>
                 </div>
               </div>
 
               {/* Right Sidebar */}
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {/* Customer Growth */}
-                <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-                  <h3 className="mb-4 text-lg font-semibold text-gray-900">Customer Growth</h3>
-                  <div className="h-64">
+                <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
+                  <h3 className="mb-3 text-base font-semibold text-gray-900">Customer Growth</h3>
+                  <div className="h-56">
                     <ChartComponents.CustomerGrowthChart growthData={analyticsData?.customerGrowth || {}} />
                   </div>
                 </div>
 
                 {/* Recent Activities */}
-                <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900">Recent Activities</h3>
+                <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-gray-900">Recent Activities</h3>
                     <button className="text-primary-600 hover:text-primary-800 text-sm font-medium">
                       View All
                     </button>
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {[1, 2, 3].map((i) => (
                       <div key={i} className="flex items-start">
                         <div className="flex-shrink-0">
-                          <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
-                            <FiUserPlus className="h-5 w-5 text-gray-500" />
+                          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                            <FiUserPlus className="h-4 w-4 text-gray-500" />
                           </div>
                         </div>
-                        <div className="ml-3">
+                        <div className="ml-2">
                           <p className="text-sm font-medium text-gray-900">New customer registered</p>
                           <p className="text-xs text-gray-500">2 hours ago</p>
                         </div>
@@ -371,10 +371,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Sales Trends Analysis */}
-            <div className="mb-8">
-              <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-                <h3 className="mb-4 text-lg font-semibold text-gray-900">Sales Trends Analysis</h3>
-                <div className="grid grid-cols-1 gap-6">
+            <div className="mb-6">
+              <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
+                <h3 className="mb-3 text-base font-semibold text-gray-900">Sales Trends Analysis</h3>
+                <div className="grid grid-cols-1 gap-4">
                   <ChartComponents.MonthlySalesTrends />
                 </div>
               </div>

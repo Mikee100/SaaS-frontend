@@ -134,7 +134,7 @@ export default function TenantBillingPage() {
           </div>
           <div className="mt-4 md:mt-0">
             <button
-              onClick={() => router.push('/admin/superadmin/billing/tenants/new')}
+              onClick={() => router.push('/superadmin/billing/tenants/new')}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
             >
               <FaPlus className="-ml-1 mr-2 h-4 w-4" />

@@ -30,11 +30,36 @@ export default function CustomerGrowthChart({
   const [chartType, setChartType] = useState<'area' | 'line'>('area');
 
   const filteredData = useMemo(() => {
-    // For simplicity, no actual filtering logic implemented here
-    return Object.entries(growthData)
+    const allData = Object.entries(growthData)
       .map(([date, value]) => ({ date, value }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [growthData]);
+
+    if (activeFilter === 'ALL') {
+      return allData;
+    }
+
+    const now = new Date();
+    let cutoffDate: Date;
+
+    switch (activeFilter) {
+      case '1W':
+        cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '1M':
+        cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '3M':
+        cutoffDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case '1Y':
+        cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        return allData;
+    }
+
+    return allData.filter(item => new Date(item.date) >= cutoffDate);
+  }, [growthData, activeFilter]);
 
   const totalCustomers = useMemo(() => filteredData.length > 0 ? filteredData[filteredData.length - 1].value : 0, [filteredData]);
   const newCustomers = useMemo(() => {

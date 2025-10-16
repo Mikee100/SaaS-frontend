@@ -55,6 +55,7 @@ export default function LoginPage() {
           const isSuperAdmin = user.roles?.includes('superadmin') || user.isSuperadmin;
           const isAdmin = user.roles?.includes('admin');
           
+          console.log('User roles:', user.roles);
           if (isSuperAdmin) {
             router.push("/superadmin");
           } else if (isAdmin) {

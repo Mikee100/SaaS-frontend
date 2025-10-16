@@ -8,10 +8,10 @@ import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
 import { useRouter } from "next/navigation";
 import {
-  FaLock, FaStore, FaQrcode, FaDownload, FaSearch,
+  FaStore, FaQrcode,  FaSearch,
   FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaChevronLeft,
   FaChevronRight, FaKeyboard, FaHistory, FaUser, FaUndo, FaRedo,
-  FaStar, FaClock, FaChartLine, FaExclamationTriangle,
+  FaStar, FaExclamationTriangle,
   FaFilter, FaSort, FaTh, FaList, FaPlus, FaMinus
 } from 'react-icons/fa';
 import MpesaPayment from '@/components/MpesaPayment';
@@ -76,7 +76,6 @@ export default function SalesPage() {
   const [sortOrder] = useState('asc');
 
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
-  const [recentSales, setRecentSales] = useState<Record<string, unknown>[]>([]);
   const [cartHistory, setCartHistory] = useState<CartItem[][]>([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
 
@@ -211,13 +210,13 @@ export default function SalesPage() {
         setProducts(products);
 
         // Fetch other data in parallel
-        const [businessInfo, recentSalesData] = await Promise.all([
+        const [businessInfo/*, recentSalesData*/] = await Promise.all([
           apiGet("/tenant/me"),
           apiGet("/sales/recent").catch(() => [])
         ]);
 
         setBusinessInfo(businessInfo as Record<string, unknown>);
-        setRecentSales(recentSalesData as Record<string, unknown>[]);
+        // Remove: setRecentSales(recentSalesData as Record<string, unknown>[]);
       } catch (error) {
         console.error('Error loading data:', error);
         setError("Failed to load data. Please try again.");
@@ -621,8 +620,8 @@ const clearCart = useCallback(() => {
       <div className="min-h-screen bg-gray-50">
         {/* Enhanced Header */}
         <header className="bg-white shadow-sm border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center mb-4">
+          <div className="max-w-7xl mx-auto  py-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center ">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Point of Sale</h1>
                 <p className="text-sm text-gray-500">Welcome back, {typeof businessInfo?.name === "string" && businessInfo?.name.trim() !== "" ? businessInfo.name : "User"}</p>
@@ -638,22 +637,11 @@ const clearCart = useCallback(() => {
                   Shortcuts
                 </button>
                 
-                <FeatureGuard requiredFeature="data_export" fallback={
-                  <button disabled className="p-2.5 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed">
-                    <FaDownload className="w-5 h-5" />
-                    Export
-                    <FaLock className="w-3 h-3" />
-                  </button>
-                }>
-                  <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition">
-                    <FaDownload className="w-4 h-4" />
-                    Export
-                  </button>
-                </FeatureGuard>
+                
               </div>
             </div>
 
-            {/* Quick Stats */}
+            {/* Quick Stats
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-100">
                 <div className="flex items-center gap-2 mb-1">
@@ -683,7 +671,7 @@ const clearCart = useCallback(() => {
                 </div>
                 <p className="text-2xl font-bold text-orange-900">{recentSales.length}</p>
               </div>
-            </div>
+            </div> */}
           </div>
         </header>
 

@@ -35,7 +35,7 @@ interface Product {
 
 export default function ProductsPage() {
   const { user } = useUser();
-  const { selectedBranchId, setSelectedBranchId, canChangeBranch } = useBranch();
+const { selectedBranchId, setSelectedBranchId } = useBranch();
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
@@ -69,19 +69,19 @@ export default function ProductsPage() {
 
 
 
-  useEffect(() => {
+ useEffect(() => {
     async function fetchBranches() {
       setBranchesLoading(true);
       try {
         const data = await apiGet<{ id: string; name: string }[]>('/api/branches');
         setBranches(data);
-        
-        // If no branch is selected and user has a branch, use that
-        if (data?.length > 0) {
+
+        // Only set initial branch if none is currently selected
+        if (data?.length > 0 && !selectedBranchId) {
           if (user?.branchId) {
             // If user has a specific branch, use that
             setSelectedBranchId(user.branchId);
-          } else if (!selectedBranchId) {
+          } else {
             // Otherwise select the first branch
             setSelectedBranchId(data[0].id);
           }
@@ -93,8 +93,7 @@ export default function ProductsPage() {
       }
     }
     fetchBranches();
-  }, [user?.branchId, selectedBranchId, setSelectedBranchId]);
-
+  }, [user?.branchId, setSelectedBranchId, selectedBranchId]);
   // Handle branch selection change
   const handleBranchChange = (branchId: string) => {
     if (!branchId) return;
@@ -491,7 +490,7 @@ export default function ProductsPage() {
                     onChange={e => handleBranchChange(e.target.value)}
                     className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
                     style={{ minWidth: 200 }}
-                    disabled={!canChangeBranch}
+                    disabled={false}
                   >
                     <option value="" disabled>Select a branch</option>
                     {branches.map(branch => (

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaFileAlt, FaChartBar, FaExclamationTriangle, FaBox, FaShoppingCart, FaUsers, FaDownload, FaFilePdf, FaFileExcel } from "react-icons/fa";
+import { FaFileAlt, FaChartBar, FaExclamationTriangle, FaBox, FaShoppingCart, FaUsers, FaFilePdf, FaFileExcel } from "react-icons/fa";
 import { hasPermission } from "@/utils/permissions";
 import { useUser } from "@/components/UserContext";
 
@@ -82,14 +82,14 @@ const reports: Report[] = [
   {
     id: 'inventory-aging',
     title: 'Inventory Aging Report',
-    description: 'Shows how long products have been in stock (age buckets: 0-30, 31-60, 61-90, 90+ days). Helps identify slow-moving or obsolete inventory.',
+    description: 'Shows how long products have been in stock (age buckets: 0-30, 31-60, 61-90, 90+ days).',
     icon: FaBox,
     category: 'inventory',
     requiredPermission: 'view_inventory'
   },
   {
     id: 'stockout-lost-sales',
-    title: 'Stockout & Lost Sales Report',
+    title: 'Stockout & Lost Sales',
     description: 'Shows products that went out of stock and estimates potential lost sales.',
     icon: FaBox,
     category: 'inventory',
@@ -97,7 +97,7 @@ const reports: Report[] = [
   },
   {
     id: 'inventory-valuation',
-    title: 'Inventory Valuation Report',
+    title: 'Inventory Valuation',
     description: 'Calculates total inventory value by cost and by retail price.',
     icon: FaChartBar,
     category: 'inventory',
@@ -123,57 +123,55 @@ export default function ProductReportsPage() {
   };
 
   const handleExportPDF = (reportId: string) => {
-    // Placeholder for PDF export
     console.log(`Exporting ${reportId} to PDF`);
     alert(`PDF export for "${reportId}" will be available after backend implementation.`);
   };
 
   const handleExportExcel = (reportId: string) => {
-    // Placeholder for Excel export
     console.log(`Exporting ${reportId} to Excel`);
     alert(`Excel export for "${reportId}" will be available after backend implementation.`);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Products & Inventory Reports</h1>
-          <p className="mt-2 text-lg text-gray-600">
-            Generate comprehensive reports for your products and inventory management.
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Products & Inventory Reports</h1>
+          <p className="mt-1 text-sm text-gray-600">
+            Generate comprehensive reports for your products and inventory management
           </p>
         </div>
 
         {/* Category Filter */}
-        <div className="mb-8">
-          <div className="flex space-x-4">
+        <div className="mb-6">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setSelectedCategory('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 selectedCategory === 'all'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
               }`}
             >
               All Reports
             </button>
             <button
               onClick={() => setSelectedCategory('products')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 selectedCategory === 'products'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
               }`}
             >
               Products
             </button>
             <button
               onClick={() => setSelectedCategory('inventory')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 selectedCategory === 'inventory'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
               }`}
             >
               Inventory
@@ -182,58 +180,57 @@ export default function ProductReportsPage() {
         </div>
 
         {/* Reports Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredReports.map((report) => {
             const Icon = report.icon;
+            const categoryColor = report.category === 'products' 
+              ? 'bg-blue-50 text-blue-700 border-blue-100' 
+              : 'bg-purple-50 text-purple-700 border-purple-100';
+            
             return (
               <div
                 key={report.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                className="group bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-200 hover:shadow-sm transition-all duration-200"
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Icon className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{report.title}</h3>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        report.category === 'products'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-orange-100 text-orange-800'
-                      }`}>
-                        {report.category === 'products' ? 'Products' : 'Inventory'}
-                      </span>
-                    </div>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-8 h-8 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-4 h-4 text-blue-600" />
                   </div>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${categoryColor}`}>
+                    {report.category}
+                  </span>
                 </div>
-
-                <p className="text-gray-600 text-sm mb-6 leading-relaxed">
-                  {report.description}
-                </p>
-
-                <div className="flex space-x-2">
+                <h3 className="text-sm font-medium text-gray-900 mb-2 line-clamp-2">{report.title}</h3>
+                <p className="text-xs text-gray-500 mb-3 line-clamp-2">{report.description}</p>
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                   <button
                     onClick={() => handleGenerateReport(report.id)}
-                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
                   >
-                    <FaDownload className="w-4 h-4" />
-                    <span>Generate</span>
+                    View Report
                   </button>
-                  <button
-                    onClick={() => handleExportPDF(report.id)}
-                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                    title="Export as PDF"
-                  >
-                    <FaFilePdf className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleExportExcel(report.id)}
-                    className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
-                    title="Export as Excel"
-                  >
-                    <FaFileExcel className="w-4 h-4" />
-                  </button>
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExportPDF(report.id);
+                      }}
+                      className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors"
+                      title="Export to PDF"
+                    >
+                      <FaFilePdf className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExportExcel(report.id);
+                      }}
+                      className="p-1 text-gray-400 hover:text-green-600 rounded hover:bg-green-50 transition-colors"
+                      title="Export to Excel"
+                    >
+                      <FaFileExcel className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -241,24 +238,25 @@ export default function ProductReportsPage() {
         </div>
 
         {filteredReports.length === 0 && (
-          <div className="text-center py-12">
-            <FaFileAlt className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No reports available</h3>
-            <p className="text-gray-600">
-              You don&apos;t have permission to view reports in this category, or no reports match your filter.
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+            <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+              <FaFileAlt className="w-5 h-5 text-gray-400" />
+            </div>
+            <h3 className="text-sm font-medium text-gray-900">No reports found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Try adjusting your filter or check back later for new reports.
             </p>
           </div>
         )}
 
         {/* Footer Note */}
-        <div className="mt-12 bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div className="mt-6 bg-blue-50 border border-blue-100 rounded-lg p-4">
           <div className="flex items-start space-x-3">
-            <FaFileAlt className="w-5 h-5 text-blue-600 mt-0.5" />
+            <FaFileAlt className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
             <div>
-              <h4 className="text-sm font-semibold text-blue-900 mb-1">Report Generation</h4>
-              <p className="text-sm text-blue-700">
-                Reports are generated in real-time based on your current data. For large datasets,
-                generation may take a few moments. All reports include export options for PDF and Excel formats.
+              <h4 className="text-xs font-medium text-blue-900 mb-1">Report Generation</h4>
+              <p className="text-xs text-blue-700">
+                Reports are generated in real-time based on your current data. All reports include export options.
               </p>
             </div>
           </div>

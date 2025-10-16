@@ -227,7 +227,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
           const isAdmin = normalizedUser.roles?.includes('admin');
 
           if (isSuperAdmin) {
-            router.push('/admin/superadmin');
+            router.push('/superadmin');
           } else if (isAdmin) {
             router.push('/admin');
           } else {

@@ -20,7 +20,7 @@ import {
   Filler,
 } from "chart.js";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
-import { FaCrown,  FaChartBar } from 'react-icons/fa';
+import { FaCrown,  FaChartBar, FaExchangeAlt, FaFilter } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import { useBranch } from "@/contexts/BranchContext";
@@ -87,6 +87,57 @@ type Metrics = {
   aiSummary?: string;
 };
 
+type Branch = { id: string; name: string };
+
+type BranchComparisonData = {
+  timeRange: string;
+  branches: Array<{
+    branchId: string;
+    branchName: string;
+    data: Array<{
+      period: string;
+      orders: number;
+      sales: number;
+    }>;
+  }>;
+  totals: Array<{
+    branchId: string;
+    branchName: string;
+    totalOrders: number;
+    totalSales: number;
+  }>;
+  periodType: string;
+};
+
+type ProductComparison = {
+  productId: string;
+  productName: string;
+  totalQuantitySold: number;
+  totalRevenue: number;
+  branchCount: number;
+  branchBreakdown: Array<{
+    branchId: string;
+    branchName: string;
+    totalRevenue: number;
+    quantitySold: number;
+  }>;
+};
+
+type BranchComparison = {
+  branchId: string;
+  branchName: string;
+  totalOrders: number;
+  totalSales: number;
+};
+
+type ProductComparisonData = {
+  products: ProductComparison[];
+  branches: BranchComparison[];
+  summary: {
+    totalProducts: number;
+  };
+};
+
 export default function ReportsPage() {
   // Low stock notification state
   const [showLowStockAlert, setShowLowStockAlert] = useState(true);
@@ -116,6 +167,14 @@ export default function ReportsPage() {
   // Grouping selector for sales trend
   const [grouping, setGrouping] = useState<'day' | 'week' | 'month'>('month');
 
+  // Branch filtering and comparison
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedReportBranch, setSelectedReportBranch] = useState<string>("all");
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [branchComparisonData, setBranchComparisonData] = useState<BranchComparisonData | null>(null);
+  const [productComparisonData, setProductComparisonData] = useState<ProductComparisonData | null>(null);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+
   // Permission checks
   const permissionsLoading = !user || !limits;
   const canViewReports = !permissionsLoading && hasPermission(user, 'view_reports');
@@ -125,14 +184,100 @@ export default function ReportsPage() {
     apiGet("/products", headers).then((data) => setProducts(data as Product[])).catch(() => setProducts([]));
   }, [selectedBranchId]);
 
+  // Fetch branches for filtering
+  useEffect(() => {
+    const fetchBranches = async () => {
+      if (!user?.tenantId) return;
+      setLoadingBranches(true);
+      try {
+        const data = await apiGet(`/api/branches`);
+        setBranches(data as Branch[]);
+      } catch (error) {
+        console.error('Failed to fetch branches:', error);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+    fetchBranches();
+  }, [user?.tenantId]);
+
+  // Fetch branch comparison data when in comparison mode
+  useEffect(() => {
+    if (comparisonMode && user?.tenantId) {
+      const fetchBranchComparison = async () => {
+        try {
+          const [timeSeriesData, productData] = await Promise.all([
+            apiGet(`/api/reports/branches/${user.tenantId}/comparison/timeseries?timeRange=30days`),
+            apiGet(`/api/reports/branches/${user.tenantId}/comparison/products?timeRange=30days`)
+          ]);
+          setBranchComparisonData(timeSeriesData as BranchComparisonData);
+          setProductComparisonData(productData as ProductComparisonData);
+        } catch (error) {
+          console.error('Failed to fetch branch comparison data:', error);
+        }
+      };
+      fetchBranchComparison();
+    }
+  }, [comparisonMode, user?.tenantId]);
+
   useEffect(() => {
     setLoading(true);
     setError(null);
-    apiGet(`/analytics/dashboard`)
-      .then((data) => setMetrics(data as Metrics))
-      .catch((err: unknown) => setError((err as Error).message || "An error occurred while fetching data."))
-      .finally(() => setLoading(false));
-  }, []);
+
+    // Use branch-specific endpoint if a branch is selected and not in comparison mode
+    const fetchData = async () => {
+      try {
+        let data: Metrics;
+
+        if (selectedReportBranch !== "all" && !comparisonMode && user?.tenantId) {
+          // Fetch branch-specific data
+          const branchData = await apiGet(`/api/reports/branches/${user.tenantId}/sales?timeRange=30days&branchId=${selectedReportBranch}`) as {
+            totalOrders?: number;
+            totalSales?: number;
+            averageOrderValue?: number;
+            topProducts?: Array<{ productId: string; productName: string; quantitySold: number; totalRevenue: number }>;
+            paymentMethods?: Array<{ method: string; amount: number }>;
+            salesTrend?: Array<{ date: string; sales: number }>;
+          };
+          // Transform branch data to match Metrics interface
+          data = {
+            totalSales: branchData.totalOrders || 0,
+            totalRevenue: branchData.totalSales || 0,
+            avgSaleValue: branchData.averageOrderValue || 0,
+            topProducts: branchData.topProducts?.map(p => ({
+              id: p.productId,
+              name: p.productName,
+              unitsSold: p.quantitySold,
+              revenue: p.totalRevenue,
+            })) || [],
+            lowStock: [],
+            paymentBreakdown: branchData.paymentMethods?.reduce((acc, pm) => {
+              acc[pm.method] = pm.amount;
+              return acc;
+            }, {} as Record<string, number>) || {},
+            salesByMonth: branchData.salesTrend?.reduce((acc, trend) => {
+              acc[trend.date] = trend.sales;
+              return acc;
+            }, {} as Record<string, number>) || {},
+            topCustomers: [],
+            forecast: { forecast_months: [], forecast_sales: [] },
+            customerSegments: [],
+          };
+        } else {
+          // Fetch general dashboard data
+          data = await apiGet(`/analytics/dashboard`) as Metrics;
+        }
+
+        setMetrics(data);
+      } catch (err: unknown) {
+        setError((err as Error).message || "An error occurred while fetching data.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [selectedReportBranch, comparisonMode, user?.tenantId]);
 
   // Map backend dashboard data to frontend chart formats
   const { salesTrendData, revenueBreakdownData, paymentMethodData } = useMemo(() => {
@@ -236,8 +381,20 @@ export default function ReportsPage() {
     const doc = new jsPDF();
     let yPosition = 20;
 
+    // Determine title and filename based on selection
+    let title = 'Business Reports';
+    let filename = 'business_reports.pdf';
+    if (comparisonMode) {
+      title = 'Business Reports - Branch Comparison';
+      filename = 'business_reports_comparison.pdf';
+    } else if (selectedReportBranch !== "all") {
+      const branchName = branches.find(b => b.id === selectedReportBranch)?.name || 'Selected Branch';
+      title = `Business Reports - ${branchName}`;
+      filename = `business_reports_${branchName.replace(/\s+/g, '_')}.pdf`;
+    }
+
     doc.setFontSize(20);
-    doc.text('Business Reports', 20, yPosition);
+    doc.text(title, 20, yPosition);
     yPosition += 20;
 
     doc.setFontSize(14);
@@ -266,11 +423,20 @@ export default function ReportsPage() {
       yPosition += 8;
     });
 
-    doc.save('business_reports.pdf');
+    doc.save(filename);
   };
 
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new();
+
+    // Determine filename based on selection
+    let filename = 'business_reports.xlsx';
+    if (comparisonMode) {
+      filename = 'business_reports_comparison.xlsx';
+    } else if (selectedReportBranch !== "all") {
+      const branchName = branches.find(b => b.id === selectedReportBranch)?.name || 'Selected Branch';
+      filename = `business_reports_${branchName.replace(/\s+/g, '_')}.xlsx`;
+    }
 
     // AI Summary sheet
     if (metrics.aiSummary) {
@@ -305,7 +471,7 @@ export default function ReportsPage() {
     const customersSheet = XLSX.utils.aoa_to_sheet(customersData);
     XLSX.utils.book_append_sheet(workbook, customersSheet, 'Top Customers');
 
-    XLSX.writeFile(workbook, 'business_reports.xlsx');
+    XLSX.writeFile(workbook, filename);
   };
 
     // Find low stock products (stock <= 10)
@@ -423,7 +589,10 @@ export default function ReportsPage() {
 
         {/* Report Type Selector */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Report Filters</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <FaFilter className="w-5 h-5" />
+            Report Filters
+          </h2>
           <div className="flex flex-wrap gap-4 items-end">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
@@ -434,6 +603,25 @@ export default function ReportsPage() {
               </select>
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Branch Filter</label>
+              <select
+                value={selectedReportBranch}
+                onChange={e => {
+                  setSelectedReportBranch(e.target.value);
+                  if (e.target.value !== "all") {
+                    setComparisonMode(false);
+                  }
+                }}
+                className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                disabled={loadingBranches}
+              >
+                <option value="all">All Branches</option>
+                {branches.map(branch => (
+                  <option key={branch.id} value={branch.id}>{branch.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
             </div>
@@ -441,515 +629,404 @@ export default function ReportsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
             </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={comparisonMode}
+                  onChange={e => {
+                    setComparisonMode(e.target.checked);
+                    if (e.target.checked) {
+                      setSelectedReportBranch("all");
+                    }
+                  }}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <FaExchangeAlt className="w-4 h-4" />
+                Compare Branches
+              </label>
+            </div>
             <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear Filters</button>
           </div>
         </div>
 
         {/* Key Metrics Section */}
         <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Key Metrics</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow p-6 flex flex-col items-center border border-blue-200">
-              <span className="text-blue-600 text-sm mb-1 font-medium">Total Sales</span>
-              <span className="text-3xl font-bold text-blue-700">{metrics.totalSales}</span>
-              <div className="flex items-center mt-2">
-                <span className="text-xs text-green-600 font-medium">+12.5%</span>
-                <span className="text-xs text-blue-500 ml-1">vs last period</span>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            Key Metrics
+            {selectedReportBranch !== "all" && !comparisonMode && (
+              <span className="text-sm font-normal text-gray-600 ml-2">
+                - {branches.find(b => b.id === selectedReportBranch)?.name || 'Selected Branch'}
+              </span>
+            )}
+            {comparisonMode && (
+              <span className="text-sm font-normal text-gray-600 ml-2">
+                - All Branches Comparison
+              </span>
+            )}
+          </h2>
+
+          {comparisonMode && branchComparisonData ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow p-6 flex flex-col items-center border border-blue-200">
+                <span className="text-blue-600 text-sm mb-1 font-medium">Total Sales (All Branches)</span>
+                <span className="text-3xl font-bold text-blue-700">{branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalOrders, 0)}</span>
+                <div className="flex items-center mt-2">
+                  <span className="text-xs text-blue-600 font-medium">Across {branchComparisonData.branches.length} branches</span>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow p-6 flex flex-col items-center border border-green-200">
+                <span className="text-green-600 text-sm mb-1 font-medium">Total Revenue</span>
+                <span className="text-3xl font-bold text-green-700">Ksh {branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalSales, 0).toLocaleString()}</span>
+                <div className="flex items-center mt-2">
+                  <span className="text-xs text-green-600 font-medium">Combined revenue</span>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow p-6 flex flex-col items-center border border-purple-200">
+                <span className="text-purple-600 text-sm mb-1 font-medium">Avg. Order Value</span>
+                <span className="text-3xl font-bold text-purple-700">Ksh {(branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalSales, 0) / branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalOrders, 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <div className="flex items-center mt-2">
+                  <span className="text-xs text-purple-600 font-medium">Across all branches</span>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl shadow p-6 flex flex-col items-center border border-orange-200">
+                <span className="text-orange-600 text-sm mb-1 font-medium">Best Performing</span>
+                <span className="text-3xl font-bold text-orange-700">{branchComparisonData.totals.sort((a, b) => b.totalSales - a.totalSales)[0]?.branchName || 'N/A'}</span>
+                <div className="flex items-center mt-2">
+                  <span className="text-xs text-orange-600 font-medium">Ksh {branchComparisonData.totals.sort((a, b) => b.totalSales - a.totalSales)[0]?.totalSales.toLocaleString() || '0'}</span>
+                </div>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow p-6 flex flex-col items-center border border-green-200">
-              <span className="text-green-600 text-sm mb-1 font-medium">Total Revenue</span>
-              <span className="text-3xl font-bold text-green-700">Ksh {(metrics.totalRevenue ?? 0).toLocaleString()}</span>
-              <div className="flex items-center mt-2">
-                <span className="text-xs text-green-600 font-medium">+18.2%</span>
-                <span className="text-xs text-green-500 ml-1">vs last period</span>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow p-6 flex flex-col items-center border border-blue-200">
+                <span className="text-blue-600 text-sm mb-1 font-medium">Total Sales</span>
+                <span className="text-3xl font-bold text-blue-700">{metrics.totalSales}</span>
+                <div className="flex items-center mt-2">
+                  <span className="text-xs text-green-600 font-medium">+12.5%</span>
+                  <span className="text-xs text-blue-500 ml-1">vs last period</span>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow p-6 flex flex-col items-center border border-green-200">
+                <span className="text-green-600 text-sm mb-1 font-medium">Total Revenue</span>
+                <span className="text-3xl font-bold text-green-700">Ksh {(metrics.totalRevenue ?? 0).toLocaleString()}</span>
+                <div className="flex items-center mt-2">
+                  <span className="text-xs text-green-600 font-medium">+18.2%</span>
+                  <span className="text-xs text-green-500 ml-1">vs last period</span>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow p-6 flex flex-col items-center border border-purple-200">
+                <span className="text-purple-600 text-sm mb-1 font-medium">Avg. Sale Value</span>
+                <span className="text-3xl font-bold text-purple-700">Ksh {(metrics.avgSaleValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <div className="flex items-center mt-2">
+                  <span className="text-xs text-blue-600 font-medium">+5.3%</span>
+                  <span className="text-xs text-purple-500 ml-1">vs last period</span>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow p-6 flex flex-col items-center border border-red-200">
+                <span className="text-red-600 text-sm mb-1 font-medium">Low Stock Alerts</span>
+                <span className="text-3xl font-bold text-red-600">{(metrics.lowStock || []).length}</span>
+                <div className="flex items-center mt-2">
+                  <span className="text-xs text-red-600 font-medium">Requires attention</span>
+                </div>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow p-6 flex flex-col items-center border border-purple-200">
-              <span className="text-purple-600 text-sm mb-1 font-medium">Avg. Sale Value</span>
-              <span className="text-3xl font-bold text-purple-700">Ksh {(metrics.avgSaleValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              <div className="flex items-center mt-2">
-                <span className="text-xs text-blue-600 font-medium">+5.3%</span>
-                <span className="text-xs text-purple-500 ml-1">vs last period</span>
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow p-6 flex flex-col items-center border border-red-200">
-              <span className="text-red-600 text-sm mb-1 font-medium">Low Stock Alerts</span>
-              <span className="text-3xl font-bold text-red-600">{(metrics.lowStock || []).length}</span>
-              <div className="flex items-center mt-2">
-                <span className="text-xs text-red-600 font-medium">Requires attention</span>
-              </div>
-            </div>
-          </div>
+          )}
         </section>
 
         {/* Sales Reports by Period */}
         <section className="mb-10">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">
             {grouping === 'day' ? 'Daily Sales Reports' : grouping === 'week' ? 'Weekly Sales Reports' : 'Monthly Sales Reports'}
+            {selectedReportBranch !== "all" && !comparisonMode && (
+              <span className="text-sm font-normal text-gray-600 ml-2">
+                - {branches.find(b => b.id === selectedReportBranch)?.name || 'Selected Branch'}
+              </span>
+            )}
+            {comparisonMode && (
+              <span className="text-sm font-normal text-gray-600 ml-2">
+                - Branch Comparison
+              </span>
+            )}
           </h2>
- </section>
 
-          {/* Daily Sales Report */}
-          {grouping === 'day' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  Daily Sales Trend
-                </h3>
-                <div className="h-64">
-                  {salesTrendData.labels.length > 0 ? (
-                    <Line
-                      data={{
-                        ...salesTrendData,
-                        datasets: [{
-                          ...salesTrendData.datasets[0],
-                          borderColor: '#3b82f6',
-                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                          fill: true,
-                          tension: 0.4,
-                          pointBackgroundColor: '#3b82f6',
-                          pointBorderColor: '#ffffff',
-                          pointBorderWidth: 2,
-                          pointRadius: 4,
-                          pointHoverRadius: 6,
-                        }]
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { display: false },
-                          tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: '#ffffff',
-                            bodyColor: '#ffffff',
-                            callbacks: {
-                              label: function(context) {
-                                return `Sales: ${context.parsed.y}`;
-                              }
-                            }
-                          }
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                            grid: {
-                              color: 'rgba(0, 0, 0, 0.1)'
-                            }
-                          },
-                          x: {
-                            grid: {
-                              color: 'rgba(0, 0, 0, 0.1)'
-                            }
-                          }
-                        },
-                        interaction: {
-                          intersect: false,
-                          mode: 'index'
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                      <div className="text-center">
-                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
-                        </div>
-                        <p>No daily sales data available</p>
-                        <p className="text-sm text-gray-400 mt-1">Try adjusting your date filters</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  Daily Performance Summary
-                </h3>
-                <div className="space-y-3">
-                  {salesTrendData.labels.length > 0 ? (
-                    salesTrendData.labels.slice(-7).map((label, index) => {
-                      const sales = salesTrendData.datasets[0].data[index] as number;
-                      const prevSales = index > 0 ? salesTrendData.datasets[0].data[index - 1] as number : sales;
-                      const growth = prevSales > 0 ? ((sales - prevSales) / prevSales * 100).toFixed(1) : '0.0';
-                      const isPositive = parseFloat(growth) >= 0;
-
-                      return (
-                        <div key={label} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                              <span className="text-xs font-medium text-blue-700">
-                                {new Date(label).toLocaleDateString('en-US', { weekday: 'short' })}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{label}</p>
-                              <p className="text-sm text-gray-600">{sales} sales</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                              {isPositive ? (
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                </svg>
-                              ) : (
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a 1 1 0 011.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                              <span className="text-sm font-medium">{isPositive ? '+' : ''}{growth}%</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <p>No daily performance data available</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Weekly Sales Report */}
-          {grouping === 'week' && (
-            <div className="space-y-6 mb-6">
-              {/* Weekly Sales Trend Graph */}
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                  Weekly Sales Trend
-                </h3>
-                <div className="h-64">
-                  {salesTrendData.labels.length > 0 ? (
-                    <Line
-                      data={{
-                        ...salesTrendData,
-                        datasets: [{
-                          ...salesTrendData.datasets[0],
-                          borderColor: '#8b5cf6',
-                          backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                          fill: true,
-                          tension: 0.4,
-                          pointBackgroundColor: '#8b5cf6',
-                          pointBorderColor: '#ffffff',
-                          pointBorderWidth: 2,
-                          pointRadius: 5,
-                          pointHoverRadius: 7,
-                        }]
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { display: false },
-                          tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: '#ffffff',
-                            bodyColor: '#ffffff',
-                            callbacks: {
-                              label: function(context) {
-                                return `Sales: ${context.parsed.y}`;
-                              }
-                            }
-                          }
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                            grid: {
-                              color: 'rgba(0, 0, 0, 0.1)'
-                            }
-                          },
-                          x: {
-                            grid: {
-                              color: 'rgba(0, 0, 0, 0.1)'
-                            }
-                          }
-                        },
-                        interaction: {
-                          intersect: false,
-                          mode: 'index'
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                      <div className="text-center">
-                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
-                        </div>
-                        <p>No weekly sales data available</p>
-                        <p className="text-sm text-gray-400 mt-1">Try adjusting your date filters</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Weekly Sales Performance */}
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                  Weekly Sales Performance
-                </h3>
-                <div className="h-64">
-                  {salesTrendData.labels.length > 0 ? (
-                    <Bar
-                      data={{
-                        ...salesTrendData,
-                        datasets: [{
-                          ...salesTrendData.datasets[0],
-                          backgroundColor: '#f97316',
-                          borderColor: '#ea580c',
-                          borderWidth: 1,
-                          borderRadius: 6,
-                          borderSkipped: false,
-                          hoverBackgroundColor: '#ea580c',
-                        }]
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { display: false },
-                          tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: '#ffffff',
-                            bodyColor: '#ffffff',
-                            callbacks: {
-                              label: function(context) {
-                                return `Sales: ${context.parsed.y}`;
-                              }
-                            }
-                          }
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                            grid: {
-                              color: 'rgba(0, 0, 0, 0.1)'
-                            }
-                          },
-                          x: {
-                            grid: {
-                              color: 'rgba(0, 0, 0, 0.1)'
-                            }
-                          }
-                        },
-                        animation: {
-                          duration: 1000,
-                          easing: 'easeOutQuart'
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                      <div className="text-center">
-                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
-                        </div>
-                        <p>No weekly performance data available</p>
-                        <p className="text-sm text-gray-400 mt-1">Try adjusting your date filters</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="bg-white rounded-xl shadow p-6 mt-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    Weekly Performance Summary
-                  </h3>
-                  <div className="space-y-3">
-                    {salesTrendData.labels.length > 0 ? (
-                      salesTrendData.labels.slice(-4).map((label, index) => {
-                        const sales = salesTrendData.datasets[0].data[index] as number;
-                        const prevSales = index > 0 ? salesTrendData.datasets[0].data[index - 1] as number : sales;
-                        const growth = prevSales > 0 ? ((sales - prevSales) / prevSales * 100).toFixed(1) : '0.0';
-                        const isPositive = parseFloat(growth) >= 0;
-
-                        return (
-                          <div key={label} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                                <span className="text-xs font-medium text-orange-700">W{index + 1}</span>
-                              </div>
-                              <div>
-                                <p className="font-medium text-gray-900">{label}</p>
-                                <p className="text-sm text-gray-600">{sales} sales</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                                {isPositive ? (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                ) : (
-                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                )}
-                                <span className="text-sm font-medium">{isPositive ? '+' : ''}{growth}%</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <p>No weekly performance data available</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Monthly Sales Report */}
-          {grouping === 'month' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <div className="bg-white rounded-xl shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  Monthly Sales Overview
-                </h3>
-                <div className="h-64">
-                  {salesTrendData.labels.length > 0 ? (
-                    <Line
-                      data={{
-                        ...salesTrendData,
-                        datasets: [{
-                          ...salesTrendData.datasets[0],
-                          borderColor: '#10b981',
-                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                          fill: true,
-                          tension: 0.4,
-                          pointBackgroundColor: '#10b981',
-                          pointBorderColor: '#ffffff',
-                          pointBorderWidth: 2,
-                          pointRadius: 5,
-                          pointHoverRadius: 7,
-                        }]
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { display: false },
-                          tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: '#ffffff',
-                            bodyColor: '#ffffff',
-                            callbacks: {
-                              label: function(context) {
-                                return `Sales: ${context.parsed.y}`;
-                              }
-                            }
-                          }
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                            grid: {
-                              color: 'rgba(0, 0, 0, 0.1)'
-                            }
-                          },
-                          x: {
-                            grid: {
-                              color: 'rgba(0, 0, 0, 0.1)'
-                            }
-                          }
-                        },
-                        interaction: {
-                          intersect: false,
-                          mode: 'index'
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                      <div className="text-center">
-                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
-                        </div>
-                        <p>No monthly sales data available</p>
-                        <p className="text-sm text-gray-400 mt-1">Try adjusting your date filters</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow p-6">
+          {/* Branch Comparison Charts */}
+          {comparisonMode && branchComparisonData && (
+            <>
+              {/* Time Series Comparison */}
+              <div className="bg-white rounded-xl shadow p-6 mb-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                   <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
-                  Monthly Performance Summary
+                  Branch Sales Comparison Over Time
                 </h3>
-                <div className="space-y-3">
-                  {salesTrendData.labels.length > 0 ? (
-                    salesTrendData.labels.slice(-6).map((label, index) => {
-                      const sales = salesTrendData.datasets[0].data[index] as number;
-                      const prevSales = index > 0 ? salesTrendData.datasets[0].data[index - 1] as number : sales;
-                      const growth = prevSales > 0 ? ((sales - prevSales) / prevSales * 100).toFixed(1) : '0.0';
-                      const isPositive = parseFloat(growth) >= 0;
-
-                      return (
-                        <div key={label} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                              <span className="text-xs font-medium text-indigo-700">
-                                {new Date(label + '-01').toLocaleDateString('en-US', { month: 'short' })}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{label}</p>
-                              <p className="text-sm text-gray-600">{sales} sales</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                              {isPositive ? (
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                </svg>
-                              ) : (
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                              <span className="text-sm font-medium">{isPositive ? '+' : ''}{growth}%</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <p>No monthly performance data available</p>
-                    </div>
-                  )}
+                <div className="h-80">
+                  <Line
+                    data={{
+                      labels: branchComparisonData.branches[0]?.data.map(d => d.period) || [],
+                      datasets: branchComparisonData.branches.map((branch, index) => ({
+                        label: branch.branchName,
+                        data: branch.data.map(d => d.sales),
+                        borderColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5],
+                        backgroundColor: ['rgba(99, 102, 241, 0.1)', 'rgba(16, 185, 129, 0.1)', 'rgba(245, 158, 11, 0.1)', 'rgba(239, 68, 68, 0.1)', 'rgba(139, 92, 246, 0.1)'][index % 5],
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                      })),
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: 'top' as const },
+                        tooltip: {
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          titleColor: '#ffffff',
+                          bodyColor: '#ffffff',
+                          callbacks: {
+                            label: function(context) {
+                              return `${context.dataset.label}: Ksh ${context.parsed.y.toLocaleString()}`;
+                            }
+                          }
+                        }
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                          },
+                          ticks: {
+                            callback: function(value) {
+                              return 'Ksh ' + value.toLocaleString();
+                            }
+                          }
+                        },
+                        x: {
+                          grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                          }
+                        }
+                      },
+                      interaction: {
+                        intersect: false,
+                        mode: 'index'
+                      }
+                    }}
+                  />
                 </div>
               </div>
-            </div>
+
+              {/* Orders Comparison */}
+              <div className="bg-white rounded-xl shadow p-6 mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  Branch Orders Comparison Over Time
+                </h3>
+                <div className="h-80">
+                  <Bar
+                    data={{
+                      labels: branchComparisonData.branches[0]?.data.map(d => d.period) || [],
+                      datasets: branchComparisonData.branches.map((branch, index) => ({
+                        label: branch.branchName,
+                        data: branch.data.map(d => d.orders),
+                        backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5],
+                        borderColor: ['#4f46e5', '#059669', '#d97706', '#dc2626', '#7c3aed'][index % 5],
+                        borderWidth: 1,
+                        borderRadius: 4,
+                      })),
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: 'top' as const },
+                        tooltip: {
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          titleColor: '#ffffff',
+                          bodyColor: '#ffffff',
+                          callbacks: {
+                            label: function(context) {
+                              return `${context.dataset.label}: ${context.parsed.y} orders`;
+                            }
+                          }
+                        }
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                          }
+                        },
+                        x: {
+                          grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                          }
+                        }
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Total Performance Summary */}
+              <div className="bg-white rounded-xl shadow p-6 mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                  Branch Performance Summary
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Branch</th>
+                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Orders</th>
+                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Sales</th>
+                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Avg Order Value</th>
+                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Performance Rank</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {branchComparisonData.totals
+                        .sort((a, b) => b.totalSales - a.totalSales)
+                        .map((branch, index) => (
+                        <tr key={branch.branchId} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-4 font-medium text-gray-900">{branch.branchName}</td>
+                          <td className="py-3 px-4">{branch.totalOrders}</td>
+                          <td className="py-3 px-4">Ksh {branch.totalSales.toLocaleString()}</td>
+                          <td className="py-3 px-4">Ksh {(branch.totalSales / branch.totalOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              index === 0 ? 'bg-green-100 text-green-800' :
+                              index === 1 ? 'bg-blue-100 text-blue-800' :
+                              index === 2 ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              #{index + 1}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Product Performance Comparison */}
+              {productComparisonData && (
+                <>
+                  {/* Top Products Across Branches */}
+                  <div className="bg-white rounded-xl shadow p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      Top Products Performance Across Branches
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Product</th>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Quantity Sold</th>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Revenue</th>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Branches Selling</th>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Avg Revenue per Branch</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productComparisonData.products
+                            .slice(0, 10)
+                            .map((product: ProductComparison) => (
+                            <tr key={product.productId} className="border-b hover:bg-gray-50">
+                              <td className="py-3 px-4 font-medium text-gray-900">{product.productName}</td>
+                              <td className="py-3 px-4">{product.totalQuantitySold}</td>
+                              <td className="py-3 px-4">Ksh {product.totalRevenue.toLocaleString()}</td>
+                              <td className="py-3 px-4">{product.branchCount}</td>
+                              <td className="py-3 px-4">Ksh {(product.totalRevenue / product.branchCount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Product Performance by Branch */}
+                  <div className="bg-white rounded-xl shadow p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                      Product Performance by Branch
+                    </h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {productComparisonData.products.slice(0, 6).map((product: ProductComparison) => (
+                        <div key={product.productId} className="bg-gray-50 rounded-lg p-4">
+                          <h4 className="font-semibold text-gray-800 mb-3">{product.productName}</h4>
+                          <div className="space-y-2">
+                            {product.branchBreakdown.map((branch) => (
+                              <div key={branch.branchId} className="flex justify-between items-center">
+                                <span className="text-sm text-gray-600">{branch.branchName}</span>
+                                <div className="text-right">
+                                  <div className="text-sm font-medium">Ksh {branch.totalRevenue.toLocaleString()}</div>
+                                  <div className="text-xs text-gray-500">{branch.quantitySold} units</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Branch Product Summary */}
+                  <div className="bg-white rounded-xl shadow p-6 mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                      Branch Product Performance Summary
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Branch</th>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Products Sold</th>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Revenue</th>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Avg Order Value</th>
+                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Product Diversity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productComparisonData.branches.map((branch: BranchComparison) => (
+                            <tr key={branch.branchId} className="border-b hover:bg-gray-50">
+                              <td className="py-3 px-4 font-medium text-gray-900">{branch.branchName}</td>
+                              <td className="py-3 px-4">{branch.totalOrders}</td>
+                              <td className="py-3 px-4">Ksh {branch.totalSales.toLocaleString()}</td>
+                              <td className="py-3 px-4">Ksh {(branch.totalSales / branch.totalOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 bg-gray-200 rounded-full h-2">
+                                    <div
+                                      className="bg-blue-500 h-2 rounded-full"
+                                      style={{
+                                        width: `${Math.min(100, (branch.totalOrders / productComparisonData.summary.totalProducts) * 100)}%`
+                                      }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-xs text-gray-600">
+                                    {((branch.totalOrders / productComparisonData.summary.totalProducts) * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
           )}
-    
+        </section>
+
         {/* System Overview Reports */}
         <section className="mb-10">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">System Overview Reports</h2>
@@ -1135,7 +1212,6 @@ export default function ReportsPage() {
         </section>
 
         {/* Advanced Reports - Always visible */}
-        {/* Sales Performance Section, Customer & Operations, etc. are always shown */}
         <section className="mb-10">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Sales Performance</h2>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
@@ -1489,7 +1565,7 @@ export default function ReportsPage() {
                           ></div>
                         </div>
                         <div className="flex justify-between text-xs text-gray-600 mt-1">
-                          <span>Your: 8.5%</span>
+                          <span>Your:  8.5%</span>
                           <span>Industry: 12%</span>
                         </div>
                       </div>
@@ -1588,7 +1664,6 @@ export default function ReportsPage() {
           </div>
         </section>
       </div>
-     </div>
-   
+    </div>
   );
 }

@@ -30,6 +30,11 @@ type Sale = {
   cashier?: string;
   items: SaleItem[];
   mpesaTransaction?: MpesaTransaction;
+  branch?: {
+    id: string;
+    name: string;
+    address?: string;
+  };
 };
 
 function unique<T>(arr: T[]): T[] {
@@ -45,16 +50,16 @@ function toCSV(rows: Record<string, unknown>[], columns: string[]): string {
 
 export default function SalesHistoryPage() {
 
-const [sales, setSales] = useState<Sale[]>([]);
+const [sales] = useState<Sale[]>([]);
+const [loading] = useState(true);
+const [error] = useState("");
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   // Branch state
-  const [branches] = useState<{ id: string; name: string }[]>([]);
-  const [branchesLoading] = useState(true);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
 
   // Filter state
   const [filterCashier, setFilterCashier] = useState("");
@@ -81,21 +86,43 @@ const [sales, setSales] = useState<Sale[]>([]);
 
   // Fetch branches
 useEffect(() => {
-  setLoading(true);
-  apiGet("/sales", selectedBranchId ? { "x-branch-id": selectedBranchId } : undefined)
-    .then((data) => setSales(data as Sale[]))
-    .catch((err) => setError(err.message || "Failed to fetch sales"))
-    .finally(() => setLoading(false));
-}, [selectedBranchId]);
+    async function fetchBranches() {
+      setBranchesLoading(true);
+      try {
+        const data = await apiGet<{ id: string; name: string }[]>('/api/branches');
+        setBranches(data);
+        // Set initial branch to "all" if none selected
+        if (data?.length > 0 && selectedBranchId === "all") {
+          // Keep "all" selected
+        }
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+      } finally {
+        setBranchesLoading(false);
+      }
+    }
+    fetchBranches();
+  }, [selectedBranchId]);
 
   // Fetch sales (filtered by branch)
-useEffect(() => {
-  setLoading(true);
-  apiGet("/sales", selectedBranchId ? { "x-branch-id": selectedBranchId } : undefined)
-    .then((data) => setSales(data as Sale[]))
-    .catch((err) => setError(err.message || "Failed to fetch sales"))
-    .finally(() => setLoading(false));
-}, [selectedBranchId]);
+  useEffect(() => {
+    async function fetchBranches() {
+      setBranchesLoading(true);
+      try {
+        const data = await apiGet<{ id: string; name: string }[]>('/api/branches');
+        setBranches(data);
+        // Set initial branch to "all" if none selected
+        if (data?.length > 0 && selectedBranchId === "all") {
+          // Keep "all" selected
+        }
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+      } finally {
+        setBranchesLoading(false);
+      }
+    }
+    fetchBranches();
+  }, [selectedBranchId]);
 
   // Summary calculations
   const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total || 0), 0);
@@ -110,12 +137,13 @@ useEffect(() => {
   function handleExportCSV() {
     if (!filteredSales.length) return;
     const columns = [
-      'saleId', 'date', 'total', 'paymentType', 'customerName', 'customerPhone', 'cashier'
+      'saleId', 'date', 'total', 'paymentType', 'customerName', 'customerPhone', 'branch', 'cashier'
     ];
     const rows = filteredSales.map(sale => ({
       ...sale,
       date: new Date(sale.date).toLocaleString(),
       total: sale.total.toFixed(2),
+      branch: sale.branch?.name || 'Unknown',
     }));
     const csv = toCSV(rows, columns);
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -134,6 +162,7 @@ useEffect(() => {
       ...sale,
       date: new Date(sale.date).toLocaleString(),
       total: sale.total.toFixed(2),
+      branch: sale.branch?.name || 'Unknown',
     })));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sales');
@@ -151,13 +180,14 @@ useEffect(() => {
     doc.setTextColor(100);
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
     // Table
-    const tableColumn = ['Date', 'Sale ID', 'Total', 'Payment', 'Customer', 'Cashier'];
+    const tableColumn = ['Date', 'Sale ID', 'Total', 'Payment', 'Customer', 'Branch', 'Cashier'];
     const tableRows = filteredSales.map(sale => [
       new Date(sale.date).toLocaleString(),
       sale.saleId,
       `$${sale.total.toFixed(2)}`,
       sale.paymentType,
       sale.customerName || '-',
+      sale.branch?.name || 'Unknown',
       sale.cashier || '-',
     ]);
     autoTable(doc, {
@@ -236,6 +266,7 @@ useEffect(() => {
                 className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
                 style={{ minWidth: 200 }}
               >
+                <option value="all">All Branches</option>
                 {branches.map(branch => (
                   <option key={branch.id} value={branch.id}>{branch.name}</option>
                 ))}
@@ -460,6 +491,7 @@ useEffect(() => {
                     <th className="py-3 px-4 text-right font-semibold text-gray-600">Total</th>
                     <th className="py-3 px-4 text-left font-semibold text-gray-600">Payment</th>
                     <th className="py-3 px-4 text-left font-semibold text-gray-600">Customer</th>
+                    <th className="py-3 px-4 text-left font-semibold text-gray-600">Branch</th>
                     <th className="py-3 px-4 text-left font-semibold text-gray-600">Cashier</th>
                     <th className="py-3 px-4 text-center font-semibold text-gray-600">Actions</th>
                   </tr>
@@ -484,8 +516,8 @@ useEffect(() => {
                         </td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            sale.paymentType === 'cash' 
-                              ? 'bg-blue-100 text-blue-800' 
+                            sale.paymentType === 'cash'
+                              ? 'bg-blue-100 text-blue-800'
                               : sale.paymentType === 'mpesa'
                               ? 'bg-green-100 text-green-800'
                               : 'bg-gray-100 text-gray-800'
@@ -499,6 +531,11 @@ useEffect(() => {
                           )}
                         </td>
                         <td className="py-3 px-4">
+                          {sale.branch?.name || (
+                            <span className="text-gray-400 italic">Unknown</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
                           {sale.cashier || (
                             <span className="text-gray-400 italic">System</span>
                           )}
@@ -508,8 +545,8 @@ useEffect(() => {
                             <button
                               onClick={() => setExpanded(expanded === sale.saleId ? null : sale.saleId)}
                               className={`p-2 rounded-lg transition-colors ${
-                                expanded === sale.saleId 
-                                  ? 'bg-blue-100 text-blue-700' 
+                                expanded === sale.saleId
+                                  ? 'bg-blue-100 text-blue-700'
                                   : 'text-gray-500 hover:text-blue-700 hover:bg-blue-50'
                               }`}
                               title={expanded === sale.saleId ? "Hide details" : "Show details"}
@@ -520,7 +557,7 @@ useEffect(() => {
                                 <ChevronRightIcon className="w-4 h-4" />
                               )}
                             </button>
-                            
+
                             <button
                               className="p-2 text-gray-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                               onClick={() => {
@@ -536,7 +573,7 @@ useEffect(() => {
                       
                       {expanded === sale.saleId && (
                         <tr>
-                          <td colSpan={7} className="bg-blue-50 px-4 py-4">
+                          <td colSpan={8} className="bg-blue-50 px-4 py-4">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                               {/* Items Table */}
                               <div>

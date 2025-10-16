@@ -1,6 +1,8 @@
 "use client";
 import SettingsSidebar from '@/components/SettingsSidebar';
 import { useState } from 'react';
+import { FaArrowLeft } from 'react-icons/fa';
+import Link from 'next/link';
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -29,6 +31,15 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         marginLeft: sidebarCollapsed ? '4rem' : '15rem', // Adjust margin based on collapsed state
         transition: 'margin-left 0.3s ease',
       }}>
+        <div className="mb-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <FaArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </Link>
+        </div>
         {children}
       </main>
     </div>

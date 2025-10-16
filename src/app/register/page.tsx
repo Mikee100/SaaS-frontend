@@ -766,7 +766,7 @@ const updateFormData = (field: string, value: string | string[] | boolean | numb
                     disabled={loading}
                     className="px-8 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading ? "Creating Account..." : "Complete Registration"}
+                    {loading ? "Creating Account..." : "Create Account"}
                   </button>
                 )}
               </div>

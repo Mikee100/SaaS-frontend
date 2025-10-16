@@ -9,72 +9,82 @@ import { jsPDF } from "jspdf";
 import { Download, Printer, Share2 } from "lucide-react";
 import Image from "next/image";
 
-// Add this CSS for better print styling
-const printStyles = `
-  @media print {
-    @page { margin: 0; size: auto; }
-    body { -webkit-print-color-adjust: exact; }
-    .no-print { display: none !important; }
-    .print-receipt { 
-      box-shadow: none !important;
-      border: none !important;
-      width: 100% !important;
-      max-width: 100% !important;
-      padding: 0 !important;
-      margin: 0 !important;
-    }
-    .receipt-container { 
-      box-shadow: none !important;
-      border: none !important;
-    }
-  }
-`;
+interface ReceiptItem {
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+interface Receipt {
+  saleId: string;
+  date: string;
+  items: ReceiptItem[];
+  subtotal?: number;
+  vatAmount?: number;
+  total?: number;
+  paymentMethod?: string;
+  amountReceived?: number;
+  change?: number;
+  customerName?: string;
+  customerPhone?: string;
+  branch?: {
+    id: string;
+    name: string;
+    address?: string;
+  };
+  // ...other fields
+}
+
+interface BusinessInfo {
+  logoUrl?: string;
+  name?: string;
+  businessType?: string;
+  address?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  kraPin?: string;
+  vatNumber?: string;
+  // ...other fields
+}
 
 export default function DigitalReceiptPage() {
   const params = useParams();
   const receiptRef = useRef<HTMLDivElement>(null);
   const [isPrinting, setIsPrinting] = useState(false);
-  const [receipt, setReceipt] = useState<{
-    saleId: string;
-    date: string;
-    subtotal?: number;
-    total?: number;
-    vatAmount?: number;
-    paymentMethod?: string;
-    amountReceived?: number;
-    change?: number;
-    customerName?: string;
-    customerPhone?: string;
-    items: Array<{
-      name: string;
-      price: number;
-      quantity: number;
-    }>;
-  } | null>(null);
-  const [businessInfo, setBusinessInfo] = useState<{
-    name?: string;
-    businessType?: string;
-    address?: string;
-    contactPhone?: string;
-    contactEmail?: string;
-    logoUrl?: string;
-    kraPin?: string;
-    vatNumber?: string;
-  } | null>(null);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [businessInfo, setBusinessInfo] = useState<BusinessInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const id = params?.id ? (Array.isArray(params.id) ? params.id[0] : params.id) : null;
 
+  // Print styles for the receipt
+  const printStyles = `
+    @media print {
+      body > *:not(#receipt-container) {
+        display: none !important;
+      }
+      #receipt-container {
+        box-shadow: none !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  `;
+
   // Add print styles to the document head
-  useEffect(() => {
-    const styleElement = document.createElement('style');
-    styleElement.innerHTML = printStyles;
-    document.head.appendChild(styleElement);
-    return () => {
-      document.head.removeChild(styleElement);
-    };
-  }, []);
+useEffect(() => {
+  const styleElement = document.createElement('style');
+  styleElement.innerHTML = printStyles;
+  document.head.appendChild(styleElement);
+  return () => {
+    document.head.removeChild(styleElement);
+  };
+}, [printStyles]);
 
   useEffect(() => {
     async function fetchData() {
@@ -85,26 +95,7 @@ export default function DigitalReceiptPage() {
           apiGet(`/sales/${id}`),
           apiGet('/tenant/me'),
         ]);
-
-        // Type assertion for receiptData
-        const receiptData = receiptDataRaw as {
-          saleId: string;
-          date: string;
-          subtotal?: number;
-          total?: number;
-          vatAmount?: number;
-          paymentMethod?: string;
-          amountReceived?: number;
-          change?: number;
-          customerName?: string;
-          customerPhone?: string;
-          items: Array<{
-            name: string;
-            price: number;
-            quantity: number;
-          }>;
-        };
-
+        const receiptData = receiptDataRaw as Receipt;
         const vatRate = 0.16;
         let subtotal = receiptData.subtotal;
         let vatAmount = receiptData.vatAmount;
@@ -117,31 +108,24 @@ export default function DigitalReceiptPage() {
           vatAmount = receiptData.total - subtotal;
         }
 
-        const processedReceipt = {
+        const processedReceipt: Receipt = {
           ...receiptData,
-          vatRate: vatRate,
           vatAmount: vatAmount,
           subtotal: subtotal,
-          items: receiptData.items?.map((item: { name: string; price: number; quantity: number }) => ({
+          items: receiptData.items?.map((item: ReceiptItem) => ({
             ...item,
             price: item.price || 0,
             quantity: item.quantity || 1
           })) || []
         };
-
         setReceipt(processedReceipt);
-        setBusinessInfo(business as {
-          name?: string;
-          businessType?: string;
-          address?: string;
-          contactPhone?: string;
-          contactEmail?: string;
-          logoUrl?: string;
-          kraPin?: string;
-          vatNumber?: string;
-        } | null);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load receipt");
+        setBusinessInfo(business as BusinessInfo);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          setError(error.message || "Failed to load receipt");
+        } else {
+          setError("Failed to load receipt");
+        }
       } finally {
         setLoading(false);
       }
@@ -195,23 +179,23 @@ export default function DigitalReceiptPage() {
     }
   };
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Receipt #${receipt?.saleId?.slice(0, 8) || ''}`,
-          text: 'View your digital receipt',
-          url: receiptUrl,
-        });
-      } catch {
-        // Sharing was cancelled
-      }
-    } else {
-      // Fallback for browsers that don't support Web Share API
-      navigator.clipboard.writeText(receiptUrl);
-      alert('Link copied to clipboard!');
+const handleShare = async () => {
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: `Receipt #${receipt?.saleId?.slice(0, 8) || ''}`,
+        text: 'View your digital receipt',
+        url: receiptUrl,
+      });
+    } catch {
+      // Sharing was cancelled
     }
-  };
+  } else {
+    // Fallback for browsers that don't support Web Share API
+    navigator.clipboard.writeText(receiptUrl);
+    alert('Link copied to clipboard!');
+  }
+};
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -226,7 +210,7 @@ export default function DigitalReceiptPage() {
   );
 
   const vatRate = 0.16;
-  const calculatedSubtotal = receipt.items?.reduce((sum: number, item: { name: string; price: number; quantity: number }) => {
+  const calculatedSubtotal = receipt.items?.reduce((sum: number, item: ReceiptItem) => {
     return sum + (Number(item.price) * (Number(item.quantity) || 1));
   }, 0) || 0;
   
@@ -235,12 +219,39 @@ export default function DigitalReceiptPage() {
   const vatAmount = receipt.vatAmount ?? (total - subtotal);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <style jsx global>{`
         @media print {
           body > *:not(#receipt-container) {
             display: none !important;
           }
+        }
+
+        /* Replace oklch with standard color values */
+        .bg-gradient-to-br {
+          background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        }
+        
+        .from-blue-600 {
+          --tw-gradient-from: #2563eb;
+          --tw-gradient-to: rgba(37, 99, 235, 0);
+          --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+        }
+        
+        .to-blue-800 {
+          --tw-gradient-to: #1e40af;
+        }
+        
+        .bg-blue-50 {
+          background-color: #eff6ff;
+        }
+        
+        .border-yellow-100 {
+          border-color: #fef9c3;
+        }
+        
+        .bg-yellow-50 {
+          background-color: #fffbeb;
         }
       `}</style>
       
@@ -280,8 +291,8 @@ export default function DigitalReceiptPage() {
           style={{ width: '100%', maxWidth: '380px', margin: '0 auto' }}
         >
           {/* Receipt Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 text-center">
-              {businessInfo?.logoUrl && (
+          <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-4 text-center">
+            {businessInfo?.logoUrl && (
               <Image
                 src={businessInfo.logoUrl}
                 alt="Business Logo"
@@ -357,6 +368,15 @@ export default function DigitalReceiptPage() {
                 {receipt.customerPhone && <div>Phone: {receipt.customerPhone}</div>}
               </div>
             )}
+
+            {/* Branch Info */}
+            {receipt.branch && (
+              <div className="bg-blue-50 rounded-lg p-3 mb-4 text-sm">
+                <h3 className="font-medium text-blue-700 mb-1">Branch</h3>
+                <div className="font-semibold text-blue-900">{receipt.branch.name}</div>
+                {receipt.branch.address && <div className="text-blue-600">{receipt.branch.address}</div>}
+              </div>
+            )}
             
             {/* Items List */}
             <div className="mb-4">
@@ -367,7 +387,7 @@ export default function DigitalReceiptPage() {
               </div>
               
               <div className="space-y-2">
-                {receipt.items.map((item: { name: string; price: number; quantity: number }, index: number) => (
+                {receipt.items.map((item: ReceiptItem, index: number) => (
                   <div key={index} className="grid grid-cols-12 gap-2 text-sm">
                     <div className="col-span-7 font-medium">{item.name}</div>
                     <div className="col-span-2 text-right text-gray-600">×{item.quantity}</div>
@@ -422,11 +442,11 @@ export default function DigitalReceiptPage() {
                     <span className="capitalize font-medium">{receipt.paymentMethod || 'N/A'}</span>
                   </div>
                   
-                  {receipt.paymentMethod === "cash" && receipt.amountReceived && receipt.amountReceived > 0 && (
+                  {receipt.paymentMethod === "cash" && (receipt.amountReceived ?? 0) > 0 && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Amount Tendered:</span>
-                        <span>KES {receipt.amountReceived.toFixed(2)}</span>
+                        <span>KES {(receipt.amountReceived ?? 0).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between font-medium">
                         <span>Change:</span>

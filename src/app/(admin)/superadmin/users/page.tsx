@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
-import { apiGet } from "@/utils/api";
+import { apiGet, apiPut } from "@/utils/api";
 
 interface User {
   id: string;
   name: string;
   email: string;
   isSuperadmin: boolean;
+  isDisabled: boolean;
   createdAt: string;
   tenant: {
     id: string;
@@ -49,6 +50,17 @@ export default function SuperadminUsersPage() {
       console.error("Failed to fetch users:", error);
     } finally {
       setLoadingUsers(false);
+    }
+  };
+
+  const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
+    try {
+      await apiPut(`/admin/users/${userId}/status`, { isDisabled: !currentStatus });
+      // Refresh the users list
+      await fetchUsers();
+    } catch (error) {
+      console.error("Failed to update user status:", error);
+      alert("Failed to update user status. Please try again.");
     }
   };
 
@@ -96,6 +108,18 @@ export default function SuperadminUsersPage() {
                       Superadmin
                     </span>
                   )}
+                  {user.isDisabled && (
+                    <span style={{
+                      background: "#ef4444",
+                      color: "#fff",
+                      padding: "0.25rem 0.5rem",
+                      borderRadius: "4px",
+                      fontSize: 12,
+                      fontWeight: "500"
+                    }}>
+                      Disabled
+                    </span>
+                  )}
                 </div>
                 <p style={{ color: "#6b7280", marginBottom: "0.5rem" }}>{user.email}</p>
                 <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
@@ -111,6 +135,20 @@ export default function SuperadminUsersPage() {
                 </p>
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  onClick={() => toggleUserStatus(user.id, user.isDisabled)}
+                  style={{
+                    background: user.isDisabled ? "#10b981" : "#ef4444",
+                    color: "#fff",
+                    padding: "0.5rem 1rem",
+                    borderRadius: "4px",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 14
+                  }}
+                >
+                  {user.isDisabled ? "Enable" : "Disable"}
+                </button>
                 <button
                   style={{
                     background: "#3b82f6",
@@ -153,6 +191,12 @@ export default function SuperadminUsersPage() {
             <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Tenant Users</h3>
             <p style={{ fontSize: 24, fontWeight: "bold", color: "#1f2937" }}>
               {users.filter(u => !u.isSuperadmin).length}
+            </p>
+          </div>
+          <div>
+            <h3 style={{ fontSize: 14, color: "#6b7280", marginBottom: "0.5rem" }}>Disabled Users</h3>
+            <p style={{ fontSize: 24, fontWeight: "bold", color: "#1f2937" }}>
+              {users.filter(u => u.isDisabled).length}
             </p>
           </div>
         </div>

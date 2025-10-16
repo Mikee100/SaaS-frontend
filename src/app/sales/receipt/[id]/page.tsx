@@ -27,6 +27,11 @@ interface Receipt {
   change?: number;
   customerName?: string;
   customerPhone?: string;
+  branch?: {
+    id: string;
+    name: string;
+    address?: string;
+  };
   // ...other fields
 }
 
@@ -361,6 +366,15 @@ const handleShare = async () => {
                 <h3 className="font-medium text-gray-700 mb-1">Customer</h3>
                 {receipt.customerName && <div>Name: {receipt.customerName}</div>}
                 {receipt.customerPhone && <div>Phone: {receipt.customerPhone}</div>}
+              </div>
+            )}
+
+            {/* Branch Info */}
+            {receipt.branch && (
+              <div className="bg-blue-50 rounded-lg p-3 mb-4 text-sm">
+                <h3 className="font-medium text-blue-700 mb-1">Branch</h3>
+                <div className="font-semibold text-blue-900">{receipt.branch.name}</div>
+                {receipt.branch.address && <div className="text-blue-600">{receipt.branch.address}</div>}
               </div>
             )}
             

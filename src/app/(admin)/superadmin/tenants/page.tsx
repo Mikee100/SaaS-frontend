@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
 import { apiGet, apiPost, apiDelete } from "@/utils/api";
+import { FaEye, FaStore, FaReceipt, FaArrowRight } from 'react-icons/fa';
 
 interface Tenant {
   id: string;
@@ -12,20 +13,64 @@ interface Tenant {
   contactEmail: string;
   contactPhone: string;
   createdAt: string;
-  _count: {
-    users: number;
-    products: number;
-    sales: number;
-  };
+  userCount: number;
+  productCount: number;
+  salesCount: number;
+}
+
+interface TenantSpaceUsage {
+  tenantId: string;
+  name: string;
+  businessType: string;
+  contactEmail: string;
+  contactPhone: string;
+  createdAt: string;
+  spaceUsedMB: string;
+  productCount: number;
+}
+
+interface TenantDetails {
+  id: string;
+  name: string;
+  businessType: string;
+  contactEmail: string;
+  contactPhone: string;
+  createdAt: string;
+  userCount: number;
+  productCount: number;
+  salesCount: number;
+  branchCount: number;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  inventory: {
+    quantity: number;
+  }[];
+}
+
+interface Transaction {
+  id: string;
+  total: number;
+  createdAt: string;
 }
 
 export default function SuperadminTenantsPage() {
   const { user, loading } = useUser();
   const router = useRouter();
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantSpaceUsage, setTenantSpaceUsage] = useState<TenantSpaceUsage[]>([]);
   const [loadingTenants, setLoadingTenants] = useState(true);
+  const [loadingSpaceUsage, setLoadingSpaceUsage] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState<TenantDetails | null>(null);
+  const [tenantProducts, setTenantProducts] = useState<Product[]>([]);
+  const [tenantTransactions, setTenantTransactions] = useState<Transaction[]>([]);
+  const [showTenantModal, setShowTenantModal] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
@@ -36,8 +81,41 @@ export default function SuperadminTenantsPage() {
   useEffect(() => {
     if (user?.isSuperadmin) {
       fetchTenants();
+      fetchTenantSpaceUsage();
     }
   }, [user]);
+
+  const fetchTenantDetails = async (tenantId: string) => {
+    try {
+      setLoadingDetails(true);
+      const [tenantDetails, products, transactions] = await Promise.all([
+        apiGet<TenantDetails>(`/admin/tenants/${tenantId}`),
+        apiGet<Product[]>(`/admin/tenants/${tenantId}/products`),
+        apiGet<Transaction[]>(`/admin/tenants/${tenantId}/transactions`),
+      ]);
+
+      setSelectedTenant(tenantDetails);
+      setTenantProducts(products);
+      setTenantTransactions(transactions);
+      setShowTenantModal(true);
+    } catch (error) {
+      console.error("Failed to fetch tenant details:", error);
+      alert("Failed to load tenant details");
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const handleEnterAccount = async (tenantId: string) => {
+    try {
+      await apiPost(`/admin/tenants/${tenantId}/switch`, {});
+      // Redirect to the tenant's dashboard or main app
+      router.push('/dashboard'); // Adjust this path as needed
+    } catch (error) {
+      console.error("Failed to switch tenant context:", error);
+      alert("Failed to enter tenant account");
+    }
+  };
 
   const fetchTenants = async () => {
     try {
@@ -49,6 +127,66 @@ export default function SuperadminTenantsPage() {
     } finally {
       setLoadingTenants(false);
     }
+  };
+
+  const fetchTenantSpaceUsage = async () => {
+    try {
+      setLoadingSpaceUsage(true);
+      const data = await apiGet("/admin/tenants/space-usage") as TenantSpaceUsage[];
+      setTenantSpaceUsage(data);
+    } catch (error) {
+      console.error("Failed to fetch tenant space usage:", error);
+    } finally {
+      setLoadingSpaceUsage(false);
+    }
+  };
+
+  const handleViewTenant = (tenantId: string) => {
+    router.push(`/superadmin/tenants/${tenantId}`);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount);
+  };
+
+  const getTenantSpaceUsage = (tenantId: string) => {
+    return tenantSpaceUsage.find(usage => usage.tenantId === tenantId);
+  };
+
+  const renderSpaceUsageBar = (spaceUsedMB: string) => {
+    const spaceUsed = parseFloat(spaceUsedMB);
+    // Assume a max limit of 100MB for visualization (adjust as needed)
+    const maxSpace = 100;
+    const percentage = Math.min((spaceUsed / maxSpace) * 100, 100);
+
+    return (
+      <div style={{ width: '100%', marginTop: '0.5rem' }}>
+        <div style={{
+          width: '100%',
+          height: '8px',
+          background: '#e5e7eb',
+          borderRadius: '4px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            width: `${percentage}%`,
+            height: '100%',
+            background: percentage > 80 ? '#ef4444' : percentage > 60 ? '#f59e0b' : '#10b981',
+            transition: 'width 0.3s ease'
+          }} />
+        </div>
+        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '0.25rem' }}>
+          {spaceUsedMB} MB used
+        </div>
+      </div>
+    );
   };
 
   const handleCreateTenant = async (formData: FormData) => {
@@ -110,6 +248,133 @@ export default function SuperadminTenantsPage() {
           Create New Tenant
         </button>
       </div>
+
+      {/* Tenant Modal */}
+      {showTenantModal && selectedTenant && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: "#fff",
+            padding: "2rem",
+            borderRadius: "8px",
+            width: "90%",
+            maxWidth: "800px",
+            maxHeight: "90vh",
+            overflow: "auto"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h2 style={{ fontSize: 24, fontWeight: "bold" }}>{selectedTenant.name}</h2>
+              <button
+                onClick={() => setShowTenantModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  cursor: "pointer",
+                  color: "#6b7280"
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "2rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1rem", marginBottom: "1rem" }}>
+                <div style={{ textAlign: "center", padding: "1rem", background: "#f3f4f6", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "24px", fontWeight: "bold", color: "#3b82f6" }}>{selectedTenant.userCount}</div>
+                  <div style={{ fontSize: "14px", color: "#6b7280" }}>Users</div>
+                </div>
+                <div style={{ textAlign: "center", padding: "1rem", background: "#f3f4f6", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "24px", fontWeight: "bold", color: "#10b981" }}>{selectedTenant.productCount}</div>
+                  <div style={{ fontSize: "14px", color: "#6b7280" }}>Products</div>
+                </div>
+                <div style={{ textAlign: "center", padding: "1rem", background: "#f3f4f6", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "24px", fontWeight: "bold", color: "#f59e0b" }}>{selectedTenant.salesCount}</div>
+                  <div style={{ fontSize: "14px", color: "#6b7280" }}>Transactions</div>
+                </div>
+                <div style={{ textAlign: "center", padding: "1rem", background: "#f3f4f6", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "24px", fontWeight: "bold", color: "#8b5cf6" }}>{selectedTenant.branchCount}</div>
+                  <div style={{ fontSize: "14px", color: "#6b7280" }}>Branches</div>
+                </div>
+              </div>
+              {getTenantSpaceUsage(selectedTenant.id) && (
+                <div style={{ marginTop: "1rem" }}>
+                  <div style={{ fontSize: "14px", fontWeight: "500", marginBottom: "0.5rem" }}>Database Space Usage</div>
+                  {renderSpaceUsageBar(getTenantSpaceUsage(selectedTenant.id)!.spaceUsedMB)}
+                </div>
+              )}
+
+              <button
+                onClick={() => handleEnterAccount(selectedTenant.id)}
+                style={{
+                  background: "#3b82f6",
+                  color: "#fff",
+                  padding: "0.75rem 1.5rem",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem"
+                }}
+              >
+                <FaArrowRight /> Enter Account
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: "bold", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <FaStore /> Products ({tenantProducts.length})
+                </h3>
+                <div style={{ maxHeight: "300px", overflow: "auto" }}>
+                  {tenantProducts.length > 0 ? (
+                    tenantProducts.slice(0, 10).map(product => (
+                      <div key={product.id} style={{ padding: "0.5rem", borderBottom: "1px solid #e5e7eb" }}>
+                        <div style={{ fontWeight: "500" }}>{product.name}</div>
+                        <div style={{ fontSize: "14px", color: "#6b7280" }}>
+                          {formatCurrency(product.price)} • Stock: {product.inventory[0]?.quantity || 0}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ color: "#6b7280", fontStyle: "italic" }}>No products found</div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: "bold", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <FaReceipt /> Recent Transactions ({tenantTransactions.length})
+                </h3>
+                <div style={{ maxHeight: "300px", overflow: "auto" }}>
+                  {tenantTransactions.length > 0 ? (
+                    tenantTransactions.slice(0, 10).map(transaction => (
+                      <div key={transaction.id} style={{ padding: "0.5rem", borderBottom: "1px solid #e5e7eb" }}>
+                        <div style={{ fontWeight: "500" }}>{formatCurrency(transaction.total)}</div>
+                        <div style={{ fontSize: "14px", color: "#6b7280" }}>{formatDate(transaction.createdAt)}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ color: "#6b7280", fontStyle: "italic" }}>No transactions found</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreateForm && (
         <div style={{ 
@@ -252,12 +517,34 @@ export default function SuperadminTenantsPage() {
                 <p style={{ color: "#6b7280", marginBottom: "0.5rem" }}>{tenant.businessType}</p>
                 <p style={{ color: "#6b7280", fontSize: 14 }}>{tenant.contactEmail}</p>
                 <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>{tenant._count.users} users</span>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>{tenant._count.products} products</span>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>{tenant._count.sales} sales</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>{tenant.userCount} users</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>{tenant.productCount} products</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>{tenant.salesCount} sales</span>
                 </div>
+                {getTenantSpaceUsage(tenant.id) && (
+                  <div style={{ marginTop: "0.5rem" }}>
+                    {renderSpaceUsageBar(getTenantSpaceUsage(tenant.id)!.spaceUsedMB)}
+                  </div>
+                )}
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  onClick={() => handleViewTenant(tenant.id)}
+                  style={{
+                    background: "#3b82f6",
+                    color: "#fff",
+                    padding: "0.5rem 1rem",
+                    borderRadius: "4px",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.25rem"
+                  }}
+                >
+                  <FaEye /> View Details
+                </button>
                 <button
                   onClick={() => handleDeleteTenant(tenant.id)}
                   style={{

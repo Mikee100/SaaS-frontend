@@ -203,28 +203,47 @@ export default function SuperadminDashboard() {
             <div style={{ fontSize: 12, opacity: 0.8 }}>Perform mass actions efficiently</div>
           </button>
           
-          <button 
+          <button
             onClick={() => router.push("/superadmin/logs")}
-            style={{ 
-              background: "#6b7280", 
-              color: "#fff", 
-              padding: "1rem", 
-              borderRadius: "6px", 
-              border: "none", 
+            style={{
+              background: "#6b7280",
+              color: "#fff",
+              padding: "1rem",
+              borderRadius: "6px",
+              border: "none",
               cursor: "pointer",
               fontWeight: "500",
               textAlign: "left"
             }}
           >
 
-            
 
-            
+
+
+
+
 
             <div style={{ fontSize: 16, fontWeight: "600", marginBottom: "0.25rem" }}>Audit Logs</div>
             <div style={{ fontSize: 12, opacity: 0.8 }}>View system activity logs</div>
           </button>
-          
+
+          <button
+            onClick={() => router.push("/superadmin/analytics")}
+            style={{
+              background: "#f97316",
+              color: "#fff",
+              padding: "1rem",
+              borderRadius: "6px",
+              border: "none",
+              cursor: "pointer",
+              fontWeight: "500",
+              textAlign: "left"
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: "600", marginBottom: "0.25rem" }}>System Analytics</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>View platform analytics and insights</div>
+          </button>
+
         </div>
       </div>
     </main>

@@ -1,5 +1,4 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '../../../components/ui/badge';
@@ -7,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table';
 import { format } from 'date-fns';
 import SubscriptionDetailsModal from '../../../components/SubscriptionDetailsModal';
+import AssignPlanModal from '../../../components/AssignPlanModal';
 
 interface Subscription {
   id: string;
@@ -32,6 +32,7 @@ export default function SubscriptionsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
 
   useEffect(() => {
     fetchSubscriptions();
@@ -79,9 +80,14 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Subscription Management</h1>
-        <p className="text-muted-foreground">Manage tenant subscriptions and scheduled changes</p>
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Subscription Management</h1>
+          <p className="text-muted-foreground">Manage tenant subscriptions and scheduled changes</p>
+        </div>
+        <Button onClick={() => setAssignModalOpen(true)}>
+          Assign Plan to Tenant
+        </Button>
       </div>
 
       <Card>
@@ -151,6 +157,12 @@ export default function SubscriptionsPage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onCancelScheduled={handleCancelScheduled}
+      />
+
+      <AssignPlanModal
+        isOpen={assignModalOpen}
+        onClose={() => setAssignModalOpen(false)}
+        onSuccess={fetchSubscriptions}
       />
     </div>
   );

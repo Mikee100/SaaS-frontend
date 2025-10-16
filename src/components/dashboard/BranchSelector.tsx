@@ -41,7 +41,7 @@ export function BranchSelector() {
       }
     }
 
-    if (user?.roles?.includes('manager') || user?.roles?.includes('admin') || user?.roles?.includes('owner')) {
+    if (user?.roles?.includes('owner')) {
       loadBranches();
     }
   }, [user]);
@@ -63,7 +63,7 @@ export function BranchSelector() {
     }
   };
 
-  if (!user || !user.roles?.some(role => ['manager', 'admin', 'owner'].includes(role))) {
+  if (!user || !user.roles?.includes('owner')) {
     return null;
   }
 
