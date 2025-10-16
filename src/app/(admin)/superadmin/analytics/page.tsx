@@ -21,8 +21,10 @@ interface TenantStats {
 interface ChartData {
   name: string;
   spaceUsed: number;
+  value: number; 
   percentage: number;
   color: string;
+  [key: string]: string | number; // Add index signature for recharts compatibility
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#f97316'];
@@ -64,6 +66,7 @@ export default function SystemAnalyticsPage() {
   const chartData: ChartData[] = tenantStats.map((tenant, index) => ({
     name: tenant.name.length > 15 ? tenant.name.substring(0, 15) + '...' : tenant.name,
     spaceUsed: parseFloat(tenant.spaceUsedMB),
+    value: parseFloat(tenant.spaceUsedMB), // <-- Add this line
     percentage: totalSpaceUsed > 0 ? (parseFloat(tenant.spaceUsedMB) / totalSpaceUsed) * 100 : 0,
     color: COLORS[index % COLORS.length]
   }));

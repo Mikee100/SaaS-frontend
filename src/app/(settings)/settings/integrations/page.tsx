@@ -16,6 +16,16 @@ interface Integration {
   webhookUrl?: string;
 }
 
+interface MpesaConfig {
+  consumerKey: string;
+  consumerSecret: string;
+  shortCode: string;
+  passkey: string;
+  callbackUrl: string;
+  environment: string;
+  isActive: boolean;
+}
+
 export default function IntegrationsSettings() {
   const { user } = useUser();
   const [integrations, setIntegrations] = useState<Integration[]>([
@@ -48,6 +58,16 @@ export default function IntegrationsSettings() {
   const [testing, setTesting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [mpesaForm, setMpesaForm] = useState({
+    mpesaConsumerKey: '',
+    mpesaConsumerSecret: '',
+    mpesaShortCode: '',
+    mpesaPasskey: '',
+    mpesaCallbackUrl: '',
+    mpesaIsActive: false,
+    mpesaEnvironment: 'sandbox',
+  });
+  const [savingMpesa, setSavingMpesa] = useState(false);
 
   useEffect(() => {
     const fetchIntegrations = async () => {
@@ -58,12 +78,38 @@ export default function IntegrationsSettings() {
         }
       } catch (err) {
         console.error('Failed to load integrations:', err);
+      }
+    };
+
+    const fetchMpesaConfig = async () => {
+      try {
+        if (!user?.tenantId) return;
+        const config = await apiGet<MpesaConfig>("/mpesa/config", { tenantId: user.tenantId });
+        if (config) {
+          setMpesaForm({
+            mpesaConsumerKey: config.consumerKey || '',
+            mpesaConsumerSecret: config.consumerSecret || '',
+            mpesaShortCode: config.shortCode || '',
+            mpesaPasskey: config.passkey || '',
+            mpesaCallbackUrl: config.callbackUrl || '',
+            mpesaIsActive: config.isActive || false,
+            mpesaEnvironment: config.environment || 'sandbox',
+          });
+          // Update M-Pesa integration status
+          setIntegrations(prev => prev.map(int =>
+            int.id === 'mpesa' ? { ...int, status: config.isActive ? 'connected' : 'disconnected' } : int
+          ));
+        }
+      } catch (err) {
+        console.error('Failed to load M-Pesa config:', err);
       } finally {
         setLoading(false);
       }
     };
+
     fetchIntegrations();
-  }, []);
+    fetchMpesaConfig();
+  }, [user?.tenantId]);
 
   const handleConnect = async (integrationId: string) => {
     try {
@@ -102,6 +148,48 @@ export default function IntegrationsSettings() {
     } catch (err: unknown) {
       const error = err as { message?: string };
       setError(error.message || `Failed to save ${integrationId} API key`);
+    }
+  };
+
+  const handleSaveMpesaConfig = async () => {
+    setSavingMpesa(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiPost('/mpesa/config', { ...mpesaForm, tenantId: user?.tenantId });
+      setSuccess('M-Pesa configuration saved successfully!');
+      // Update integration status
+      setIntegrations(prev => prev.map(int =>
+        int.id === 'mpesa' ? { ...int, status: mpesaForm.mpesaIsActive ? 'connected' : 'disconnected' } : int
+      ));
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || 'Failed to save M-Pesa configuration');
+    } finally {
+      setSavingMpesa(false);
+    }
+  };
+
+  const handleTestMpesaConnection = async () => {
+    setTesting('mpesa');
+    setError(null);
+    setSuccess(null);
+    try {
+      // For now, simulate test by calling initiate with a small amount (0.01)
+      // In production, backend should have a dedicated test endpoint
+      await apiPost('/mpesa/initiate', {
+        phoneNumber: '254712345678', // Test phone
+        amount: 0.01,
+        reference: 'TEST_CONNECTION',
+        transactionDesc: 'Connection Test',
+        tenantId: user?.tenantId,
+      });
+      setSuccess('M-Pesa connection test successful!');
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || 'M-Pesa connection test failed');
+    } finally {
+      setTesting(null);
     }
   };
 
@@ -164,7 +252,78 @@ export default function IntegrationsSettings() {
             )}
 
             <div className="space-y-3">
-              {integration.id === 'stripe' || integration.id === 'mpesa' ? (
+              {integration.id === 'mpesa' ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3">
+                    <input
+                      type="text"
+                      placeholder="Consumer Key"
+                      value={mpesaForm.mpesaConsumerKey}
+                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaConsumerKey: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Consumer Secret"
+                      value={mpesaForm.mpesaConsumerSecret}
+                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaConsumerSecret: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Short Code"
+                      value={mpesaForm.mpesaShortCode}
+                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaShortCode: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Passkey"
+                      value={mpesaForm.mpesaPasskey}
+                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaPasskey: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <textarea
+                      placeholder="Callback URL"
+                      value={mpesaForm.mpesaCallbackUrl}
+                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaCallbackUrl: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={2}
+                    />
+                    <select
+                      value={mpesaForm.mpesaEnvironment}
+                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaEnvironment: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="sandbox">Sandbox</option>
+                      <option value="production">Production</option>
+                    </select>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={mpesaForm.mpesaIsActive}
+                        onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaIsActive: e.target.checked }))}
+                        className="rounded"
+                      />
+                      <span className="text-sm">Enable M-Pesa Integration</span>
+                    </label>
+                  </div>
+                  <button
+                    onClick={handleSaveMpesaConfig}
+                    disabled={savingMpesa}
+                    className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+                  >
+                    {savingMpesa ? (
+                      <>
+                        <FaSpinner className="inline mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Configuration'
+                    )}
+                  </button>
+                </div>
+              ) : integration.id === 'stripe' ? (
                 <button
                   onClick={() => handleConnect(integration.id)}
                   className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -193,13 +352,30 @@ export default function IntegrationsSettings() {
                 </div>
               )}
 
-              {integration.status === 'connected' && (
+              {integration.status === 'connected' && integration.id !== 'mpesa' && (
                 <button
                   onClick={() => handleTestConnection(integration.id)}
                   disabled={testing === integration.id}
                   className="w-full px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-60"
                 >
                   {testing === integration.id ? (
+                    <>
+                      <FaSpinner className="inline mr-2 animate-spin" />
+                      Testing...
+                    </>
+                  ) : (
+                    'Test Connection'
+                  )}
+                </button>
+              )}
+
+              {integration.id === 'mpesa' && integration.status === 'connected' && (
+                <button
+                  onClick={handleTestMpesaConnection}
+                  disabled={testing === 'mpesa'}
+                  className="w-full px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-60"
+                >
+                  {testing === 'mpesa' ? (
                     <>
                       <FaSpinner className="inline mr-2 animate-spin" />
                       Testing...

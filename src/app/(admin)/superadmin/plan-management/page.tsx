@@ -1,7 +1,5 @@
 'use client';
-
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/utils/api';
 import {
   FaPlus,
@@ -14,7 +12,6 @@ import {
   FaTimes,
   FaSync,
   FaDollarSign,
-  FaCalendarAlt,
 } from 'react-icons/fa';
 
 // Types
@@ -58,7 +55,7 @@ interface PlanFormData {
 
 // Main Component
 export default function PlanManagementPage() {
-  const router = useRouter();
+  
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [features, setFeatures] = useState<PlanFeature[]>([]);

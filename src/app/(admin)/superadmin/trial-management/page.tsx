@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Clock, CheckCircle, XCircle, Users, Package, Building, ShoppingCart, AlertTriangle } from 'lucide-react';
+import { Loader2, Clock, Users, Package, Building, ShoppingCart, AlertTriangle } from 'lucide-react';
 import { apiGet, apiPost } from '@/utils/api';
 
 interface Tenant {
@@ -77,12 +77,7 @@ export default function TrialManagementPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [selectedTenantForUsage, setSelectedTenantForUsage] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchTenants();
-    fetchPlans();
-  }, []);
-
-  const fetchTenants = async () => {
+  const fetchTenants = useCallback(async () => {
     try {
       const data = await apiGet<Tenant[]>('/admin/tenants');
       setTenants(data);
@@ -91,16 +86,21 @@ export default function TrialManagementPage() {
     } catch (error) {
       console.error('Error fetching tenants:', error);
     }
-  };
+  }, []);
 
-  const fetchPlans = async () => {
+  const fetchPlans = useCallback(async () => {
     try {
       const data = await apiGet<Plan[]>('/billing/plans');
       setPlans(data);
     } catch (error) {
       console.error('Error fetching plans:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchTenants();
+    fetchPlans();
+  }, [fetchTenants, fetchPlans]);
 
   const fetchTrialStatus = async (tenantId: string) => {
     try {
@@ -146,8 +146,17 @@ export default function TrialManagementPage() {
       setSelectedTenant('');
       setDurationHours('24');
       setSelectedPlan('');
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to create trial' });
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "message" in error &&
+        typeof (error as { message?: unknown }).message === "string"
+      ) {
+        setMessage({ type: 'error', text: (error as { message: string }).message });
+      } else {
+        setMessage({ type: 'error', text: 'Failed to create trial' });
+      }
     } finally {
       setLoading(false);
     }
@@ -415,11 +424,13 @@ export default function TrialManagementPage() {
                         <strong>Usage Warning:</strong> This tenant is approaching one or more usage limits.
                         Consider contacting them about upgrading their plan.
                         <ul className="mt-2 list-disc list-inside">
-                          {Object.entries(usage.usage)
-                            .filter(([_, metric]) => metric.approachingLimit)
-                            .map(([key, _]) => (
-                              <li key={key}>{getUsageLabel(key)} usage is over 80%</li>
-                            ))}
+                      
+{Object.entries(usage.usage)
+  .filter(([, metric]) => metric.approachingLimit)
+  .map(([key]) => (
+    <li key={key}>{getUsageLabel(key)} usage is over 80%</li>
+  ))}
+
                         </ul>
                       </AlertDescription>
                     </Alert>

@@ -1,32 +1,55 @@
-"use client";
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { apiGet } from '@/utils/api';
+
+export interface PlanLimitsData {
+  currentPlan: string;
+  usage: {
+    users: { current: number; limit: number };
+    products: { current: number; limit: number };
+    branches: { current: number; limit: number };
+    sales: { current: number; limit: number };
+  };
+  features: {
+    analytics: boolean;
+    advanced_reports: boolean;
+    custom_branding: boolean;
+    api_access: boolean;
+    bulk_operations: boolean;
+    data_export: boolean;
+    custom_fields: boolean;
+  };
+}
 
 export function usePlanLimits() {
-	const [limits] = useState({
-		currentPlan: 'Basic',
-		usage: {
-			users: { current: 1, limit: 1 },
-			products: { current: 0, limit: 10 },
-			sales: { current: 0, limit: 100 }
-		},
-		features: {
-			analytics: false,
-			advanced_reports: false,
-			custom_branding: false,
-			api_access: false,
-			bulk_operations: true,
-			data_export: false,
-			custom_fields: false
-		}
-	});
+  const [data, setData] = useState<PlanLimitsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-	return {
-		limits,
-		loading: false,
-		error: null,
-		hasFeature: () => false,
-		canCreate: () => true,
-		getUsagePercentage: () => 0,
-		isPlanAtLeast: (plan: 'Basic' | 'Pro' | 'Enterprise') => plan === 'Basic',
-	};
+  const fetchPlanLimits = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiGet<PlanLimitsData>('/user/me/plan-limits');
+      setData(response);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch plan limits');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPlanLimits();
+  }, [fetchPlanLimits]);
+
+  const refetch = useCallback(() => {
+    fetchPlanLimits();
+  }, [fetchPlanLimits]);
+
+  return {
+    data,
+    loading,
+    error,
+    refetch,
+  };
 }

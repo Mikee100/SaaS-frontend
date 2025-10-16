@@ -63,14 +63,12 @@ export default function SuperadminTenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantSpaceUsage, setTenantSpaceUsage] = useState<TenantSpaceUsage[]>([]);
   const [loadingTenants, setLoadingTenants] = useState(true);
-  const [loadingSpaceUsage, setLoadingSpaceUsage] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState<TenantDetails | null>(null);
-  const [tenantProducts, setTenantProducts] = useState<Product[]>([]);
-  const [tenantTransactions, setTenantTransactions] = useState<Transaction[]>([]);
+  const [selectedTenant] = useState<TenantDetails | null>(null);
+  const [tenantProducts] = useState<Product[]>([]);
+  const [tenantTransactions] = useState<Transaction[]>([]);
   const [showTenantModal, setShowTenantModal] = useState(false);
-  const [loadingDetails, setLoadingDetails] = useState(false);
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
@@ -85,27 +83,7 @@ export default function SuperadminTenantsPage() {
     }
   }, [user]);
 
-  const fetchTenantDetails = async (tenantId: string) => {
-    try {
-      setLoadingDetails(true);
-      const [tenantDetails, products, transactions] = await Promise.all([
-        apiGet<TenantDetails>(`/admin/tenants/${tenantId}`),
-        apiGet<Product[]>(`/admin/tenants/${tenantId}/products`),
-        apiGet<Transaction[]>(`/admin/tenants/${tenantId}/transactions`),
-      ]);
-
-      setSelectedTenant(tenantDetails);
-      setTenantProducts(products);
-      setTenantTransactions(transactions);
-      setShowTenantModal(true);
-    } catch (error) {
-      console.error("Failed to fetch tenant details:", error);
-      alert("Failed to load tenant details");
-    } finally {
-      setLoadingDetails(false);
-    }
-  };
-
+ 
   const handleEnterAccount = async (tenantId: string) => {
     try {
       await apiPost(`/admin/tenants/${tenantId}/switch`, {});
@@ -131,13 +109,10 @@ export default function SuperadminTenantsPage() {
 
   const fetchTenantSpaceUsage = async () => {
     try {
-      setLoadingSpaceUsage(true);
       const data = await apiGet("/admin/tenants/space-usage") as TenantSpaceUsage[];
       setTenantSpaceUsage(data);
     } catch (error) {
       console.error("Failed to fetch tenant space usage:", error);
-    } finally {
-      setLoadingSpaceUsage(false);
     }
   };
 
@@ -566,5 +541,5 @@ export default function SuperadminTenantsPage() {
       )}
     </main>
   );
-} 
+}
 

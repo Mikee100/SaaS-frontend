@@ -14,7 +14,6 @@ const CreateTenantPage = () => {
     ownerEmail: "",
     ownerPassword: "",
   });
-  const [tempPassword, setTempPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +42,8 @@ const CreateTenantPage = () => {
         },
       };
 
-      const data = await apiPost('/admin/tenants', tenantData);
-      setSuccess(`Tenant created successfully! Default password: owner1234@`);
+      await apiPost('/admin/tenants', tenantData);
+      setSuccess("Tenant created successfully! Default password: owner1234@");
       setForm({
         name: "",
         businessType: "",
@@ -55,8 +54,17 @@ const CreateTenantPage = () => {
         ownerEmail: "",
         ownerPassword: "",
       });
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "message" in err &&
+        typeof (err as { message?: unknown }).message === "string"
+      ) {
+        setError((err as { message: string }).message);
+      } else {
+        setError("Something went wrong");
+      }
     } finally {
       setLoading(false);
     }
@@ -186,7 +194,7 @@ const CreateTenantPage = () => {
             style={{ width: "100%", padding: "0.5rem", marginTop: "0.25rem" }}
           />
           <small style={{ color: "#666", fontSize: "0.875rem" }}>
-            Note: A default password "owner1234@" will be set. Users can change it after first login.
+            Note: A default password &quot;owner1234@&quot; will be set. Users can change it after first login.
           </small>
         </div>
 

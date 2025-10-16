@@ -142,7 +142,7 @@ export default function ReportsPage() {
   // Low stock notification state
   const [showLowStockAlert, setShowLowStockAlert] = useState(true);
   const { user } = useUser();
-  const { limits } = usePlanLimits();
+ const { data: limits } = usePlanLimits();
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
   const [metrics, setMetrics] = useState<Metrics>({

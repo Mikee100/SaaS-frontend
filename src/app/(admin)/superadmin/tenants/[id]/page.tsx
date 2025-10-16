@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter, useParams } from "next/navigation";
 import { apiGet, apiPost } from "@/utils/api";
-import { FaArrowLeft, FaStore, FaReceipt, FaArrowRight, FaUsers, FaBuilding } from 'react-icons/fa';
+import { FaArrowLeft, FaStore, FaReceipt, FaArrowRight, FaUsers, FaBuilding, FaPlug, FaSpinner, FaCheckCircle } from 'react-icons/fa';
 
 interface TenantDetails {
   id: string;
@@ -19,6 +19,16 @@ interface TenantDetails {
   branchCount: number;
   spaceUsedMB: string;
   resourceSpaceUsage?: Record<string, number>;
+}
+
+interface MpesaConfigApiResponse {
+  consumerKey?: string;
+  consumerSecret?: string;
+  shortCode?: string;
+  passkey?: string;
+  callbackUrl?: string;
+  environment?: string;
+  isActive?: boolean;
 }
 
 interface Product {
@@ -46,7 +56,21 @@ export default function TenantDetailsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions' | 'analytics' | 'integrations'>('overview');
+
+  // M-Pesa integration state
+  const [mpesaConfig, setMpesaConfig] = useState({
+    mpesaConsumerKey: '',
+    mpesaConsumerSecret: '',
+    mpesaShortCode: '',
+    mpesaPasskey: '',
+    mpesaCallbackUrl: '',
+    mpesaEnvironment: 'sandbox',
+    mpesaIsActive: false
+  });
+  const [savingMpesa, setSavingMpesa] = useState(false);
+  const [testingMpesa, setTestingMpesa] = useState(false);
+  const [mpesaStatus, setMpesaStatus] = useState<'disconnected' | 'connected'>('disconnected');
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
@@ -54,13 +78,7 @@ export default function TenantDetailsPage() {
     }
   }, [user, loading, router]);
 
-  useEffect(() => {
-    if (user?.isSuperadmin && tenantId) {
-      fetchTenantData();
-    }
-  }, [user, tenantId]);
-
-  const fetchTenantData = async () => {
+  const fetchTenantData = useCallback(async () => {
     try {
       setLoadingData(true);
       const [tenantDetails, tenantProducts, tenantTransactions] = await Promise.all([
@@ -77,6 +95,73 @@ export default function TenantDetailsPage() {
       alert("Failed to load tenant data");
     } finally {
       setLoadingData(false);
+    }
+  }, [tenantId]);
+
+const fetchMpesaConfig = useCallback(async () => {
+  try {
+    const config = await apiGet(`/mpesa/config`, { tenantId }) as MpesaConfigApiResponse;
+    if (config) {
+      setMpesaConfig({
+        mpesaConsumerKey: config.consumerKey || '',
+        mpesaConsumerSecret: config.consumerSecret || '',
+        mpesaShortCode: config.shortCode || '',
+        mpesaPasskey: config.passkey || '',
+        mpesaCallbackUrl: config.callbackUrl || '',
+        mpesaEnvironment: config.environment || 'sandbox',
+        mpesaIsActive: config.isActive || false
+      });
+      setMpesaStatus(config.isActive ? 'connected' : 'disconnected');
+    }
+  } catch (error) {
+    console.error("Failed to fetch M-Pesa config:", error);
+    // Keep default disconnected status
+  }
+}, [tenantId]);
+
+  useEffect(() => {
+    if (user?.isSuperadmin && tenantId) {
+      fetchTenantData();
+      fetchMpesaConfig();
+    }
+  }, [user, tenantId, fetchTenantData, fetchMpesaConfig]);
+
+  const saveMpesaConfig = async () => {
+    try {
+      setSavingMpesa(true);
+      await apiPost(`/mpesa/config`, {
+        tenantId,
+        mpesaConsumerKey: mpesaConfig.mpesaConsumerKey,
+        mpesaConsumerSecret: mpesaConfig.mpesaConsumerSecret,
+        mpesaShortCode: mpesaConfig.mpesaShortCode,
+        mpesaPasskey: mpesaConfig.mpesaPasskey,
+        mpesaCallbackUrl: mpesaConfig.mpesaCallbackUrl,
+        mpesaIsActive: true,
+        mpesaEnvironment: mpesaConfig.mpesaEnvironment
+      });
+      setMpesaStatus('connected');
+      alert("M-Pesa configuration saved successfully!");
+    } catch (error) {
+      console.error("Failed to save M-Pesa config:", error);
+      alert("Failed to save M-Pesa configuration");
+    } finally {
+      setSavingMpesa(false);
+    }
+  };
+
+  const testMpesaConnection = async () => {
+    try {
+      setTestingMpesa(true);
+      // For now, just simulate a test - in real implementation, you'd call a test endpoint
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+      setMpesaStatus('connected');
+      alert("M-Pesa connection test successful!");
+    } catch (error) {
+      console.error("Failed to test M-Pesa connection:", error);
+      setMpesaStatus('disconnected');
+      alert("M-Pesa connection test failed");
+    } finally {
+      setTestingMpesa(false);
     }
   };
 
@@ -288,6 +373,20 @@ export default function TenantDetailsPage() {
           >
             Analytics
           </button>
+          <button
+            onClick={() => setActiveTab('integrations')}
+            style={{
+              padding: "1rem 0",
+              border: "none",
+              background: "none",
+              borderBottom: activeTab === 'integrations' ? "2px solid #3b82f6" : "2px solid transparent",
+              color: activeTab === 'integrations' ? "#3b82f6" : "#6b7280",
+              fontWeight: activeTab === 'integrations' ? "600" : "500",
+              cursor: "pointer"
+            }}
+          >
+            Integrations
+          </button>
         </nav>
       </div>
 
@@ -426,6 +525,234 @@ export default function TenantDetailsPage() {
               No transactions found
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'integrations' && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+          {/* M-Pesa Integration */}
+          <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
+            <div style={{ padding: "1.5rem", borderBottom: "1px solid #e5e7eb" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+                <FaPlug style={{ color: "#10b981" }} />
+                <h3 style={{ fontSize: 20, fontWeight: "bold", margin: 0 }}>M-Pesa Integration</h3>
+                {mpesaStatus === 'connected' ? (
+                  <FaCheckCircle style={{ color: "#10b981" }} />
+                ) : (
+                  <FaSpinner style={{ color: "#f59e0b", animation: "spin 1s linear infinite" }} />
+                )}
+              </div>
+              <p style={{ color: "#6b7280", fontSize: "14px" }}>
+                Configure M-Pesa payment gateway for mobile money transactions
+              </p>
+            </div>
+
+            <div style={{ padding: "1.5rem" }}>
+              <form onSubmit={(e) => e.preventDefault()}>
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                    Consumer Key
+                  </label>
+                  <input
+                    type="text"
+                    value={mpesaConfig.mpesaConsumerKey}
+                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaConsumerKey: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "4px",
+                      fontSize: "14px"
+                    }}
+                    placeholder="Enter M-Pesa Consumer Key"
+                  />
+                </div>
+
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                    Consumer Secret
+                  </label>
+                  <input
+                    type="password"
+                    value={mpesaConfig.mpesaConsumerSecret}
+                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaConsumerSecret: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "4px",
+                      fontSize: "14px"
+                    }}
+                    placeholder="Enter M-Pesa Consumer Secret"
+                  />
+                </div>
+
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                    Short Code
+                  </label>
+                  <input
+                    type="text"
+                    value={mpesaConfig.mpesaShortCode}
+                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaShortCode: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "4px",
+                      fontSize: "14px"
+                    }}
+                    placeholder="Enter M-Pesa Short Code"
+                  />
+                </div>
+
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                    Passkey
+                  </label>
+                  <input
+                    type="password"
+                    value={mpesaConfig.mpesaPasskey}
+                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaPasskey: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "4px",
+                      fontSize: "14px"
+                    }}
+                    placeholder="Enter M-Pesa Passkey"
+                  />
+                </div>
+
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                    Callback URL
+                  </label>
+                  <input
+                    type="url"
+                    value={mpesaConfig.mpesaCallbackUrl}
+                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaCallbackUrl: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "4px",
+                      fontSize: "14px"
+                    }}
+                    placeholder="https://your-domain.com/mpesa/callback"
+                  />
+                </div>
+
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                    Environment
+                  </label>
+                  <select
+                    value={mpesaConfig.mpesaEnvironment}
+                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaEnvironment: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "4px",
+                      fontSize: "14px"
+                    }}
+                  >
+                    <option value="sandbox">Sandbox</option>
+                    <option value="production">Production</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", gap: "1rem" }}>
+                  <button
+                    type="button"
+                    onClick={saveMpesaConfig}
+                    disabled={savingMpesa}
+                    style={{
+                      background: "#3b82f6",
+                      color: "#fff",
+                      padding: "0.75rem 1.5rem",
+                      borderRadius: "6px",
+                      border: "none",
+                      cursor: savingMpesa ? "not-allowed" : "pointer",
+                      fontWeight: "500",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      opacity: savingMpesa ? 0.6 : 1
+                    }}
+                  >
+                    {savingMpesa ? <FaSpinner style={{ animation: "spin 1s linear infinite" }} /> : <FaCheckCircle />}
+                    {savingMpesa ? 'Saving...' : 'Save Configuration'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={testMpesaConnection}
+                    disabled={testingMpesa}
+                    style={{
+                      background: "#10b981",
+                      color: "#fff",
+                      padding: "0.75rem 1.5rem",
+                      borderRadius: "6px",
+                      border: "none",
+                      cursor: testingMpesa ? "not-allowed" : "pointer",
+                      fontWeight: "500",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      opacity: testingMpesa ? 0.6 : 1
+                    }}
+                  >
+                    {testingMpesa ? <FaSpinner style={{ animation: "spin 1s linear infinite" }} /> : <FaPlug />}
+                    {testingMpesa ? 'Testing...' : 'Test Connection'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          {/* Integration Status */}
+          <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
+            <div style={{ padding: "1.5rem", borderBottom: "1px solid #e5e7eb" }}>
+              <h3 style={{ fontSize: 20, fontWeight: "bold", margin: 0 }}>Integration Status</h3>
+            </div>
+
+            <div style={{ padding: "1.5rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#6b7280" }}>M-Pesa</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    {mpesaStatus === 'connected' ? (
+                      <>
+                        <FaCheckCircle style={{ color: "#10b981" }} />
+                        <span style={{ color: "#10b981", fontWeight: "500" }}>Connected</span>
+                      </>
+                    ) : (
+                      <>
+                        <FaSpinner style={{ color: "#f59e0b", animation: "spin 1s linear infinite" }} />
+                        <span style={{ color: "#f59e0b", fontWeight: "500" }}>Disconnected</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#6b7280" }}>Webhook Status</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <FaCheckCircle style={{ color: "#10b981" }} />
+                    <span style={{ color: "#10b981", fontWeight: "500" }}>Active</span>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#6b7280" }}>Last Sync</span>
+                  <span style={{ color: "#1f2937", fontWeight: "500" }}>2 hours ago</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </main>

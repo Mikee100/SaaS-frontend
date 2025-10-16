@@ -26,7 +26,7 @@ interface Branch {
 
 export default function PlanBasedNav() {
   const userContext = useUser();
-  const { limits, loading: limitsLoading } = usePlanLimits();
+  const { data: limits, loading: limitsLoading } = usePlanLimits();
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
@@ -51,7 +51,7 @@ export default function PlanBasedNav() {
       try {
         const [tenantData, branchData] = await Promise.all([
           apiGet('/tenant/me'),
-          apiGet(`/api/branches/${userContext.user.branchId}`)
+          apiGet(`/branches/${userContext.user.branchId}`)
         ]);
         setTenant(tenantData as Tenant);
         setBranch(branchData as Branch);
@@ -66,8 +66,6 @@ export default function PlanBasedNav() {
       fetchTenantAndBranch();
     }
   }, [userContext.user]);
-
-  // Debug logs
 
     // Always call hooks at top level!
     const navigationItems = React.useMemo(() => [
@@ -136,8 +134,16 @@ export default function PlanBasedNav() {
 
   // Check if tenant has an active subscription
   const hasActiveSubscription = React.useMemo(() => {
-    return limits && limits.currentPlan && limits.currentPlan !== 'Basic'; // Assuming 'Basic' means no paid plan
+    console.log('PlanBasedNav: calculating hasActiveSubscription, limits:', limits);
+    const result = limits && limits.currentPlan !== null; // Any assigned plan is considered active
+    console.log('PlanBasedNav: hasActiveSubscription result:', result);
+    return result;
   }, [limits]);
+
+  // Debug log
+  console.log('PlanBasedNav - limits:', limits);
+  console.log('PlanBasedNav - hasActiveSubscription:', hasActiveSubscription);
+  console.log('PlanBasedNav - currentPlan:', limits?.currentPlan);
 
   const accessibleItems = React.useMemo(() => {
     // If no active subscription, only show Dashboard

@@ -230,10 +230,10 @@ export default function TrialUsagePage() {
                 <p>You are approaching one or more usage limits. Consider upgrading your plan to avoid service interruptions.</p>
                 <ul className="mt-2 list-disc list-inside">
                   {Object.entries(trialData.usage)
-                    .filter(([_, metric]) => metric.approachingLimit)
-                    .map(([key, _]) => (
-                      <li key={key}>{getUsageLabel(key)} usage is over 80%</li>
-                    ))}
+  .filter(([, metric]) => metric.approachingLimit)
+  .map(([key]) => (
+    <li key={key}>{getUsageLabel(key)} usage is over 80%</li>
+  ))}
                 </ul>
               </div>
             </div>

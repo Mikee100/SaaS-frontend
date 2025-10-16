@@ -59,7 +59,19 @@ const { selectedBranchId, setSelectedBranchId } = useBranch();
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const itemsPerPage = 20;
   
-  const { limits, canCreate, getUsagePercentage } = usePlanLimits();
+  const { data: limits } = usePlanLimits();
+  
+  // Helper: can create product
+  const canCreate = () => {
+    if (!limits || !limits.usage?.products) return false;
+    return limits.usage.products.current < limits.usage.products.limit;
+  };
+
+  // Helper: get usage percentage
+  const getUsagePercentage = () => {
+    if (!limits || !limits.usage?.products) return 0;
+    return Math.round((limits.usage.products.current / limits.usage.products.limit) * 100);
+  };
 
   // Permission checks
   const canViewProducts = hasPermission(user, 'view_products');

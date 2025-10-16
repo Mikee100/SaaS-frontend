@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [showLoginAnimation, setShowLoginAnimation] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [formVisible, setFormVisible] = useState(false);
-  const [shakeForm, setShakeForm] = useState(false);
+
   const [showPassword, setShowPassword] = useState(false);
   const animationStartedRef = useRef(false);
 
@@ -78,13 +78,7 @@ export default function LoginPage() {
     await login(email, password);
   };
 
-  useEffect(() => {
-    if (error) {
-      setShakeForm(true);
-      const timer = setTimeout(() => setShakeForm(false), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
+
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEmail(e.target.value);
@@ -151,7 +145,6 @@ export default function LoginPage() {
           <div className={`w-full max-w-md relative
             transition-all duration-700 ease-out
             ${formVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}
-            ${shakeForm ? "animate-shake" : ""}
           `}>
             {/* Card Background with Glass Effect */}
             <div className="bg-gray-800/80 backdrop-blur-xl rounded-3xl border border-gray-700/50 shadow-2xl p-8">

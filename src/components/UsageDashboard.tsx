@@ -4,8 +4,8 @@ import { FaUsers, FaBox, FaShoppingCart, FaExclamationTriangle, FaCrown } from '
 import { useEffect, useState } from 'react';
 
 export default function UsageDashboard() {
-  const { limits, loading, getUsagePercentage } = usePlanLimits();
-  const [isClient, setIsClient] = useState(false);
+const { data: limits, loading } = usePlanLimits();
+const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -59,9 +59,15 @@ export default function UsageDashboard() {
     );
   }
 
-  const usersPercentage = getUsagePercentage();
-  const productsPercentage = getUsagePercentage();
-  const salesPercentage = getUsagePercentage();
+  const usersPercentage = limits?.usage?.users?.limit
+    ? Math.round(((limits.usage.users.current || 0) / limits.usage.users.limit) * 100)
+    : 0;
+  const productsPercentage = limits?.usage?.products?.limit
+    ? Math.round(((limits.usage.products.current || 0) / limits.usage.products.limit) * 100)
+    : 0;
+  const salesPercentage = limits?.usage?.sales?.limit
+    ? Math.round(((limits.usage.sales.current || 0) / limits.usage.sales.limit) * 100)
+    : 0;
 
   const getProgressColor = (percentage: number) => {
     if (percentage >= 90) return 'bg-red-500';
