@@ -345,25 +345,26 @@ export default function ProductSalesReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-gray-50 p-2 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-10">
+        {/* Header */}
+        <header className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Product Sales Report</h1>
-              <p className="mt-2 text-lg text-gray-500">Comprehensive sales analytics with multiple time periods and performance insights.</p>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Product Sales Report</h1>
+              <p className="mt-1 text-sm text-gray-500">Comprehensive sales analytics with multiple time periods and performance insights.</p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={exportToPDF}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center gap-2 text-xs"
               >
                 <FaFilePdf />
                 Export PDF
               </button>
               <button
                 onClick={exportToExcel}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                className="px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 text-xs"
               >
                 <FaFileExcel />
                 Export Excel
@@ -372,14 +373,14 @@ export default function ProductSalesReportPage() {
           </div>
         </header>
 
-        {/* Tab Navigation */}
-        <div className="mb-8">
-          <nav className="flex space-x-1 bg-white p-1 rounded-lg shadow">
+        {/* Tabs & Filters */}
+        <div className="mb-4 flex flex-col gap-2">
+          <nav className="flex space-x-1 bg-white p-1 rounded-md shadow-sm">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
                   activeTab === tab.key
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-700 hover:bg-gray-100'
@@ -389,79 +390,76 @@ export default function ProductSalesReportPage() {
               </button>
             ))}
           </nav>
+          {activeTab !== 'performance' && (
+            <div className="bg-white rounded-md shadow-sm p-3 flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">From Date</label>
+                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">To Date</label>
+                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1" />
+              </div>
+              <button className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear</button>
+            </div>
+          )}
         </div>
 
-        {/* Filters */}
-        {activeTab !== 'performance' && (
-          <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Report Filters</h2>
-            <div className="flex flex-wrap gap-4 items-end">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+        {/* Metrics Section */}
+        <section className="mb-4">
+          <div className="bg-white rounded-md shadow-sm p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-bold text-gray-800">Key Metrics</h2>
+              <button
+                onClick={exportMetrics}
+                className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1 text-xs"
+                aria-label="Download Key Metrics as Excel"
+                title="Download Key Metrics"
+              >
+                <FaDownload />
+                Download
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="bg-blue-50 rounded shadow-sm p-3 flex flex-col items-center border border-blue-100 hover:bg-blue-100 transition-colors">
+                <span className="text-blue-600 text-xs mb-1 font-medium">Total Sales</span>
+                <span className="text-xl font-bold text-blue-700">{metrics.totalSales}</span>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+              <div className="bg-green-50 rounded shadow-sm p-3 flex flex-col items-center border border-green-100 hover:bg-green-100 transition-colors">
+                <span className="text-green-600 text-xs mb-1 font-medium">Total Revenue</span>
+                <span className="text-xl font-bold text-green-700">Ksh {(metrics.totalRevenue ?? 0).toLocaleString()}</span>
               </div>
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear Filters</button>
-            </div>
-          </div>
-        )}
-
-        {/* Key Metrics */}
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-800">Key Metrics</h2>
-            <button
-              onClick={exportMetrics}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
-              aria-label="Download Key Metrics as Excel"
-              title="Download Key Metrics"
-            >
-              <FaDownload />
-              Download
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow p-6 flex flex-col items-center border border-blue-200 hover:bg-gray-50 transition-colors">
-              <span className="text-blue-600 text-sm mb-1 font-medium">Total Sales</span>
-              <span className="text-3xl font-bold text-blue-700">{metrics.totalSales}</span>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow p-6 flex flex-col items-center border border-green-200 hover:bg-gray-50 transition-colors">
-              <span className="text-green-600 text-sm mb-1 font-medium">Total Revenue</span>
-              <span className="text-3xl font-bold text-green-700">Ksh {(metrics.totalRevenue ?? 0).toLocaleString()}</span>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow p-6 flex flex-col items-center border border-purple-200 hover:bg-gray-50 transition-colors">
-              <span className="text-purple-600 text-sm mb-1 font-medium">Avg. Sale Value</span>
-              <span className="text-3xl font-bold text-purple-700">Ksh {(metrics.avgSaleValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            </div>
-            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow p-6 flex flex-col items-center border border-red-200 hover:bg-gray-50 transition-colors">
-              <span className="text-red-600 text-sm mb-1 font-medium">Top Products</span>
-              <span className="text-3xl font-bold text-red-600">{(metrics.topProducts || []).length}</span>
+              <div className="bg-purple-50 rounded shadow-sm p-3 flex flex-col items-center border border-purple-100 hover:bg-purple-100 transition-colors">
+                <span className="text-purple-600 text-xs mb-1 font-medium">Avg. Sale Value</span>
+                <span className="text-xl font-bold text-purple-700">Ksh {(metrics.avgSaleValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="bg-red-50 rounded shadow-sm p-3 flex flex-col items-center border border-red-100 hover:bg-red-100 transition-colors">
+                <span className="text-red-600 text-xs mb-1 font-medium">Top Products</span>
+                <span className="text-xl font-bold text-red-600">{(metrics.topProducts || []).length}</span>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Tab Content */}
+        {/* Dashboard Charts Row */}
         {activeTab === 'overview' && (
-          <>
-            {/* Sales Trends */}
-            <section className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-800">Sales Trends</h2>
-                <button
-                  onClick={exportTrendData}
-                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
-                  aria-label="Download Sales Trends as Excel"
-                  title="Download Sales Trends"
-                >
-                  <FaDownload />
-                  Download
-                </button>
-              </div>
-              <div className="bg-white rounded-xl shadow p-6 hover:bg-gray-50 transition-colors">
-                <div className="h-64">
+          <section className="mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Sales Trends Chart */}
+              <div className="bg-white rounded-md shadow p-3 flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-base font-bold text-gray-800">Sales Trends</h2>
+                  <button
+                    onClick={exportTrendData}
+                    className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1 text-xs"
+                    aria-label="Download Sales Trends as Excel"
+                    title="Download Sales Trends"
+                  >
+                    <FaDownload />
+                    Download
+                  </button>
+                </div>
+                <div className="h-56 bg-gray-50 rounded p-2">
                   {salesTrendData.labels.length > 0 ? (
                     <Line
                       data={salesTrendData}
@@ -471,9 +469,11 @@ export default function ProductSalesReportPage() {
                         plugins: {
                           legend: { display: false },
                           tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: '#ffffff',
-                            bodyColor: '#ffffff',
+                            backgroundColor: '#2563eb',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#fff',
+                            borderWidth: 1,
                             callbacks: {
                               label: function(context) {
                                 return `Sales: ${context.parsed.y}`;
@@ -484,17 +484,20 @@ export default function ProductSalesReportPage() {
                         scales: {
                           y: {
                             beginAtZero: true,
-                            grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                            grid: { color: 'rgba(37,99,235,0.07)' },
+                            ticks: { color: '#2563eb', font: { size: 11 } }
                           },
                           x: {
-                            grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                            grid: { color: 'rgba(37,99,235,0.07)' },
+                            ticks: { color: '#2563eb', font: { size: 11 } }
                           }
                         },
-                        interaction: {
-                          intersect: false,
-                          mode: 'index'
+                          interaction: {
+                            intersect: false,
+                            mode: 'index'
+                          }
                         }
-                      }}
+                      }
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full text-gray-500">
@@ -503,103 +506,158 @@ export default function ProductSalesReportPage() {
                   )}
                 </div>
               </div>
-            </section>
-
-            {/* Top Products */}
-            <section className="mb-10">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Top Products</h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white rounded-xl shadow p-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Revenue by Product</h3>
-                  <div className="h-80">
-                    <Bar data={revenueBreakdownData} options={{ responsive: true, maintainAspectRatio: false, indexAxis: 'y' }} />
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow p-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Units Sold by Product</h3>
-                  <div className="h-80">
-                    <Pie
-                      data={{
-                        labels: (metrics.topProducts || []).map(p => p.name),
-                        datasets: [{
-                          label: 'Units Sold',
-                          data: (metrics.topProducts || []).map(p => p.unitsSold),
-                          backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#06b6d4'],
-                          borderRadius: 4,
-                        }],
-                      }}
-                      options={{ responsive: true, maintainAspectRatio: false }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Detailed Product Table */}
-            <section className="mb-10">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Detailed Product Performance</h2>
-              <div className="bg-white rounded-xl shadow p-6">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Product</th>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Units Sold</th>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Revenue</th>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Avg. Price</th>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Performance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(metrics.topProducts || []).map((product) => {
-                        const avgPrice = product.unitsSold > 0 ? product.revenue / product.unitsSold : 0;
-                        const performance = product.unitsSold > 100 ? 'High' : product.unitsSold > 50 ? 'Medium' : 'Low';
-                        const className = product.unitsSold > 100 ? 'bg-green-100 text-green-800' : product.unitsSold > 50 ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
-                        return (
-                          <tr key={product.id} className="border-b">
-                            <td className="py-2 px-4">{product.name}</td>
-                            <td className="py-2 px-4">{product.unitsSold}</td>
-                            <td className="py-2 px-4">Ksh {product.revenue.toLocaleString()}</td>
-                            <td className="py-2 px-4">Ksh {avgPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            <td className="py-2 px-4">
-                              <span className={`px-2 py-1 rounded-full text-sm font-medium ${className}`}>
-                                {performance}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              {/* Revenue Breakdown Chart */}
+              <div className="bg-white rounded-md shadow p-3 flex flex-col">
+                <h2 className="text-base font-bold text-gray-800 mb-2">Revenue by Product</h2>
+                <div className="h-56 bg-gray-50 rounded p-2">
+                  <Bar
+                    data={revenueBreakdownData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      indexAxis: 'y',
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          backgroundColor: '#a855f7',
+                          titleColor: '#fff',
+                          bodyColor: '#fff',
+                          borderColor: '#fff',
+                          borderWidth: 1,
+                          callbacks: {
+                            label: function(context) {
+                              return `Revenue: Ksh ${context.parsed.x || context.parsed.y}`;
+                            }
+                          }
+                        }
+                      },
+                      scales: {
+                        x: {
+                          grid: { color: 'rgba(168,85,247,0.07)' },
+                          ticks: { color: '#a855f7', font: { size: 11 } }
+                        },
+                        y: {
+                          grid: { color: 'rgba(168,85,247,0.07)' },
+                          ticks: { color: '#a855f7', font: { size: 11 } }
+                        }
+                      }
+                    }}
+                  />
                 </div>
               </div>
-            </section>
-          </>
+            </div>
+          </section>
         )}
 
+        {/* Top Products Pie Chart */}
+        {activeTab === 'overview' && (
+          <section className="mb-4">
+            <div className="bg-white rounded-md shadow p-3 flex flex-col">
+              <h2 className="text-base font-bold text-gray-800 mb-2">Units Sold by Product</h2>
+              <div className="h-56 bg-gray-50 rounded p-2">
+                <Pie
+                  data={{
+                    labels: (metrics.topProducts || []).map(p => p.name),
+                    datasets: [{
+                      label: 'Units Sold',
+                      data: (metrics.topProducts || []).map(p => p.unitsSold),
+                      backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#06b6d4'],
+                      borderRadius: 4,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'bottom',
+                        labels: { font: { size: 11 }, color: '#374151' }
+                      },
+                      tooltip: {
+                        backgroundColor: '#22c55e',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: '#fff',
+                        borderWidth: 1,
+                        callbacks: {
+                          label: function(context) {
+                            return `${context.label}: ${context.parsed}`;
+                          }
+                        }
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Product Performance Table */}
+        {activeTab === 'overview' && (
+          <section className="mb-4">
+            <div className="bg-white rounded-md shadow p-3">
+              <h2 className="text-base font-bold text-gray-800 mb-2">Detailed Product Performance</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Product</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Units Sold</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Revenue</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Avg. Price</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Performance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(metrics.topProducts || []).map((product) => {
+                      const avgPrice = product.unitsSold > 0 ? product.revenue / product.unitsSold : 0;
+                      const performance = product.unitsSold > 100 ? 'High' : product.unitsSold > 50 ? 'Medium' : 'Low';
+                      const className = product.unitsSold > 100 ? 'bg-green-100 text-green-800' : product.unitsSold > 50 ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
+                      return (
+                        <tr key={product.id} className="border-b">
+                          <td className="py-2 px-4">{product.name}</td>
+                          <td className="py-2 px-4">{product.unitsSold}</td>
+                          <td className="py-2 px-4">Ksh {product.revenue.toLocaleString()}</td>
+                          <td className="py-2 px-4">Ksh {avgPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-4">
+                            <span className={`px-2 py-1 rounded-full text-sm font-medium ${className}`}>
+                              {performance}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Time Period Trends & Table */}
         {(activeTab === 'daily' || activeTab === 'weekly' || activeTab === 'monthly' || activeTab === 'yearly') && (
-          <>
-            <section className="mb-10">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Sales Trends</h2>
-              <div className="bg-white rounded-xl shadow p-6">
-                <div className="h-64">
-                  {salesTrendData.labels.length > 0 ? (
-                    <Line
-                      data={salesTrendData}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { display: false },
-                          tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: '#ffffff',
-                            bodyColor: '#ffffff',
-                            callbacks: {
-                              label: function(context) {
-                                return `Sales: Ksh ${context.parsed.y.toLocaleString()}`;
-                              }
+          <section className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-md shadow p-3">
+              <h2 className="text-base font-bold text-gray-800 mb-2">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Sales Trends</h2>
+              <div className="h-56 bg-gray-50 rounded p-2">
+                {salesTrendData.labels.length > 0 ? (
+                  <Line
+                    data={salesTrendData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          titleColor: '#ffffff',
+                          bodyColor: '#ffffff',
+                          callbacks: {
+                            label: function(context) {
+                              return `Sales: Ksh ${context.parsed.y.toLocaleString()}`;
                             }
+                          }
                           }
                         },
                         scales: {
@@ -616,144 +674,134 @@ export default function ProductSalesReportPage() {
                           mode: 'index'
                         }
                       }}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                      <p>No {activeTab} sales data available</p>
-                    </div>
-                  )}
-                </div>
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    <p>No {activeTab} sales data available</p>
+                  </div>
+                )}
               </div>
-            </section>
-
-            <section className="mb-10">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Sales Details</h2>
-              <div className="bg-white rounded-xl shadow p-6">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Period</th>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Sales (Ksh)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredSalesData.length > 0 ? (
-                        filteredSalesData.map((item, index) => (
-                          <tr key={index} className="border-b">
-                            <td className="py-2 px-4">{item.label}</td>
-                            <td className="py-2 px-4 font-medium">Ksh {item.value.toLocaleString()}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={2} className="py-4 px-4 text-center text-gray-500">
-                            No {activeTab} sales data available for the selected filters.
-                          </td>
+            </div>
+            <div className="bg-white rounded-md shadow p-3">
+              <h2 className="text-base font-bold text-gray-800 mb-2">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Sales Details</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Period</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Sales (Ksh)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSalesData.length > 0 ? (
+                      filteredSalesData.map((item, index) => (
+                        <tr key={index} className="border-b">
+                          <td className="py-2 px-4">{item.label}</td>
+                          <td className="py-2 px-4 font-medium">Ksh {item.value.toLocaleString()}</td>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={2} className="py-4 px-4 text-center text-gray-500">
+                          No {activeTab} sales data available for the selected filters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </section>
-          </>
+            </div>
+          </section>
         )}
 
+        {/* Performance Tab: Best/Worst Products */}
         {activeTab === 'performance' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Best Performing Products */}
-            <section className="mb-10">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Best Performing Products</h2>
-              <div className="bg-white rounded-xl shadow p-6">
-                <div className="h-80">
-                  <Bar
-                    data={{
-                      labels: bestProducts.map(p => p.name),
-                      datasets: [{
-                        label: 'Units Sold',
-                        data: bestProducts.map(p => p.unitsSold),
-                        backgroundColor: '#22c55e',
-                        borderRadius: 4,
-                      }],
-                    }}
-                    options={{ responsive: true, maintainAspectRatio: false, indexAxis: 'y' }}
-                  />
-                </div>
-                <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Product</th>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Units Sold</th>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Revenue</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bestProducts.map((product) => (
-                        <tr key={product.id} className="border-b">
-                          <td className="py-2 px-4">{product.name}</td>
-                          <td className="py-2 px-4">{product.unitsSold}</td>
-                          <td className="py-2 px-4">Ksh {product.revenue.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+          <section className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-md shadow p-3">
+              <h2 className="text-base font-bold text-gray-800 mb-2">Best Performing Products</h2>
+              <div className="h-56 bg-gray-50 rounded p-2">
+                <Bar
+                  data={{
+                    labels: bestProducts.map(p => p.name),
+                    datasets: [{
+                      label: 'Units Sold',
+                      data: bestProducts.map(p => p.unitsSold),
+                      backgroundColor: '#22c55e',
+                      borderRadius: 4,
+                    }],
+                  }}
+                  options={{ responsive: true, maintainAspectRatio: false, indexAxis: 'y' }}
+                />
               </div>
-            </section>
-
-            {/* Worst Performing Products */}
-            <section className="mb-10">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Worst Performing Products</h2>
-              <div className="bg-white rounded-xl shadow p-6">
-                <div className="h-80">
-                  <Bar
-                    data={{
-                      labels: worstProducts.map(p => p.name),
-                      datasets: [{
-                        label: 'Units Sold',
-                        data: worstProducts.map(p => p.unitsSold),
-                        backgroundColor: '#ef4444',
-                        borderRadius: 4,
-                      }],
-                    }}
-                    options={{ responsive: true, maintainAspectRatio: false, indexAxis: 'y' }}
-                  />
-                </div>
-                <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Product</th>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Units Sold</th>
-                        <th className="py-2 px-4 text-left font-semibold text-gray-600">Revenue</th>
+              <div className="mt-2 overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Product</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Units Sold</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bestProducts.map((product) => (
+                      <tr key={product.id} className="border-b">
+                        <td className="py-2 px-4">{product.name}</td>
+                        <td className="py-2 px-4">{product.unitsSold}</td>
+                        <td className="py-2 px-4">Ksh {product.revenue.toLocaleString()}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {worstProducts.map((product) => (
-                        <tr key={product.id} className="border-b">
-                          <td className="py-2 px-4">{product.name}</td>
-                          <td className="py-2 px-4">{product.unitsSold}</td>
-                          <td className="py-2 px-4">Ksh {product.revenue.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </section>
-          </div>
+            </div>
+            <div className="bg-white rounded-md shadow p-3">
+              <h2 className="text-base font-bold text-gray-800 mb-2">Worst Performing Products</h2>
+              <div className="h-56 bg-gray-50 rounded p-2">
+                <Bar
+                  data={{
+                    labels: worstProducts.map(p => p.name),
+                    datasets: [{
+                      label: 'Units Sold',
+                      data: worstProducts.map(p => p.unitsSold),
+                      backgroundColor: '#ef4444',
+                      borderRadius: 4,
+                    }],
+                  }}
+                  options={{ responsive: true, maintainAspectRatio: false, indexAxis: 'y' }}
+                />
+              </div>
+              <div className="mt-2 overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Product</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Units Sold</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {worstProducts.map((product) => (
+                      <tr key={product.id} className="border-b">
+                        <td className="py-2 px-4">{product.name}</td>
+                        <td className="py-2 px-4">{product.unitsSold}</td>
+                        <td className="py-2 px-4">Ksh {product.revenue.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Sales Summary */}
         <section>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Sales Summary</h2>
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-md shadow p-3">
+            <h2 className="text-base font-bold text-gray-800 mb-2">Sales Summary</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="text-center">
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">Best Selling Product</h3>
-                <p className="text-2xl font-bold text-blue-600">
+                <h3 className="text-base font-semibold text-gray-800 mb-2">Best Selling Product</h3>
+                <p className="text-xl font-bold text-blue-600">
                   {(metrics.topProducts || []).length > 0 ? (metrics.topProducts || [])[0].name : 'N/A'}
                 </p>
                 <p className="text-sm text-gray-600">
@@ -761,8 +809,8 @@ export default function ProductSalesReportPage() {
                 </p>
               </div>
               <div className="text-center">
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">Highest Revenue Product</h3>
-                <p className="text-2xl font-bold text-green-600">
+                <h3 className="text-base font-semibold text-gray-800 mb-2">Highest Revenue Product</h3>
+                <p className="text-xl font-bold text-green-600">
                   {(metrics.topProducts || []).length > 0 ? (metrics.topProducts || []).sort((a, b) => b.revenue - a.revenue)[0].name : 'N/A'}
                 </p>
                 <p className="text-sm text-gray-600">
@@ -770,8 +818,8 @@ export default function ProductSalesReportPage() {
                 </p>
               </div>
               <div className="text-center">
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">Total Products Tracked</h3>
-                <p className="text-2xl font-bold text-purple-600">{(metrics.topProducts || []).length}</p>
+                <h3 className="text-base font-semibold text-gray-800 mb-2">Total Products Tracked</h3>
+                <p className="text-xl font-bold text-purple-600">{(metrics.topProducts || []).length}</p>
                 <p className="text-sm text-gray-600">Active products</p>
               </div>
             </div>

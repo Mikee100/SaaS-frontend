@@ -30,13 +30,6 @@ function ClientContent({ children }: { children: ReactNode }) {
       canChangeBranch: user?.roles?.includes('owner'),
       loading: loading
     });
-
-    // Log more details about the user object structure
-    if (user) {
-      console.log('ClientContent - Full user object:', JSON.stringify(user, null, 2));
-      console.log('ClientContent - User roles type:', typeof user.roles, Array.isArray(user.roles) ? 'is array' : 'is not array');
-      console.log('ClientContent - User roles content:', JSON.stringify(user.roles));
-    }
   }, [user, loading, pathname]);
 
   // Redirect to login if no user, not loading, and no token
@@ -46,13 +39,6 @@ function ClientContent({ children }: { children: ReactNode }) {
     }
   }, [user, loading, router]);
 
-  // Log component mount/unmount
-  useEffect(() => {
-    console.log('ClientContent - Mounted');
-    return () => {
-      console.log('ClientContent - Unmounted');
-    };
-  }, []);
 
   return (
     <BranchProvider

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaFileAlt, FaChartBar, FaExclamationTriangle, FaBox, FaShoppingCart, FaUsers, FaFilePdf, FaFileExcel } from "react-icons/fa";
+import { FaFileAlt, FaChartBar, FaExclamationTriangle, FaBox, FaShoppingCart, FaUsers, FaFilePdf, FaFileExcel, FaTh, FaList } from "react-icons/fa";
 import { hasPermission } from "@/utils/permissions";
 import { useUser } from "@/components/UserContext";
 
@@ -109,6 +109,7 @@ export default function ProductReportsPage() {
   const { user } = useUser();
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'products' | 'inventory'>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const filteredReports = reports.filter(report => {
     if (selectedCategory === 'all') return true;
@@ -143,8 +144,8 @@ export default function ProductReportsPage() {
           </p>
         </div>
 
-        {/* Category Filter */}
-        <div className="mb-6">
+        {/* Filters and View Toggle */}
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setSelectedCategory('all')}
@@ -177,65 +178,152 @@ export default function ProductReportsPage() {
               Inventory
             </button>
           </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded-md transition-colors ${
+                viewMode === 'grid'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+              }`}
+              title="Grid View"
+            >
+              <FaTh className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-md transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+              }`}
+              title="List View"
+            >
+              <FaList className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Reports Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredReports.map((report) => {
-            const Icon = report.icon;
-            const categoryColor = report.category === 'products' 
-              ? 'bg-blue-50 text-blue-700 border-blue-100' 
-              : 'bg-purple-50 text-purple-700 border-purple-100';
-            
-            return (
-              <div
-                key={report.id}
-                className="group bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-200 hover:shadow-sm transition-all duration-200"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-8 h-8 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-4 h-4 text-blue-600" />
+        {/* Reports Display */}
+        {viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredReports.map((report) => {
+              const Icon = report.icon;
+              const categoryColor = report.category === 'products'
+                ? 'bg-blue-50 text-blue-700 border-blue-100'
+                : 'bg-purple-50 text-purple-700 border-purple-100';
+
+              return (
+                <div
+                  key={report.id}
+                  className="group bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-200 hover:shadow-sm transition-all duration-200"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-8 h-8 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${categoryColor}`}>
+                      {report.category}
+                    </span>
                   </div>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${categoryColor}`}>
-                    {report.category}
-                  </span>
-                </div>
-                <h3 className="text-sm font-medium text-gray-900 mb-2 line-clamp-2">{report.title}</h3>
-                <p className="text-xs text-gray-500 mb-3 line-clamp-2">{report.description}</p>
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <button
-                    onClick={() => handleGenerateReport(report.id)}
-                    className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
-                  >
-                    View Report
-                  </button>
-                  <div className="flex space-x-1">
+                  <h3 className="text-sm font-medium text-gray-900 mb-2 line-clamp-2">{report.title}</h3>
+                  <p className="text-xs text-gray-500 mb-3 line-clamp-2">{report.description}</p>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExportPDF(report.id);
-                      }}
-                      className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors"
-                      title="Export to PDF"
+                      onClick={() => handleGenerateReport(report.id)}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
                     >
-                      <FaFilePdf className="w-3.5 h-3.5" />
+                      View Report
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExportExcel(report.id);
-                      }}
-                      className="p-1 text-gray-400 hover:text-green-600 rounded hover:bg-green-50 transition-colors"
-                      title="Export to Excel"
-                    >
-                      <FaFileExcel className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleExportPDF(report.id);
+                        }}
+                        className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors"
+                        title="Export to PDF"
+                      >
+                        <FaFilePdf className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleExportExcel(report.id);
+                        }}
+                        className="p-1 text-gray-400 hover:text-green-600 rounded hover:bg-green-50 transition-colors"
+                        title="Export to Excel"
+                      >
+                        <FaFileExcel className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredReports.map((report) => {
+              const Icon = report.icon;
+              const categoryColor = report.category === 'products'
+                ? 'bg-blue-50 text-blue-700 border-blue-100'
+                : 'bg-purple-50 text-purple-700 border-purple-100';
+
+              return (
+                <div
+                  key={report.id}
+                  className="group bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-200 hover:shadow-sm transition-all duration-200"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="text-base font-medium text-gray-900">{report.title}</h3>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${categoryColor} ml-2 flex-shrink-0`}>
+                          {report.category}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 mb-3">{report.description}</p>
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => handleGenerateReport(report.id)}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          View Report
+                        </button>
+                        <div className="flex space-x-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleExportPDF(report.id);
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors"
+                            title="Export to PDF"
+                          >
+                            <FaFilePdf className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleExportExcel(report.id);
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-green-600 rounded hover:bg-green-50 transition-colors"
+                            title="Export to Excel"
+                          >
+                            <FaFileExcel className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {filteredReports.length === 0 && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200">

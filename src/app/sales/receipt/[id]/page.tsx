@@ -4,7 +4,6 @@ import { useParams } from "next/navigation";
 import { apiGet } from "@/utils/api";
 import Barcode from "react-barcode";
 import { QRCodeCanvas } from "qrcode.react";
-import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { Download, Printer, Share2 } from "lucide-react";
 import Image from "next/image";
@@ -61,30 +60,88 @@ export default function DigitalReceiptPage() {
   // Print styles for the receipt
   const printStyles = `
     @media print {
-      body > *:not(#receipt-container) {
-        display: none !important;
+      @page {
+        margin: 0;
+        size: auto;
       }
+
+      html, body {
+        height: auto;
+        overflow: visible !important;
+      }
+
+      body * {
+        visibility: hidden;
+      }
+
       #receipt-container {
-        box-shadow: none !important;
-        margin: 0 !important;
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
+        height: auto !important;
+        visibility: visible !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
       }
+
+      #receipt-container * {
+        visibility: visible !important;
+      }
+
       .no-print {
+        display: none !important;
+      }
+
+      /* Force all text to black for printing */
+      #receipt-container {
+        color: black !important;
+      }
+
+      #receipt-container * {
+        color: black !important;
+        background: transparent !important;
+        border-color: black !important;
+      }
+
+      /* Specific overrides for colored elements */
+      .bg-blue-600 {
+        background-color: white !important;
+        color: black !important;
+      }
+
+      .text-white {
+        color: black !important;
+      }
+
+      .bg-white {
+        background-color: white !important;
+      }
+
+      .text-gray-500, .text-gray-600, .text-gray-700,
+      .text-blue-600, .text-blue-700, .text-blue-900 {
+        color: black !important;
+      }
+
+      /* Hide action buttons and other non-receipt elements */
+      button, .no-print, .flex.gap-3.mb-6 {
         display: none !important;
       }
     }
   `;
 
   // Add print styles to the document head
-useEffect(() => {
-  const styleElement = document.createElement('style');
-  styleElement.innerHTML = printStyles;
-  document.head.appendChild(styleElement);
-  return () => {
-    document.head.removeChild(styleElement);
-  };
-}, [printStyles]);
+  useEffect(() => {
+    const styleElement = document.createElement('style');
+    styleElement.innerHTML = printStyles;
+    document.head.appendChild(styleElement);
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, [printStyles]);
 
   useEffect(() => {
     async function fetchData() {
@@ -141,59 +198,595 @@ useEffect(() => {
 
   const handlePrint = () => {
     setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
+
+    // Create a temporary print-friendly version
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups for printing');
       setIsPrinting(false);
-    }, 500);
+      return;
+    }
+
+    // Get the receipt content
+    const receiptElement = document.getElementById('receipt-container');
+    if (!receiptElement) {
+      alert('Receipt content not found');
+      setIsPrinting(false);
+      return;
+    }
+
+    // Clone the receipt content
+    const receiptClone = receiptElement.cloneNode(true) as HTMLElement;
+
+    // Remove action buttons and other non-print elements
+    const buttons = receiptClone.querySelectorAll('button, .no-print');
+    buttons.forEach(button => button.remove());
+
+    // Create print HTML
+    const printHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Receipt - ${receipt?.saleId?.slice(0, 8) || 'Unknown'}</title>
+          <style>
+            @page {
+              margin: 0.5cm;
+              size: auto;
+            }
+
+            body {
+              font-family: 'Courier New', monospace;
+              margin: 0;
+              padding: 10px;
+              background: white;
+              color: black;
+              line-height: 1.4;
+            }
+
+            .receipt {
+              max-width: 80mm;
+              margin: 0 auto;
+              font-size: 12px;
+            }
+
+            .text-center {
+              text-align: center;
+            }
+
+            .text-right {
+              text-align: right;
+            }
+
+            .font-bold {
+              font-weight: bold;
+            }
+
+            .mb-2 {
+              margin-bottom: 8px;
+            }
+
+            .mb-4 {
+              margin-bottom: 16px;
+            }
+
+            .border-b {
+              border-bottom: 1px solid black;
+            }
+
+            .pb-2 {
+              padding-bottom: 8px;
+            }
+
+            .space-y-2 > * + * {
+              margin-top: 8px;
+            }
+
+            .flex {
+              display: flex;
+            }
+
+            .justify-between {
+              justify-content: space-between;
+            }
+
+            .grid {
+              display: grid;
+            }
+
+            .grid-cols-12 {
+              grid-template-columns: repeat(12, 1fr);
+            }
+
+            .gap-2 {
+              gap: 8px;
+            }
+
+            .col-span-7 {
+              grid-column: span 7;
+            }
+
+            .col-span-2 {
+              grid-column: span 2;
+            }
+
+            .col-span-3 {
+              grid-column: span 3;
+            }
+
+            .text-sm {
+              font-size: 12px;
+            }
+
+            .text-xs {
+              font-size: 10px;
+            }
+
+            .text-lg {
+              font-size: 16px;
+            }
+
+            /* Force black text */
+            * {
+              color: black !important;
+              background: white !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            ${receiptClone.innerHTML}
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printHTML);
+    printWindow.document.close();
+
+    // Wait for content to load then print
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+        setIsPrinting(false);
+      }, 500);
+    };
   };
 
   const handleDownloadPDF = async () => {
-    if (!receiptRef.current) return;
-    
+    if (!receipt) return;
+
     try {
       setIsPrinting(true);
-      const canvas = await html2canvas(receiptRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
+
+      // Create a new PDF document
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [80, 297] // A4 width, auto height
+        format: [80, 297] // 80mm width (thermal receipt standard)
       });
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = 80; // mm
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`receipt-${receipt?.saleId?.slice(0, 8) || 'unknown'}.pdf`);
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      let yPosition = 10;
+
+      // Set font
+      pdf.setFont('helvetica', 'normal');
+
+      // Header - Business Info
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      if (businessInfo?.name) {
+        pdf.text(businessInfo.name, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 6;
+      }
+
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      if (businessInfo?.businessType) {
+        pdf.text(businessInfo.businessType, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 4;
+      }
+
+      if (businessInfo?.address) {
+        pdf.text(businessInfo.address, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 4;
+      }
+
+      if (businessInfo?.contactPhone) {
+        pdf.text(`Phone: ${businessInfo.contactPhone}`, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 4;
+      }
+
+      if (businessInfo?.kraPin) {
+        pdf.text(`KRA PIN: ${businessInfo.kraPin}`, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 4;
+      }
+
+      if (businessInfo?.vatNumber) {
+        pdf.text(`VAT No: ${businessInfo.vatNumber}`, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 6;
+      }
+
+      // Separator line
+      pdf.line(5, yPosition, pageWidth - 5, yPosition);
+      yPosition += 6;
+
+      // Receipt title
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('TAX INVOICE', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 6;
+
+      // Receipt details
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Receipt No: #${receipt.saleId?.slice(0, 8) || 'N/A'}`, 5, yPosition);
+      pdf.text(`Date: ${new Date(receipt.date).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })}`, pageWidth - 5, yPosition, { align: 'right' });
+      yPosition += 6;
+
+      // Customer info
+      if (receipt.customerName || receipt.customerPhone) {
+        pdf.text('Customer:', 5, yPosition);
+        yPosition += 4;
+        if (receipt.customerName) {
+          pdf.text(`Name: ${receipt.customerName}`, 8, yPosition);
+          yPosition += 4;
+        }
+        if (receipt.customerPhone) {
+          pdf.text(`Phone: ${receipt.customerPhone}`, 8, yPosition);
+          yPosition += 4;
+        }
+        yPosition += 2;
+      }
+
+      // Branch info
+      if (receipt.branch) {
+        pdf.text('Branch:', 5, yPosition);
+        yPosition += 4;
+        pdf.text(`${receipt.branch.name}`, 8, yPosition);
+        yPosition += 4;
+        if (receipt.branch.address) {
+          pdf.text(`${receipt.branch.address}`, 8, yPosition);
+          yPosition += 4;
+        }
+        yPosition += 2;
+      }
+
+      // Items header
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('ITEM', 5, yPosition);
+      pdf.text('QTY', pageWidth - 25, yPosition);
+      pdf.text('AMOUNT', pageWidth - 5, yPosition, { align: 'right' });
+      yPosition += 2;
+
+      // Separator line
+      pdf.line(5, yPosition, pageWidth - 5, yPosition);
+      yPosition += 4;
+
+      // Items
+      pdf.setFont('helvetica', 'normal');
+      const vatRate = 0.16;
+      const calculatedSubtotal = receipt.items?.reduce((sum: number, item: ReceiptItem) => {
+        return sum + (Number(item.price) * (Number(item.quantity) || 1));
+      }, 0) || 0;
+
+      const subtotal = receipt.subtotal ?? calculatedSubtotal;
+      const total = receipt.total ?? subtotal * (1 + vatRate);
+      const vatAmount = receipt.vatAmount ?? (total - subtotal);
+
+      receipt.items?.forEach((item: ReceiptItem) => {
+        const itemName = item.name.length > 20 ? item.name.substring(0, 17) + '...' : item.name;
+        pdf.text(itemName, 5, yPosition);
+        pdf.text(`x${item.quantity}`, pageWidth - 25, yPosition);
+        pdf.text(`KES ${(item.price * item.quantity).toFixed(2)}`, pageWidth - 5, yPosition, { align: 'right' });
+        yPosition += 4;
+
+        if (item.price > 0) {
+          pdf.setFontSize(6);
+          pdf.text(`@ KES ${item.price.toFixed(2)} each`, 8, yPosition);
+          yPosition += 3;
+          pdf.setFontSize(8);
+        }
+      });
+
+      yPosition += 2;
+
+      // Totals section
+      pdf.line(5, yPosition, pageWidth - 5, yPosition);
+      yPosition += 4;
+
+      pdf.text('Subtotal:', 5, yPosition);
+      pdf.text(`KES ${subtotal.toFixed(2)}`, pageWidth - 5, yPosition, { align: 'right' });
+      yPosition += 4;
+
+      pdf.text(`VAT @ ${(vatRate * 100).toFixed(0)}%:`, 5, yPosition);
+      pdf.text(`KES ${vatAmount.toFixed(2)}`, pageWidth - 5, yPosition, { align: 'right' });
+      yPosition += 4;
+
+      // Total
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
+      pdf.line(5, yPosition, pageWidth - 5, yPosition);
+      yPosition += 5;
+
+      pdf.text('TOTAL:', 5, yPosition);
+      pdf.text(`KES ${total.toFixed(2)}`, pageWidth - 5, yPosition, { align: 'right' });
+      yPosition += 6;
+
+      // Payment details
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text(`Payment Method: ${receipt.paymentMethod || 'N/A'}`, 5, yPosition);
+      yPosition += 4;
+
+      if (receipt.paymentMethod === "cash" && (receipt.amountReceived ?? 0) > 0) {
+        pdf.text(`Amount Tendered: KES ${(receipt.amountReceived ?? 0).toFixed(2)}`, 5, yPosition);
+        yPosition += 4;
+        pdf.text(`Change: KES ${receipt.change?.toFixed(2) || '0.00'}`, 5, yPosition);
+        yPosition += 6;
+      }
+
+      // Footer
+      pdf.setFontSize(8);
+      pdf.text('Thank you for your business!', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 4;
+
+      pdf.setFontSize(6);
+      pdf.text('No returns without receipt. Items can be returned within 14 days.', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 3;
+
+      if (businessInfo?.contactPhone) {
+        pdf.text(`For inquiries: ${businessInfo.contactPhone}`, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 3;
+      }
+
+      pdf.text('Created by Adeera Unitech Company', pageWidth / 2, yPosition, { align: 'center' });
+
+      // Save the PDF
+      pdf.save(`receipt-${receipt.saleId?.slice(0, 8) || 'unknown'}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
     } finally {
       setIsPrinting(false);
     }
   };
 
 const handleShare = async () => {
-  if (navigator.share) {
-    try {
+  try {
+    if (!receipt) return;
+
+    // Create a new PDF document for sharing
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [80, 297]
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    let yPosition = 10;
+
+    // Set font
+    pdf.setFont('helvetica', 'normal');
+
+    // Header - Business Info
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    if (businessInfo?.name) {
+      pdf.text(businessInfo.name, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 6;
+    }
+
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    if (businessInfo?.businessType) {
+      pdf.text(businessInfo.businessType, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 4;
+    }
+
+    if (businessInfo?.address) {
+      pdf.text(businessInfo.address, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 4;
+    }
+
+    if (businessInfo?.contactPhone) {
+      pdf.text(`Phone: ${businessInfo.contactPhone}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 4;
+    }
+
+    if (businessInfo?.kraPin) {
+      pdf.text(`KRA PIN: ${businessInfo.kraPin}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 4;
+    }
+
+    if (businessInfo?.vatNumber) {
+      pdf.text(`VAT No: ${businessInfo.vatNumber}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 6;
+    }
+
+    // Separator line
+    pdf.line(5, yPosition, pageWidth - 5, yPosition);
+    yPosition += 6;
+
+    // Receipt title
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('TAX INVOICE', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 6;
+
+    // Receipt details
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Receipt No: #${receipt.saleId?.slice(0, 8) || 'N/A'}`, 5, yPosition);
+    pdf.text(`Date: ${new Date(receipt.date).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}`, pageWidth - 5, yPosition, { align: 'right' });
+    yPosition += 6;
+
+    // Customer info
+    if (receipt.customerName || receipt.customerPhone) {
+      pdf.text('Customer:', 5, yPosition);
+      yPosition += 4;
+      if (receipt.customerName) {
+        pdf.text(`Name: ${receipt.customerName}`, 8, yPosition);
+        yPosition += 4;
+      }
+      if (receipt.customerPhone) {
+        pdf.text(`Phone: ${receipt.customerPhone}`, 8, yPosition);
+        yPosition += 4;
+      }
+      yPosition += 2;
+    }
+
+    // Branch info
+    if (receipt.branch) {
+      pdf.text('Branch:', 5, yPosition);
+      yPosition += 4;
+      pdf.text(`${receipt.branch.name}`, 8, yPosition);
+      yPosition += 4;
+      if (receipt.branch.address) {
+        pdf.text(`${receipt.branch.address}`, 8, yPosition);
+        yPosition += 4;
+      }
+      yPosition += 2;
+    }
+
+    // Items header
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('ITEM', 5, yPosition);
+    pdf.text('QTY', pageWidth - 25, yPosition);
+    pdf.text('AMOUNT', pageWidth - 5, yPosition, { align: 'right' });
+    yPosition += 2;
+
+    // Separator line
+    pdf.line(5, yPosition, pageWidth - 5, yPosition);
+    yPosition += 4;
+
+    // Items
+    pdf.setFont('helvetica', 'normal');
+    const vatRate = 0.16;
+    const calculatedSubtotal = receipt.items?.reduce((sum: number, item: ReceiptItem) => {
+      return sum + (Number(item.price) * (Number(item.quantity) || 1));
+    }, 0) || 0;
+
+    const subtotal = receipt.subtotal ?? calculatedSubtotal;
+    const total = receipt.total ?? subtotal * (1 + vatRate);
+    const vatAmount = receipt.vatAmount ?? (total - subtotal);
+
+    receipt.items?.forEach((item: ReceiptItem) => {
+      const itemName = item.name.length > 20 ? item.name.substring(0, 17) + '...' : item.name;
+      pdf.text(itemName, 5, yPosition);
+      pdf.text(`x${item.quantity}`, pageWidth - 25, yPosition);
+      pdf.text(`KES ${(item.price * item.quantity).toFixed(2)}`, pageWidth - 5, yPosition, { align: 'right' });
+      yPosition += 4;
+
+      if (item.price > 0) {
+        pdf.setFontSize(6);
+        pdf.text(`@ KES ${item.price.toFixed(2)} each`, 8, yPosition);
+        yPosition += 3;
+        pdf.setFontSize(8);
+      }
+    });
+
+    yPosition += 2;
+
+    // Totals section
+    pdf.line(5, yPosition, pageWidth - 5, yPosition);
+    yPosition += 4;
+
+    pdf.text('Subtotal:', 5, yPosition);
+    pdf.text(`KES ${subtotal.toFixed(2)}`, pageWidth - 5, yPosition, { align: 'right' });
+    yPosition += 4;
+
+    pdf.text(`VAT @ ${(vatRate * 100).toFixed(0)}%:`, 5, yPosition);
+    pdf.text(`KES ${vatAmount.toFixed(2)}`, pageWidth - 5, yPosition, { align: 'right' });
+    yPosition += 4;
+
+    // Total
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.line(5, yPosition, pageWidth - 5, yPosition);
+    yPosition += 5;
+
+    pdf.text('TOTAL:', 5, yPosition);
+    pdf.text(`KES ${total.toFixed(2)}`, pageWidth - 5, yPosition, { align: 'right' });
+    yPosition += 6;
+
+    // Payment details
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.text(`Payment Method: ${receipt.paymentMethod || 'N/A'}`, 5, yPosition);
+    yPosition += 4;
+
+    if (receipt.paymentMethod === "cash" && (receipt.amountReceived ?? 0) > 0) {
+      pdf.text(`Amount Tendered: KES ${(receipt.amountReceived ?? 0).toFixed(2)}`, 5, yPosition);
+      yPosition += 4;
+      pdf.text(`Change: KES ${receipt.change?.toFixed(2) || '0.00'}`, 5, yPosition);
+      yPosition += 6;
+    }
+
+    // Footer
+    pdf.setFontSize(8);
+    pdf.text('Thank you for your business!', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 4;
+
+    pdf.setFontSize(6);
+    pdf.text('No returns without receipt. Items can be returned within 14 days.', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 3;
+
+    if (businessInfo?.contactPhone) {
+      pdf.text(`For inquiries: ${businessInfo.contactPhone}`, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 3;
+    }
+
+    pdf.text('Created by Adeera Unitech Company', pageWidth / 2, yPosition, { align: 'center' });
+
+    // Convert PDF to blob for sharing
+    const pdfBlob = pdf.output('blob');
+    const file = new File([pdfBlob], `receipt-${receipt.saleId?.slice(0, 8) || 'unknown'}.pdf`, { type: 'application/pdf' });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      // Share the PDF file directly
       await navigator.share({
-        title: `Receipt #${receipt?.saleId?.slice(0, 8) || ''}`,
+        title: `Receipt #${receipt.saleId?.slice(0, 8) || ''}`,
+        text: 'Digital receipt PDF',
+        files: [file],
+      });
+    } else if (navigator.share) {
+      // Fallback to sharing URL if file sharing not supported
+      await navigator.share({
+        title: `Receipt #${receipt.saleId?.slice(0, 8) || ''}`,
         text: 'View your digital receipt',
         url: receiptUrl,
       });
-    } catch {
-      // Sharing was cancelled
+    } else {
+      // Fallback for browsers that don't support Web Share API
+      // Download the PDF instead
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipt-${receipt.saleId?.slice(0, 8) || 'unknown'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('PDF downloaded! Sharing not supported in this browser.');
     }
-  } else {
-    // Fallback for browsers that don't support Web Share API
+  } catch (error) {
+    console.error('Error sharing PDF:', error);
+    // Fallback to copying link
     navigator.clipboard.writeText(receiptUrl);
-    alert('Link copied to clipboard!');
+    alert('Sharing failed. Link copied to clipboard instead.');
   }
 };
 
@@ -227,31 +820,17 @@ const handleShare = async () => {
           }
         }
 
-        /* Replace oklch with standard color values */
-        .bg-gradient-to-br {
-          background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-        }
-        
-        .from-blue-600 {
-          --tw-gradient-from: #2563eb;
-          --tw-gradient-to: rgba(37, 99, 235, 0);
-          --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
-        }
-        
-        .to-blue-800 {
-          --tw-gradient-to: #1e40af;
-        }
-        
+        /* Replace problematic CSS with standard values */
         .bg-blue-50 {
-          background-color: #eff6ff;
+          background-color: #eff6ff !important;
         }
-        
+
         .border-yellow-100 {
-          border-color: #fef9c3;
+          border-color: #fef9c3 !important;
         }
-        
+
         .bg-yellow-50 {
-          background-color: #fffbeb;
+          background-color: #fffbeb !important;
         }
       `}</style>
       
@@ -291,7 +870,7 @@ const handleShare = async () => {
           style={{ width: '100%', maxWidth: '380px', margin: '0 auto' }}
         >
           {/* Receipt Header */}
-          <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-4 text-center">
+          <div className="bg-blue-600 text-white p-4 text-center">
             {businessInfo?.logoUrl && (
               <Image
                 src={businessInfo.logoUrl}
@@ -414,7 +993,7 @@ const handleShare = async () => {
                 
                 <div className="bg-yellow-50 p-2 rounded border border-yellow-100">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">VAT @ {(vatRate * 100).toFixed(0)}%:</span>
+                    <span className="text-gray-600">VAT @ ${(vatRate * 100).toFixed(0)}%:</span>
                     <span className="font-medium">
                       KES {vatAmount.toFixed(2)}
                     </span>
@@ -473,6 +1052,7 @@ const handleShare = async () => {
               <div className="mt-3 pt-2 border-t border-dashed border-gray-200 text-[11px] text-gray-400">
                 <p>No returns without receipt. Items can be returned within 14 days with receipt.</p>
                 <p className="mt-1">For inquiries, contact: {businessInfo?.contactPhone || 'N/A'}</p>
+                <p className="mt-2 text-center font-medium text-gray-500">Created by Adeera Unitech Company</p>
               </div>
             </div>
           </div>

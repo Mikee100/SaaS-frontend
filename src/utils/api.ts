@@ -14,7 +14,6 @@ class EnhancedAPI {
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');
       if (token) {
-        console.log('[API] Using token from localStorage');
         headers['Authorization'] = `Bearer ${token}`;
       } else {
         console.warn('[API] No token found in localStorage');
@@ -32,16 +31,7 @@ class EnhancedAPI {
       ...this.getAuthHeaders(),
       ...options.headers,
     };
-    
-    console.log(`[API] ${options.method || 'GET'} ${url}`, {
-      headers: {
-        ...headers,
-        Authorization: (headers as Record<string, string>).Authorization ? 'Bearer [REDACTED]' : undefined,
-
-      },
-      body: options.body ? JSON.parse(options.body as string) : undefined
-    });
-    
+  
     try {
       const response = await fetch(url, {
         ...options,

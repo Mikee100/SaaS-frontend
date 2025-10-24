@@ -2,7 +2,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { FaChartLine, FaBox, FaClipboardList, FaUsers, FaCashRegister, FaHistory, FaCog, FaSignOutAlt, FaBell } from "react-icons/fa";
+import { FaChartLine, FaBox, FaClipboardList, FaUsers, FaCashRegister, FaHistory, FaCog, FaSignOutAlt, FaBell, FaCreditCard } from "react-icons/fa";
 import { usePathname } from "next/navigation";
 
 type User = {
@@ -41,6 +41,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     { href: "/users", label: "Users", icon: <FaUsers /> },
     { href: "/sales", label: "Sales/POS", icon: <FaCashRegister /> },
     { href: "/sales/history", label: "Sales History", icon: <FaHistory /> },
+    { href: "/credit", label: "Credit Management", icon: <FaCreditCard /> },
     { href: "/reports", label: "Reports", icon: <FaClipboardList /> },
     { href: "/analytics", label: "Analytics", icon: <FaChartLine /> },
     { href: "/settings", label: "Settings", icon: <FaCog /> },

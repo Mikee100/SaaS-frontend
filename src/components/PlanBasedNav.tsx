@@ -4,7 +4,7 @@ import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
-import { FaBox, FaShoppingCart, FaChartLine, FaCog, FaUsers, FaSignOutAlt, FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, FaMapMarkerAlt, FaCreditCard, FaRobot } from 'react-icons/fa';
+import { FaBox, FaShoppingCart, FaChartLine, FaCreditCard, FaCog, FaUsers, FaSignOutAlt, FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, FaMapMarkerAlt, FaRobot } from 'react-icons/fa';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
 import { FaTachometerAlt } from 'react-icons/fa';
@@ -24,6 +24,8 @@ interface Branch {
   // Add other fields as needed
 }
 
+
+
 export default function PlanBasedNav() {
   const userContext = useUser();
   const { data: limits, loading: limitsLoading } = usePlanLimits();
@@ -35,9 +37,14 @@ export default function PlanBasedNav() {
   const [tenantBranchLoading, setTenantBranchLoading] = useState(true);
   const pathname = usePathname();
 
-  // Close dropdowns when navigating to a different page
+  // Close dropdowns when navigating to a different page, but open relevant ones for reports
   React.useEffect(() => {
-    setOpenDropdowns(new Set());
+    const newOpen = new Set<string>();
+    if (pathname?.startsWith('/products/reports')) {
+      newOpen.add('Products & Inventory');
+      newOpen.add('Reports');
+    }
+    setOpenDropdowns(newOpen);
   }, [pathname]);
 
   // Fetch tenant and branch data
@@ -90,7 +97,25 @@ export default function PlanBasedNav() {
           { name: 'Basic Inventory', href: '/inventory', requiredPermission: 'view_inventory' },
           { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory' },
           { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory' },
-           { name: 'Reports', href: '/products/reports', requiredPermission: 'view_inventory' }
+          {
+            name: 'Reports',
+            href: '/products/reports',
+            requiredPermission: 'view_inventory',
+            // Add all reports as subItems here
+            subItems: [
+              { name: 'Product Sales', href: '/products/reports/product-sales', requiredPermission: 'view_sales' },
+              { name: 'Inventory Levels', href: '/products/reports/inventory-levels', requiredPermission: 'view_inventory' },
+              { name: 'Low Stock Alerts', href: '/products/reports/low-stock-alerts', requiredPermission: 'view_inventory' },
+              { name: 'Product Performance', href: '/products/reports/product-performance', requiredPermission: 'view_analytics' },
+              { name: 'Inventory Turnover', href: '/products/reports/inventory-turnover', requiredPermission: 'view_inventory' },
+              { name: 'Supplier Performance', href: '/products/reports/supplier-performance', requiredPermission: 'view_inventory' },
+              { name: 'Product Category Analysis', href: '/products/reports/product-category-analysis', requiredPermission: 'view_analytics' },
+              { name: 'Inventory Movement', href: '/products/reports/inventory-movement', requiredPermission: 'view_inventory' },
+              { name: 'Inventory Aging', href: '/products/reports/inventory-aging', requiredPermission: 'view_inventory' },
+              { name: 'Stockout & Lost Sales', href: '/products/reports/stockout-lost-sales', requiredPermission: 'view_inventory' },
+              { name: 'Inventory Valuation', href: '/products/reports/inventory-valuation', requiredPermission: 'view_inventory' }
+            ]
+          }
         ]
       },
     {
@@ -116,7 +141,11 @@ export default function PlanBasedNav() {
         { name: 'Reports', href: '/reports', requiredPermission: 'view_reports' }
       ]
     },
-    { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
+ { name: 'Credit', href: '/credit', icon: FaCreditCard, requiredPlan: 'Basic', requiredPermission: 'view_users' },
+    
+  { name: 'Expenses', href: '/expenses', icon: FaCreditCard, requiredPlan: 'Basic', requiredPermission: 'view_users' },
+    
+      { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
     { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
     { name: 'Billing & Subscription', href: '/account/billing', icon: FaCreditCard, requiredPlan: null, requiredPermission: null },
   ], []);
@@ -134,16 +163,11 @@ export default function PlanBasedNav() {
 
   // Check if tenant has an active subscription
   const hasActiveSubscription = React.useMemo(() => {
-    console.log('PlanBasedNav: calculating hasActiveSubscription, limits:', limits);
     const result = limits && limits.currentPlan !== null; // Any assigned plan is considered active
-    console.log('PlanBasedNav: hasActiveSubscription result:', result);
+  
     return result;
   }, [limits]);
 
-  // Debug log
-  console.log('PlanBasedNav - limits:', limits);
-  console.log('PlanBasedNav - hasActiveSubscription:', hasActiveSubscription);
-  console.log('PlanBasedNav - currentPlan:', limits?.currentPlan);
 
   const accessibleItems = React.useMemo(() => {
     // If no active subscription, only show Dashboard

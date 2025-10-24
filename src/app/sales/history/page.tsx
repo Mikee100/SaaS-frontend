@@ -1,10 +1,11 @@
 "use client";
 import { apiGet } from "@/utils/api";
-import { PrinterIcon, ChevronDownIcon, ChevronRightIcon, DocumentArrowDownIcon, DocumentTextIcon, DocumentChartBarIcon, CalendarDaysIcon, UserIcon, CreditCardIcon, XMarkIcon, FunnelIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, DocumentChartBarIcon, CalendarDaysIcon, UserIcon, CreditCardIcon, XMarkIcon, FunnelIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import React, { useEffect, useState } from "react";
+import QRCode from 'qrcode';
 
 type SaleItem = {
   productId: string;
@@ -50,11 +51,10 @@ function toCSV(rows: Record<string, unknown>[], columns: string[]): string {
 
 export default function SalesHistoryPage() {
 
-const [sales] = useState<Sale[]>([]);
-const [loading] = useState(true);
-const [error] = useState("");
-
-  const [expanded, setExpanded] = useState<string | null>(null);
+const [sales, setSales] = useState<Sale[]>([]);
+const [loading, setLoading] = useState(true);
+const [error, setError] = useState("");
+const [isPrinting, setIsPrinting] = useState(false);
 
   // Branch state
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
@@ -67,7 +67,7 @@ const [error] = useState("");
   const [filterStart, setFilterStart] = useState("");
   const [filterEnd, setFilterEnd] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  
+
   // Filtering logic
   const filteredSales = sales.filter((sale) => {
     const saleDate = new Date(sale.date);
@@ -77,7 +77,7 @@ const [error] = useState("");
     const paymentOk = !filterPayment || sale.paymentType === filterPayment;
     return startOk && endOk && cashierOk && paymentOk;
   });
-  
+
   // Pagination state
   const [page, setPage] = useState(1);
   const perPage = 10;
@@ -106,22 +106,24 @@ useEffect(() => {
 
   // Fetch sales (filtered by branch)
   useEffect(() => {
-    async function fetchBranches() {
-      setBranchesLoading(true);
+    async function fetchSales() {
+      setLoading(true);
+      setError("");
       try {
-        const data = await apiGet<{ id: string; name: string }[]>('/api/branches');
-        setBranches(data);
-        // Set initial branch to "all" if none selected
-        if (data?.length > 0 && selectedBranchId === "all") {
-          // Keep "all" selected
-        }
-      } catch (error) {
-        console.error('Error fetching branches:', error);
+        const headers = selectedBranchId && selectedBranchId !== "all" ? { 'x-branch-id': selectedBranchId } : undefined;
+        const data = await apiGet<Sale[]>('/sales', headers);
+        setSales(data || []);
+      } catch (err) {
+        console.error('Error fetching sales:', err);
+        setError('Failed to load sales data. Please try again.');
       } finally {
-        setBranchesLoading(false);
+        setLoading(false);
       }
     }
-    fetchBranches();
+
+    if (selectedBranchId) {
+      fetchSales();
+    }
   }, [selectedBranchId]);
 
   // Summary calculations
@@ -170,45 +172,176 @@ useEffect(() => {
   }
 
   // PDF export handler
-  function handleExportPDF() {
+  async function handleExportPDF() {
     if (!filteredSales.length) return;
-    const doc = new jsPDF();
-    // Header
-    doc.setFontSize(18);
-    doc.text('Sales History Report', 14, 18);
-    doc.setFontSize(11);
-    doc.setTextColor(100);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
-    // Table
-    const tableColumn = ['Date', 'Sale ID', 'Total', 'Payment', 'Customer', 'Branch', 'Cashier'];
-    const tableRows = filteredSales.map(sale => [
-      new Date(sale.date).toLocaleString(),
-      sale.saleId,
-      `$${sale.total.toFixed(2)}`,
-      sale.paymentType,
-      sale.customerName || '-',
-      sale.branch?.name || 'Unknown',
-      sale.cashier || '-',
-    ]);
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      startY: 32,
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [37, 99, 235] },
-      alternateRowStyles: { fillColor: [240, 248, 255] },
-      margin: { left: 14, right: 14 },
-    });
-    // Footer
-    const pageCount = doc.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(10);
-      doc.setTextColor(150);
-      doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.getWidth() - 30, doc.internal.pageSize.getHeight() - 10);
-      doc.text('SaaS POS • Sales Report', 14, doc.internal.pageSize.getHeight() - 10);
+
+    try {
+      // Fetch tenant data including PDF template settings
+      type TenantData = {
+        name?: string;
+        address?: string;
+        contactPhone?: string;
+        contactEmail?: string;
+        currency?: string;
+        pdfTemplate?: {
+          orientation?: string;
+          paperSize?: string;
+          margins?: string;
+          fontSize?: string;
+          primaryColor?: string;
+          secondaryColor?: string;
+          businessName?: boolean;
+          businessAddress?: boolean;
+          businessPhone?: boolean;
+          businessEmail?: boolean;
+          branchInfo?: boolean;
+          footerText?: string;
+        };
+      };
+      const tenantData = await apiGet<TenantData>('/tenant/me');
+      const pdfTemplate = tenantData?.pdfTemplate || {};
+      const currency = tenantData.currency || 'KES';
+
+      // Set up PDF document with template settings
+      const doc = new jsPDF({
+        orientation: (pdfTemplate.orientation || 'portrait') as 'portrait' | 'landscape',
+        unit: 'mm',
+        format: (pdfTemplate.paperSize?.toLowerCase() || 'a4') as 'a4' | 'letter' | string
+      });
+
+      // Calculate margins based on template
+      const marginMap: { [key: string]: number } = {
+        'normal': 20,
+        'narrow': 10,
+        'wide': 30
+      };
+      const margin = marginMap[pdfTemplate.margins as string] || 20;
+
+      // Apply font size from template
+      const fontSize = parseInt(pdfTemplate.fontSize ?? "12") || 12;
+      doc.setFontSize(fontSize);
+
+      // Header with business info (if enabled)
+      let yPosition = margin;
+
+      if (pdfTemplate.businessName && tenantData?.name) {
+        doc.setFontSize(fontSize + 6);
+        doc.setTextColor(pdfTemplate.primaryColor?.replace('#', '') || '000000');
+        doc.text(tenantData.name, margin, yPosition);
+        yPosition += 10;
+      }
+
+      if (pdfTemplate.businessAddress && tenantData?.address) {
+        doc.setFontSize(fontSize);
+        doc.setTextColor(pdfTemplate.secondaryColor?.replace('#', '') || '666666');
+        doc.text(tenantData.address, margin, yPosition);
+        yPosition += 6;
+      }
+
+      if (pdfTemplate.businessPhone && tenantData?.contactPhone) {
+        doc.setFontSize(fontSize);
+        doc.text(`Phone: ${tenantData.contactPhone}`, margin, yPosition);
+        yPosition += 6;
+      }
+
+      if (pdfTemplate.businessEmail && tenantData?.contactEmail) {
+        doc.setFontSize(fontSize);
+        doc.text(`Email: ${tenantData.contactEmail}`, margin, yPosition);
+        yPosition += 6;
+      }
+
+      // Report title
+      doc.setFontSize(fontSize + 4);
+      doc.setTextColor(pdfTemplate.primaryColor?.replace('#', '') || '000000');
+      doc.text('Sales History Report', margin, yPosition + 10);
+      yPosition += 8;
+
+      // Generation date
+      doc.setFontSize(fontSize - 2);
+      doc.setTextColor('666666');
+      doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+      yPosition += 15;
+
+      // Table columns - filter based on template visibility settings
+      const tableColumn = ['Date', 'Sale ID', `${currency} Total`, 'Payment'];
+      if (pdfTemplate.businessName) tableColumn.push('Customer');
+      if (pdfTemplate.branchInfo) tableColumn.push('Branch');
+      tableColumn.push('Cashier');
+
+      const tableRows = filteredSales.map(sale => {
+        const row = [
+          new Date(sale.date).toLocaleString(),
+          sale.saleId.slice(0, 8),
+          `${currency} ${sale.total.toFixed(2)}`,
+          sale.paymentType
+        ];
+
+        if (pdfTemplate.businessName) row.push(sale.customerName || '-');
+        if (pdfTemplate.branchInfo) row.push(sale.branch?.name || 'Unknown');
+        row.push(sale.cashier || '-');
+
+        return row;
+      });
+
+      // Convert hex colors to RGB for jsPDF
+      const hexToRgb = (hex: string): [number, number, number] => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? [
+          parseInt(result[1], 16),
+          parseInt(result[2], 16),
+          parseInt(result[3], 16)
+        ] : [37, 99, 235]; // Default blue
+      };
+
+      const primaryRgb = hexToRgb(pdfTemplate.primaryColor || '#2563eb');
+      const secondaryRgb = hexToRgb(pdfTemplate.secondaryColor || '#e0e7ff');
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: yPosition,
+        styles: {
+          fontSize: fontSize - 3,
+          cellPadding: 3
+        },
+        headStyles: {
+          fillColor: primaryRgb,
+          textColor: [255, 255, 255],
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+          fillColor: secondaryRgb
+        },
+        margin: { left: margin, right: margin },
+      });
+
+      // Footer text from template
+      if (pdfTemplate.footerText) {
+        const pageHeight = doc.internal.pageSize.height;
+        const footerY = pageHeight - margin;
+
+        doc.setFontSize(fontSize - 2);
+        doc.setTextColor('666666');
+        doc.text(pdfTemplate.footerText, margin, footerY);
+      }
+
+      // Page numbers
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(fontSize - 2);
+        doc.setTextColor('999999');
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin - 20, pageHeight - margin / 2);
+        doc.text('SaaS POS • Sales Report', margin, pageHeight - margin / 2);
+      }
+
+      doc.save('sales-history.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
     }
-    doc.save('sales-history.pdf');
   }
 
   const clearFilters = () => {
@@ -219,6 +352,341 @@ useEffect(() => {
     setPage(1);
   };
 
+  // Print receipt function
+  const handlePrintReceipt = async (sale: Sale) => {
+    setIsPrinting(true);
+
+    try {
+      // Create a temporary print-friendly version
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Please allow popups for printing');
+        setIsPrinting(false);
+        return;
+      }
+
+      // Get business info (you might need to fetch this or pass it as prop)
+      let businessInfo = {
+        name: "Business Name",
+        businessType: "Retail",
+        address: "Business Address",
+        contactPhone: "Phone Number",
+        kraPin: "KRA PIN",
+        vatNumber: "VAT Number",
+        currency: "KES"
+      };
+
+      try {
+        type BusinessData = {
+          name?: string;
+          businessType?: string;
+          address?: string;
+          contactPhone?: string;
+          kraPin?: string;
+          vatNumber?: string;
+          currency?: string;
+          pdfTemplate?: {
+            currency?: string;
+            [key: string]: unknown;
+          };
+        };
+        const businessData = await apiGet<BusinessData>('/tenant/me');
+        const pdfTemplate = businessData?.pdfTemplate || {};
+        businessInfo = {
+          name: businessData.name || "Business Name",
+          businessType: businessData.businessType || "Retail",
+          address: businessData.address || "Business Address",
+          contactPhone: businessData.contactPhone || "Phone Number",
+          kraPin: businessData.kraPin || "KRA PIN",
+          vatNumber: businessData.vatNumber || "VAT Number",
+          currency: businessData.currency || pdfTemplate.currency || "KES"
+        };
+      } catch (error) {
+        console.warn('Could not fetch business info, using defaults:', error);
+      }
+
+      const receiptUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com') + `/receipt/${sale.saleId}`;
+
+      // Create print HTML
+      const printHTML = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Receipt - ${sale.saleId?.slice(0, 8) || 'Unknown'}</title>
+            <style>
+              @page {
+                margin: 0.5cm;
+                size: auto;
+              }
+
+              body {
+                font-family: 'Courier New', monospace;
+                margin: 0;
+                padding: 10px;
+                background: white;
+                color: black;
+                line-height: 1.4;
+              }
+
+              .receipt {
+                max-width: 80mm;
+                margin: 0 auto;
+                font-size: 12px;
+              }
+
+              .text-center {
+                text-align: center;
+              }
+
+              .text-right {
+                text-align: right;
+              }
+
+              .font-bold {
+                font-weight: bold;
+              }
+
+              .mb-2 {
+                margin-bottom: 8px;
+              }
+
+              .mb-4 {
+                margin-bottom: 16px;
+              }
+
+              .border-b {
+                border-bottom: 1px solid black;
+              }
+
+              .pb-2 {
+                padding-bottom: 8px;
+              }
+
+              .space-y-2 > * + * {
+                margin-top: 8px;
+              }
+
+              .flex {
+                display: flex;
+              }
+
+              .justify-between {
+                justify-content: space-between;
+              }
+
+              .grid {
+                display: grid;
+              }
+
+              .grid-cols-12 {
+                grid-template-columns: repeat(12, 1fr);
+              }
+
+              .gap-2 {
+                gap: 8px;
+              }
+
+              .col-span-7 {
+                grid-column: span 7;
+              }
+
+              .col-span-2 {
+                grid-column: span 2;
+              }
+
+              .col-span-3 {
+                grid-column: span 3;
+              }
+
+              .text-sm {
+                font-size: 12px;
+              }
+
+              .text-xs {
+                font-size: 10px;
+              }
+
+              .text-lg {
+                font-size: 16px;
+              }
+
+              /* Force black text */
+              * {
+                color: black !important;
+                background: white !important;
+              }
+
+              /* QR Code styles */
+              #qrcode-${sale.saleId} {
+                display: inline-block;
+                margin: 0 auto;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="receipt">
+              <!-- Header -->
+              <div class="text-center mb-4">
+                <div class="font-bold text-lg mb-2">${businessInfo.name}</div>
+                <div class="text-sm mb-1">${businessInfo.businessType}</div>
+                <div class="text-xs mb-1">${businessInfo.address}</div>
+                <div class="text-xs mb-2">Phone: ${businessInfo.contactPhone}</div>
+                <div class="text-xs mb-1">KRA PIN: ${businessInfo.kraPin}</div>
+                <div class="text-xs mb-4">VAT No: ${businessInfo.vatNumber}</div>
+              </div>
+
+              <!-- Receipt Title -->
+              <div class="text-center mb-4">
+                <div class="font-bold">TAX INVOICE</div>
+              </div>
+
+              <!-- Receipt Details -->
+              <div class="mb-4">
+                <div class="flex justify-between text-sm mb-1">
+                  <span>Receipt No:</span>
+                  <span class="font-bold">#${sale.saleId?.slice(0, 8) || 'N/A'}</span>
+                </div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span>Date:</span>
+                  <span>${new Date(sale.date).toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}</span>
+                </div>
+                ${sale.customerName ? `
+                <div class="flex justify-between text-sm mb-1">
+                  <span>Customer:</span>
+                  <span>${sale.customerName}</span>
+                </div>
+                ` : ''}
+                ${sale.customerPhone ? `
+                <div class="flex justify-between text-sm mb-1">
+                  <span>Phone:</span>
+                  <span>${sale.customerPhone}</span>
+                </div>
+                ` : ''}
+                ${sale.branch ? `
+                <div class="flex justify-between text-sm mb-1">
+                  <span>Branch:</span>
+                  <span>${sale.branch.name}</span>
+                </div>
+                ` : ''}
+              </div>
+
+              <!-- Items Header -->
+              <div class="grid grid-cols-12 gap-2 text-xs font-bold border-b pb-1 mb-2">
+                <div class="col-span-7">ITEM</div>
+                <div class="col-span-2 text-right">QTY</div>
+                <div class="col-span-3 text-right">AMOUNT</div>
+              </div>
+
+              <!-- Items -->
+              <div class="space-y-2 mb-4">
+                ${sale.items.map(item => `
+                  <div class="grid grid-cols-12 gap-2 text-sm">
+                    <div class="col-span-7">${item.name}</div>
+                    <div class="col-span-2 text-right">×${item.quantity}</div>
+                    <div class="col-span-3 text-right">${businessInfo.currency} ${(item.price * item.quantity).toFixed(2)}</div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <!-- Totals -->
+              <div class="border-b mb-2"></div>
+              <div class="flex justify-between font-bold text-sm mb-1">
+                <span>TOTAL:</span>
+                <span>${businessInfo.currency} ${sale.total.toFixed(2)}</span>
+              </div>
+
+              <!-- Payment Details -->
+              <div class="mb-4">
+                <div class="flex justify-between text-sm">
+                  <span>Payment Method:</span>
+                  <span class="capitalize">${sale.paymentType || 'N/A'}</span>
+                </div>
+                ${sale.mpesaTransaction ? `
+                <div class="mt-2 text-xs">
+                  <div>M-Pesa: ${sale.mpesaTransaction.phoneNumber}</div>
+                  <div>Receipt: ${sale.mpesaTransaction.mpesaReceipt || 'N/A'}</div>
+                </div>
+                ` : ''}
+              </div>
+
+              <!-- Footer -->
+              <div class="text-center text-xs">
+                <div class="font-bold mb-2">Thank you for your business!</div>
+                <p>Scan the QR code to verify this receipt</p>
+                <div class="mt-2 mb-2" style="text-align: center;">
+                  <div id="qrcode-${sale.saleId}" style="display: inline-block;"></div>
+                </div>
+                <p class="mb-1">No returns without receipt.</p>
+                <p class="mb-2">Items can be returned within 14 days.</p>
+                <p>For inquiries: ${businessInfo.contactPhone}</p>
+                <p class="mt-2 font-bold">Created by Adeera Unitech Company</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(printHTML);
+      printWindow.document.close();
+
+      // Wait for content to load then generate QR code and print
+      printWindow.onload = () => {
+        setTimeout(async () => {
+          try {
+            // Generate QR code in the main window
+            const qrContainer = printWindow.document.getElementById(`qrcode-${sale.saleId}`);
+            if (qrContainer) {
+              // Use QRCode library to generate data URL
+              const qrDataURL = await QRCode.toDataURL(receiptUrl, {
+                width: 60,
+                color: {
+                  dark: '#000000',
+                  light: '#FFFFFF'
+                },
+                errorCorrectionLevel: 'H'
+              });
+
+              const qrImage = printWindow.document.createElement('img');
+              qrImage.src = qrDataURL;
+              qrImage.style.width = '60px';
+              qrImage.style.height = '60px';
+              qrContainer.appendChild(qrImage);
+
+              // Now print
+              printWindow.print();
+              printWindow.close();
+              setIsPrinting(false);
+            } else {
+              // Fallback if QR code container not found
+              printWindow.print();
+              printWindow.close();
+              setIsPrinting(false);
+            }
+          } catch (error: unknown) {
+            console.warn('QR code generation failed, printing without it:', error);
+            printWindow.print();
+            printWindow.close();
+            setIsPrinting(false);
+          }
+        }, 500);
+      };
+    } catch (error) {
+      console.error('Error printing receipt:', error);
+      alert('Failed to print receipt. Please try again.');
+      setIsPrinting(false);
+    }
+  };
+
+  // Add modal state
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -226,14 +694,14 @@ useEffect(() => {
       </div>
     );
   }
-  
+
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
           <div className="text-red-600 font-medium text-lg mb-2">Error Loading Sales Data</div>
           <p className="text-red-700">{error}</p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
@@ -245,26 +713,27 @@ useEffect(() => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="max-w-7xl mx-auto px-2 py-4">
       {/* Header Section */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Sales History</h1>
-          <p className="text-gray-600">Track and analyze your sales performance</p>
+      <div className="flex flex-col gap-2 mb-4 md:flex-row md:items-center md:justify-between">
+        {/* Left: Title and subtitle */}
+        <div className="flex flex-col justify-center md:justify-start">
+          <h1 className="text-2xl font-bold text-gray-900 mb-0 animate-fade-in">Sales History</h1>
+          <p className="text-gray-600 text-sm mt-0.5">Track and analyze your sales performance</p>
         </div>
-        
-        {/* Branch Selector */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Select Branch</label>
+        {/* Right: Controls */}
+        <div className="flex flex-row items-center gap-4 mt-2 md:mt-0">
+          {/* Branch Selector */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-gray-700" htmlFor="branch-select">Branch:</label>
             {branchesLoading ? (
-              <div className="text-gray-500 text-sm">Loading branches...</div>
+              <div className="text-gray-500 text-xs">Loading...</div>
             ) : (
               <select
+                id="branch-select"
                 value={selectedBranchId}
                 onChange={e => setSelectedBranchId(e.target.value)}
-                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
-                style={{ minWidth: 200 }}
+                className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 bg-white shadow-sm text-xs min-w-[120px]"
               >
                 <option value="all">All Branches</option>
                 {branches.map(branch => (
@@ -273,19 +742,20 @@ useEffect(() => {
               </select>
             )}
           </div>
-          
+          {/* Filters Button */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-              showFilters 
-                ? 'bg-blue-600 text-white' 
+            className={`flex items-center gap-1 px-3 py-1 rounded font-medium transition-colors shadow-sm text-xs ${
+              showFilters
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
+            title="Show/Hide Filters"
           >
-            <FunnelIcon className="w-5 h-5" />
+            <FunnelIcon className="w-4 h-4" />
             Filters
             {(filterStart || filterEnd || filterCashier || filterPayment) && (
-              <span className="bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+              <span className="bg-blue-500 text-white text-[10px] rounded-full h-4 w-4 flex items-center justify-center animate-bounce ml-1">
                 {[filterStart, filterEnd, filterCashier, filterPayment].filter(Boolean).length}
               </span>
             )}
@@ -294,186 +764,179 @@ useEffect(() => {
       </div>
 
       {/* Filters Panel */}
-      {showFilters && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-800">Filter Sales</h3>
-            <button
-              onClick={() => setShowFilters(false)}
-              className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition"
-            >
-              <XMarkIcon className="w-5 h-5" />
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                <CalendarDaysIcon className="w-4 h-4" />
-                Start Date
-              </label>
-              <input 
-                type="date" 
-                value={filterStart} 
-                onChange={e => setFilterStart(e.target.value)} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                <CalendarDaysIcon className="w-4 h-4" />
-                End Date
-              </label>
-              <input 
-                type="date" 
-                value={filterEnd} 
-                onChange={e => setFilterEnd(e.target.value)} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                <UserIcon className="w-4 h-4" />
-                Cashier
-              </label>
-              <select 
-                value={filterCashier} 
-                onChange={e => setFilterCashier(e.target.value)} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      <div
+        className={`overflow-hidden transition-all duration-300 ${showFilters ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0'} mb-3`}
+        aria-expanded={showFilters}
+      >
+        {showFilters && (
+          <div className="bg-white rounded border border-gray-200 p-3 shadow-sm animate-slide-down">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-800">Filter Sales</h3>
+              <button
+                onClick={() => setShowFilters(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition"
               >
-                <option value="">All Cashiers</option>
-                {allCashiers.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+                <XMarkIcon className="w-5 h-5" />
+              </button>
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                <CreditCardIcon className="w-4 h-4" />
-                Payment Method
-              </label>
-              <select 
-                value={filterPayment} 
-                onChange={e => setFilterPayment(e.target.value)} 
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                  <CalendarDaysIcon className="w-4 h-4" />
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={filterStart}
+                  onChange={e => setFilterStart(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                  <CalendarDaysIcon className="w-4 h-4" />
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={filterEnd}
+                  onChange={e => setFilterEnd(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                  <UserIcon className="w-4 h-4" />
+                  Cashier
+                </label>
+                <select
+                  value={filterCashier}
+                  onChange={e => setFilterCashier(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Cashiers</option>
+                  {allCashiers.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                  <CreditCardIcon className="w-4 h-4" />
+                  Payment Method
+                </label>
+                <select
+                  value={filterPayment}
+                  onChange={e => setFilterPayment(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Methods</option>
+                  {allPayments.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-100">
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors"
               >
-                <option value="">All Methods</option>
-                {allPayments.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+                <ArrowPathIcon className="w-4 h-4" />
+                Clear Filters
+              </button>
+
+              <button
+                onClick={() => setShowFilters(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Apply Filters
+              </button>
             </div>
           </div>
-          
-          <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-100">
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors"
-            >
-              <ArrowPathIcon className="w-4 h-4" />
-              Clear Filters
-            </button>
-            
-            <button
-              onClick={() => setShowFilters(false)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Apply Filters
-            </button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-100">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-blue-200 rounded-lg">
-              <DocumentTextIcon className="w-5 h-5 text-blue-700" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-1 mb-2">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-2 rounded border border-blue-100 shadow-sm animate-fade-in">
+          <div className="flex items-center gap-1 mb-0.5">
+            <div className="p-0.5 bg-blue-200 rounded">
+              <DocumentTextIcon className="w-3 h-3 text-blue-700" />
             </div>
             <div>
-              <p className="text-sm text-blue-700 font-medium">Total Sales</p>
-              <p className="text-2xl font-bold text-blue-900">{totalSales}</p>
+              <p className="text-[10px] text-blue-700 font-medium leading-tight">Total Sales</p>
+              <p className="text-base font-bold text-blue-900 leading-tight">{totalSales}</p>
             </div>
           </div>
-          <p className="text-xs text-blue-600 mt-2">Number of completed transactions</p>
+          <p className="text-[9px] text-blue-600 mt-0.5 leading-tight">Completed transactions</p>
         </div>
-        
-        <div className="bg-gradient-to-r from-green-50 to-green-100 p-6 rounded-xl border border-green-100">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-green-200 rounded-lg">
-              <DocumentChartBarIcon className="w-5 h-5 text-green-700" />
+
+        <div className="bg-gradient-to-r from-green-50 to-green-100 p-2 rounded border border-green-100 shadow-sm animate-fade-in">
+          <div className="flex items-center gap-1 mb-0.5">
+            <div className="p-0.5 bg-green-200 rounded">
+              <DocumentChartBarIcon className="w-3 h-3 text-green-700" />
             </div>
             <div>
-              <p className="text-sm text-green-700 font-medium">Total Revenue</p>
-              <p className="text-2xl font-bold text-green-900">${totalRevenue.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
+              <p className="text-[10px] text-green-700 font-medium leading-tight">Total Revenue</p>
+              <p className="text-base font-bold text-green-900 leading-tight">${totalRevenue.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
             </div>
           </div>
-          <p className="text-xs text-green-600 mt-2">Sum of all transaction values</p>
+          <p className="text-[9px] text-green-600 mt-0.5 leading-tight">Sum of values</p>
         </div>
-        
-        <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-6 rounded-xl border border-purple-100">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-purple-200 rounded-lg">
-              <CreditCardIcon className="w-5 h-5 text-purple-700" />
+
+        <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-2 rounded border border-purple-100 shadow-sm animate-fade-in">
+          <div className="flex items-center gap-1 mb-0.5">
+            <div className="p-0.5 bg-purple-200 rounded">
+              <CreditCardIcon className="w-3 h-3 text-purple-700" />
             </div>
             <div>
-              <p className="text-sm text-purple-700 font-medium">Average Sale</p>
-              <p className="text-2xl font-bold text-purple-900">${avgSaleValue.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
+              <p className="text-[10px] text-purple-700 font-medium leading-tight">Average Sale</p>
+              <p className="text-base font-bold text-purple-900 leading-tight">${avgSaleValue.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
             </div>
           </div>
-          <p className="text-xs text-purple-600 mt-2">Average value per transaction</p>
+          <p className="text-[9px] text-purple-600 mt-0.5 leading-tight">Avg per transaction</p>
         </div>
       </div>
 
-      {/* Export Buttons */}
-      <div className="flex flex-wrap gap-3 mb-6">
-        <button
-          onClick={handleExportCSV}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+      {/* Export Dropdown */}
+      <div className="flex items-center gap-2 mb-3">
+        <label htmlFor="export-action" className="text-xs font-medium text-gray-700">Export / Print:</label>
+        <select
+          id="export-action"
+          className="px-3 py-1 border border-gray-300 rounded text-xs bg-white shadow-sm"
+          defaultValue=""
+          onChange={e => {
+            if (e.target.value === "csv") handleExportCSV();
+            if (e.target.value === "excel") handleExportExcel();
+            if (e.target.value === "pdf") handleExportPDF();
+            if (e.target.value === "print") window.print();
+            e.target.value = "";
+          }}
         >
-          <DocumentArrowDownIcon className="w-5 h-5" />
-          Export CSV
-        </button>
-        
-        <button
-          onClick={handleExportExcel}
-          className="flex items-center gap-2 px-4 py-2.5 bg-green-100 border border-green-200 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
-        >
-          <DocumentArrowDownIcon className="w-5 h-5" />
-          Export Excel
-        </button>
-        
-        <button
-          onClick={handleExportPDF}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-100 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
-        >
-          <DocumentArrowDownIcon className="w-5 h-5" />
-          Export PDF
-        </button>
-        
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2.5 bg-orange-100 border border-orange-200 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
-        >
-          <PrinterIcon className="w-5 h-5" />
-          Print Report
-        </button>
+          <option value="" disabled>Select action</option>
+          <option value="csv">Export CSV</option>
+          <option value="excel">Export Excel</option>
+          <option value="pdf">Export PDF</option>
+          <option value="print">Print Report</option>
+        </select>
       </div>
 
       {/* Sales Table */}
       {filteredSales.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <DocumentTextIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <div className="bg-white rounded border border-gray-200 p-6 text-center flex flex-col items-center animate-fade-in">
+          <DocumentTextIcon className="w-16 h-16 text-gray-300 mx-auto mb-4 animate-pulse" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No sales found</h3>
           <p className="text-gray-500 mb-4">
-            {sales.length === 0 
-              ? "No sales have been recorded yet." 
+            {sales.length === 0
+              ? "No sales have been recorded yet."
               : "No sales match your current filters."}
           </p>
           {(filterStart || filterEnd || filterCashier || filterPayment) ? (
             <button
               onClick={clearFilters}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
               Clear Filters
             </button>
@@ -481,10 +944,10 @@ useEffect(() => {
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm mb-6">
+          <div className="bg-white rounded border border-gray-200 overflow-hidden shadow-sm mb-3 animate-fade-in">
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
+              <table className="min-w-full text-xs">
+                <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                   <tr>
                     <th className="py-3 px-4 text-left font-semibold text-gray-600">Date & Time</th>
                     <th className="py-3 px-4 text-left font-semibold text-gray-600">Sale ID</th>
@@ -497,247 +960,135 @@ useEffect(() => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {pagedSales.map((sale, idx) => (
-                    <React.Fragment key={sale.saleId}>
-                      <tr className={`transition hover:bg-blue-50 ${idx % 2 === 0 ? "bg-gray-50" : "bg-white"}`}>
-                        <td className="py-3 px-4">
-                          <div className="text-gray-900 font-medium">
-                            {new Date(sale.date).toLocaleDateString()}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {new Date(sale.date).toLocaleTimeString()}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs text-gray-600">
-                          {sale.saleId.slice(0, 8)}...
-                        </td>
-                        <td className="py-3 px-4 text-right font-bold text-green-700">
-                          ${sale.total.toFixed(2)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            sale.paymentType === 'cash'
-                              ? 'bg-blue-100 text-blue-800'
-                              : sale.paymentType === 'mpesa'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {sale.paymentType}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          {sale.customerName || (
-                            <span className="text-gray-400 italic">Guest</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          {sale.branch?.name || (
-                            <span className="text-gray-400 italic">Unknown</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          {sale.cashier || (
-                            <span className="text-gray-400 italic">System</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => setExpanded(expanded === sale.saleId ? null : sale.saleId)}
-                              className={`p-2 rounded-lg transition-colors ${
-                                expanded === sale.saleId
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'text-gray-500 hover:text-blue-700 hover:bg-blue-50'
-                              }`}
-                              title={expanded === sale.saleId ? "Hide details" : "Show details"}
-                            >
-                              {expanded === sale.saleId ? (
-                                <ChevronDownIcon className="w-4 h-4" />
-                              ) : (
-                                <ChevronRightIcon className="w-4 h-4" />
-                              )}
-                            </button>
-
-                            <button
-                              className="p-2 text-gray-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                              onClick={() => {
-                                window.print();
-                              }}
-                              title="Print Receipt"
-                            >
-                              <PrinterIcon className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      
-                      {expanded === sale.saleId && (
-                        <tr>
-                          <td colSpan={8} className="bg-blue-50 px-4 py-4">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                              {/* Items Table */}
-                              <div>
-                                <div className="font-semibold text-gray-800 mb-3">Items Purchased</div>
-                                <table className="w-full text-sm bg-white rounded-lg overflow-hidden shadow-xs">
-                                  <thead className="bg-gray-100">
-                                    <tr>
-                                      <th className="py-2 px-3 text-left font-medium text-gray-600">Item</th>
-                                      <th className="py-2 px-3 text-right font-medium text-gray-600">Qty</th>
-                                      <th className="py-2 px-3 text-right font-medium text-gray-600">Price</th>
-                                      <th className="py-2 px-3 text-right font-medium text-gray-600">Total</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-gray-100">
-                                    {sale.items.map((item: SaleItem) => (
-                                      <tr key={item.productId}>
-                                        <td className="py-2 px-3">{item.name}</td>
-                                        <td className="py-2 px-3 text-right">{item.quantity}</td>
-                                        <td className="py-2 px-3 text-right">${item.price.toFixed(2)}</td>
-                                        <td className="py-2 px-3 text-right font-medium">
-                                          ${(item.price * item.quantity).toFixed(2)}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                  <tfoot className="bg-gray-50">
-                                    <tr>
-                                      <td colSpan={3} className="py-2 px-3 text-right font-medium">Total:</td>
-                                      <td className="py-2 px-3 text-right font-bold text-green-700">
-                                        ${sale.total.toFixed(2)}
-                                      </td>
-                                    </tr>
-                                  </tfoot>
-                                </table>
-                              </div>
-                              
-                              {/* Payment Details */}
-                              <div>
-                                <div className="font-semibold text-gray-800 mb-3">Payment Details</div>
-                                <div className="bg-white rounded-lg p-4 shadow-xs">
-                                  <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Payment Method:</span>
-                                      <span className="font-medium">{sale.paymentType}</span>
-                                    </div>
-                                    
-                                    {sale.mpesaTransaction && (
-                                      <>
-                                        <div className="pt-3 border-t border-gray-100">
-                                          <div className="font-medium text-gray-800 mb-2">M-Pesa Transaction</div>
-                                          <div className="space-y-2 text-sm">
-                                            <div className="flex justify-between">
-                                              <span className="text-gray-600">Phone:</span>
-                                              <span>{sale.mpesaTransaction.phoneNumber}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                              <span className="text-gray-600">Amount:</span>
-                                              <span>KES {sale.mpesaTransaction.amount}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                              <span className="text-gray-600">Status:</span>
-                                              <span className={sale.mpesaTransaction.status === 'success' 
-                                                ? 'text-green-600 font-medium' 
-                                                : 'text-red-600'
-                                              }>
-                                                {sale.mpesaTransaction.status}
-                                              </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                              <span className="text-gray-600">Receipt:</span>
-                                              <span>{sale.mpesaTransaction.mpesaReceipt || '-'}</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </>
-                                    )}
-                                    
-                                    {sale.customerName && (
-                                      <div className="pt-3 border-t border-gray-100">
-                                        <div className="font-medium text-gray-800 mb-1">Customer</div>
-                                        <div className="text-sm">
-                                          {sale.customerName}
-                                          {sale.customerPhone && (
-                                            <div className="text-gray-600">{sale.customerPhone}</div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                  {pagedSales.map((sale) => (
+                    <tr
+                      key={sale.saleId}
+                      className="hover:bg-blue-50 transition-colors duration-150"
+                    >
+                      <td className="py-3 px-4">{new Date(sale.date).toLocaleString()}</td>
+                      <td className="py-3 px-4">{sale.saleId.slice(0, 8)}</td>
+                      <td className="py-3 px-4 text-right">{sale.total.toFixed(2)}</td>
+                      <td className="py-3 px-4">{sale.paymentType}</td>
+                      <td className="py-3 px-4">{sale.customerName || '-'}</td>
+                      <td className="py-3 px-4">{sale.branch?.name || '-'}</td>
+                      <td className="py-3 px-4">{sale.cashier || '-'}</td>
+                      <td className="py-3 px-4 text-center flex gap-1 justify-center">
+                        <button
+                          className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-600 hover:text-white text-xs transition-colors duration-150 shadow-sm"
+                          onClick={() => handlePrintReceipt(sale)}
+                          disabled={isPrinting}
+                          title="Print Receipt"
+                        >
+                          Print Receipt
+                        </button>
+                        <button
+                          className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-300 text-xs transition-colors duration-150 shadow-sm"
+                          onClick={() => { setSelectedSale(sale); setShowDetailsModal(true); }}
+                          title="View Details"
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
-          
-          {/* Pagination controls */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-gray-500">
-              Showing {filteredSales.length === 0 ? 0 : (page - 1) * perPage + 1}
-              -{Math.min(page * perPage, filteredSales.length)} of {filteredSales.length} sales
-            </div>
-            
-            <div className="flex gap-2">
-              <button
-                className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                <ChevronRightIcon className="w-4 h-4 rotate-180" />
-                Previous
-              </button>
-              
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
-                  let pageNum;
-                  if (pageCount <= 5) {
-                    pageNum = i + 1;
-                  } else if (page <= 3) {
-                    pageNum = i + 1;
-                  } else if (page >= pageCount - 2) {
-                    pageNum = pageCount - 4 + i;
-                  } else {
-                    pageNum = page - 2 + i;
-                  }
-                  
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setPage(pageNum)}
-                      className={`w-10 h-10 rounded-lg transition ${
-                        page === pageNum
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                
-                {pageCount > 5 && (
-                  <span className="px-2 text-gray-500">...</span>
-                )}
+
+          {/* Pagination */}
+          {pageCount > 1 && (
+            <div className="flex flex-col md:flex-row items-center justify-between gap-2 mb-4 animate-fade-in">
+              <div className="text-sm text-gray-700">
+                Showing {((page - 1) * perPage) + 1} to {Math.min(page * perPage, filteredSales.length)} of {filteredSales.length} results
               </div>
-              
-              <button
-                className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                onClick={() => setPage(p => Math.min(pageCount, p + 1))}
-                disabled={page === pageCount}
-              >
-                Next
-                <ChevronRightIcon className="w-4 h-4" />
-              </button>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                  className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  title="First Page"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+                  disabled={page === 1}
+                  className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  title="Previous Page"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-2 text-gray-600 font-semibold">{page} / {pageCount}</span>
+                <button
+                  onClick={() => setPage(prev => Math.min(prev + 1, pageCount))}
+                  disabled={page === pageCount}
+                  className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  title="Next Page"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setPage(pageCount)}
+                  disabled={page === pageCount}
+                  className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  title="Last Page"
+                >
+                  Last
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Sale Details Modal */}
+          {showDetailsModal && selectedSale && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+              <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 relative animate-fade-in">
+                <button
+                  className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
+                  onClick={() => setShowDetailsModal(false)}
+                  title="Close"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+                <h2 className="text-lg font-bold mb-2 text-gray-900">Sale Details</h2>
+                <div className="text-xs text-gray-700 space-y-2">
+                  <div><span className="font-semibold">Sale ID:</span> {selectedSale.saleId}</div>
+                  <div><span className="font-semibold">Date:</span> {new Date(selectedSale.date).toLocaleString()}</div>
+                  <div><span className="font-semibold">Total:</span> {selectedSale.total.toFixed(2)}</div>
+                  <div><span className="font-semibold">Payment:</span> {selectedSale.paymentType}</div>
+                  <div><span className="font-semibold">Customer:</span> {selectedSale.customerName || '-'}</div>
+                  <div><span className="font-semibold">Phone:</span> {selectedSale.customerPhone || '-'}</div>
+                  <div><span className="font-semibold">Branch:</span> {selectedSale.branch?.name || '-'}</div>
+                  <div><span className="font-semibold">Cashier:</span> {selectedSale.cashier || '-'}</div>
+                  {selectedSale.mpesaTransaction && (
+                    <div>
+                      <span className="font-semibold">Mpesa:</span> {selectedSale.mpesaTransaction.phoneNumber} <br />
+                      <span className="font-semibold">Mpesa Receipt:</span> {selectedSale.mpesaTransaction.mpesaReceipt || '-'}
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-semibold">Items:</span>
+                    <ul className="list-disc ml-4 mt-1">
+                      {selectedSale.items.map((item) => (
+                        <li key={item.name}>
+                          {item.name} &times; {item.quantity} @ {item.price.toFixed(2)} = {(item.price * item.quantity).toFixed(2)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
   );
 }
+
+// Add some simple animation classes (can be in your global CSS or Tailwind config)
+// .animate-fade-in { animation: fadeIn 0.5s ease; }
+// .animate-slide-down { animation: slideDown 0.4s ease; }
+// .animate-pulse { animation: pulse 1.5s infinite; }
+// .animate-bounce { animation: bounce 1s infinite; }

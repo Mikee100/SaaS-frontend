@@ -13,7 +13,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { FaFilePdf, FaFileExcel } from "react-icons/fa";
+import { FaFilePdf, FaFileExcel, FaBox, FaExclamationTriangle, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 import { useBranch } from "@/contexts/BranchContext";
 
 ChartJS.register(
@@ -168,44 +168,88 @@ export default function InventoryLevelsReportPage() {
     );
   }
 
+  // Modern metric card
+  function MetricCard({ icon, label, value, color, bg }: { icon: React.ReactNode; label: string; value: string | number; color: string; bg: string }) {
+    return (
+      <div className={`flex items-center gap-3 ${bg} rounded-lg p-3 shadow-sm border border-gray-100 hover:shadow transition-shadow`}>
+        <div className={`flex items-center justify-center w-8 h-8 rounded ${color} bg-opacity-10`}>
+          {icon}
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-gray-500">{label}</p>
+          <p className={`text-base font-bold ${color}`}>{value}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-gray-50 p-2 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-10">
-          <div>
-            <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Inventory Stock Levels Report</h1>
-            <p className="mt-2 text-lg text-gray-500">Current stock levels for all products with reorder points and stock value.</p>
-          </div>
+        {/* Header */}
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Inventory Stock Levels Report</h1>
+          <p className="mt-1 text-sm text-gray-500">Current stock levels for all products with reorder points and stock value.</p>
         </header>
 
-        {/* Key Metrics */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Key Metrics</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow p-6 flex flex-col items-center border border-blue-200">
-              <span className="text-blue-600 text-sm mb-1 font-medium">Total Products</span>
-              <span className="text-3xl font-bold text-blue-700">{products.length}</span>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow p-6 flex flex-col items-center border border-green-200">
-              <span className="text-green-600 text-sm mb-1 font-medium">Total Stock Value</span>
-              <span className="text-3xl font-bold text-green-700">Ksh {totalStockValue.toLocaleString()}</span>
-            </div>
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl shadow p-6 flex flex-col items-center border border-orange-200">
-              <span className="text-orange-600 text-sm mb-1 font-medium">Low Stock Items</span>
-              <span className="text-3xl font-bold text-orange-700">{lowStockProducts.length}</span>
-            </div>
-            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow p-6 flex flex-col items-center border border-red-200">
-              <span className="text-red-600 text-sm mb-1 font-medium">Out of Stock</span>
-              <span className="text-3xl font-bold text-red-600">{outOfStockProducts.length}</span>
-            </div>
+        {/* Metrics Row */}
+        <section className="mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <MetricCard
+              icon={<FaBox className="w-4 h-4" />}
+              label="Total Products"
+              value={products.length}
+              color="text-blue-600"
+              bg="bg-blue-50"
+            />
+            <MetricCard
+              icon={<FaCheckCircle className="w-4 h-4" />}
+              label="Total Stock Value"
+              value={`Ksh ${totalStockValue.toLocaleString()}`}
+              color="text-green-600"
+              bg="bg-green-50"
+            />
+            <MetricCard
+              icon={<FaExclamationTriangle className="w-4 h-4" />}
+              label="Low Stock Items"
+              value={lowStockProducts.length}
+              color="text-orange-600"
+              bg="bg-orange-50"
+            />
+            <MetricCard
+              icon={<FaTimesCircle className="w-4 h-4" />}
+              label="Out of Stock"
+              value={outOfStockProducts.length}
+              color="text-red-600"
+              bg="bg-red-50"
+            />
           </div>
         </section>
 
-        {/* Stock Levels Chart */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Stock Levels Overview</h2>
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="h-64">
+        {/* Chart + Filters Row */}
+        <section className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Chart Card */}
+          <div className="bg-white rounded-lg shadow p-4 flex flex-col">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-base font-bold text-gray-800">Stock Levels Overview</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={exportToPDF}
+                  className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-1 text-xs"
+                >
+                  <FaFilePdf />
+                  PDF
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1 text-xs"
+                >
+                  <FaFileExcel />
+                  Excel
+                </button>
+              </div>
+            </div>
+            <div className="h-56 bg-gray-50 rounded p-2">
               <Bar
                 data={stockData}
                 options={{
@@ -214,6 +258,11 @@ export default function InventoryLevelsReportPage() {
                   plugins: {
                     legend: { display: false },
                     tooltip: {
+                      backgroundColor: '#2563eb',
+                      titleColor: '#fff',
+                      bodyColor: '#fff',
+                      borderColor: '#fff',
+                      borderWidth: 1,
                       callbacks: {
                         label: function(context) {
                           return `Stock: ${context.parsed.y}`;
@@ -224,73 +273,54 @@ export default function InventoryLevelsReportPage() {
                   scales: {
                     y: {
                       beginAtZero: true,
-                      grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                      grid: { color: 'rgba(37,99,235,0.07)' },
+                      ticks: { color: '#2563eb', font: { size: 11 } }
                     },
                     x: {
-                      grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                      grid: { color: 'rgba(37,99,235,0.07)' },
+                      ticks: { color: '#2563eb', font: { size: 11 } }
                     }
                   }
                 }}
               />
             </div>
           </div>
-        </section>
-
-        {/* Filters */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Filters</h2>
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex flex-wrap gap-4">
-                <button
-                  onClick={() => setFilterType('all')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${filterType === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setFilterType('in-stock')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${filterType === 'in-stock' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                >
-                  In Stock
-                </button>
-                <button
-                  onClick={() => setFilterType('low-stock')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${filterType === 'low-stock' ? 'bg-orange-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                >
-                  Low Stock
-                </button>
-                <button
-                  onClick={() => setFilterType('out-of-stock')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${filterType === 'out-of-stock' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                >
-                  Out of Stock
-                </button>
-              </div>
-              <div className="flex gap-2 ml-auto">
-                <button
-                  onClick={exportToPDF}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
-                >
-                  <FaFilePdf />
-                  Export PDF
-                </button>
-                <button
-                  onClick={exportToExcel}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-                >
-                  <FaFileExcel />
-                  Export Excel
-                </button>
-              </div>
+          {/* Filters Card */}
+          <div className="bg-white rounded-lg shadow p-4 flex flex-col">
+            <h2 className="text-base font-bold text-gray-800 mb-2">Filters</h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setFilterType('all')}
+                className={`px-3 py-1 rounded transition-colors text-xs font-semibold ${filterType === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilterType('in-stock')}
+                className={`px-3 py-1 rounded transition-colors text-xs font-semibold ${filterType === 'in-stock' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                In Stock
+              </button>
+              <button
+                onClick={() => setFilterType('low-stock')}
+                className={`px-3 py-1 rounded transition-colors text-xs font-semibold ${filterType === 'low-stock' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                Low Stock
+              </button>
+              <button
+                onClick={() => setFilterType('out-of-stock')}
+                className={`px-3 py-1 rounded transition-colors text-xs font-semibold ${filterType === 'out-of-stock' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                Out of Stock
+              </button>
             </div>
           </div>
         </section>
 
         {/* Inventory Table */}
         <section>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Detailed Inventory ({filteredProducts.length} items)</h2>
-          <div className="bg-white rounded-xl shadow p-6">
+          <div className="bg-white rounded-lg shadow p-4">
+            <h2 className="text-base font-bold text-gray-800 mb-2">Detailed Inventory <span className="text-xs text-gray-500">({filteredProducts.length} items)</span></h2>
             <div className="overflow-x-auto">
               <table className="min-w-full">
                 <thead className="bg-gray-50">
@@ -309,14 +339,22 @@ export default function InventoryLevelsReportPage() {
                     const minStock = product.minStock || 10;
                     const status = stock === 0 ? 'Out of Stock' : stock <= minStock ? 'Low Stock' : 'In Stock';
                     const statusColor = stock === 0 ? 'text-red-600' : stock <= minStock ? 'text-orange-600' : 'text-green-600';
+                    const statusIcon = stock === 0
+                      ? <FaTimesCircle className="inline mr-1 text-red-500" />
+                      : stock <= minStock
+                        ? <FaExclamationTriangle className="inline mr-1 text-orange-500" />
+                        : <FaCheckCircle className="inline mr-1 text-green-500" />;
                     return (
-                      <tr key={product.id} className="border-b">
+                      <tr key={product.id} className="border-b hover:bg-gray-50 transition-colors">
                         <td className="py-2 px-4">{product.name}</td>
                         <td className="py-2 px-4">{stock}</td>
                         <td className="py-2 px-4">{minStock}</td>
                         <td className="py-2 px-4">Ksh {(product.price || 0).toLocaleString()}</td>
                         <td className="py-2 px-4">Ksh {(stock * (product.price || 0)).toLocaleString()}</td>
-                        <td className={`py-2 px-4 font-medium ${statusColor}`}>{status}</td>
+                        <td className={`py-2 px-4 font-medium ${statusColor}`}>
+                          {statusIcon}
+                          {status}
+                        </td>
                       </tr>
                     );
                   })}
