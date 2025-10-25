@@ -7,6 +7,8 @@ import autoTable from 'jspdf-autotable';
 import React, { useEffect, useState } from "react";
 import QRCode from 'qrcode';
 
+
+
 type SaleItem = {
   productId: string;
   name: string;
