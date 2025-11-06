@@ -1,7 +1,7 @@
 "use client";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaBuilding, FaCogs, FaClipboardList, FaCreditCard, FaUserShield, FaChartBar, FaUsers, FaKey, FaImage, FaCrown, FaBell, FaPlug, FaShieldAlt, FaBars, FaTimes, FaEnvelope } from 'react-icons/fa';
+import { FaBuilding, FaCogs, FaClipboardList, FaCreditCard, FaUserShield, FaUsers, FaKey, FaImage, FaBell, FaPlug, FaShieldAlt, FaBars, FaTimes, FaEnvelope } from 'react-icons/fa';
 import { useState } from 'react';
 
 interface SettingsSidebarProps {
@@ -29,8 +29,6 @@ export default function SettingsSidebar({ collapsed = false, onToggle }: Setting
         { href: "/settings/branches", label: "Branches", icon: FaBuilding },
         { href: "/settings/permissions", label: "Permissions", icon: FaUserShield },
         { href: "/settings/billing", label: "Billing", icon: FaCreditCard },
-        { href: "/settings/enterprise", label: "Enterprise Features", icon: FaCrown },
-        { href: "/settings/statistics", label: "Statistics", icon: FaChartBar },
         { href: "/settings/notifications", label: "Notifications", icon: FaBell },
         { href: "/settings/integrations", label: "Integrations", icon: FaPlug },
       ]

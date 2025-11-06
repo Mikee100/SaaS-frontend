@@ -78,7 +78,13 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: 
               setTimeout(() => {
                 if (isMounted) {
                   console.log('Calling onSuccess callback with transaction ID:', updatedTransaction.id);
-                  onSuccess(updatedTransaction.id);
+                  // Show success message for a moment before calling onSuccess
+                  setStatusMessage('✅ Payment completed successfully! Your order has been processed.');
+                  setTimeout(() => {
+                    if (isMounted) {
+                      onSuccess(updatedTransaction.id);
+                    }
+                  }, 2000);
                 }
               }, 1000);
               return;
@@ -226,13 +232,14 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: 
         }
       });
       
+      const { tenantId, ...restSaleData } = saleData as { tenantId?: string; [key: string]: unknown };
       const response = await apiPost('/mpesa/initiate', {
         phoneNumber: formattedPhone,
         amount: Math.ceil(amount),
-        accountReference: reference,
-        transactionDesc: `Payment for order ${reference}`,
+        reference, // <-- use 'reference' not 'accountReference'
+        tenantId,  // <-- ensure tenantId is sent at top-level
         saleData: {
-          ...saleData,
+          ...restSaleData,
           reference,
           timestamp: new Date().toISOString()
         }
@@ -434,8 +441,8 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: 
             )}
           </div>
           <h3 className="mt-2 text-lg font-medium text-gray-900">
-            {currentTransaction.status === 'pending' 
-              ? 'Waiting for Payment...' 
+            {currentTransaction.status === 'pending'
+              ? 'Waiting for Payment...'
               : currentTransaction.status === 'success'
               ? 'Payment Successful!'
               : 'Payment Failed'}
@@ -443,6 +450,18 @@ export default function MpesaPayment({ amount, saleData, onSuccess, onCancel }: 
           <p className="mt-1 text-sm text-gray-500">
             {currentTransaction.message || 'Processing your payment...'}
           </p>
+
+          {/* Show transaction details for successful payments */}
+          {currentTransaction.status === 'success' && currentTransaction.mpesaReceipt && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+              <div className="text-xs text-green-800">
+                <div className="font-medium">Transaction Details:</div>
+                <div>M-Pesa Receipt: {currentTransaction.mpesaReceipt}</div>
+                <div>Amount: KES {currentTransaction.amount.toLocaleString()}</div>
+                <div>Phone: {currentTransaction.phoneNumber}</div>
+              </div>
+            </div>
+          )}
           
           {currentTransaction.status === 'pending' && (
             <div className="mt-4">

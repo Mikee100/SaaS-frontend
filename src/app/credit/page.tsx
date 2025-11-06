@@ -1,11 +1,14 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
-import { FaCreditCard, FaMoneyBillWave, FaCalendarAlt, FaUser, FaPhone, FaExclamationTriangle, FaCheckCircle, FaClock, FaPlus, FaEye, FaDollarSign, FaTimesCircle, FaUsers } from 'react-icons/fa';
+import { FaCreditCard, FaMoneyBillWave, FaCalendarAlt, FaUser, FaPhone, FaExclamationTriangle, FaCheckCircle, FaClock, FaPlus, FaEye, FaDollarSign, FaTimesCircle, FaUsers, FaFilePdf, FaFileExcel } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Spinner from '@/components/Spinner';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import jsPDF from 'jspdf';
+import * as XLSX from 'xlsx';
 
 interface Credit {
   id: string;
@@ -64,6 +67,13 @@ interface CreditEligibility {
   reasons: string[];
 }
 
+
+// Remove unused Tenant interface
+// interface Tenant {
+//   name?: string;
+//   pdfTemplate?: PDFTemplate;
+// }
+
 // Define a type for customer history to avoid 'unknown' assignment error
 type CustomerHistory = {
   summary: {
@@ -112,9 +122,11 @@ export default function CreditManagementPage() {
   const [loadingEligibility, setLoadingEligibility] = useState(false);
 
   // Dashboard states
-  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'reports' | 'completed'>('overview');
   const [customerHistory, setCustomerHistory] = useState<CustomerHistory | null>(null);
   const [loadingCustomerHistory, setLoadingCustomerHistory] = useState(false);
+
+
 
   // Permission checks
   const canViewSales = hasPermission(user, 'view_sales');
@@ -123,6 +135,96 @@ export default function CreditManagementPage() {
   useEffect(() => {
     fetchCredits();
   }, []);
+
+  // Compute aging analysis
+  const agingAnalysis = useMemo(() => {
+    const now = new Date();
+    const aging = {
+      current: 0,
+      '1-30': 0,
+      '31-60': 0,
+      '61-90': 0,
+      '90+': 0,
+    };
+
+    credits.filter(credit => credit.balance > 0 && credit.status !== 'paid').forEach(credit => {
+      if (!credit.dueDate) {
+        aging.current += credit.balance;
+        return;
+      }
+      const dueDate = new Date(credit.dueDate);
+      const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysOverdue <= 0) {
+        aging.current += credit.balance;
+      } else if (daysOverdue <= 30) {
+        aging['1-30'] += credit.balance;
+      } else if (daysOverdue <= 60) {
+        aging['31-60'] += credit.balance;
+      } else if (daysOverdue <= 90) {
+        aging['61-90'] += credit.balance;
+      } else {
+        aging['90+'] += credit.balance;
+      }
+    });
+    return aging;
+  }, [credits]);
+
+  // Compute payment trends
+  const paymentTrends = useMemo(() => {
+    const trends: { [key: string]: number } = {};
+    credits.forEach(credit => {
+      credit.payments.forEach(payment => {
+        const month = new Date(payment.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+        trends[month] = (trends[month] || 0) + payment.amount;
+      });
+    });
+    return Object.entries(trends).map(([month, amount]) => ({ month, amount })).sort((a, b) => new Date(a.month + ' 1').getTime() - new Date(b.month + ' 1').getTime());
+  }, [credits]);
+
+  // Export functions
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    doc.text('Credit Report', 20, 20);
+
+    // Add aging analysis
+    doc.text('Aging Analysis:', 20, 40);
+    let y = 50;
+    Object.entries(agingAnalysis).forEach(([key, value]) => {
+      doc.text(`${key}: $${(value as number).toFixed(2)}`, 20, y);
+      y += 10;
+    });
+
+    // Add credits summary
+    y += 20;
+    doc.text('Credit Summary:', 20, y);
+    y += 10;
+    doc.text(`Total Credits: ${credits.length}`, 20, y);
+    y += 10;
+    doc.text(`Outstanding: $${credits.reduce((sum, credit) => sum + credit.balance, 0).toFixed(2)}`, 20, y);
+    y += 10;
+    doc.text(`Paid Credits: ${credits.filter(credit => credit.status === 'paid').length}`, 20, y);
+    y += 10;
+    doc.text(`Overdue: ${credits.filter(credit => credit.status === 'overdue').length}`, 20, y);
+
+    doc.save('credit-report.pdf');
+  };
+
+  const exportToExcel = () => {
+    const data = credits.map(credit => ({
+      Customer: credit.customerName,
+      Phone: credit.customerPhone,
+      Total: credit.totalAmount,
+      Paid: credit.paidAmount,
+      Balance: credit.balance,
+      Status: credit.status,
+      DueDate: credit.dueDate ? new Date(credit.dueDate).toLocaleDateString() : '',
+      Notes: credit.notes || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Credits');
+    XLSX.writeFile(wb, 'credit-report.xlsx');
+  };
 
   const fetchCredits = async () => {
     try {
@@ -140,7 +242,8 @@ export default function CreditManagementPage() {
   const handleMakePayment = async () => {
     if (!selectedCredit || paymentAmount <= 0) return;
 
-    if (paymentAmount > selectedCredit.balance) {
+    // Use Number() for robust comparison
+    if (Math.round(Number(paymentAmount) * 100) > Math.round(Number(selectedCredit.balance) * 100)) {
       setError('Payment amount cannot exceed remaining balance');
       return;
     }
@@ -164,9 +267,23 @@ export default function CreditManagementPage() {
       setPaymentAmount(0);
       setPaymentMethod('cash');
       setPaymentNotes('');
-    } catch (error) {
+    } catch (error: unknown) {
+      // Try to extract backend error message
+      let msg = 'Failed to process payment';
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as { response?: unknown }).response === 'object' &&
+        (error as { response?: { message?: string } }).response &&
+        'message' in (error as { response: { message?: string } }).response
+      ) {
+        msg = ((error as { response: { message?: string } }).response.message) || msg;
+      } else if (error instanceof Error && error.message) {
+        msg = error.message;
+      }
+      setError(msg);
       console.error('Error making payment:', error);
-      setError('Failed to process payment');
     } finally {
       setProcessingPayment(false);
     }
@@ -313,6 +430,16 @@ export default function CreditManagementPage() {
                 }`}
               >
                 Reports
+              </button>
+              <button
+                onClick={() => setActiveTab('completed')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'completed'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Completed
               </button>
             </nav>
           </div>
@@ -669,11 +796,215 @@ export default function CreditManagementPage() {
         )}
 
         {activeTab === 'reports' && (
-          <div className="bg-white rounded shadow-sm border border-gray-100 p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Credit Reports</h2>
-            <p className="text-gray-500 text-sm">Aging analysis and export options will be available here.</p>
-            {/* Placeholder for reports */}
+          <div className="space-y-6">
+            {/* Aging Analysis */}
+            <div className="bg-white rounded shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold text-gray-900">Aging Analysis</h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={exportToPDF}
+                    className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-semibold flex items-center gap-1"
+                  >
+                    <FaFilePdf className="w-3 h-3" />
+                    PDF
+                  </button>
+                  <button
+                    onClick={exportToExcel}
+                    className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-semibold flex items-center gap-1"
+                  >
+                    <FaFileExcel className="w-3 h-3" />
+                    Excel
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                  <div className="text-xs text-blue-700 font-medium">Current</div>
+                  <div className="text-lg font-bold text-blue-900">${agingAnalysis.current.toFixed(2)}</div>
+                </div>
+                <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+                  <div className="text-xs text-yellow-700 font-medium">1-30 Days</div>
+                  <div className="text-lg font-bold text-yellow-900">${agingAnalysis['1-30'].toFixed(2)}</div>
+                </div>
+                <div className="bg-orange-50 p-3 rounded border border-orange-200">
+                  <div className="text-xs text-orange-700 font-medium">31-60 Days</div>
+                  <div className="text-lg font-bold text-orange-900">${agingAnalysis['31-60'].toFixed(2)}</div>
+                </div>
+                <div className="bg-red-50 p-3 rounded border border-red-200">
+                  <div className="text-xs text-red-700 font-medium">61-90 Days</div>
+                  <div className="text-lg font-bold text-red-900">${agingAnalysis['61-90'].toFixed(2)}</div>
+                </div>
+                <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                  <div className="text-xs text-gray-700 font-medium">90+ Days</div>
+                  <div className="text-lg font-bold text-gray-900">${agingAnalysis['90+'].toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Trends Chart */}
+            <div className="bg-white rounded shadow-sm border border-gray-100 p-6">
+              <h2 className="text-base font-semibold text-gray-900 mb-4">Payment Trends</h2>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={paymentTrends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => [`$${value}`, 'Amount']} />
+                    <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Summary Statistics */}
+            <div className="bg-white rounded shadow-sm border border-gray-100 p-6">
+              <h2 className="text-base font-semibold text-gray-900 mb-4">Summary Statistics</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">{credits.length}</div>
+                  <div className="text-xs text-gray-500">Total Credits</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    ${credits.reduce((sum, credit) => sum + credit.paidAmount, 0).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-500">Total Paid</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">
+                    ${credits.reduce((sum, credit) => sum + credit.balance, 0).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-500">Outstanding</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {credits.filter(credit => credit.status === 'paid').length}
+                  </div>
+                  <div className="text-xs text-gray-500">Paid Credits</div>
+                </div>
+              </div>
+            </div>
           </div>
+        )}
+
+        {activeTab === 'completed' && (
+          <>
+            {error && (
+              <div className="mb-4 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-xs flex items-center gap-2">
+                <FaExclamationTriangle className="w-4 h-4" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Summary Cards for Completed */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+              <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+                <FaCreditCard className="w-5 h-5 text-blue-600" />
+                <div>
+                  <div className="text-xs text-gray-500">Completed Credits</div>
+                  <div className="text-base font-bold text-gray-900">
+                    {credits.filter(credit => credit.status === 'paid').length}
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+                <FaDollarSign className="w-5 h-5 text-green-600" />
+                <div>
+                  <div className="text-xs text-gray-500">Total Paid</div>
+                  <div className="text-base font-bold text-gray-900">
+                    ${credits.filter(credit => credit.status === 'paid').reduce((sum, credit) => sum + credit.paidAmount, 0).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+                <FaCheckCircle className="w-5 h-5 text-green-600" />
+                <div>
+                  <div className="text-xs text-gray-500">Fully Paid</div>
+                  <div className="text-base font-bold text-gray-900">
+                    {credits.filter(credit => credit.status === 'paid' && credit.balance === 0).length}
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+                <FaCalendarAlt className="w-5 h-5 text-purple-600" />
+                <div>
+                  <div className="text-xs text-gray-500">Avg Completion Time</div>
+                  <div className="text-base font-bold text-gray-900">
+                    {(() => {
+                      const completedCredits = credits.filter(credit => credit.status === 'paid');
+                      if (completedCredits.length === 0) return 'N/A';
+                      const totalDays = completedCredits.reduce((sum, credit) => {
+                        const created = new Date(credit.createdAt);
+                        const updated = new Date(credit.updatedAt);
+                        return sum + Math.floor((updated.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+                      }, 0);
+                      return Math.floor(totalDays / completedCredits.length) + ' days';
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Completed Credits List */}
+            <div className="bg-white rounded shadow-sm border border-gray-100">
+              <div className="p-3 border-b border-gray-100">
+                <h2 className="text-base font-semibold text-gray-900">Completed Credit Records</h2>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {credits.filter(credit => credit.status === 'paid').length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    <FaCheckCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-base font-medium">No completed credits found</p>
+                    <p className="text-xs">Completed credits will appear here</p>
+                  </div>
+                ) : (
+                  credits.filter(credit => credit.status === 'paid').map((credit) => (
+                    <div key={credit.id} className="p-3 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-sm font-medium text-gray-900">{credit.customerName}</h3>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <FaCheckCircle className="w-3 h-3" />
+                              Paid
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-gray-600">
+                            <div className="flex items-center gap-1">
+                              <FaPhone className="w-3 h-3" />
+                              <span>{credit.customerPhone}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <FaDollarSign className="w-3 h-3" />
+                              <span>Total: ${credit.totalAmount.toFixed(2)}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <FaCalendarAlt className="w-3 h-3" />
+                              <span>Completed: {new Date(credit.updatedAt).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          {credit.notes && (
+                            <p className="text-xs text-gray-500 mt-1">{credit.notes}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setSelectedCredit(credit)}
+                            className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                          >
+                            <FaEye className="w-3 h-3 inline mr-1" />
+                            View
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
         )}
 
         {/* Credit Details Modal */}
@@ -780,7 +1111,7 @@ export default function CreditManagementPage() {
                     onClick={() => {
                       setShowPaymentModal(false);
                       setSelectedCredit(null);
-                      setError(null);
+                      setError(null); // Reset error on close
                     }}
                     className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
                   >
@@ -793,7 +1124,10 @@ export default function CreditManagementPage() {
                     <input
                       type="number"
                       value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => {
+                        setPaymentAmount(parseFloat(e.target.value) || 0);
+                        setError(null); // Reset error on amount change
+                      }}
                       className="w-full px-2 py-1 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 text-xs"
                       placeholder="0.00"
                       min="0"
@@ -845,7 +1179,7 @@ export default function CreditManagementPage() {
                   </button>
                   <button
                     onClick={handleMakePayment}
-                    disabled={processingPayment || paymentAmount <= 0 || paymentAmount > selectedCredit.balance}
+                    disabled={processingPayment || paymentAmount <= 0 || Math.round(paymentAmount * 100) > Math.round(selectedCredit.balance * 100)}
                     className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                   >
                     {processingPayment ? (

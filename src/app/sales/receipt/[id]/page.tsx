@@ -31,6 +31,14 @@ interface Receipt {
     name: string;
     address?: string;
   };
+  mpesaTransaction?: {
+    phoneNumber: string;
+    amount: number;
+    status: string;
+    mpesaReceipt?: string;
+    message?: string;
+    transactionDate?: string;
+  };
   // ...other fields
 }
 
@@ -529,6 +537,11 @@ export default function DigitalReceiptPage() {
         pdf.text(`Amount Tendered: KES ${(receipt.amountReceived ?? 0).toFixed(2)}`, 5, yPosition);
         yPosition += 4;
         pdf.text(`Change: KES ${receipt.change?.toFixed(2) || '0.00'}`, 5, yPosition);
+        yPosition += 6;
+      }
+
+      if (receipt.paymentMethod === "mpesa" && receipt.mpesaTransaction?.mpesaReceipt) {
+        pdf.text(`M-Pesa Receipt: ${receipt.mpesaTransaction.mpesaReceipt}`, 5, yPosition);
         yPosition += 6;
       }
 
@@ -1032,6 +1045,13 @@ const handleShare = async () => {
                         <span>KES {receipt.change?.toFixed(2) || '0.00'}</span>
                       </div>
                     </>
+                  )}
+
+                  {receipt.paymentMethod === "mpesa" && receipt.mpesaTransaction?.mpesaReceipt && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">M-Pesa Receipt:</span>
+                      <span className="font-medium">{receipt.mpesaTransaction.mpesaReceipt}</span>
+                    </div>
                   )}
                 </div>
               </div>

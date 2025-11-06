@@ -1,5 +1,5 @@
 "use client";
-import { apiGet, apiPost } from "@/utils/api";
+import { apiGet, apiPost, apiPut } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
 import { FaBox, FaSearch,  FaPlus, FaExclamationTriangle, FaCheckCircle, FaTimesCircle, FaEdit, FaCalculator, FaDownload } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
@@ -53,6 +53,9 @@ export default function InventoryPage() {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(true);
 
+  // Add state for editable product fields in modal
+  const [modalProductFields, setModalProductFields] = useState<Partial<Product>>({});
+
   useEffect(() => {
     setLoading(true);
     const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
@@ -76,7 +79,7 @@ export default function InventoryPage() {
     async function fetchBranches() {
       setBranchesLoading(true);
       try {
-        const data = await apiGet('/api/branches');
+        const data = await apiGet('/branches');
         if (Array.isArray(data)) {
           setBranches(data as { id: string; name: string }[]);
           // Auto-select first branch if none selected
@@ -172,6 +175,13 @@ export default function InventoryPage() {
     setModalProduct(product);
     setModalQuantity(getInv(product.id)?.quantity || 0);
     setModalError("");
+    setModalProductFields({
+      name: product.name,
+      sku: product.sku || "",
+      price: product.price ?? undefined,
+      cost: product.cost ?? undefined,
+      category: product.category || "",
+    });
     setShowModal(true);
   }
 
@@ -181,12 +191,19 @@ export default function InventoryPage() {
     setSaving(true);
     setModalError("");
     try {
+      // Use PUT for updating product details
+      await apiPut(`/products/${modalProduct.id}`, {
+        ...modalProductFields,
+      });
+      // Update inventory quantity
       await apiPost("/inventory", { productId: modalProduct.id, quantity: Number(modalQuantity) });
       setShowModal(false);
       setModalProduct(null);
       setModalQuantity(0);
+      setModalProductFields({});
       setTimeout(() => {
         const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
+        apiGet("/products", headers).then((data) => setProducts(Array.isArray(data) ? data : []));
         apiGet("/inventory", headers).then((data) => setInventory(data as InventoryItem[]));
       }, 300);
     } catch (err: unknown) {
@@ -203,22 +220,22 @@ export default function InventoryPage() {
     return { status: "in", color: "text-green-600", bg: "bg-green-50", icon: <FaCheckCircle />, text: "In Stock" };
   }
 
-  // Modern StatCard
+  // StatCard: smaller paddings/text
   function StatCard({ title, value, icon, color, bg }: { title: string; value: string | number; icon: React.ReactNode; color: string; bg: string }) {
     return (
-      <div className={`flex items-center gap-3 ${bg} rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow`}>
-        <div className={`flex items-center justify-center w-10 h-10 rounded-lg ${color} bg-opacity-10`}>
+      <div className={`flex items-center gap-2 ${bg} rounded-lg p-2 shadow-sm border border-gray-100`}>
+        <div className={`flex items-center justify-center w-7 h-7 rounded ${color} bg-opacity-10 text-xs`}>
           {icon}
         </div>
         <div>
-          <p className="text-xs font-semibold text-gray-500">{title}</p>
-          <p className={`text-lg font-bold ${color}`}>{value}</p>
+          <p className="text-[11px] font-semibold text-gray-500">{title}</p>
+          <p className={`text-base font-bold ${color}`}>{value}</p>
         </div>
       </div>
     );
   }
 
-  // Modern ProductCard
+  // ProductCard: smaller paddings/text, tighter layout
   function ProductCard({ product }: { product: Product }) {
     const inv = getInv(product.id);
     const stockStatus = getStockStatus(inv?.quantity || 0);
@@ -239,22 +256,22 @@ export default function InventoryPage() {
     };
 
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col gap-2 animate-fade-in">
-        <div className="flex items-center justify-between mb-2">
+      <div className="bg-white rounded-xl border border-gray-100 p-2 shadow-sm hover:shadow transition-all flex flex-col gap-1">
+        <div className="flex items-center justify-between mb-1">
           <div>
-            <h3 className="font-semibold text-gray-900 text-base">{product.name}</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">{product.category || 'Uncategorized'}</span>
+            <h3 className="font-semibold text-gray-900 text-sm">{product.name}</h3>
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-gray-500">{product.category || 'Uncategorized'}</span>
               {product.sku && (
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">{product.sku}</span>
+                <span className="text-[10px] bg-gray-100 text-gray-500 px-1 py-0.5 rounded">{product.sku}</span>
               )}
             </div>
           </div>
-          <div className={`px-2 py-1 rounded-full text-xs font-semibold ${stockStatus.color} ${stockStatus.bg}`}>
+          <div className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${stockStatus.color} ${stockStatus.bg}`}>
             {stockStatus.text}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+        <div className="grid grid-cols-2 gap-1 text-[11px] mb-1">
           <div>
             <span className="text-gray-400">Stock</span>
             <div className="font-bold">{quantity}</div>
@@ -272,19 +289,19 @@ export default function InventoryPage() {
             <div className={`font-bold ${getMarginColor(marginPercent)}`}>{marginPercent.toFixed(1)}%</div>
           </div>
         </div>
-        <div className="flex justify-between items-center text-xs border-t pt-2">
+        <div className="flex justify-between items-center text-[11px] border-t pt-1">
           <span className="text-gray-400">Total Value</span>
           <span className="font-bold text-green-600">${totalValue.toFixed(2)}</span>
         </div>
-        <div className="flex justify-between items-center text-xs">
+        <div className="flex justify-between items-center text-[11px]">
           <span className="text-gray-400">Total Profit</span>
           <span className={`font-bold ${totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>${totalProfit.toFixed(2)}</span>
         </div>
-        <div className="flex mt-2">
+        <div className="flex mt-1">
           {canEditInventory ? (
             <button
               onClick={() => openStockModal(product)}
-              className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-semibold"
+              className="flex-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-[11px] font-semibold"
             >
               <FaEdit className="w-3 h-3 inline mr-1" />
               Update Stock
@@ -293,7 +310,7 @@ export default function InventoryPage() {
             <Tooltip content="You don't have permission to edit inventory. Contact your administrator.">
               <button
                 disabled
-                className="flex-1 px-3 py-2 bg-gray-200 text-gray-400 rounded-lg cursor-not-allowed text-xs font-semibold"
+                className="flex-1 px-2 py-1 bg-gray-200 text-gray-400 rounded cursor-not-allowed text-[11px] font-semibold"
               >
                 <FaEdit className="w-3 h-3 inline mr-1" />
                 Update Stock
@@ -329,19 +346,19 @@ export default function InventoryPage() {
 
   return (
     <AuthGuard>
-      <div className="max-w-7xl mx-auto px-2 py-4">
-        {/* Modern Top Section */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-6 animate-fade-in">
+      <div className="max-w-7xl mx-auto px-1 py-2">
+        {/* Top Section: smaller paddings, tighter layout */}
+        <div className="bg-white rounded-xl shadow border border-gray-100 p-3 mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           {/* Branch Selector */}
-          <div className="flex-shrink-0 min-w-[200px]">
-            <label className="block text-xs font-semibold text-gray-700 mb-2">Branch</label>
+          <div className="flex-shrink-0 min-w-[120px]">
+            <label className="block text-[11px] font-semibold text-gray-700 mb-1">Branch</label>
             {branchesLoading ? (
-              <div className="text-gray-400 text-xs">Loading branches...</div>
+              <div className="text-gray-400 text-[11px]">Loading branches...</div>
             ) : (
               <select
                 value={selectedBranchId || ''}
                 onChange={e => setSelectedBranchId(e.target.value)}
-                className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow text-xs min-w-[140px] font-semibold"
+                className="px-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 bg-white shadow text-[11px] min-w-[90px] font-semibold"
               >
                 <option value="" disabled>Select a branch</option>
                 {branches.map(branch => (
@@ -351,12 +368,12 @@ export default function InventoryPage() {
             )}
           </div>
           {/* Title and Statistics */}
-          <div className="flex-1 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex-1 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Smart Inventory</h1>
-              <p className="text-gray-500 text-sm">Stock management & cost analysis</p>
+              <h1 className="text-lg font-bold text-gray-900 mb-0.5">Smart Inventory</h1>
+              <p className="text-gray-500 text-xs">Stock management & cost analysis</p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <StatCard
                 title="Total Products"
                 value={stats.totalProducts}
@@ -390,22 +407,22 @@ export default function InventoryPage() {
         </div>
 
         {/* Sticky Filters/Actions Bar */}
-        <div className="sticky top-2 z-10 bg-white rounded-xl shadow border border-gray-100 p-3 mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 animate-fade-in">
-          <div className="flex-1 flex gap-2">
+        <div className="sticky top-2 z-10 bg-white rounded-lg shadow border border-gray-100 p-2 mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <div className="flex-1 flex gap-1">
             <div className="relative w-full max-w-xs">
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <FaSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
               <input
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search products..."
-                className="w-full pl-10 pr-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full pl-7 pr-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs"
               />
             </div>
             <select
               value={stockFilter}
               onChange={e => setStockFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-semibold"
+              className="px-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs font-semibold"
             >
               <option value="all">All Stock</option>
               <option value="in">In Stock</option>
@@ -416,7 +433,7 @@ export default function InventoryPage() {
               <select
                 value={categoryFilter}
                 onChange={e => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-semibold"
+                className="px-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs font-semibold"
               >
                 <option value="all">All Categories</option>
                 {categories.map(cat => (
@@ -424,10 +441,10 @@ export default function InventoryPage() {
                 ))}
               </select>
             )}
-            <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+            <div className="flex border border-gray-200 rounded overflow-hidden">
               <button
                 onClick={() => setViewMode("grid")}
-                className={`px-4 py-2 text-sm font-semibold transition-colors ${
+                className={`px-2 py-1 text-xs font-semibold ${
                   viewMode === "grid" 
                     ? "bg-blue-600 text-white" 
                     : "bg-white text-gray-700 hover:bg-gray-50"
@@ -437,7 +454,7 @@ export default function InventoryPage() {
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={`px-4 py-2 text-sm font-semibold transition-colors ${
+                className={`px-2 py-1 text-xs font-semibold ${
                   viewMode === "list" 
                     ? "bg-blue-600 text-white" 
                     : "bg-white text-gray-700 hover:bg-gray-50"
@@ -447,7 +464,7 @@ export default function InventoryPage() {
               </button>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <button
               onClick={() => {
                 const data = filtered.map(product => {
@@ -479,17 +496,17 @@ export default function InventoryPage() {
                 XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
                 XLSX.writeFile(wb, `inventory-${new Date().toISOString().split('T')[0]}.xlsx`);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-semibold shadow"
+              className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-semibold shadow"
             >
-              <FaDownload className="w-4 h-4" />
+              <FaDownload className="w-3 h-3" />
               Export
             </button>
             {hasPermission(user, 'create_inventory') && (
               <button
                 onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold shadow"
+                className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-semibold shadow"
               >
-                <FaPlus className="w-4 h-4" />
+                <FaPlus className="w-3 h-3" />
                 Bulk Update
               </button>
             )}
@@ -498,31 +515,31 @@ export default function InventoryPage() {
 
         {/* Products Grid/List */}
         {currentProducts.length === 0 ? (
-          <div className="text-center py-16">
-            <FaBox className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No products found</h3>
-            <p className="text-gray-500">Try adjusting your search or filters</p>
+          <div className="text-center py-8">
+            <FaBox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+            <h3 className="text-base font-semibold text-gray-900 mb-1">No products found</h3>
+            <p className="text-xs text-gray-500">Try adjusting your search or filters</p>
           </div>
         ) : (
           <>
             {viewMode === "grid" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 mb-3">
                 {currentProducts.map(product => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow overflow-hidden mb-6 animate-fade-in">
+              <div className="bg-white rounded-xl border border-gray-100 shadow overflow-hidden mb-3">
                 <div className="overflow-x-auto">
-                  <table className="min-w-full">
+                  <table className="min-w-full text-xs">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Product</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Updated</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider">Product</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider">Category</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider">Last Updated</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
@@ -532,32 +549,32 @@ export default function InventoryPage() {
                         const stockStatus = getStockStatus(quantity);
                         return (
                           <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-semibold text-gray-900">{product.name}</div>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              <div className="text-xs font-semibold text-gray-900">{product.name}</div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 py-2 whitespace-nowrap">
                               {product.category && (
-                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                                <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">
                                   {product.category}
                                 </span>
                               )}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 py-2 whitespace-nowrap">
                               <span className={`font-bold ${stockStatus.color}`}>{quantity}</span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${stockStatus.bg} ${stockStatus.color}`}>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${stockStatus.bg} ${stockStatus.color}`}>
                                 {stockStatus.icon}
                                 {stockStatus.status === "in" ? "In Stock" : stockStatus.status === "low" ? "Low Stock" : "Out of Stock"}
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                            <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-400">
                               {inv ? new Date(inv.updatedAt).toLocaleDateString() : 'Never'}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 py-2 whitespace-nowrap">
                               <button
                                 onClick={() => openStockModal(product)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors"
+                                className="px-2 py-1 bg-blue-600 text-white rounded text-[11px] font-semibold hover:bg-blue-700"
                               >
                                 {inv ? 'Edit' : 'Add'}
                               </button>
@@ -573,72 +590,115 @@ export default function InventoryPage() {
           </>
         )}
 
-        {/* Pagination */}
+        {/* Pagination: smaller paddings/text */}
         {totalPages > 1 && (
-          <div className="flex justify-center items-center gap-4 mb-6">
+          <div className="flex justify-center items-center gap-2 mb-3">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-4 py-2 border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors font-semibold"
+              className="px-2 py-1 border border-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 font-semibold text-xs"
             >
               Previous
             </button>
-            <span className="mx-4 text-sm text-gray-500 font-semibold">
+            <span className="mx-2 text-xs text-gray-500 font-semibold">
               Page {currentPage} of {totalPages}
             </span>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-4 py-2 border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors font-semibold"
+              className="px-2 py-1 border border-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 font-semibold text-xs"
             >
               Next
             </button>
           </div>
         )}
 
-        {/* Add/Edit Stock Modal */}
+        {/* Add/Edit Stock Modal: now with product details */}
         {showModal && modalProduct && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50 animate-fade-in">
-            <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-gray-100 relative animate-fade-in">
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+            <div className="bg-white p-4 rounded-xl shadow-2xl w-full max-w-xs mx-2 border border-gray-100 relative">
               <button
                 onClick={() => setShowModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
               >
-                <FaTimesCircle className="w-6 h-6" />
+                <FaTimesCircle className="w-5 h-5" />
               </button>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                {getInv(modalProduct.id) ? 'Edit Stock' : 'Add Stock'}
+              <h2 className="text-lg font-bold text-gray-900 mb-3">
+                {getInv(modalProduct.id) ? 'Edit Product & Stock' : 'Add Product & Stock'}
               </h2>
               <form onSubmit={handleStockSave}>
-                <div className="mb-5">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Product</label>
+                <div className="mb-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Product Name</label>
                   <input
                     type="text"
-                    value={modalProduct.name}
-                    disabled
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 font-semibold"
+                    value={modalProductFields.name ?? ""}
+                    onChange={e => setModalProductFields(f => ({ ...f, name: e.target.value }))}
+                    className="w-full px-2 py-1 border border-gray-200 rounded bg-white text-gray-900 font-semibold text-xs"
+                    required
                   />
                 </div>
-                <div className="mb-5">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+                <div className="mb-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">SKU</label>
+                  <input
+                    type="text"
+                    value={modalProductFields.sku ?? ""}
+                    onChange={e => setModalProductFields(f => ({ ...f, sku: e.target.value }))}
+                    className="w-full px-2 py-1 border border-gray-200 rounded bg-white text-gray-900 font-semibold text-xs"
+                  />
+                </div>
+                <div className="mb-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Price</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={modalProductFields.price ?? ""}
+                      onChange={e => setModalProductFields(f => ({ ...f, price: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                      className="w-full px-2 py-1 border border-gray-200 rounded bg-white text-gray-900 font-semibold text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Cost</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={modalProductFields.cost ?? ""}
+                      onChange={e => setModalProductFields(f => ({ ...f, cost: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                      className="w-full px-2 py-1 border border-gray-200 rounded bg-white text-gray-900 font-semibold text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="mb-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Category</label>
+                  <input
+                    type="text"
+                    value={modalProductFields.category ?? ""}
+                    onChange={e => setModalProductFields(f => ({ ...f, category: e.target.value }))}
+                    className="w-full px-2 py-1 border border-gray-200 rounded bg-white text-gray-900 font-semibold text-xs"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Quantity</label>
                   <input
                     type="number"
                     min={0}
                     value={modalQuantity}
                     onChange={e => setModalQuantity(Number(e.target.value))}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-semibold"
+                    className="w-full px-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 font-semibold text-xs"
                     required
                   />
                 </div>
                 {modalError && (
-                  <div className="mb-5 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm font-semibold">
+                  <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-600 text-xs font-semibold">
                     {modalError}
                   </div>
                 )}
-                <div className="flex justify-end gap-3">
+                <div className="flex justify-end gap-2">
                   <button 
                     type="button" 
-                    className="px-5 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-semibold" 
+                    className="px-3 py-1 border border-gray-200 rounded text-gray-700 hover:bg-gray-50 font-semibold text-xs" 
                     onClick={() => setShowModal(false)} 
                     disabled={saving}
                   >
@@ -646,7 +706,7 @@ export default function InventoryPage() {
                   </button>
                   <button 
                     type="submit" 
-                    className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold" 
+                    className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold text-xs" 
                     disabled={saving}
                   >
                     {saving ? "Saving..." : "Save"}

@@ -31,7 +31,7 @@ export function BranchSelector() {
   useEffect(() => {
     async function loadBranches() {
       try {
-        const data = await apiGet('/api/branches') as Branch[];
+        const data = await apiGet('/branches') as Branch[];
         setBranches(data);
       } catch (error) {
         console.error('Failed to load branches:', error);
@@ -51,7 +51,7 @@ export function BranchSelector() {
     
     setIsSwitching(true);
     try {
-      await apiPost(`/api/branches/switch/${branchId}`, {});
+      await apiPost(`/branches/switch/${branchId}`, {});
       await refreshUser();
       toast.success('Branch switched successfully');
       router.refresh();

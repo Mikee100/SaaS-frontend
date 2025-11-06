@@ -43,6 +43,10 @@ const ChartComponents = {
   CustomerSegmentation: dynamic(
     () => import('@/components/CustomerSegmentation'),
     { ssr: false, loading: () => <div className="h-full flex items-center justify-center">Loading...</div> }
+  ),
+  SalesTarget: dynamic(
+    () => import('@/components/SalesTarget'),
+    { ssr: false, loading: () => <div className="h-64 flex items-center justify-center">Loading...</div> }
   )
 };
 

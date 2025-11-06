@@ -15,13 +15,7 @@ import {
   FiUserPlus,
   FiFileText,
   FiShoppingCart,
-  FiTrendingDown,
 } from 'react-icons/fi';
-
-import AnomalyDetectionPanel from '@/components/AnomalyDetectionPanel';
-import CustomerSegmentationPanel from '@/components/CustomerSegmentationPanel';
-import ChurnPredictionPanel from '@/components/ChurnPredictionPanel';
-import AISummaryPanel from '@/components/AISummaryPanel';
 
 // Dynamically import components with no SSR for better performance
 const ChartComponents = {
@@ -36,12 +30,25 @@ const ChartComponents = {
   SalesTrendsAnalysis: dynamic(
     () => import('@/components/SalesTrendsAnalysis'),
     { ssr: false }
+  ),
+  SalesTarget: dynamic(
+    () => import('@/components/SalesTarget'),
+    { ssr: false }
+  ),
+  SimpleChart: dynamic(
+    () => import('@/components/SimpleChart'),
+    { ssr: false }
+  ),
+  BranchComparisonChart: dynamic(
+    () => import('@/components/BranchComparisonChart'),
+    { ssr: false }
   )
 };
 
 const {
-  CustomerGrowthChart,
-  SalesRevenueChart,
+  SalesTarget,
+  SimpleChart,
+  BranchComparisonChart,
 } = ChartComponents;
 
 // Helper function to generate mock customer growth data if not provided by the API
@@ -79,6 +86,11 @@ interface AnalyticsData {
   salesByMonth?: Record<string, number>;
   salesByWeek?: Record<string, number>;
   salesByDay?: Record<string, number>;
+  branches?: Array<{ id: string; name: string }>;
+  branchSalesByDay?: Record<string, Record<string, number>>;
+  branchSalesByWeek?: Record<string, Record<string, number>>;
+  branchSalesByMonth?: Record<string, Record<string, number>>;
+  branchTopProducts?: Record<string, Array<{ name: string; sales: number; revenue: number; margin?: number; cost?: number }>>;
   topProducts?: Array<{ name: string; sales: number; revenue: number; margin?: number; cost?: number }>;
   customerSegments?: Array<{ segment: string; count: number; revenue: number }>;
   realTimeData?: {
@@ -149,11 +161,11 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false }
 }) {
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 h-full">
-        <div className="animate-pulse space-y-3">
-          <div className="h-6 w-6 bg-gray-200 rounded-full"></div>
-          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-          <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+      <div className="bg-white rounded-md shadow-sm border border-gray-200 p-3 h-full">
+        <div className="animate-pulse space-y-2">
+          <div className="h-5 w-5 bg-gray-200 rounded-full"></div>
+          <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+          <div className="h-6 bg-gray-200 rounded w-1/3"></div>
         </div>
       </div>
     );
@@ -161,15 +173,15 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false }
 
   return (
     <motion.div
-      whileHover={{ y: -2 }}
-      className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 h-full"
+      whileHover={{ y: -1 }}
+      className="bg-white rounded-md shadow-sm border border-gray-200 p-3 h-full"
     >
-      <div className="flex items-center justify-between mb-4">
-        <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+      <div className="flex items-center justify-between mb-2">
+        <div className="p-1.5 rounded-md bg-indigo-50 text-indigo-600">
           {icon}
         </div>
         {trend && (
-          <span className={`flex items-center text-xs font-medium gap-1 px-2 py-1 rounded-full ${
+          <span className={`flex items-center text-[11px] font-medium gap-1 px-1.5 py-0.5 rounded ${
             trendDirection === 'up'
               ? 'text-green-600 bg-green-50'
               : 'text-red-600 bg-red-50'
@@ -180,8 +192,8 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false }
         )}
       </div>
       <div>
-        <span className="text-gray-500 text-sm font-medium">{label}</span>
-        <div className="text-2xl font-bold text-gray-900 mt-1">{value}</div>
+        <span className="text-gray-500 text-xs font-medium">{label}</span>
+        <div className="text-lg font-bold text-gray-900 mt-0.5">{value}</div>
       </div>
     </motion.div>
   );
@@ -212,19 +224,19 @@ function QuickActions() {
   ];
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-      <h2 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="bg-white rounded-md shadow-sm p-3 border border-gray-200">
+      <h2 className="text-base font-semibold text-gray-800 mb-2">Quick Actions</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {actions.map((action, i) => (
           <a
             key={i}
             href={action.href}
-            className="bg-gray-50 text-gray-700 p-4 rounded-lg flex flex-col items-center gap-3 transition-all duration-300 hover:bg-indigo-50 hover:text-indigo-700"
+            className="bg-gray-50 text-gray-700 p-2 rounded-md flex flex-col items-center gap-2 transition-all duration-300 hover:bg-indigo-50 hover:text-indigo-700"
           >
-            <div className="p-2 bg-white rounded-lg shadow-sm">
+            <div className="p-1 bg-white rounded-md shadow-sm">
               {action.icon}
             </div>
-            <span className="text-sm font-medium text-center">{action.label}</span>
+            <span className="text-xs font-medium text-center">{action.label}</span>
           </a>
         ))}
       </div>
@@ -232,27 +244,26 @@ function QuickActions() {
   );
 }
 
-
 function SkeletonLoader() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
         {[1, 2, 3, 4].map((i) => (
           <StatCard key={i} loading={true} icon={null} label="" value="" />
         ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 animate-pulse h-64"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2 space-y-3">
+          <div className="bg-white rounded-md p-3 shadow-sm border border-gray-200 animate-pulse h-40"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[1, 2].map((i) => (
-              <div key={i} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 animate-pulse h-48"></div>
+              <div key={i} className="bg-white rounded-md p-3 shadow-sm border border-gray-200 animate-pulse h-24"></div>
             ))}
           </div>
         </div>
-        <div className="space-y-6">
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 animate-pulse h-64"></div>
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 animate-pulse h-64"></div>
+        <div className="space-y-3">
+          <div className="bg-white rounded-md p-3 shadow-sm border border-gray-200 animate-pulse h-40"></div>
+          <div className="bg-white rounded-md p-3 shadow-sm border border-gray-200 animate-pulse h-40"></div>
         </div>
       </div>
     </div>
@@ -261,14 +272,14 @@ function SkeletonLoader() {
 
 function MetricCard({ title, value, unit, trend }: { title: string; value: number; unit?: string; trend?: number }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <p className="text-xs text-gray-500 mb-1">{title}</p>
+    <div className="bg-white rounded-md border border-gray-200 p-2">
+      <p className="text-[11px] text-gray-500 mb-0.5">{title}</p>
       <div className="flex items-end justify-between">
-        <p className="text-xl font-bold text-gray-900">
+        <p className="text-base font-bold text-gray-900">
           {unit && unit === '$' ? unit : ''}{value.toLocaleString()}{unit && unit !== '$' ? unit : ''}
         </p>
         {trend !== undefined && (
-          <span className={`flex items-center text-xs font-medium gap-1 px-2 py-1 rounded-full ${
+          <span className={`flex items-center text-[11px] font-medium gap-1 px-1 py-0.5 rounded ${
             trend >= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
           }`}>
             {trend >= 0 ? <FiTrendingUp className="w-3 h-3" /> : ''}
@@ -280,12 +291,27 @@ function MetricCard({ title, value, unit, trend }: { title: string; value: numbe
   );
 }
 
+function formatChartData(data: Record<string, number>) {
+  // Converts { "2024-06-01": 100, ... } to [{ label: "2024-06-01", value: 100 }, ...]
+  return Object.entries(data)
+    .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+    .map(([label, value]) => ({ label, value }));
+}
+
 export default function DashboardPage() {
 
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const {  loading: limitsLoading } = usePlanLimits();
   const [stockThreshold, setStockThreshold] = useState<number>(15);
+  const [salesByDay, setSalesByDay] = useState<Record<string, number>>({});
+  const [salesByWeek, setSalesByWeek] = useState<Record<string, number>>({});
+  const [salesByMonth, setSalesByMonth] = useState<Record<string, number>>({});
+  const [branchMonthlyComparison, setBranchMonthlyComparison] = useState<{
+    months: string[];
+    branches: { branchId: string; branchName: string; data: number[] }[];
+    total: number[];
+  } | null>(null);
   const lowStockProducts = (analyticsData?.topProducts || []).filter((p) => (p.sales ?? 0) < stockThreshold);
 
   useEffect(() => {
@@ -304,6 +330,11 @@ export default function DashboardPage() {
           salesByMonth: stats.salesByMonth,
           salesByWeek: stats.salesByWeek,
           salesByDay: stats.salesByDay,
+          branches: stats.branches,
+          branchSalesByDay: stats.branchSalesByDay,
+          branchSalesByWeek: stats.branchSalesByWeek,
+          branchSalesByMonth: stats.branchSalesByMonth,
+          branchTopProducts: stats.branchTopProducts,
           topProducts: stats.topProducts?.map((p: { name: string; sales: number; revenue: number; margin?: number; cost?: number }) => ({
             name: p.name,
             sales: p.sales,
@@ -321,6 +352,16 @@ export default function DashboardPage() {
           inventoryAnalytics: stats.inventoryAnalytics,
           performanceMetrics: stats.performanceMetrics,
         });
+
+        // Fetch sales data for graphs if not present or if you want more detail
+        // If your /analytics/dashboard already provides these, you can skip these fetches
+        const dayData = stats.salesByDay || {};
+        const weekData = stats.salesByWeek || {};
+        const monthData = stats.salesByMonth || {};
+
+        setSalesByDay(dayData);
+        setSalesByWeek(weekData);
+        setSalesByMonth(monthData);
 
         const activities: Array<{ type: string; description: string; date: string }> = [];
         if (stats.recentActivity?.sales) {
@@ -341,7 +382,14 @@ export default function DashboardPage() {
             });
           });
         }
-       
+        // Fetch branch monthly sales comparison
+        apiGet('/analytics/branch-monthly-sales-comparison')
+          .then((data) => setBranchMonthlyComparison(data as {
+            months: string[];
+            branches: { branchId: string; branchName: string; data: number[] }[];
+            total: number[];
+          }))
+          .catch(() => setBranchMonthlyComparison(null));
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         setAnalyticsData(null);
@@ -355,11 +403,11 @@ export default function DashboardPage() {
 
   if (loading || limitsLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <div className="h-8 bg-gray-200 rounded w-64 mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-80"></div>
+      <div className="min-h-screen bg-gray-50 py-4 px-2 sm:px-3 lg:px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-4">
+            <div className="h-6 bg-gray-200 rounded w-40 mb-1"></div>
+            <div className="h-3 bg-gray-200 rounded w-56"></div>
           </div>
           <SkeletonLoader />
         </div>
@@ -367,59 +415,64 @@ export default function DashboardPage() {
     );
   }
 
+  // Log chart data to debug
+  console.log("Daily:", formatChartData(salesByDay));
+  console.log("Weekly:", formatChartData(salesByWeek));
+  console.log("Monthly:", formatChartData(salesByMonth));
+
   return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-5xl mx-auto px-2 sm:px-3 lg:px-4 py-4">
           {/* Header */}
-          <div className="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Dashboard</h1>
-              <p className="text-gray-600 mt-2 text-lg">
-  Welcome back! Here&apos;s what&apos;s happening with your business.
-</p>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Dashboard</h1>
+              <p className="text-gray-600 mt-1 text-base">
+                Welcome back! Here&apos;s what&apos;s happening with your business.
+              </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <BranchSwitcher />
               <button
                 onClick={() => window.location.reload()}
-                className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+                className="p-1.5 text-gray-500 hover:text-gray-700 transition-colors"
                 title="Refresh data"
               >
-                <FiRefreshCw className="w-5 h-5" />
+                <FiRefreshCw className="w-4 h-4" />
               </button>
             </div>
           </div>
 
           {/* Quick Actions */}
-          <div className="mb-8">
+          <div className="mb-4">
             <QuickActions />
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
             <StatCard
-              icon={<FiDollarSign className="w-5 h-5" />}
+              icon={<FiDollarSign className="w-4 h-4" />}
               label="Total Sales"
               value={analyticsData?.totalSales?.toLocaleString() || '0'}
               trend="12.5%"
               trendDirection="up"
             />
             <StatCard
-              icon={<FiTrendingUp className="w-5 h-5" />}
+              icon={<FiTrendingUp className="w-4 h-4" />}
               label="Total Revenue"
               value={`$${analyticsData?.totalRevenue?.toLocaleString() || '0'}`}
               trend="8.2%"
               trendDirection="up"
             />
             <StatCard
-              icon={<FiPackage className="w-5 h-5" />}
+              icon={<FiPackage className="w-4 h-4" />}
               label="Products"
               value={analyticsData?.totalProducts?.toLocaleString() || '0'}
               trend="3.1%"
               trendDirection="up"
             />
             <StatCard
-              icon={<FiUsers className="w-5 h-5" />}
+              icon={<FiUsers className="w-4 h-4" />}
               label="Customers"
               value={analyticsData?.totalCustomers?.toLocaleString() || '0'}
               trend="5.7%"
@@ -428,170 +481,127 @@ export default function DashboardPage() {
           </div>
 
           {/* Revenue & Growth Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Revenue & Growth</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              <SalesRevenueChart
-                salesData={analyticsData?.salesByMonth || {}}
-                title="Monthly Revenue"
-                height={400}
-              />
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                <CustomerGrowthChart
-                  growthData={analyticsData?.customerGrowth || {}}
-                  title="Customer Growth"
-                  height={400}
-                />
-              </div>
-            </div>
-
-            {/* Full-width Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-              <motion.div
-                whileHover={{ y: -2, scale: 1.02 }}
-                transition={{ duration: 0.2 }}
-                className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl border border-purple-200 p-6 shadow-sm hover:shadow-lg transition-all duration-300"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-white rounded-xl shadow-sm">
-                      <FiUsers className="w-6 h-6 text-purple-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-purple-800">Total Customers</h3>
-                      <p className="text-xs text-purple-600">Active user base</p>
-                    </div>
-                  </div>
-                  {analyticsData?.customerRetention && (
-                    <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                      analyticsData.customerRetention.retentionRate >= 0
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}>
-                      {analyticsData.customerRetention.retentionRate >= 0 ? (
-                        <FiTrendingUp className="w-3 h-3" />
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-800 mb-2">Sales Trends by Branch</h2>
+            {analyticsData?.branches && analyticsData.branches.length > 0 ? (
+              analyticsData.branches.map((branch) => (
+                <div key={branch.id} className="mb-8">
+                  <h3 className="text-md font-semibold text-gray-700 mb-3">{branch.name}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Daily Sales Chart */}
+                    <div className="flex flex-col bg-white rounded-xl border border-gray-100 shadow-lg p-4 min-h-[220px] hover:shadow-xl transition-shadow duration-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-indigo-700">Daily Sales</span>
+                        <span className="text-[10px] text-gray-400">{Object.keys(analyticsData.branchSalesByDay?.[branch.id] || {}).length} days</span>
+                      </div>
+                      {analyticsData.branchSalesByDay && analyticsData.branchSalesByDay[branch.id] && Object.keys(analyticsData.branchSalesByDay[branch.id]).length > 0 ? (
+                        <SimpleChart
+                          data={analyticsData.branchSalesByDay[branch.id]}
+                          height={140}
+                          type="line"
+                        />
                       ) : (
-                        <FiTrendingDown className="w-3 h-3" />
+                        <div className="text-xs text-gray-400 text-center py-8">No daily sales data</div>
                       )}
-                      {Math.abs(Math.round(analyticsData.customerRetention.retentionRate * 100))}%
                     </div>
-                  )}
+                    {/* Weekly Sales Chart */}
+                    <div className="flex flex-col bg-white rounded-xl border border-gray-100 shadow-lg p-4 min-h-[220px] hover:shadow-xl transition-shadow duration-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-emerald-700">Weekly Sales</span>
+                        <span className="text-[10px] text-gray-400">{Object.keys(analyticsData.branchSalesByWeek?.[branch.id] || {}).length} weeks</span>
+                      </div>
+                      {analyticsData.branchSalesByWeek && analyticsData.branchSalesByWeek[branch.id] && Object.keys(analyticsData.branchSalesByWeek[branch.id]).length > 0 ? (
+                        <SimpleChart
+                          data={analyticsData.branchSalesByWeek[branch.id]}
+                          height={140}
+                          type="line"
+                        />
+                      ) : (
+                        <div className="text-xs text-gray-400 text-center py-8">No weekly sales data</div>
+                      )}
+                    </div>
+                    {/* Monthly Sales Chart */}
+                    <div className="flex flex-col bg-white rounded-xl border border-gray-100 shadow-lg p-4 min-h-[220px] hover:shadow-xl transition-shadow duration-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-purple-700">Monthly Sales</span>
+                        <span className="text-[10px] text-gray-400">{Object.keys(analyticsData.branchSalesByMonth?.[branch.id] || {}).length} months</span>
+                      </div>
+                      {analyticsData.branchSalesByMonth && analyticsData.branchSalesByMonth[branch.id] && Object.keys(analyticsData.branchSalesByMonth[branch.id]).length > 0 ? (
+                        <SimpleChart
+                          data={analyticsData.branchSalesByMonth[branch.id]}
+                          height={140}
+                          type="line"
+                        />
+                      ) : (
+                        <div className="text-xs text-gray-400 text-center py-8">No monthly sales data</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-3xl font-bold text-purple-900 mb-2">
-                  {analyticsData?.totalCustomers?.toLocaleString() || '0'}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-purple-600 font-medium">Registered users</span>
-                  <div className="flex items-center gap-1 text-xs text-purple-500">
-                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                    Live data
+              ))
+            ) : (
+              // Fallback to overall sales if no branches
+              <div className="mb-8">
+                <h3 className="text-md font-semibold text-gray-700 mb-3">Overall Sales</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Daily Sales Chart */}
+                  <div className="flex flex-col bg-white rounded-xl border border-gray-100 shadow-lg p-4 min-h-[220px] hover:shadow-xl transition-shadow duration-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-indigo-700">Daily Sales</span>
+                      <span className="text-[10px] text-gray-400">{Object.keys(salesByDay).length} days</span>
+                    </div>
+                    {Object.keys(salesByDay).length > 0 ? (
+                      <SimpleChart
+                        data={salesByDay}
+                        height={140}
+                        type="line"
+                      />
+                    ) : (
+                      <div className="text-xs text-gray-400 text-center py-8">No daily sales data</div>
+                    )}
+                  </div>
+                  {/* Weekly Sales Chart */}
+                  <div className="flex flex-col bg-white rounded-xl border border-gray-100 shadow-lg p-4 min-h-[220px] hover:shadow-xl transition-shadow duration-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-emerald-700">Weekly Sales</span>
+                      <span className="text-[10px] text-gray-400">{Object.keys(salesByWeek).length} weeks</span>
+                    </div>
+                    {Object.keys(salesByWeek).length > 0 ? (
+                      <SimpleChart
+                        data={salesByWeek}
+                        height={140}
+                        type="line"
+                      />
+                    ) : (
+                      <div className="text-xs text-gray-400 text-center py-8">No weekly sales data</div>
+                    )}
+                  </div>
+                  {/* Monthly Sales Chart */}
+                  <div className="flex flex-col bg-white rounded-xl border border-gray-100 shadow-lg p-4 min-h-[220px] hover:shadow-xl transition-shadow duration-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-purple-700">Monthly Sales</span>
+                      <span className="text-[10px] text-gray-400">{Object.keys(salesByMonth).length} months</span>
+                    </div>
+                    {Object.keys(salesByMonth).length > 0 ? (
+                      <SimpleChart
+                        data={salesByMonth}
+                        height={140}
+                        type="line"
+                      />
+                    ) : (
+                      <div className="text-xs text-gray-400 text-center py-8">No monthly sales data</div>
+                    )}
                   </div>
                 </div>
-              </motion.div>
-
-              {analyticsData?.performanceMetrics && (
-                <motion.div
-                  whileHover={{ y: -2, scale: 1.02 }}
-                  transition={{ duration: 0.2 }}
-                  className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl border border-emerald-200 p-6 shadow-sm hover:shadow-lg transition-all duration-300"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-white rounded-xl shadow-sm">
-                        <FiDollarSign className="w-6 h-6 text-emerald-600" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-semibold text-emerald-800">Avg. Customer Value</h3>
-                        <p className="text-xs text-emerald-600">Lifetime value</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
-                      <FiTrendingUp className="w-3 h-3" />
-                      CLV
-                    </div>
-                  </div>
-                  <div className="text-3xl font-bold text-emerald-900 mb-2">
-                    ${Math.round(analyticsData.performanceMetrics.customerLifetimeValue).toLocaleString()}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-emerald-600 font-medium">Per customer</span>
-                    <div className="flex items-center gap-1 text-xs text-emerald-500">
-                      <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                      Calculated
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {analyticsData?.customerRetention && (
-                <motion.div
-                  whileHover={{ y: -2, scale: 1.01 }}
-                  transition={{ duration: 0.2 }}
-                  className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-2xl p-6 border border-indigo-200 shadow-sm hover:shadow-lg transition-all duration-300"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-white rounded-xl shadow-sm">
-                        <FiTrendingUp className="w-6 h-6 text-indigo-600" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-semibold text-indigo-800">Customer Retention</h3>
-                        <p className="text-xs text-indigo-600">Repeat customer rate</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">
-                      <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
-                      Active
-                    </div>
-                  </div>
-                  <div className="flex items-end justify-between mb-4">
-                    <div>
-                      <p className="text-4xl font-bold text-indigo-900 mb-1">
-                        {Math.round(analyticsData.customerRetention.retentionRate * 100)}%
-                      </p>
-                      <div className="flex items-center gap-2 text-sm text-indigo-700">
-                        <span className="font-medium">{analyticsData.customerRetention.repeatCustomers.toLocaleString()}</span>
-                        <span>repeat customers</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-indigo-600 font-medium">
-                        of {analyticsData.customerRetention.totalCustomers.toLocaleString()} total
-                      </p>
-                      <div className="flex items-center gap-1 mt-1">
-                        <div className="w-20 h-2 bg-indigo-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000"
-                            style={{
-                              width: `${Math.round(analyticsData.customerRetention.retentionRate * 100)}%`
-                            }}
-                          ></div>
-                        </div>
-                        <span className="text-xs text-indigo-500 font-medium">
-                          {Math.round(analyticsData.customerRetention.retentionRate * 100)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between pt-4 border-t border-indigo-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                      <span className="text-xs text-indigo-600 font-medium">Healthy retention rate</span>
-                    </div>
-                    <div className="text-xs text-indigo-500">
-                      Last 30 days
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Inventory Overview */}
           {analyticsData?.inventoryAnalytics && (
-            <div className="bg-white rounded-lg border border-gray-200 p-5 mb-8">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Inventory Overview</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-md border border-gray-200 p-3 mb-4">
+              <h2 className="text-base font-semibold text-gray-800 mb-2">Inventory Overview</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <MetricCard
                   title="Low Stock Items"
                   value={analyticsData.inventoryAnalytics.lowStockItems}
@@ -613,62 +623,120 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* AI Insights Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">AI Insights</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <AISummaryPanel
-                summary={analyticsData?.aiSummary || ''}
-                loading={loading}
-              />
-              <AnomalyDetectionPanel
-                anomalies={analyticsData?.anomalies || []}
-                loading={loading}
-              />
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <CustomerSegmentationPanel
-                segments={analyticsData?.customerSegmentsAI || []}
-                loading={loading}
-              />
-              <ChurnPredictionPanel
-                predictions={analyticsData?.churnPrediction || []}
-                loading={loading}
-              />
-            </div>
+          {/* Sales Targets Section */}
+          <div className="mb-4">
+            <SalesTarget
+              currentRevenue={analyticsData?.totalRevenue || 0}
+              totalSales={analyticsData?.totalSales || 0}
+              filteredSales={analyticsData?.recentActivity?.sales || []}
+            />
           </div>
 
+          {/* Branch Top Products Section */}
+          {analyticsData?.branches && analyticsData.branches.length > 0 && analyticsData.branchTopProducts && (
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-gray-800 mb-2">Top Products by Branch</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {analyticsData.branches.map((branch) => (
+                  <div key={branch.id} className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h3 className="text-md font-semibold text-gray-700 mb-3">{branch.name}</h3>
+                    {analyticsData.branchTopProducts?.[branch.id] && analyticsData.branchTopProducts[branch.id].length > 0 ? (
+                      <div className="space-y-2">
+                        {analyticsData.branchTopProducts[branch.id].slice(0, 3).map((product, idx) => (
+                          <div key={idx} className="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                              <div className="text-xs text-gray-500">{product.sales} units sold</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-green-600">${product.revenue.toLocaleString()}</div>
+                              {product.margin !== undefined && (
+                                <div className="text-xs text-gray-500">{(product.margin * 100).toFixed(1)}% margin</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-400 text-center py-4">No product data available</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Branch Comparison Section */}
+          {analyticsData?.branches && analyticsData.branches.length > 1 && (
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-gray-800 mb-2">Branch Comparison</h2>
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <BranchComparisonChart
+                  branchData={analyticsData.branches.map(branch => ({
+                    branchName: branch.name,
+                    dailySales: Object.values(analyticsData.branchSalesByDay?.[branch.id] || {}).reduce((sum, val) => sum + val, 0),
+                    weeklySales: Object.values(analyticsData.branchSalesByWeek?.[branch.id] || {}).reduce((sum, val) => sum + val, 0),
+                    monthlySales: Object.values(analyticsData.branchSalesByMonth?.[branch.id] || {}).reduce((sum, val) => sum + val, 0),
+                  }))}
+                  height={300}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Branch Monthly Sales Comparison Section */}
+          {branchMonthlyComparison && (
+            <div className="mb-8">
+              <h2 className="text-lg font-semibold text-gray-800 mb-2">
+                Branch Sales Comparison (Monthly)
+              </h2>
+              <div className="bg-white rounded-xl border border-gray-100 shadow-lg p-4">
+             
+<BranchComparisonChart
+  branchData={branchMonthlyComparison.branches.map(b => ({
+    branchName: b.branchName,
+    dailySales: b.data[0],
+    weeklySales: b.data[1],
+    monthlySales: b.data[2],
+  }))}
+  height={320}
+/>
+
+              </div>
+            </div>
+          )}
+
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             {/* Main Content Area */}
 
 
             {/* Sidebar */}
-            <div className="space-y-6">
+            <div className="space-y-3">
               {/* Low Stock Notification */}
               {lowStockProducts.length > 0 && (
-                <div className="bg-white rounded-lg border border-gray-200 p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FiAlertCircle className="w-5 h-5 text-amber-500" />
-                    <h2 className="text-lg font-semibold text-gray-800">Low Stock Alert</h2>
+                <div className="bg-white rounded-md border border-gray-200 p-3">
+                  <div className="flex items-center gap-1 mb-2">
+                    <FiAlertCircle className="w-4 h-4 text-amber-500" />
+                    <h2 className="text-base font-semibold text-gray-800">Low Stock Alert</h2>
                   </div>
-                  <p className="text-sm text-gray-600 mb-3">
+                  <p className="text-xs text-gray-600 mb-2">
                     {lowStockProducts.length} product{lowStockProducts.length > 1 ? 's' : ''} below {stockThreshold} in stock.
                   </p>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {lowStockProducts.slice(0, 3).map((p, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-sm">
+                      <div key={idx} className="flex justify-between items-center text-xs">
                         <span className="font-medium">{p.name}</span>
                         <span className="text-red-600">{p.sales ?? 0} left</span>
                       </div>
                     ))}
                   </div>
                   {lowStockProducts.length > 3 && (
-                    <p className="text-xs text-gray-500 mt-2">
+                    <p className="text-[10px] text-gray-500 mt-1">
                       +{lowStockProducts.length - 3} more products with low stock
                     </p>
                   )}
-                  <button className="w-full mt-4 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">
+                  <button className="w-full mt-2 px-2 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-xs">
                     Manage Inventory
                   </button>
                 </div>

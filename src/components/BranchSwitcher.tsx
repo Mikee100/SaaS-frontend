@@ -16,7 +16,7 @@ export default function BranchSwitcher() {
     async function fetchBranches() {
       setLoading(true);
       try {
-        const data = await apiGet("/api/branches");
+        const data = await apiGet("/branches");
         const branchData = data as Branch[];
         setBranches(branchData);
         // Try to restore last selected branch from localStorage

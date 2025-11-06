@@ -59,7 +59,7 @@ export default function BranchesPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await apiGet<Branch[]>("/api/branches");
+      const data = await apiGet<Branch[]>("/branches");
       setBranches(data);
     } catch {
       setError("Failed to load branches");
@@ -85,7 +85,7 @@ export default function BranchesPage() {
     try {
       const payload = { ...form };
       if (form.logo) payload.logo = undefined; // Now this is type-safe
-      await apiPost("/api/branches", payload);
+      await apiPost("/branches", payload);
       setFormSuccess("Branch created successfully!");
       setForm({
         name: "",
@@ -122,7 +122,7 @@ export default function BranchesPage() {
     try {
       const payload = { ...form };
       if (form.logo) payload.logo = undefined;
-      await apiPut(`/api/branches/${showEditModal.id}`, payload);
+      await apiPut(`/branches/${showEditModal.id}`, payload);
       setFormSuccess("Branch updated successfully!");
       setShowEditModal(null);
       fetchBranches();
@@ -138,7 +138,7 @@ export default function BranchesPage() {
     if (!confirm("Are you sure you want to delete this branch? This action cannot be undone.")) return;
     
     try {
-      await apiDelete(`/api/branches/${id}`);
+      await apiDelete(`/branches/${id}`);
       setFormSuccess("Branch deleted successfully!");
       fetchBranches();
     } catch (err: unknown) {

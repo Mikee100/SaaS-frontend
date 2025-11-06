@@ -76,7 +76,7 @@ export default function PermissionsSettings() {
         apiGet("/roles"),
         apiGet("/permissions"),
         apiGet("/user"),
-        apiGet("/api/branches"),
+        apiGet("/branches"),
       ]);
       // LOG: API responses
       console.log("rolesData:", rolesData);

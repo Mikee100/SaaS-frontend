@@ -4,7 +4,7 @@ import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
-import { FaBox, FaShoppingCart, FaChartLine, FaCreditCard, FaCog, FaUsers, FaSignOutAlt, FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, FaMapMarkerAlt, FaRobot } from 'react-icons/fa';
+import { FaBox, FaShoppingCart, FaChartLine, FaCreditCard, FaCog, FaSignOutAlt, FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, FaMapMarkerAlt, FaRobot } from 'react-icons/fa';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
 import { FaTachometerAlt } from 'react-icons/fa';
@@ -81,14 +81,14 @@ export default function PlanBasedNav() {
         name: 'AI Assistant',
         href: '/ai-assistant',
         icon: FaRobot,
-        requiredPlan: 'Basic',
+        requiredPlan: null,
         requiredPermission: null
       },
       {
         name: 'Products & Inventory',
         href: '/products',
         icon: FaBox,
-        requiredPlan: 'Basic',
+        requiredPlan: null,
         requiredPermission: 'view_products',
         subItems: [
           { name: 'Product List', href: '/products', requiredPermission: 'view_products' },
@@ -118,34 +118,33 @@ export default function PlanBasedNav() {
           }
         ]
       },
-    {
-      name: 'Transactions',
-      href: '/sales',
-      icon: FaShoppingCart,
-      requiredPlan: null,
-      requiredPermission: 'view_sales',
-      subItems: [
-        { name: 'Sales', href: '/sales', requiredPermission: 'view_sales' },
-        { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales' },
-        { name: 'M-Pesa Transactions', href: '/mpesa-transactions', requiredPermission: 'view_sales' }
-      ]
-    },
-    {
-      name: 'Reports & Analytics',
-      href: '/analytics',
-      icon: FaChartLine,
-      requiredPlan: null,
-      requiredPermission: 'view_analytics',
-      subItems: [
-        { name: 'Analytics', href: '/analytics', requiredPermission: 'view_analytics' },
-        { name: 'Reports', href: '/reports', requiredPermission: 'view_reports' }
-      ]
-    },
- { name: 'Credit', href: '/credit', icon: FaCreditCard, requiredPlan: 'Basic', requiredPermission: 'view_users' },
+      {
+        name: 'Transactions',
+        href: '/sales',
+        icon: FaShoppingCart,
+        requiredPlan: null,
+        requiredPermission: 'view_sales',
+        subItems: [
+          { name: 'Sales', href: '/sales', requiredPermission: 'view_sales' },
+          { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales' },
+          { name: 'M-Pesa Transactions', href: '/mpesa-transactions', requiredPermission: 'view_sales' },
+          { name: 'Sales Target', href: '/sales/targets', requiredPermission: 'view_sales' }, // <-- Added here
+        ]
+      },
+      {
+        name: 'Reports & Analytics',
+        href: '/analytics',
+        icon: FaChartLine,
+        requiredPlan: null,
+        requiredPermission: 'view_analytics',
+        subItems: [
+          { name: 'Analytics', href: '/analytics', requiredPermission: 'view_analytics' },
+          { name: 'Reports', href: '/reports', requiredPermission: 'view_reports' }
+        ]
+      },
+ { name: 'Credit', href: '/credit', icon: FaCreditCard, requiredPlan: null, requiredPermission: 'view_users' },
     
-  { name: 'Expenses', href: '/expenses', icon: FaCreditCard, requiredPlan: 'Basic', requiredPermission: 'view_users' },
-    
-      { name: 'Users', href: '/users', icon: FaUsers, requiredPlan: 'Basic', requiredPermission: 'view_users' },
+  { name: 'Expenses', href: '/expenses', icon: FaCreditCard, requiredPlan: null, requiredPermission: 'view_users' },
     { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
     { name: 'Billing & Subscription', href: '/account/billing', icon: FaCreditCard, requiredPlan: null, requiredPermission: null },
   ], []);

@@ -6,6 +6,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import React, { useEffect, useState } from "react";
 import QRCode from 'qrcode';
+import SalesTargetComponent from "@/components/SalesTarget";
 
 
 
@@ -91,7 +92,7 @@ useEffect(() => {
     async function fetchBranches() {
       setBranchesLoading(true);
       try {
-        const data = await apiGet<{ id: string; name: string }[]>('/api/branches');
+        const data = await apiGet<{ id: string; name: string }[]>('/branches');
         setBranches(data);
         // Set initial branch to "all" if none selected
         if (data?.length > 0 && selectedBranchId === "all") {
@@ -859,6 +860,13 @@ useEffect(() => {
           </div>
         )}
       </div>
+
+      {/* Sales Target Component */}
+      <SalesTargetComponent
+        currentRevenue={totalRevenue}
+        totalSales={totalSales}
+        filteredSales={filteredSales}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-1 mb-2">

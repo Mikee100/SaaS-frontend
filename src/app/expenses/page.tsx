@@ -2,11 +2,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { apiGet, apiPost, apiDelete } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
-import { FaDollarSign, FaCalendarAlt, FaBuilding, FaSave, FaTimesCircle, FaExclamationTriangle, FaPlus, FaEye, FaEdit, FaTrash, FaCheckCircle, FaClock, FaRedo } from 'react-icons/fa';
+import { FaDollarSign, FaCalendarAlt, FaBuilding, FaSave, FaTimesCircle, FaExclamationTriangle, FaPlus, FaEye, FaEdit, FaTrash, /* FaCheckCircle, FaClock, */ FaRedo, FaFileDownload, FaChartBar, FaHistory, FaSync } from 'react-icons/fa';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Spinner from '@/components/Spinner';
 import { motion, AnimatePresence } from "framer-motion";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 interface Expense {
   id: string;
@@ -44,8 +47,61 @@ interface ExpenseFormData {
   notes?: string;
 }
 
+interface SalarySchemeFormData {
+  employeeName: string;
+  salaryAmount: number;
+  frequency: 'monthly' | 'yearly';
+  startDate: string;
+  userId: string;
+  branchId?: string;
+  notes?: string;
+}
+
+interface PDFTemplate {
+  businessName: boolean;
+  businessAddress: boolean;
+  businessPhone: boolean;
+  businessEmail: boolean;
+  branchInfo: boolean;
+  logo: boolean;
+  primaryColor: string;
+  secondaryColor: string;
+  fontSize: string;
+  showVat: boolean;
+  showSubtotal: boolean;
+  footerText: string;
+  paperSize: string;
+  orientation: string;
+  margins: string;
+}
+
+interface Tenant {
+  name?: string;
+  pdfTemplate?: PDFTemplate;
+}
+
+// Add interfaces for branch comparison and past months data
+interface BranchComparisonData {
+  branches?: {
+    branchName: string;
+    totalAmount: number;
+    expenseCount: number;
+  }[];
+}
+
+interface PastMonthsData {
+  records?: {
+    month: string;
+    monthName: string;
+    totalAmount: number;
+    expenseCount: number;
+  }[];
+}
+
 export default function ExpensesPage() {
+  console.log('ExpensesPage component rendered');
   const { user } = useUser();
+  const [activeTab, setActiveTab] = useState<'current' | 'comparison' | 'past' | 'salaries'>('current');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -55,32 +111,275 @@ export default function ExpensesPage() {
   const [drawerType, setDrawerType] = useState<'create' | 'details' | null>(null);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [branchFilter, setBranchFilter] = useState<string | null>(null);
-
+  const [expenseTypeFilter, setExpenseTypeFilter] = useState<'all' | 'one_time' | 'recurring'>('all');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [page] = useState(1);
+  const [limit] = useState(10);
+  const [branchComparison, setBranchComparison] = useState<BranchComparisonData | null>(null);
+  const [pastMonthsData, setPastMonthsData] = useState<PastMonthsData | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
+  const [salaryForm, setSalaryForm] = useState<SalarySchemeFormData>({
+    employeeName: '',
+    salaryAmount: 0,
+    frequency: 'monthly',
+    startDate: '',
+    userId: '',
+    branchId: '',
+    notes: '',
+  });
   const [formData, setFormData] = useState<ExpenseFormData>({
     amount: 0,
     description: '',
     category: 'other',
     expenseType: 'one_time',
   });
+  const [exportType, setExportType] = useState<'csv' | 'pdf'>('csv');
+  const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
+  const [salaryAssigning, setSalaryAssigning] = useState(false);
+
+  // Fetch tenant data on mount
+  const fetchTenantData = useCallback(async () => {
+    try {
+      console.log('Fetching tenant data...');
+      const tenantData = await apiGet<Tenant>('/tenant/me');
+      console.log('Tenant data fetched:', tenantData);
+      console.log('Tenant data keys:', Object.keys(tenantData || {}));
+      console.log('PDF Template:', tenantData?.pdfTemplate);
+      console.log('PDF Template details:', JSON.stringify(tenantData?.pdfTemplate, null, 2));
+    } catch (error) {
+      console.error('Error fetching tenant data:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTenantData();
+  }, [fetchTenantData]);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const data = await apiGet('/user');
+      setUsers(data as { id: string; name: string }[]);
+    } catch {
+      // ignore user fetch error for now
+    }
+  }, []);
 
   // Permission checks
   const canViewExpenses = hasPermission(user, 'view_sales');
   const canCreateExpenses = hasPermission(user, 'create_sales');
+
+  // Fetch functions for new tabs
+  const fetchBranchComparison = useCallback(async () => {
+    try {
+      const response = await apiGet('/expenses/comparison/branches');
+      setBranchComparison((response as { data: BranchComparisonData }).data);
+    } catch (error) {
+      console.error('Failed to fetch branch comparison:', error);
+    }
+  }, []);
+
+  const fetchPastMonthsData = useCallback(async () => {
+    try {
+      const response = await apiGet('/expenses/past-months?months=12');
+      setPastMonthsData((response as { data: PastMonthsData }).data);
+    } catch (error) {
+      console.error('Failed to fetch past months data:', error);
+    }
+  }, []);
+
+  const handleMonthlyReset = async () => {
+    if (!confirm('Are you sure you want to reset monthly expenses? This will archive all current month expenses.')) return;
+    setResetting(true);
+    try {
+      await apiPost('/expenses/reset-monthly', {});
+      setSuccess('Monthly expenses reset successfully!');
+      await fetchExpenses();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error: unknown) {
+      setError((error as { message?: string })?.message || 'Failed to reset monthly expenses');
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'comparison' && !branchComparison) {
+      fetchBranchComparison();
+    } else if (activeTab === 'past' && !pastMonthsData) {
+      fetchPastMonthsData();
+    } else if (activeTab === 'salaries' && users.length === 0) {
+      fetchUsers();
+    }
+  }, [activeTab, branchComparison, pastMonthsData, fetchBranchComparison, fetchPastMonthsData, users.length, fetchUsers]);
+
+  const handleDownloadReport = () => {
+    if (filteredExpenses.length === 0) {
+      setError('No expenses to export');
+      return;
+    }
+
+    const reportDate = new Date().toLocaleDateString();
+    const reportTime = new Date().toLocaleTimeString();
+
+    if (exportType === 'csv') {
+      // Enhanced CSV with metadata
+      const metadata = [
+        'SaaS Platform - Expenses Report',
+        `Generated on: ${reportDate} at ${reportTime}`,
+        `Total Expenses: ${filteredExpenses.length}`,
+        `Total Amount: $${totalAmount.toFixed(2)}`,
+        `Filters Applied: ${branchFilter ? `Branch: ${branches.find(b => b.id === branchFilter)?.name || 'Unknown'}` : 'All Branches'}, Type: ${expenseTypeFilter === 'all' ? 'All Types' : expenseTypeFilter === 'one_time' ? 'One-time' : 'Recurring'}${search ? `, Search: "${search}"` : ''}`,
+        '', // Empty line
+      ];
+
+      const headers = ['ID', 'Amount', 'Description', 'Category', 'Type', 'Frequency', 'Next Due Date', 'Created At', 'Branch', 'Status', 'Created By'];
+      const csvContent = [
+        ...metadata,
+        headers.join(','),
+        ...filteredExpenses.map(expense => [
+          expense.id,
+          expense.amount.toFixed(2),
+          `"${expense.description.replace(/"/g, '""')}"`,
+          (expense.category || 'other').replace('_', ' '),
+          expense.expenseType === 'recurring' ? 'Recurring' : 'One-time',
+          expense.frequency || '',
+          expense.nextDueDate ? new Date(expense.nextDueDate).toLocaleDateString() : '',
+          new Date(expense.createdAt).toLocaleDateString(),
+          expense.branch?.name || '',
+          expense.isActive ? 'Active' : 'Inactive',
+          expense.user.name
+        ].join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `expenses-report-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else if (exportType === 'pdf') {
+      const doc = new jsPDF();
+
+      // Company Header
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('SaaS Platform', 20, 25);
+      doc.setFontSize(16);
+      doc.text('Expenses Report', 20, 35);
+
+      // Report metadata
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated on: ${reportDate} at ${reportTime}`, 20, 50);
+      doc.text(`Total Expenses: ${filteredExpenses.length}`, 20, 58);
+      doc.text(`Total Amount: $${totalAmount.toFixed(2)}`, 20, 66);
+
+      // Filters applied
+      let yPos = 74;
+      const filtersText = `Filters: ${branchFilter ? `Branch: ${branches.find(b => b.id === branchFilter)?.name || 'Unknown'}` : 'All Branches'}, Type: ${expenseTypeFilter === 'all' ? 'All Types' : expenseTypeFilter === 'one_time' ? 'One-time' : 'Recurring'}${search ? `, Search: "${search}"` : ''}`;
+      const splitFilters = doc.splitTextToSize(filtersText, 170);
+      doc.text(splitFilters, 20, yPos);
+
+      // Summary section
+      yPos += splitFilters.length * 6 + 10;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Summary', 20, yPos);
+      yPos += 10;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Categories: ${Object.keys(categoryTotals).length}`, 30, yPos);
+      doc.text(`Branches: ${Object.keys(branchTotals).length}`, 100, yPos);
+      yPos += 8;
+      doc.text(`Average Expense: $${expenses.length > 0 ? (totalAmount / expenses.length).toFixed(2) : '0.00'}`, 30, yPos);
+
+      // Table
+      yPos += 20;
+      const headers = [['ID', 'Amount', 'Description', 'Category', 'Type', 'Created Date', 'Branch', 'Status']];
+      const data = filteredExpenses.map(expense => [
+        expense.id.substring(0, 8) + '...', // Truncate ID for PDF
+        `$${expense.amount.toFixed(2)}`,
+        expense.description.length > 30 ? expense.description.substring(0, 27) + '...' : expense.description,
+        (expense.category || 'other').replace('_', ' '),
+        expense.expenseType === 'recurring' ? 'Recurring' : 'One-time',
+        new Date(expense.createdAt).toLocaleDateString(),
+        expense.branch?.name || '',
+        expense.isActive ? 'Active' : 'Inactive'
+      ]);
+
+      autoTable(doc, {
+        head: headers,
+        body: data,
+        startY: yPos,
+        styles: {
+          fontSize: 8,
+          cellPadding: 3,
+        },
+        headStyles: {
+          fillColor: [59, 130, 246], // Blue header
+          textColor: 255,
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252] // Light gray alternate rows
+        },
+        margin: { top: 20, left: 20, right: 20 },
+        columnStyles: {
+          0: { cellWidth: 25 }, // ID
+          1: { cellWidth: 20, halign: 'right' }, // Amount
+          2: { cellWidth: 40 }, // Description
+          3: { cellWidth: 25 }, // Category
+          4: { cellWidth: 20 }, // Type
+          5: { cellWidth: 25 }, // Date
+          6: { cellWidth: 25 }, // Branch
+          7: { cellWidth: 20 } // Status
+        }
+      });
+
+      // Footer
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
+        doc.text('SaaS Platform - Confidential', 20, doc.internal.pageSize.height - 10);
+      }
+
+      doc.save(`expenses-report-${new Date().toISOString().split('T')[0]}.pdf`);
+    }
+
+    setSuccess('Professional report downloaded successfully!');
+    setTimeout(() => setSuccess(null), 3000);
+  };
 
   // Wrap fetchExpenses in useCallback to avoid changing reference on every render
   const fetchExpenses = useCallback(async () => {
     try {
       setLoading(true);
       let url = '/expenses';
-      if (branchFilter) url += `?branchId=${branchFilter}`;
-      const data = await apiGet(url);
-      setExpenses(data as Expense[]);
+      const params = new URLSearchParams();
+      if (branchFilter) params.append('branchId', branchFilter);
+      if (expenseTypeFilter !== 'all') params.append('expenseType', expenseTypeFilter);
+      if (params.toString()) url += `?${params.toString()}`;
+      const response = await apiGet(url);
+      const data = (response as { data?: unknown })?.data || response || [];
+      setExpenses(Array.isArray(data) ? data : []);
     } catch {
       setError('Failed to load expenses');
+      setExpenses([]);
     } finally {
       setLoading(false);
     }
-  }, [branchFilter]);
+  }, [branchFilter, expenseTypeFilter]);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -89,6 +388,54 @@ export default function ExpensesPage() {
     };
     fetchAll();
   }, [branchFilter, fetchExpenses]);
+
+  // Filter and sort expenses
+  useEffect(() => {
+    let filtered = [...expenses];
+
+    // Apply search filter
+    if (search) {
+      filtered = filtered.filter(expense =>
+        expense.description.toLowerCase().includes(search.toLowerCase()) ||
+        expense.category.toLowerCase().includes(search.toLowerCase()) ||
+        (expense.branch?.name.toLowerCase().includes(search.toLowerCase()))
+      );
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: string | number, bValue: string | number;
+
+      switch (sortBy) {
+        case 'amount':
+          aValue = a.amount;
+          bValue = b.amount;
+          break;
+        case 'category':
+          aValue = a.category;
+          bValue = a.category;
+          break;
+        case 'createdAt':
+        default:
+          aValue = new Date(a.createdAt).getTime();
+          bValue = new Date(b.createdAt).getTime();
+          break;
+      }
+
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
+    // Apply pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginated = filtered.slice(startIndex, endIndex);
+
+    setFilteredExpenses(paginated);
+  }, [expenses, search, sortBy, sortOrder, page, limit]);
 
   const fetchBranches = async () => {
     try {
@@ -165,6 +512,7 @@ export default function ExpensesPage() {
 
   const getCategoryColor = (category: string) => {
     const colors: { [key: string]: string } = {
+      salary: 'bg-emerald-100 text-emerald-800',
       office_supplies: 'bg-blue-100 text-blue-800',
       utilities: 'bg-green-100 text-green-800',
       rent: 'bg-purple-100 text-purple-800',
@@ -181,17 +529,18 @@ export default function ExpensesPage() {
   };
 
   // Calculate summary totals
-  const totalAmount = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const categoryTotals = expenses.reduce((acc, exp) => {
+  const totalAmount = Array.isArray(expenses) ? expenses.reduce((sum, exp) => sum + exp.amount, 0) : 0;
+  const categoryTotals = Array.isArray(expenses) ? expenses.reduce((acc, exp) => {
     acc[exp.category] = (acc[exp.category] || 0) + exp.amount;
     return acc;
-  }, {} as Record<string, number>);
-  const branchTotals = expenses.reduce((acc, exp) => {
+  }, {} as Record<string, number>) : {};
+  const branchTotals = Array.isArray(expenses) ? expenses.reduce((acc, exp) => {
     if (exp.branch?.name) {
       acc[exp.branch.name] = (acc[exp.branch.name] || 0) + exp.amount;
     }
     return acc;
-  }, {} as Record<string, number>);
+  }, {} as Record<string, number>) : {};
+  const salaryTotal = categoryTotals['salary'] || 0;
 
   if (loading) {
     return (
@@ -216,204 +565,626 @@ export default function ExpensesPage() {
     );
   }
 
+  const handleSalaryFormChange = (field: keyof SalarySchemeFormData, value: unknown) => {
+    setSalaryForm(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleAssignSalary = async () => {
+    if (!salaryForm.employeeName || !salaryForm.salaryAmount || !salaryForm.startDate) {
+      setError('Please fill all required fields');
+      return;
+    }
+    setSalaryAssigning(true);
+    setError(null);
+    try {
+      await apiPost('/salary-schemes', {
+        ...salaryForm,
+        userId: salaryForm.employeeName,
+      });
+      setSuccess('Salary assigned successfully!');
+      setSalaryForm({
+        employeeName: '',
+        salaryAmount: 0,
+        frequency: 'monthly',
+        startDate: '',
+        userId: '',
+        branchId: '',
+        notes: '',
+      });
+      await fetchExpenses();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error: unknown) {
+      setError((error as { message?: string })?.message || 'Failed to assign salary');
+    } finally {
+      setSalaryAssigning(false);
+    }
+  };
+
   return (
     <AuthGuard>
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-20 bg-gradient-to-r from-blue-50 via-white to-purple-50 backdrop-blur-lg flex items-center justify-between mb-4 py-3 px-2 rounded-lg shadow border border-gray-100">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1 tracking-tight">Expenses</h1>
-            <p className="text-sm text-gray-500">Track and manage your business expenses with a modern, intuitive interface.</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Modern Glassmorphism Header */}
+          <div className="sticky top-0 z-30 mb-8">
+            <div className="backdrop-blur-xl bg-white/80 border border-white/20 rounded-2xl shadow-2xl shadow-blue-500/10 p-6">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                      <FaDollarSign className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                        Expenses
+                      </h1>
+                      <p className="text-sm text-gray-600 font-medium">Track and manage your business expenses</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2 p-1 bg-gray-100/80 rounded-xl backdrop-blur-sm">
+                    <select
+                      value={exportType}
+                      onChange={(e) => setExportType(e.target.value as 'csv' | 'pdf')}
+                      className="px-3 py-2 bg-transparent border-0 text-sm font-medium text-gray-700 focus:ring-0 focus:outline-none"
+                    >
+                      <option value="csv">CSV Export</option>
+                      <option value="pdf">PDF Export</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleDownloadReport}
+                    className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
+                  >
+                    <FaFileDownload className="w-4 h-4" />
+                    Export Report
+                  </button>
+
+                  {canCreateExpenses && (
+                    <button
+                      onClick={() => setDrawerType('create')}
+                      className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
+                    >
+                      <FaPlus className="w-4 h-4" />
+                      Add Expense
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-          {canCreateExpenses && (
-            <button
-              onClick={() => setDrawerType('create')}
-              className="hidden md:inline-flex px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg shadow hover:scale-105 hover:shadow-lg font-semibold items-center gap-2 transition-all duration-150 text-sm"
-            >
-              <FaPlus className="w-4 h-4" />
-              Add Expense
-            </button>
-          )}
-        </div>
 
-        {/* Floating Add Button (mobile) */}
-        {canCreateExpenses && (
-          <button
-            onClick={() => setDrawerType('create')}
-            className="fixed bottom-8 right-8 z-30 md:hidden bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full shadow-xl p-5 flex items-center justify-center hover:scale-110 transition-all duration-150"
-            aria-label="Add Expense"
+        {/* Filters Row */}
+        <div className="flex flex-wrap items-center gap-3 mb-4 px-1">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search description, category, branch..."
+            className="flex-1 min-w-[120px] px-2 py-1 border border-gray-200 rounded bg-white text-xs"
+          />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-2 py-1 border border-gray-200 rounded bg-white text-xs"
           >
-            <FaPlus className="w-6 h-6" />
-          </button>
-        )}
-
-        {/* Success/Error Messages */}
-        <AnimatePresence>
-          {success && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-base flex items-center gap-3 shadow"
-            >
-              <FaCheckCircle className="w-5 h-5" />
-              <span>{success}</span>
-            </motion.div>
-          )}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-base flex items-center gap-3 shadow"
-            >
-              <FaExclamationTriangle className="w-5 h-5" />
-              <span>{error}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Branch Filter */}
-        <div className="mb-6 flex items-center gap-4">
-          <label className="font-semibold text-gray-700">Filter by Branch:</label>
+            <option value="createdAt">Date</option>
+            <option value="amount">Amount</option>
+            <option value="category">Category</option>
+          </select>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+            className="px-2 py-1 border border-gray-200 rounded bg-white text-xs"
+          >
+            <option value="desc">Desc</option>
+            <option value="asc">Asc</option>
+          </select>
           <select
             value={branchFilter || ''}
             onChange={e => setBranchFilter(e.target.value || null)}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            className="px-2 py-1 border border-gray-200 rounded bg-white text-xs"
           >
             <option value="">All Branches</option>
             {branches.map(branch => (
               <option key={branch.id} value={branch.id}>{branch.name}</option>
             ))}
           </select>
+          <select
+            value={expenseTypeFilter}
+            onChange={e => setExpenseTypeFilter(e.target.value as 'all' | 'one_time' | 'recurring')}
+            className="px-2 py-1 border border-gray-200 rounded bg-white text-xs"
+          >
+            <option value="all">All Types</option>
+            <option value="one_time">One-time</option>
+            <option value="recurring">Recurring</option>
+          </select>
         </div>
 
-        {/* Expenses Summary Table */}
-        <div className="mb-6">
-          <div className="bg-white rounded-lg shadow border border-gray-100 p-4">
-            <h4 className="text-base font-semibold text-gray-800 mb-2">Expenses Summary</h4>
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-2 font-semibold text-gray-700">Type</th>
-                  <th className="text-left py-2 px-2 font-semibold text-gray-700">Name</th>
-                  <th className="text-right py-2 px-2 font-semibold text-gray-700">Total Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b">
-                  <td className="py-2 px-2 text-gray-600">All</td>
-                  <td className="py-2 px-2 text-gray-600">All Expenses</td>
-                  <td className="py-2 px-2 text-right font-bold text-blue-700">${totalAmount.toFixed(2)}</td>
-                </tr>
-                {/* By Category */}
-                {Object.entries(categoryTotals).map(([cat, amt]) => (
-                  <tr key={cat} className="border-b">
-                    <td className="py-2 px-2 text-gray-600">Category</td>
-                    <td className="py-2 px-2 text-gray-600">{cat.replace('_', ' ')}</td>
-                    <td className="py-2 px-2 text-right text-gray-800">${amt.toFixed(2)}</td>
-                  </tr>
-                ))}
-                {/* By Branch */}
-                {Object.entries(branchTotals).map(([branch, amt]) => (
-                  <tr key={branch} className="border-b">
-                    <td className="py-2 px-2 text-gray-600">Branch</td>
-                    <td className="py-2 px-2 text-gray-600">{branch}</td>
-                    <td className="py-2 px-2 text-right text-gray-800">${amt.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mb-6 border-b border-gray-100 pb-2">
+          <button
+            onClick={() => setActiveTab('current')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
+              activeTab === 'current'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <FaHistory className="w-3 h-3 inline mr-1" />
+            Current
+          </button>
+          <button
+            onClick={() => setActiveTab('salaries')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
+              activeTab === 'salaries'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <FaDollarSign className="w-3 h-3 inline mr-1" />
+            Salaries
+          </button>
+          <button
+            onClick={() => setActiveTab('comparison')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
+              activeTab === 'comparison'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <FaChartBar className="w-3 h-3 inline mr-1" />
+            Branch Comparison
+          </button>
+          <button
+            onClick={() => setActiveTab('past')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
+              activeTab === 'past'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <FaCalendarAlt className="w-3 h-3 inline mr-1" />
+            Past Months
+          </button>
+        </div>
+
+        {/* Summary & Breakdown - Only show in 'current' tab */}
+        {activeTab === 'current' && (
+          <div className="mb-8">
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {/* Total Expenses */}
+              <div className="min-w-[180px] bg-white rounded-lg p-4 shadow-sm flex flex-col justify-between">
+                <span className="text-xs text-gray-500 mb-1">Total Expenses</span>
+                <div className="flex items-center gap-2">
+                  <FaDollarSign className="w-4 h-4 text-blue-400" />
+                  <span className="text-lg font-bold">${totalAmount.toFixed(2)}</span>
+                </div>
+              </div>
+              {/* Categories Count */}
+              <div className="min-w-[180px] bg-white rounded-lg p-4 shadow-sm flex flex-col justify-between">
+                <span className="text-xs text-gray-500 mb-1">Categories</span>
+                <div className="flex items-center gap-2">
+                  <FaBuilding className="w-4 h-4 text-purple-400" />
+                  <span className="text-lg font-bold">{Object.keys(categoryTotals).length}</span>
+                </div>
+              </div>
+              {/* Branches Count */}
+              <div className="min-w-[180px] bg-white rounded-lg p-4 shadow-sm flex flex-col justify-between">
+                <span className="text-xs text-gray-500 mb-1">Branches</span>
+                <div className="flex items-center gap-2">
+                  <FaBuilding className="w-4 h-4 text-green-400" />
+                  <span className="text-lg font-bold">{Object.keys(branchTotals).length}</span>
+                </div>
+              </div>
+              {/* By Category */}
+              <div className="min-w-[220px] bg-gray-50 rounded-lg p-4 shadow-sm flex flex-col">
+                <span className="text-xs font-semibold text-gray-700 mb-2">By Category</span>
+                <div className="space-y-1 max-h-24 overflow-y-auto">
+                  {Object.entries(categoryTotals).length === 0 ? (
+                    <p className="text-gray-400 text-xs">No expenses yet</p>
+                  ) : (
+                    Object.entries(categoryTotals).map(([cat, amt]) => (
+                      <div key={cat} className="flex items-center justify-between text-xs">
+                        <span className="capitalize">{cat.replace('_', ' ')}</span>
+                        <span className="font-bold">${amt.toFixed(2)}</span>
+                      </div>
+                    )))
+                  }
+                </div>
+              </div>
+              {/* By Branch */}
+              <div className="min-w-[220px] bg-gray-50 rounded-lg p-4 shadow-sm flex flex-col">
+                <span className="text-xs font-semibold text-gray-700 mb-2">By Branch</span>
+                <div className="space-y-1 max-h-24 overflow-y-auto">
+                  {Object.keys(branchTotals).length === 0 ? (
+                    <p className="text-gray-400 text-xs">No branch expenses yet</p>
+                  ) : (
+                    Object.entries(branchTotals).map(([branch, amt]) => (
+                      <div key={branch} className="flex items-center justify-between text-xs">
+                        <span>{branch}</span>
+                        <span className="font-bold">${amt.toFixed(2)}</span>
+                      </div>
+                    )))
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Salary Summary */}
+        <div className="mb-8">
+          <div className="bg-white rounded-lg p-4 shadow-sm flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-emerald-700 mb-1">Total Salary Expenses</h4>
+              <p className="text-xs text-emerald-600">Employee salaries as business expenses</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <FaDollarSign className="w-5 h-5 text-emerald-400" />
+              <span className="text-xl font-bold">${salaryTotal.toFixed(2)}</span>
+            </div>
           </div>
         </div>
 
-        {/* Expenses Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {expenses.length === 0 ? (
-            <div className="col-span-full text-center py-16">
-              <FaDollarSign className="w-20 h-20 text-gray-300 mx-auto mb-6" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No expenses found</h3>
-              <p className="text-gray-500 mb-6">Start by adding your first expense</p>
-              {canCreateExpenses && (
-                <button
-                  onClick={() => setDrawerType('create')}
-                  className="px-5 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 font-semibold flex items-center gap-2"
-                >
-                  <FaPlus className="w-5 h-5" />
-                  Add Expense
-                </button>
-              )}
-            </div>
-          ) : (
-            expenses.map((expense) => (
-              <div
-                key={expense.id}
-                className="bg-white rounded-lg shadow border border-gray-100 p-4 hover:shadow-lg transition-shadow cursor-pointer flex flex-col justify-between"
-                onClick={() => {
-                  setSelectedExpense(expense);
-                  setDrawerType('details');
-                }}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 bg-blue-50 rounded-lg shadow">
-                      {getExpenseTypeIcon(expense.expenseType)}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-base">${expense.amount.toFixed(2)}</h3>
-                      <p className="text-xs text-gray-600">{expense.description}</p>
-                    </div>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getCategoryColor(expense.category)}`}>
-                    {expense.category.replace('_', ' ')}
-                  </span>
-                </div>
-                <div className="space-y-1 mb-2">
-                  <div className="flex items-center gap-1 text-xs text-gray-600">
-                    <FaCalendarAlt className="w-3 h-3" />
-                    <span>{new Date(expense.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  {expense.expenseType === 'recurring' && expense.nextDueDate && (
-                    <div className="flex items-center gap-1 text-xs text-orange-600">
-                      <FaClock className="w-3 h-3" />
-                      <span>Next due: {new Date(expense.nextDueDate).toLocaleDateString()}</span>
-                    </div>
-                  )}
-                  {expense.branch && (
-                    <div className="flex items-center gap-1 text-xs text-gray-600">
-                      <FaBuilding className="w-3 h-3" />
-                      <span>{expense.branch.name}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between mt-auto pt-1">
-                  <div className="flex items-center gap-1">
-                    {expense.expenseType === 'recurring' ? (
-                      <span className="px-1.5 py-0.5 bg-orange-100 text-orange-800 rounded text-xs font-medium">
-                        Recurring ({expense.frequency})
-                      </span>
-                    ) : (
-                      <span className="px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-medium">
-                        One-time
-                      </span>
-                    )}
-                  </div>
+        {/* Divider */}
+        <div className="border-t border-gray-100 my-6" />
+
+        {/* Tab Content */}
+        {activeTab === 'current' && (
+          <>
+            {/* Expenses Table (desktop) / Cards (mobile) */}
+            {filteredExpenses.length === 0 ? (
+              <div className="text-center py-10">
+                <FaDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <h3 className="text-base font-semibold text-gray-900 mb-1">No expenses found</h3>
+                <p className="text-gray-400 text-xs mb-2">Start by adding your first expense or adjust your filters</p>
+                {canCreateExpenses && (
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedExpense(expense);
-                      setDrawerType('details');
-                    }}
-                    className="px-2 py-0.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded text-xs font-medium flex items-center gap-1"
+                    onClick={() => setDrawerType('create')}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded shadow hover:bg-blue-700 font-semibold flex items-center gap-1 text-xs"
                   >
-                    <FaEye className="w-3 h-3" />
-                    View
+                    <FaPlus className="w-3 h-3" />
+                    Add Expense
                   </button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white rounded-lg shadow-sm">
+                  <thead>
+                    <tr className="text-xs text-gray-500 border-b">
+                      <th className="py-2 px-3 text-left">Amount</th>
+                      <th className="py-2 px-3 text-left">Description</th>
+                      <th className="py-2 px-3 text-left">Category</th>
+                      <th className="py-2 px-3 text-left">Type</th>
+                      <th className="py-2 px-3 text-left">Date</th>
+                      <th className="py-2 px-3 text-left">Branch</th>
+                      <th className="py-2 px-3 text-left">Status</th>
+                      <th className="py-2 px-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredExpenses.map(expense => (
+                      <tr
+                        key={expense.id}
+                        className="border-b hover:bg-blue-50 cursor-pointer"
+                        onClick={() => {
+                          setSelectedExpense(expense);
+                          setDrawerType('details');
+                        }}
+                      >
+                        <td className="py-2 px-3 font-bold text-gray-900">${expense.amount.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-xs">{expense.description}</td>
+                        <td className="py-2 px-3 text-xs capitalize">{(expense.category || 'other').replace('_', ' ')}</td>
+                        <td className="py-2 px-3 text-xs">
+                          {expense.expenseType === 'recurring' ? (
+                            <span className="text-orange-700">Recurring</span>
+                          ) : (
+                            <span className="text-gray-700">One-time</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-xs">{new Date(expense.createdAt).toLocaleDateString()}</td>
+                        <td className="py-2 px-3 text-xs">{expense.branch?.name || ''}</td>
+                        <td className="py-2 px-3 text-xs">
+                          <span className={expense.isActive ? 'text-green-600' : 'text-red-600'}>
+                            {expense.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedExpense(expense);
+                              setDrawerType('details');
+                            }}
+                            className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
+                          >
+                            <FaEye className="w-3 h-3" />
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'salaries' && (
+          <>
+            {/* Salary Assignment Form */}
+            <div className="mb-8 bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-xl p-4 shadow-sm border border-gray-100">
+              <h4 className="text-base font-semibold text-gray-800 mb-2">Assign Salary to Worker</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Worker Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Worker *</label>
+                  <select
+                    value={salaryForm.employeeName}
+                    onChange={e => handleSalaryFormChange('employeeName', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                  >
+                    <option value="">Select worker</option>
+                    {users.map(user => (
+                      <option key={user.id} value={user.id}>{user.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Salary Amount */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Salary Amount *</label>
+                  <input
+                    type="number"
+                    value={salaryForm.salaryAmount}
+                    onChange={e => handleSalaryFormChange('salaryAmount', parseFloat(e.target.value) || 0)}
+                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                {/* Frequency */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Frequency</label>
+                  <select
+                    value={salaryForm.frequency}
+                    onChange={e => handleSalaryFormChange('frequency', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                {/* Start Date */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Start Date *</label>
+                  <input
+                    type="date"
+                    value={salaryForm.startDate}
+                    onChange={e => handleSalaryFormChange('startDate', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                  />
+                </div>
+                {/* Branch (optional) */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Branch</label>
+                  <select
+                    value={salaryForm.branchId || ''}
+                    onChange={e => handleSalaryFormChange('branchId', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                  >
+                    <option value="">Select branch</option>
+                    {branches.map(branch => (
+                      <option key={branch.id} value={branch.id}>{branch.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={salaryForm.notes || ''}
+                    onChange={e => handleSalaryFormChange('notes', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                    placeholder="Additional notes..."
+                    rows={2}
+                  />
                 </div>
               </div>
-            ))
-          )}
-        </div>
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={handleAssignSalary}
+                  disabled={salaryAssigning || !salaryForm.employeeName || !salaryForm.salaryAmount || !salaryForm.startDate}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold flex items-center gap-2 text-sm disabled:opacity-50"
+                >
+                  {salaryAssigning ? <Spinner /> : <FaSave className="w-4 h-4" />}
+                  Assign Salary
+                </button>
+              </div>
+              {/* Error/Success */}
+              {error && <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm shadow">{error}</div>}
+              {success && <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm shadow">{success}</div>}
+            </div>
+            {/* Salary Expenses Table */}
+            {filteredExpenses.filter(exp => exp.category === 'salary').length === 0 ? (
+              <div className="text-center py-10">
+                <FaDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <h3 className="text-base font-semibold text-gray-900 mb-1">No salary expenses found</h3>
+                <p className="text-gray-400 text-xs mb-2">No expenses categorized as salary</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white rounded-lg shadow-sm">
+                  <thead>
+                    <tr className="text-xs text-gray-500 border-b">
+                      <th className="py-2 px-3 text-left">Amount</th>
+                      <th className="py-2 px-3 text-left">Description</th>
+                      <th className="py-2 px-3 text-left">Type</th>
+                      <th className="py-2 px-3 text-left">Date</th>
+                      <th className="py-2 px-3 text-left">Branch</th>
+                      <th className="py-2 px-3 text-left">Status</th>
+                      <th className="py-2 px-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredExpenses.filter(exp => exp.category === 'salary').map(expense => (
+                      <tr
+                        key={expense.id}
+                        className="border-b hover:bg-blue-50 cursor-pointer"
+                        onClick={() => {
+                          setSelectedExpense(expense);
+                          setDrawerType('details');
+                        }}
+                      >
+                        <td className="py-2 px-3 font-bold text-gray-900">${expense.amount.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-xs">{expense.description}</td>
+                        <td className="py-2 px-3 text-xs">
+                          {expense.expenseType === 'recurring' ? (
+                            <span className="text-orange-700">Recurring</span>
+                          ) : (
+                            <span className="text-gray-700">One-time</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-xs">{new Date(expense.createdAt).toLocaleDateString()}</td>
+                        <td className="py-2 px-3 text-xs">{expense.branch?.name || ''}</td>
+                        <td className="py-2 px-3 text-xs">
+                          <span className={expense.isActive ? 'text-green-600' : 'text-red-600'}>
+                            {expense.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedExpense(expense);
+                              setDrawerType('details');
+                            }}
+                            className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
+                          >
+                            <FaEye className="w-3 h-3" />
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'comparison' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Branch Comparison</h3>
+              {branchComparison && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {branchComparison.branches?.map((branch: { branchName: string; totalAmount: number; expenseCount: number }) => (
+                      <div key={branch.branchName} className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                        <h4 className="font-semibold text-blue-900 mb-2">{branch.branchName}</h4>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-blue-700">Total Expenses:</span>
+                            <span className="font-bold">${branch.totalAmount?.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-blue-700">Count:</span>
+                            <span className="font-bold">{branch.expenseCount}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-blue-700">Avg per Expense:</span>
+                            <span className="font-bold">${(branch.totalAmount / branch.expenseCount).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-6">
+                    <h4 className="font-semibold text-gray-900 mb-3">Expense Distribution by Category</h4>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={branchComparison.branches}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="branchName" />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => [`$${value}`, 'Amount']} />
+                        <Legend />
+                        <Bar dataKey="totalAmount" fill="#3b82f6" name="Total Amount" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'past' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Past Months Records</h3>
+                {canCreateExpenses && (
+                  <button
+                    onClick={handleMonthlyReset}
+                    disabled={resetting}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold flex items-center gap-2 text-sm disabled:opacity-50"
+                  >
+                    {resetting ? <Spinner /> : <FaSync className="w-4 h-4" />}
+                    Reset Monthly Expenses
+                  </button>
+                )}
+              </div>
+              {pastMonthsData && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {pastMonthsData.records?.map((record: { month: string; monthName: string; totalAmount: number; expenseCount: number }) => (
+                      <div key={record.month} className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
+                        <h4 className="font-semibold text-green-900 mb-2">{record.monthName}</h4>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-green-700">Total Expenses:</span>
+                            <span className="font-bold">${record.totalAmount?.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-green-700">Count:</span>
+                            <span className="font-bold">{record.expenseCount}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-green-700">Avg per Expense:</span>
+                            <span className="font-bold">${(record.totalAmount / record.expenseCount).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-6">
+                    <h4 className="font-semibold text-gray-900 mb-3">Monthly Expense Trends</h4>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={pastMonthsData.records}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="monthName" />
+                        <YAxis />
+                        <Tooltip formatter={(value: number) => [`$${value}`, 'Amount']} />
+                        <Legend />
+                        <Line type="monotone" dataKey="totalAmount" stroke="#10b981" strokeWidth={2} name="Total Amount" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Drawer Backdrop */}
         <AnimatePresence>
@@ -496,6 +1267,7 @@ export default function ExpensesPage() {
                         onChange={(e) => handleInputChange('category', e.target.value)}
                         className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
                       >
+                        <option value="salary">Salary</option>
                         <option value="office_supplies">Office Supplies</option>
                         <option value="utilities">Utilities</option>
                         <option value="rent">Rent</option>
@@ -665,8 +1437,8 @@ export default function ExpensesPage() {
                     <div className="text-sm text-gray-600">{selectedExpense.description}</div>
                   </div>
                   <div className="text-right">
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(selectedExpense.category)}`}>
-                      {selectedExpense.category.replace('_', ' ')}
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(selectedExpense.category || 'other')}`}>
+                      {(selectedExpense.category || 'other').replace('_', ' ')}
                     </span>
                     <div className="mt-2 flex items-center gap-1">
                       {getExpenseTypeIcon(selectedExpense.expenseType)}
@@ -777,6 +1549,7 @@ export default function ExpensesPage() {
           )}
         </AnimatePresence>
       </div>
+    </div>
     </AuthGuard>
   );
 }

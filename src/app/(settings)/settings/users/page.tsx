@@ -50,7 +50,7 @@ export default function UsersSettings() {
     try {
       // Get the selected branch from localStorage or use the first available branch
       const selectedBranchId = localStorage.getItem('selectedBranchId');
-      const branchesData = await apiGet<Branch[]>("/api/branches");
+      const branchesData = await apiGet<Branch[]>("/branches");
       setBranches(branchesData);
       
       // If no branch is selected and we have branches, select the first one

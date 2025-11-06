@@ -178,7 +178,7 @@ export default function AdvancedInventoryPage() {
     async function fetchBranches() {
       setBranchesLoading(true);
       try {
-        const data = await apiGet<{ id: string; name: string }[]>('/api/branches');
+        const data = await apiGet<{ id: string; name: string }[]>('/branches');
         if (Array.isArray(data)) {
           setBranches(data);
           if (!selectedBranchId && data.length > 0) {
@@ -365,52 +365,51 @@ export default function AdvancedInventoryPage() {
 
   return (
     <AuthGuard>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-2 py-2">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
             <Link
               href="/inventory"
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors text-xs"
             >
-              <FaArrowLeft className="w-4 h-4" />
-              Back to Inventory
+              <FaArrowLeft className="w-3 h-3" />
+              Back
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Advanced Inventory Management</h1>
-              <p className="text-gray-600">Comprehensive stock control and analytics</p>
+              <h1 className="text-xl font-bold text-gray-900">Advanced Inventory</h1>
+              <p className="text-xs text-gray-500">Comprehensive stock control & analytics</p>
             </div>
           </div>
-
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setShowAlertSettings(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-xs"
             >
-              <FaCog className="w-4 h-4" />
-              Alert Settings
+              <FaCog className="w-3 h-3" />
+              Alerts
             </button>
             <button
               onClick={exportInventory}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
             >
-              <FaDownload className="w-4 h-4" />
+              <FaDownload className="w-3 h-3" />
               Export
             </button>
           </div>
         </div>
 
         {/* Branch Selector */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Select Branch</label>
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-gray-700 mb-1">Branch</label>
           {branchesLoading ? (
-            <div className="text-gray-500 text-sm">Loading branches...</div>
+            <div className="text-gray-400 text-xs">Loading branches...</div>
           ) : (
             <select
               value={selectedBranchId || ''}
               onChange={e => setSelectedBranchId(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
-              style={{ minWidth: 200 }}
+              className="px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 bg-white shadow-sm text-xs"
+              style={{ minWidth: 120 }}
               disabled={!canChangeBranch}
             >
               <option value="" disabled>Select a branch</option>
@@ -422,110 +421,105 @@ export default function AdvancedInventoryPage() {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+          <div className="bg-white rounded border border-gray-200 p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Products</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalProducts}</p>
+                <p className="text-xs font-medium text-gray-600">Products</p>
+                <p className="text-lg font-bold text-gray-900">{stats.totalProducts}</p>
               </div>
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <FaBox className="w-6 h-6 text-blue-600" />
+              <div className="p-2 bg-blue-50 rounded">
+                <FaBox className="w-4 h-4 text-blue-600" />
               </div>
             </div>
           </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded border border-gray-200 p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Stock</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalStock.toLocaleString()}</p>
+                <p className="text-xs font-medium text-gray-600">Stock</p>
+                <p className="text-lg font-bold text-gray-900">{stats.totalStock.toLocaleString()}</p>
               </div>
-              <div className="p-3 bg-green-50 rounded-lg">
-                <FaWarehouse className="w-6 h-6 text-green-600" />
+              <div className="p-2 bg-green-50 rounded">
+                <FaWarehouse className="w-4 h-4 text-green-600" />
               </div>
             </div>
           </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded border border-gray-200 p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Inventory Value</p>
-                <p className="text-2xl font-bold text-gray-900">${stats.totalValue.toLocaleString()}</p>
+                <p className="text-xs font-medium text-gray-600">Value</p>
+                <p className="text-lg font-bold text-gray-900">${stats.totalValue.toLocaleString()}</p>
               </div>
-              <div className="p-3 bg-purple-50 rounded-lg">
-                <FaCalculator className="w-6 h-6 text-purple-600" />
+              <div className="p-2 bg-purple-50 rounded">
+                <FaCalculator className="w-4 h-4 text-purple-600" />
               </div>
             </div>
           </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded border border-gray-200 p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Active Alerts</p>
-                <p className="text-2xl font-bold text-red-600">{stats.activeAlerts}</p>
+                <p className="text-xs font-medium text-gray-600">Alerts</p>
+                <p className="text-lg font-bold text-red-600">{stats.activeAlerts}</p>
               </div>
-              <div className="p-3 bg-red-50 rounded-lg">
-                <FaBell className="w-6 h-6 text-red-600" />
+              <div className="p-2 bg-red-50 rounded">
+                <FaBell className="w-4 h-4 text-red-600" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-xl border border-gray-200 mb-6">
+        <div className="bg-white rounded border border-gray-200 mb-3">
           <div className="border-b border-gray-200">
             <nav className="flex">
               {[
                 { id: 'overview', label: 'Overview', icon: FaEye },
-                { id: 'movements', label: 'Stock Movements', icon: FaHistory },
+                { id: 'movements', label: 'Movements', icon: FaHistory },
                 { id: 'alerts', label: 'Alerts', icon: FaBell },
-                { id: 'forecasting', label: 'Forecasting', icon: FaChartLine },
+                { id: 'forecasting', label: 'Forecast', icon: FaChartLine },
                 { id: 'locations', label: 'Locations', icon: FaMapMarkerAlt }
               ].map((tab) => (
-               // ...existing code...
-<button
-  key={tab.id}
-  onClick={() => setActiveTab(tab.id as 'overview' | 'movements' | 'alerts' | 'forecasting' | 'locations')}
-  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
-    activeTab === tab.id
-      ? 'border-blue-500 text-blue-600'
-      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-  }`}
->
-  <tab.icon className="w-4 h-4" />
-  {tab.label}
-</button>
-// ...existing code...
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as 'overview' | 'movements' | 'alerts' | 'forecasting' | 'locations')}
+                  className={`flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <tab.icon className="w-3 h-3" />
+                  {tab.label}
+                </button>
               ))}
             </nav>
           </div>
 
-          <div className="p-6">
+          <div className="p-3">
             {/* Overview Tab */}
             {activeTab === 'overview' && (
               <div>
                 {/* Filters */}
-                <div className="flex flex-col lg:flex-row gap-4 mb-6">
+                <div className="flex flex-col lg:flex-row gap-2 mb-2">
                   <div className="flex-1">
                     <div className="relative">
-                      <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <FaSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
                       <input
                         type="text"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         placeholder="Search products..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full pl-8 pr-2 py-1 border border-gray-300 rounded text-xs"
                       />
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1">
                     <select
                       value={stockFilter}
                       onChange={e => setStockFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="px-2 py-1 border border-gray-300 rounded text-xs"
                     >
-                      <option value="all">All Stock Levels</option>
+                      <option value="all">All Stock</option>
                       <option value="low">Low Stock</option>
                       <option value="out">Out of Stock</option>
                       <option value="over">Over Stock</option>
@@ -533,7 +527,7 @@ export default function AdvancedInventoryPage() {
                     <select
                       value={locationFilter}
                       onChange={e => setLocationFilter(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="px-2 py-1 border border-gray-300 rounded text-xs"
                     >
                       <option value="all">All Locations</option>
                       {locations.map(location => (
@@ -544,23 +538,23 @@ export default function AdvancedInventoryPage() {
                 </div>
 
                 {/* Inventory Table */}
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-white border border-gray-200 rounded overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="min-w-full">
+                    <table className="min-w-full text-xs">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Stock</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min/Max</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Product</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Location</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Stock</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Min/Max</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Status</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
+                      <tbody className="bg-white divide-y divide-gray-100">
                         {currentInventory.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                            <td colSpan={6} className="px-3 py-8 text-center text-gray-400 text-xs">
                               No inventory items found
                             </td>
                           </tr>
@@ -569,50 +563,49 @@ export default function AdvancedInventoryPage() {
                             const status = getStockStatus(item);
                             return (
                               <tr key={item.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-3 py-2 whitespace-nowrap">
                                   <div>
-                                    <div className="text-sm font-medium text-gray-900">{item.product?.name}</div>
-                                    <div className="text-sm text-gray-500">{item.product?.sku}</div>
+                                    <div className="text-xs font-medium text-gray-900">{item.product?.name}</div>
+                                    <div className="text-[11px] text-gray-500">{item.product?.sku}</div>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                                   {item.location}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`text-sm font-semibold ${status.color}`}>{item.quantity}</span>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <span className={`font-semibold ${status.color}`}>{item.quantity}</span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
                                   {item.minStock} / {item.maxStock}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${status.bg} ${status.color}`}>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${status.bg} ${status.color}`}>
                                     {status.icon}
                                     {status.text}
                                   </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                  <div className="flex gap-2">
+                                <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">
+                                  <div className="flex gap-1">
                                     <button
                                       onClick={() => {
                                         setSelectedProduct(item.product);
-                                        
                                         setShowMovementModal(true);
                                       }}
                                       className="text-blue-600 hover:text-blue-900"
                                       title="View History"
                                     >
-                                      <FaHistory className="w-4 h-4" />
+                                      <FaHistory className="w-3 h-3" />
                                     </button>
                                     {hasPermission(user, 'edit_inventory') && (
                                       <button
                                         onClick={() => {
                                           setSelectedProduct(item.product);
-                                         
+                                          // Could open an edit modal here
                                         }}
                                         className="text-green-600 hover:text-green-900"
                                         title="Edit Stock"
                                       >
-                                        <FaEdit className="w-4 h-4" />
+                                        <FaEdit className="w-3 h-3" />
                                       </button>
                                     )}
                                   </div>
@@ -628,21 +621,21 @@ export default function AdvancedInventoryPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-2 mt-6">
+                  <div className="flex justify-center items-center gap-2 mt-3">
                     <button
                       onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      className="px-2 py-1 border border-gray-300 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                     >
                       Previous
                     </button>
-                    <span className="mx-4 text-sm text-gray-600">
+                    <span className="mx-2 text-xs text-gray-600">
                       Page {currentPage} of {totalPages}
                     </span>
                     <button
                       onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      className="px-2 py-1 border border-gray-300 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                     >
                       Next
                     </button>
@@ -654,56 +647,55 @@ export default function AdvancedInventoryPage() {
             {/* Stock Movements Tab */}
             {activeTab === 'movements' && (
               <div>
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">Stock Movement History</h3>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-base font-semibold text-gray-900">Stock Movement History</h3>
                   <button
                     onClick={() => setShowMovementModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
                     disabled={!hasPermission(user, 'edit_inventory')}
                   >
-                    <FaPlus className="w-4 h-4" />
-                    Record Movement
+                    <FaPlus className="w-3 h-3" />
+                    Record
                   </button>
                 </div>
-
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {stockMovements.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
+                    <div className="text-center py-6 text-gray-400 text-xs">
                       No stock movements recorded yet
                     </div>
                   ) : (
                     stockMovements.slice(0, 20).map((movement) => (
-                      <div key={movement.id} className="bg-gray-50 rounded-lg p-4">
+                      <div key={movement.id} className="bg-gray-50 rounded p-2">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${
+                          <div className="flex items-center gap-2">
+                            <div className={`p-1 rounded ${
                               movement.type === 'in' ? 'bg-green-100 text-green-600' :
                               movement.type === 'out' ? 'bg-red-100 text-red-600' :
                               movement.type === 'adjustment' ? 'bg-yellow-100 text-yellow-600' :
                               'bg-blue-100 text-blue-600'
                             }`}>
-                              {movement.type === 'in' ? <FaArrowUp className="w-4 h-4" /> :
-                               movement.type === 'out' ? <FaArrowDown className="w-4 h-4" /> :
-                               movement.type === 'adjustment' ? <FaSync className="w-4 h-4" /> :
-                               <FaBox className="w-4 h-4" />}
+                              {movement.type === 'in' ? <FaArrowUp className="w-3 h-3" /> :
+                               movement.type === 'out' ? <FaArrowDown className="w-3 h-3" /> :
+                               movement.type === 'adjustment' ? <FaSync className="w-3 h-3" /> :
+                               <FaBox className="w-3 h-3" />}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900">{movement.product?.name}</p>
-                              <p className="text-sm text-gray-600">
+                              <p className="font-medium text-xs text-gray-900">{movement.product?.name}</p>
+                              <p className="text-[11px] text-gray-600">
                                 {movement.type.charAt(0).toUpperCase() + movement.type.slice(1)} • {movement.location}
                                 {movement.reason && ` • ${movement.reason}`}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className={`font-semibold ${
+                            <p className={`font-semibold text-xs ${
                               movement.type === 'in' ? 'text-green-600' :
                               movement.type === 'out' ? 'text-red-600' :
                               'text-gray-600'
                             }`}>
                               {movement.type === 'in' ? '+' : movement.type === 'out' ? '-' : ''}{movement.quantity}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-[10px] text-gray-400">
                               {new Date(movement.createdAt).toLocaleDateString()}
                             </p>
                           </div>
@@ -718,30 +710,27 @@ export default function AdvancedInventoryPage() {
             {/* Alerts Tab */}
             {activeTab === 'alerts' && (
               <div>
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">Inventory Alerts</h3>
-                  <div className="flex gap-2">
-                    <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
-                      {stats.activeAlerts} Active
-                    </span>
-                  </div>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-base font-semibold text-gray-900">Inventory Alerts</h3>
+                  <span className="px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs font-medium">
+                    {stats.activeAlerts} Active
+                  </span>
                 </div>
-
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {alerts.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
+                    <div className="text-center py-6 text-gray-400 text-xs">
                       No alerts at this time
                     </div>
                   ) : (
                     alerts.map((alert) => (
-                      <div key={alert.id} className={`border rounded-lg p-4 ${getAlertSeverityColor(alert.severity)} ${!alert.isRead ? 'border-l-4' : ''}`}>
+                      <div key={alert.id} className={`border rounded p-2 ${getAlertSeverityColor(alert.severity)} ${!alert.isRead ? 'border-l-4' : ''}`}>
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <FaBell className="w-5 h-5" />
+                          <div className="flex items-center gap-2">
+                            <FaBell className="w-4 h-4" />
                             <div>
-                              <p className="font-medium text-gray-900">{alert.product?.name}</p>
-                              <p className="text-sm">{alert.message}</p>
-                              <p className="text-xs text-gray-500 mt-1">
+                              <p className="font-medium text-xs text-gray-900">{alert.product?.name}</p>
+                              <p className="text-[11px]">{alert.message}</p>
+                              <p className="text-[10px] text-gray-400 mt-1">
                                 {new Date(alert.createdAt).toLocaleDateString()}
                               </p>
                             </div>
@@ -749,7 +738,7 @@ export default function AdvancedInventoryPage() {
                           {!alert.isRead && (
                             <button
                               onClick={() => markAlertAsRead(alert.id)}
-                              className="px-3 py-1 bg-white text-gray-700 rounded text-sm hover:bg-gray-50"
+                              className="px-2 py-0.5 bg-white text-gray-700 rounded text-xs hover:bg-gray-50"
                             >
                               Mark as Read
                             </button>
@@ -765,25 +754,24 @@ export default function AdvancedInventoryPage() {
             {/* Forecasting Tab */}
             {activeTab === 'forecasting' && (
               <div>
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">Stock Forecasting</h3>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <FaClipboardList className="w-4 h-4" />
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-base font-semibold text-gray-900">Stock Forecasting</h3>
+                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                    <FaClipboardList className="w-3 h-3" />
                     Predictive Analytics
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                   {forecastData.length === 0 ? (
-                    <div className="col-span-full text-center py-8 text-gray-500">
+                    <div className="col-span-full text-center py-6 text-gray-400 text-xs">
                       Forecasting data not available
                     </div>
                   ) : (
                     forecastData.map((forecast) => (
-                      <div key={forecast.productId} className="bg-white border border-gray-200 rounded-lg p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="font-semibold text-gray-900">{forecast.product?.name}</h4>
-                          <div className={`px-2 py-1 rounded text-xs font-medium ${
+                      <div key={forecast.productId} className="bg-white border border-gray-200 rounded p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold text-xs text-gray-900">{forecast.product?.name}</h4>
+                          <div className={`px-2 py-0.5 rounded text-[11px] font-medium ${
                             forecast.confidence > 80 ? 'bg-green-100 text-green-800' :
                             forecast.confidence > 60 ? 'bg-yellow-100 text-yellow-800' :
                             'bg-red-100 text-red-800'
@@ -791,33 +779,31 @@ export default function AdvancedInventoryPage() {
                             {forecast.confidence}% confidence
                           </div>
                         </div>
-
-                        <div className="space-y-3">
+                        <div className="space-y-1">
                           <div className="flex justify-between">
-                            <span className="text-sm text-gray-600">Current Stock:</span>
+                            <span className="text-[11px] text-gray-600">Current Stock:</span>
                             <span className="font-medium">{forecast.currentStock}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-sm text-gray-600">Daily Sales Avg:</span>
+                            <span className="text-[11px] text-gray-600">Daily Sales Avg:</span>
                             <span className="font-medium">{forecast.averageDailySales.toFixed(1)}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-sm text-gray-600">Days Until Stockout:</span>
+                            <span className="text-[11px] text-gray-600">Days Until Stockout:</span>
                             <span className={`font-medium ${forecast.daysUntilStockout < 7 ? 'text-red-600' : 'text-green-600'}`}>
                               {forecast.daysUntilStockout}
                             </span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-sm text-gray-600">Recommended Order:</span>
+                            <span className="text-[11px] text-gray-600">Recommended Order:</span>
                             <span className="font-medium text-blue-600">{forecast.recommendedOrder}</span>
                           </div>
                         </div>
-
                         {forecast.daysUntilStockout < 7 && (
-                          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                            <div className="flex items-center gap-2">
-                              <FaExclamationTriangle className="w-4 h-4 text-red-600" />
-                              <span className="text-sm text-red-800">Reorder urgently recommended</span>
+                          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                            <div className="flex items-center gap-1">
+                              <FaExclamationTriangle className="w-3 h-3 text-red-600" />
+                              <span className="text-xs text-red-800">Reorder urgently recommended</span>
                             </div>
                           </div>
                         )}
@@ -831,47 +817,44 @@ export default function AdvancedInventoryPage() {
             {/* Locations Tab */}
             {activeTab === 'locations' && (
               <div>
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">Inventory Locations</h3>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-base font-semibold text-gray-900">Inventory Locations</h3>
                   <button
                     onClick={() => setShowLocationModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
                     disabled={!hasPermission(user, 'edit_inventory')}
                   >
-                    <FaPlus className="w-4 h-4" />
-                    Add Location
+                    <FaPlus className="w-3 h-3" />
+                    Add
                   </button>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                   {locations.length === 0 ? (
-                    <div className="col-span-full text-center py-8 text-gray-500">
+                    <div className="col-span-full text-center py-6 text-gray-400 text-xs">
                       No locations configured
                     </div>
                   ) : (
                     locations.map((location) => (
-                      <div key={location.id} className="bg-white border border-gray-200 rounded-lg p-6">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className={`p-2 rounded-lg ${
+                      <div key={location.id} className="bg-white border border-gray-200 rounded p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`p-1 rounded ${
                             location.type === 'warehouse' ? 'bg-blue-100 text-blue-600' :
                             location.type === 'store' ? 'bg-green-100 text-green-600' :
                             'bg-purple-100 text-purple-600'
                           }`}>
-                            {location.type === 'warehouse' ? <FaWarehouse className="w-5 h-5" /> :
-                             location.type === 'store' ? <FaStore className="w-5 h-5" /> :
-                             <FaClipboardList className="w-5 h-5" />}
+                            {location.type === 'warehouse' ? <FaWarehouse className="w-4 h-4" /> :
+                             location.type === 'store' ? <FaStore className="w-4 h-4" /> :
+                             <FaClipboardList className="w-4 h-4" />}
                           </div>
                           <div>
-                            <h4 className="font-semibold text-gray-900">{location.name}</h4>
-                            <p className="text-sm text-gray-600 capitalize">{location.type}</p>
+                            <h4 className="font-semibold text-xs text-gray-900">{location.name}</h4>
+                            <p className="text-[11px] text-gray-600 capitalize">{location.type}</p>
                           </div>
                         </div>
-
                         {location.address && (
-                          <p className="text-sm text-gray-600 mb-4">{location.address}</p>
+                          <p className="text-[11px] text-gray-600 mb-2">{location.address}</p>
                         )}
-
-                        <div className="text-sm text-gray-500">
+                        <div className="text-[11px] text-gray-500">
                           {inventory.filter(item => item.location === location.name).length} products stored
                         </div>
                       </div>
@@ -885,66 +868,62 @@ export default function AdvancedInventoryPage() {
 
         {/* Stock Movement Modal */}
         {showMovementModal && selectedProduct && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Record Stock Movement</h2>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-xs mx-2">
+              <div className="flex items-center justify-between p-3 border-b border-gray-200">
+                <h2 className="text-base font-semibold text-gray-900">Record Stock Movement</h2>
                 <button
                   onClick={() => setShowMovementModal(false)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <FaTimesCircle className="w-5 h-5" />
+                  <FaTimesCircle className="w-4 h-4" />
                 </button>
               </div>
-
-              <form onSubmit={handleStockMovement} className="p-6 space-y-4">
+              <form onSubmit={handleStockMovement} className="p-3 space-y-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Product</label>
                   <input
                     type="text"
                     value={selectedProduct.name}
                     disabled
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50"
+                    className="w-full px-2 py-1 border border-gray-200 rounded bg-gray-50 text-xs"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Movement Type</label>
-              <select
-  value={movementForm.type}
-  onChange={e =>
-    setMovementForm(prev => ({
-      ...prev,
-      type: e.target.value as 'in' | 'out' | 'adjustment' | 'transfer'
-    }))
-  }
-  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
->
-  <option value="in">Stock In</option>
-  <option value="out">Stock Out</option>
-  <option value="adjustment">Adjustment</option>
-  <option value="transfer">Transfer</option>
-</select>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Movement Type</label>
+                  <select
+                    value={movementForm.type}
+                    onChange={e =>
+                      setMovementForm(prev => ({
+                        ...prev,
+                        type: e.target.value as 'in' | 'out' | 'adjustment' | 'transfer'
+                      }))
+                    }
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                  >
+                    <option value="in">Stock In</option>
+                    <option value="out">Stock Out</option>
+                    <option value="adjustment">Adjustment</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
                   <input
                     type="number"
                     min="0"
                     value={movementForm.quantity}
                     onChange={e => setMovementForm(prev => ({ ...prev, quantity: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
                     required
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Location</label>
                   <select
                     value={movementForm.location}
                     onChange={e => setMovementForm(prev => ({ ...prev, location: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
                     required
                   >
                     <option value="">Select Location</option>
@@ -953,14 +932,13 @@ export default function AdvancedInventoryPage() {
                     ))}
                   </select>
                 </div>
-
                 {movementForm.type === 'transfer' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Destination Location</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Destination Location</label>
                     <select
                       value={movementForm.destinationLocation}
                       onChange={e => setMovementForm(prev => ({ ...prev, destinationLocation: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
                       required
                     >
                       <option value="">Select Destination</option>
@@ -970,31 +948,29 @@ export default function AdvancedInventoryPage() {
                     </select>
                   </div>
                 )}
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Reason (Optional)</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Reason (Optional)</label>
                   <textarea
                     value={movementForm.reason}
                     onChange={e => setMovementForm(prev => ({ ...prev, reason: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                    rows={2}
                     placeholder="Enter reason for this movement..."
                   />
                 </div>
-
-                <div className="flex justify-end gap-3 pt-4">
+                <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowMovementModal(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    className="px-2 py-1 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 text-xs"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
                   >
-                    Record Movement
+                    Record
                   </button>
                 </div>
               </form>
@@ -1004,68 +980,66 @@ export default function AdvancedInventoryPage() {
 
         {/* Location Modal */}
         {showLocationModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Add New Location</h2>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-xs mx-2">
+              <div className="flex items-center justify-between p-3 border-b border-gray-200">
+                <h2 className="text-base font-semibold text-gray-900">Add Location</h2>
                 <button
                   onClick={() => setShowLocationModal(false)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <FaTimesCircle className="w-5 h-5" />
+                  <FaTimesCircle className="w-4 h-4" />
                 </button>
               </div>
-
-              <form onSubmit={handleCreateLocation} className="p-6 space-y-4">
+              <form onSubmit={handleCreateLocation} className="p-3 space-y-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location Name</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Location Name</label>
                   <input
                     type="text"
                     value={locationForm.name}
                     onChange={e => setLocationForm(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
                     required
                   />
                 </div>
-
-              
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location Type</label>
-                 <select
-  value={locationForm.type}
-  onChange={e => setLocationForm(prev => ({
-    ...prev,
-    type: e.target.value as 'warehouse' | 'store' | 'showroom'
-  }))}
-  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
->
-  <option value="warehouse">Warehouse</option>
-  <option value="store">Store</option>
-  <option value="showroom">Showroom</option>
-</select>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address (Optional)</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Location Type</label>
+                  <select
+                    value={locationForm.type}
+                    onChange={e => setLocationForm(prev => ({
+                      ...prev,
+                      type: e.target.value as 'warehouse' | 'store' | 'showroom'
+                    }))}
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                  >
+                    <option value="warehouse">Warehouse</option>
+                    <option value="store">Store</option>
+                    <option value="showroom">Showroom</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Address (Optional)</label>
                   <textarea
                     value={locationForm.address}
                     onChange={e => setLocationForm(prev => ({ ...prev, address: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                    rows={2}
                     placeholder="Enter location address..."
                   />
                 </div>
-
-                <div className="flex justify-end gap-3 pt-4">
+                <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowLocationModal(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    className="px-2 py-1 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 text-xs"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
                   >
-                    Create Location
+                    Create
                   </button>
                 </div>
               </form>
@@ -1075,84 +1049,79 @@ export default function AdvancedInventoryPage() {
 
         {/* Alert Settings Modal */}
         {showAlertSettings && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Alert Settings</h2>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-xs mx-2">
+              <div className="flex items-center justify-between p-3 border-b border-gray-200">
+                <h2 className="text-base font-semibold text-gray-900">Alert Settings</h2>
                 <button
                   onClick={() => setShowAlertSettings(false)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <FaTimesCircle className="w-5 h-5" />
+                  <FaTimesCircle className="w-4 h-4" />
                 </button>
               </div>
-
-              <form onSubmit={handleUpdateAlertSettings} className="p-6 space-y-4">
+              <form onSubmit={handleUpdateAlertSettings} className="p-3 space-y-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Low Stock Threshold</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Low Stock Threshold</label>
                   <input
                     type="number"
                     min="0"
                     value={alertSettings.lowStockThreshold}
                     onChange={e => setAlertSettings(prev => ({ ...prev, lowStockThreshold: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Alert when stock falls below this number</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Alert when stock falls below this number</p>
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Critical Stock Threshold</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Critical Stock Threshold</label>
                   <input
                     type="number"
                     min="0"
                     value={alertSettings.criticalStockThreshold}
                     onChange={e => setAlertSettings(prev => ({ ...prev, criticalStockThreshold: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Critical alert when stock falls below this number</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Critical alert when stock falls below this number</p>
                 </div>
-
-                <div className="space-y-3">
+                <div className="space-y-1">
                   <div className="flex items-center">
                     <input
                       type="checkbox"
                       id="emailAlerts"
                       checked={alertSettings.enableEmailAlerts}
                       onChange={e => setAlertSettings(prev => ({ ...prev, enableEmailAlerts: e.target.checked }))}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <label htmlFor="emailAlerts" className="ml-2 block text-sm text-gray-900">
+                    <label htmlFor="emailAlerts" className="ml-2 block text-xs text-gray-900">
                       Enable Email Alerts
                     </label>
                   </div>
-
                   <div className="flex items-center">
                     <input
                       type="checkbox"
                       id="pushAlerts"
                       checked={alertSettings.enablePushAlerts}
                       onChange={e => setAlertSettings(prev => ({ ...prev, enablePushAlerts: e.target.checked }))}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <label htmlFor="pushAlerts" className="ml-2 block text-sm text-gray-900">
+                    <label htmlFor="pushAlerts" className="ml-2 block text-xs text-gray-900">
                       Enable Push Notifications
                     </label>
                   </div>
                 </div>
-
-                <div className="flex justify-end gap-3 pt-4">
+                <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowAlertSettings(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    className="px-2 py-1 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 text-xs"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
                   >
-                    Save Settings
+                    Save
                   </button>
                 </div>
               </form>

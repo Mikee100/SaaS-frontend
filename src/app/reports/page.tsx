@@ -179,6 +179,9 @@ export default function ReportsPage() {
   const permissionsLoading = !user || !limits;
   const canViewReports = !permissionsLoading && hasPermission(user, 'view_reports');
 
+  // Collapsible alert banner state and setter
+  const [alertCollapsed, setAlertCollapsed] = useState(true);
+
   useEffect(() => {
     const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
     apiGet("/products", headers).then((data) => setProducts(data as Product[])).catch(() => setProducts([]));
@@ -190,7 +193,7 @@ export default function ReportsPage() {
       if (!user?.tenantId) return;
       setLoadingBranches(true);
       try {
-        const data = await apiGet(`/api/branches`);
+        const data = await apiGet(`/branches`);
         setBranches(data as Branch[]);
       } catch (error) {
         console.error('Failed to fetch branches:', error);
@@ -529,42 +532,58 @@ export default function ReportsPage() {
 
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-gray-50 p-2 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Low Stock Notification Alert */}
         {showLowStockAlert && lowStockProducts.length > 0 && (
-          <div className="mb-6">
-            <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg shadow-md flex items-center justify-between" role="alert">
+          <div className="mb-3">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded-lg shadow flex items-center justify-between text-xs" role="alert">
               <div>
                 <strong className="font-bold">Low Stock Alert:</strong>
-                <span className="ml-2">{lowStockProducts.length} product{lowStockProducts.length > 1 ? 's' : ''} are low on stock.</span>
-                <span className="ml-2 text-xs text-gray-600">({lowStockProducts.map(p => p.name).join(', ')})</span>
+                <span className="ml-1">{lowStockProducts.length} product{lowStockProducts.length > 1 ? 's' : ''} low on stock.</span>
+                <span className="ml-1 text-[10px] text-gray-600">({lowStockProducts.map(p => p.name).join(', ')})</span>
               </div>
-              <button className="ml-4 text-red-700 hover:text-red-900" onClick={() => setShowLowStockAlert(false)}>
+              <button className="ml-2 text-red-700 hover:text-red-900 text-xs" onClick={() => setShowLowStockAlert(false)}>
                 Dismiss
               </button>
             </div>
           </div>
         )}
-        {/* Alert Banner */}
-        <AlertBanner />
+        {/* Alert Banner - collapsed by default, expand/collapse toggle */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-xs text-gray-700">System Alerts</span>
+            <button
+              className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 ml-2"
+              onClick={() => setAlertCollapsed(c => !c)}
+              aria-label={alertCollapsed ? "Expand alerts" : "Collapse alerts"}
+            >
+              {alertCollapsed ? "Show" : "Hide"}
+            </button>
+          </div>
+          {!alertCollapsed && (
+            <div className="mt-2">
+              <AlertBanner />
+            </div>
+          )}
+        </div>
 
-        <header className="mb-10">
+        <header className="mb-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Business Reports</h1>
-              <p className="mt-2 text-lg text-gray-500">Dive deep into your sales, customers, and product performance.</p>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Business Reports</h1>
+              <p className="mt-1 text-sm text-gray-500">Dive deep into your sales, customers, and product performance.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-1">
               <button
                 onClick={exportToPDF}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
               >
                 Export PDF
               </button>
               <button
                 onClick={exportToExcel}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
               >
                 Export Excel
               </button>
@@ -574,12 +593,12 @@ export default function ReportsPage() {
 
         {/* AI-Generated Insights Section */}
         {metrics.aiSummary && (
-          <section className="mb-10">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+          <section className="mb-5">
+            <h2 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
               AI-Generated Insights
             </h2>
-            <div className="bg-white rounded-xl shadow p-6">
+            <div className="bg-white rounded shadow p-3 text-xs">
               <div className="prose prose-gray max-w-none">
                 <p className="text-gray-700 leading-relaxed whitespace-pre-line">{metrics.aiSummary}</p>
               </div>
@@ -588,71 +607,67 @@ export default function ReportsPage() {
         )}
 
         {/* Report Type Selector */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <FaFilter className="w-5 h-5" />
+        <div className="bg-white rounded shadow-md p-3 mb-4">
+          <h2 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+            <FaFilter className="w-4 h-4" />
             Report Filters
           </h2>
-          <div className="flex flex-wrap gap-4 items-end">
+          <div className="flex flex-wrap gap-2 items-end">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
-              <select value={grouping} onChange={e => setGrouping(e.target.value as 'day' | 'week' | 'month')} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                <option value="day">Daily Reports</option>
-                <option value="week">Weekly Reports</option>
-                <option value="month">Monthly Reports</option>
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">Report Type</label>
+              <select value={grouping} onChange={e => setGrouping(e.target.value as 'day' | 'week' | 'month')} className="border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1 px-2">
+                <option value="day">Daily</option>
+                <option value="week">Weekly</option>
+                <option value="month">Monthly</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Branch Filter</label>
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">Branch</label>
               <select
                 value={selectedReportBranch}
                 onChange={e => {
                   setSelectedReportBranch(e.target.value);
-                  if (e.target.value !== "all") {
-                    setComparisonMode(false);
-                  }
+                  if (e.target.value !== "all") setComparisonMode(false);
                 }}
-                className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className="border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1 px-2"
                 disabled={loadingBranches}
               >
-                <option value="all">All Branches</option>
+                <option value="all">All</option>
                 {branches.map(branch => (
                   <option key={branch.id} value={branch.id}>{branch.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">From</label>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1 px-2" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">To</label>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1 px-2" />
             </div>
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <div className="flex items-center gap-1">
+              <label className="flex items-center gap-1 text-xs font-medium text-gray-700">
                 <input
                   type="checkbox"
                   checked={comparisonMode}
                   onChange={e => {
                     setComparisonMode(e.target.checked);
-                    if (e.target.checked) {
-                      setSelectedReportBranch("all");
-                    }
+                    if (e.target.checked) setSelectedReportBranch("all");
                   }}
                   className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
-                <FaExchangeAlt className="w-4 h-4" />
-                Compare Branches
+                <FaExchangeAlt className="w-3 h-3" />
+                Compare
               </label>
             </div>
-            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear Filters</button>
+            <button className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-xs" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear</button>
           </div>
         </div>
 
         {/* Key Metrics Section */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+        <section className="mb-5">
+          <h2 className="text-base font-semibold text-gray-800 mb-2">
             Key Metrics
             {selectedReportBranch !== "all" && !comparisonMode && (
               <span className="text-sm font-normal text-gray-600 ml-2">
@@ -667,67 +682,67 @@ export default function ReportsPage() {
           </h2>
 
           {comparisonMode && branchComparisonData ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow p-6 flex flex-col items-center border border-blue-200">
-                <span className="text-blue-600 text-sm mb-1 font-medium">Total Sales (All Branches)</span>
-                <span className="text-3xl font-bold text-blue-700">{branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalOrders, 0)}</span>
-                <div className="flex items-center mt-2">
-                  <span className="text-xs text-blue-600 font-medium">Across {branchComparisonData.branches.length} branches</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded shadow p-3 flex flex-col items-center border border-blue-200 text-xs">
+                <span className="text-blue-600 text-xs mb-0.5 font-medium">Total Sales (All Branches)</span>
+                <span className="text-xl font-bold text-blue-700">{branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalOrders, 0)}</span>
+                <div className="flex items-center mt-1">
+                  <span className="text-[10px] text-blue-600 font-medium">Across {branchComparisonData.branches.length} branches</span>
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow p-6 flex flex-col items-center border border-green-200">
-                <span className="text-green-600 text-sm mb-1 font-medium">Total Revenue</span>
-                <span className="text-3xl font-bold text-green-700">Ksh {branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalSales, 0).toLocaleString()}</span>
-                <div className="flex items-center mt-2">
-                  <span className="text-xs text-green-600 font-medium">Combined revenue</span>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded shadow p-3 flex flex-col items-center border border-green-200 text-xs">
+                <span className="text-green-600 text-xs mb-0.5 font-medium">Total Revenue</span>
+                <span className="text-xl font-bold text-green-700">Ksh {branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalSales, 0).toLocaleString()}</span>
+                <div className="flex items-center mt-1">
+                  <span className="text-[10px] text-green-600 font-medium">Combined revenue</span>
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow p-6 flex flex-col items-center border border-purple-200">
-                <span className="text-purple-600 text-sm mb-1 font-medium">Avg. Order Value</span>
-                <span className="text-3xl font-bold text-purple-700">Ksh {(branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalSales, 0) / branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalOrders, 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                <div className="flex items-center mt-2">
-                  <span className="text-xs text-purple-600 font-medium">Across all branches</span>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded shadow p-3 flex flex-col items-center border border-purple-200 text-xs">
+                <span className="text-purple-600 text-xs mb-0.5 font-medium">Avg. Order Value</span>
+                <span className="text-xl font-bold text-purple-700">Ksh {(branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalSales, 0) / branchComparisonData.totals.reduce((sum, branch) => sum + branch.totalOrders, 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <div className="flex items-center mt-1">
+                  <span className="text-[10px] text-purple-600 font-medium">Across all branches</span>
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl shadow p-6 flex flex-col items-center border border-orange-200">
-                <span className="text-orange-600 text-sm mb-1 font-medium">Best Performing</span>
-                <span className="text-3xl font-bold text-orange-700">{branchComparisonData.totals.sort((a, b) => b.totalSales - a.totalSales)[0]?.branchName || 'N/A'}</span>
-                <div className="flex items-center mt-2">
-                  <span className="text-xs text-orange-600 font-medium">Ksh {branchComparisonData.totals.sort((a, b) => b.totalSales - a.totalSales)[0]?.totalSales.toLocaleString() || '0'}</span>
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded shadow p-3 flex flex-col items-center border border-orange-200 text-xs">
+                <span className="text-orange-600 text-xs mb-0.5 font-medium">Best Performing</span>
+                <span className="text-xl font-bold text-orange-700">{branchComparisonData.totals.sort((a, b) => b.totalSales - a.totalSales)[0]?.branchName || 'N/A'}</span>
+                <div className="flex items-center mt-1">
+                  <span className="text-[10px] text-orange-600 font-medium">Ksh {branchComparisonData.totals.sort((a, b) => b.totalSales - a.totalSales)[0]?.totalSales.toLocaleString() || '0'}</span>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow p-6 flex flex-col items-center border border-blue-200">
-                <span className="text-blue-600 text-sm mb-1 font-medium">Total Sales</span>
-                <span className="text-3xl font-bold text-blue-700">{metrics.totalSales}</span>
-                <div className="flex items-center mt-2">
-                  <span className="text-xs text-green-600 font-medium">+12.5%</span>
-                  <span className="text-xs text-blue-500 ml-1">vs last period</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded shadow p-3 flex flex-col items-center border border-blue-200 text-xs">
+                <span className="text-blue-600 text-xs mb-0.5 font-medium">Total Sales</span>
+                <span className="text-xl font-bold text-blue-700">{metrics.totalSales}</span>
+                <div className="flex items-center mt-1">
+                  <span className="text-[10px] text-green-600 font-medium">+12.5%</span>
+                  <span className="text-[10px] text-blue-500 ml-1">vs last period</span>
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow p-6 flex flex-col items-center border border-green-200">
-                <span className="text-green-600 text-sm mb-1 font-medium">Total Revenue</span>
-                <span className="text-3xl font-bold text-green-700">Ksh {(metrics.totalRevenue ?? 0).toLocaleString()}</span>
-                <div className="flex items-center mt-2">
-                  <span className="text-xs text-green-600 font-medium">+18.2%</span>
-                  <span className="text-xs text-green-500 ml-1">vs last period</span>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded shadow p-3 flex flex-col items-center border border-green-200 text-xs">
+                <span className="text-green-600 text-xs mb-0.5 font-medium">Total Revenue</span>
+                <span className="text-xl font-bold text-green-700">Ksh {(metrics.totalRevenue ?? 0).toLocaleString()}</span>
+                <div className="flex items-center mt-1">
+                  <span className="text-[10px] text-green-600 font-medium">+18.2%</span>
+                  <span className="text-[10px] text-green-500 ml-1">vs last period</span>
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow p-6 flex flex-col items-center border border-purple-200">
-                <span className="text-purple-600 text-sm mb-1 font-medium">Avg. Sale Value</span>
-                <span className="text-3xl font-bold text-purple-700">Ksh {(metrics.avgSaleValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                <div className="flex items-center mt-2">
-                  <span className="text-xs text-blue-600 font-medium">+5.3%</span>
-                  <span className="text-xs text-purple-500 ml-1">vs last period</span>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded shadow p-3 flex flex-col items-center border border-purple-200 text-xs">
+                <span className="text-purple-600 text-xs mb-0.5 font-medium">Avg. Sale Value</span>
+                <span className="text-xl font-bold text-purple-700">Ksh {(metrics.avgSaleValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <div className="flex items-center mt-1">
+                  <span className="text-[10px] text-blue-600 font-medium">+5.3%</span>
+                  <span className="text-[10px] text-purple-500 ml-1">vs last period</span>
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow p-6 flex flex-col items-center border border-red-200">
-                <span className="text-red-600 text-sm mb-1 font-medium">Low Stock Alerts</span>
-                <span className="text-3xl font-bold text-red-600">{(metrics.lowStock || []).length}</span>
-                <div className="flex items-center mt-2">
-                  <span className="text-xs text-red-600 font-medium">Requires attention</span>
+              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded shadow p-3 flex flex-col items-center border border-red-200 text-xs">
+                <span className="text-red-600 text-xs mb-0.5 font-medium">Low Stock Alerts</span>
+                <span className="text-xl font-bold text-red-600">{(metrics.lowStock || []).length}</span>
+                <div className="flex items-center mt-1">
+                  <span className="text-[10px] text-red-600 font-medium">Requires attention</span>
                 </div>
               </div>
             </div>
@@ -735,8 +750,8 @@ export default function ReportsPage() {
         </section>
 
         {/* Sales Reports by Period */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">
+        <section className="mb-5">
+          <h2 className="text-base font-semibold text-gray-800 mb-3">
             {grouping === 'day' ? 'Daily Sales Reports' : grouping === 'week' ? 'Weekly Sales Reports' : 'Monthly Sales Reports'}
             {selectedReportBranch !== "all" && !comparisonMode && (
               <span className="text-sm font-normal text-gray-600 ml-2">
@@ -754,12 +769,12 @@ export default function ReportsPage() {
           {comparisonMode && branchComparisonData && (
             <>
               {/* Time Series Comparison */}
-              <div className="bg-white rounded-xl shadow p-6 mb-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
+              <div className="bg-white rounded shadow p-3 mb-3">
+                <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
                   Branch Sales Comparison Over Time
                 </h3>
-                <div className="h-80">
+                <div className="h-40">
                   <Line
                     data={{
                       labels: branchComparisonData.branches[0]?.data.map(d => d.period) || [],
@@ -818,12 +833,12 @@ export default function ReportsPage() {
               </div>
 
               {/* Orders Comparison */}
-              <div className="bg-white rounded-xl shadow p-6 mb-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <div className="bg-white rounded shadow p-3 mb-3">
+                <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                   Branch Orders Comparison Over Time
                 </h3>
-                <div className="h-80">
+                <div className="h-40">
                   <Bar
                     data={{
                       labels: branchComparisonData.branches[0]?.data.map(d => d.period) || [],
@@ -871,20 +886,20 @@ export default function ReportsPage() {
               </div>
 
               {/* Total Performance Summary */}
-              <div className="bg-white rounded-xl shadow p-6 mb-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+              <div className="bg-white rounded shadow p-3 mb-3">
+                <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
                   Branch Performance Summary
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full">
+                  <table className="min-w-full text-xs">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Branch</th>
-                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Orders</th>
-                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Sales</th>
-                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Avg Order Value</th>
-                        <th className="py-3 px-4 text-left font-semibold text-gray-600">Performance Rank</th>
+                        <th className="py-2 px-3 text-left font-semibold text-gray-600">Branch</th>
+                        <th className="py-2 px-3 text-left font-semibold text-gray-600">Total Orders</th>
+                        <th className="py-2 px-3 text-left font-semibold text-gray-600">Total Sales</th>
+                        <th className="py-2 px-3 text-left font-semibold text-gray-600">Avg Order Value</th>
+                        <th className="py-2 px-3 text-left font-semibold text-gray-600">Performance Rank</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -892,11 +907,11 @@ export default function ReportsPage() {
                         .sort((a, b) => b.totalSales - a.totalSales)
                         .map((branch, index) => (
                         <tr key={branch.branchId} className="border-b hover:bg-gray-50">
-                          <td className="py-3 px-4 font-medium text-gray-900">{branch.branchName}</td>
-                          <td className="py-3 px-4">{branch.totalOrders}</td>
-                          <td className="py-3 px-4">Ksh {branch.totalSales.toLocaleString()}</td>
-                          <td className="py-3 px-4">Ksh {(branch.totalSales / branch.totalOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="py-3 px-4">
+                          <td className="py-2 px-3 font-medium text-gray-900">{branch.branchName}</td>
+                          <td className="py-2 px-3">{branch.totalOrders}</td>
+                          <td className="py-2 px-3">Ksh {branch.totalSales.toLocaleString()}</td>
+                          <td className="py-2 px-3">Ksh {(branch.totalSales / branch.totalOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-3">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                               index === 0 ? 'bg-green-100 text-green-800' :
                               index === 1 ? 'bg-blue-100 text-blue-800' :
@@ -917,20 +932,20 @@ export default function ReportsPage() {
               {productComparisonData && (
                 <>
                   {/* Top Products Across Branches */}
-                  <div className="bg-white rounded-xl shadow p-6 mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <div className="bg-white rounded shadow p-3 mb-3">
+                    <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       Top Products Performance Across Branches
                     </h3>
                     <div className="overflow-x-auto">
-                      <table className="min-w-full">
+                      <table className="min-w-full text-xs">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Product</th>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Quantity Sold</th>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Revenue</th>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Branches Selling</th>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Avg Revenue per Branch</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Product</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Total Quantity Sold</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Total Revenue</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Branches Selling</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Avg Revenue per Branch</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -938,11 +953,11 @@ export default function ReportsPage() {
                             .slice(0, 10)
                             .map((product: ProductComparison) => (
                             <tr key={product.productId} className="border-b hover:bg-gray-50">
-                              <td className="py-3 px-4 font-medium text-gray-900">{product.productName}</td>
-                              <td className="py-3 px-4">{product.totalQuantitySold}</td>
-                              <td className="py-3 px-4">Ksh {product.totalRevenue.toLocaleString()}</td>
-                              <td className="py-3 px-4">{product.branchCount}</td>
-                              <td className="py-3 px-4">Ksh {(product.totalRevenue / product.branchCount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="py-2 px-3 font-medium text-gray-900">{product.productName}</td>
+                              <td className="py-2 px-3">{product.totalQuantitySold}</td>
+                              <td className="py-2 px-3">Ksh {product.totalRevenue.toLocaleString()}</td>
+                              <td className="py-2 px-3">{product.branchCount}</td>
+                              <td className="py-2 px-3">Ksh {(product.totalRevenue / product.branchCount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -951,22 +966,22 @@ export default function ReportsPage() {
                   </div>
 
                   {/* Product Performance by Branch */}
-                  <div className="bg-white rounded-xl shadow p-6 mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <div className="bg-white rounded shadow p-3 mb-3">
+                    <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                       Product Performance by Branch
                     </h3>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       {productComparisonData.products.slice(0, 6).map((product: ProductComparison) => (
-                        <div key={product.productId} className="bg-gray-50 rounded-lg p-4">
-                          <h4 className="font-semibold text-gray-800 mb-3">{product.productName}</h4>
-                          <div className="space-y-2">
+                        <div key={product.productId} className="bg-gray-50 rounded-lg p-2">
+                          <h4 className="font-semibold text-gray-800 mb-2 text-xs">{product.productName}</h4>
+                          <div className="space-y-1">
                             {product.branchBreakdown.map((branch) => (
                               <div key={branch.branchId} className="flex justify-between items-center">
-                                <span className="text-sm text-gray-600">{branch.branchName}</span>
+                                <span className="text-xs text-gray-600">{branch.branchName}</span>
                                 <div className="text-right">
-                                  <div className="text-sm font-medium">Ksh {branch.totalRevenue.toLocaleString()}</div>
-                                  <div className="text-xs text-gray-500">{branch.quantitySold} units</div>
+                                  <div className="text-xs font-medium">Ksh {branch.totalRevenue.toLocaleString()}</div>
+                                  <div className="text-[10px] text-gray-500">{branch.quantitySold} units</div>
                                 </div>
                               </div>
                             ))}
@@ -977,30 +992,30 @@ export default function ReportsPage() {
                   </div>
 
                   {/* Branch Product Summary */}
-                  <div className="bg-white rounded-xl shadow p-6 mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                  <div className="bg-white rounded shadow p-3 mb-3">
+                    <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
                       Branch Product Performance Summary
                     </h3>
                     <div className="overflow-x-auto">
-                      <table className="min-w-full">
+                      <table className="min-w-full text-xs">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Branch</th>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Products Sold</th>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Total Revenue</th>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Avg Order Value</th>
-                            <th className="py-3 px-4 text-left font-semibold text-gray-600">Product Diversity</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Branch</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Total Products Sold</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Total Revenue</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Avg Order Value</th>
+                            <th className="py-2 px-3 text-left font-semibold text-gray-600">Product Diversity</th>
                           </tr>
                         </thead>
                         <tbody>
                           {productComparisonData.branches.map((branch: BranchComparison) => (
                             <tr key={branch.branchId} className="border-b hover:bg-gray-50">
-                              <td className="py-3 px-4 font-medium text-gray-900">{branch.branchName}</td>
-                              <td className="py-3 px-4">{branch.totalOrders}</td>
-                              <td className="py-3 px-4">Ksh {branch.totalSales.toLocaleString()}</td>
-                              <td className="py-3 px-4">Ksh {(branch.totalSales / branch.totalOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              <td className="py-3 px-4">
+                              <td className="py-2 px-3 font-medium text-gray-900">{branch.branchName}</td>
+                              <td className="py-2 px-3">{branch.totalOrders}</td>
+                              <td className="py-2 px-3">Ksh {branch.totalSales.toLocaleString()}</td>
+                              <td className="py-2 px-3">Ksh {(branch.totalSales / branch.totalOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="py-2 px-3">
                                 <div className="flex items-center gap-2">
                                   <div className="w-16 bg-gray-200 rounded-full h-2">
                                     <div
@@ -1010,7 +1025,7 @@ export default function ReportsPage() {
                                       }}
                                     ></div>
                                   </div>
-                                  <span className="text-xs text-gray-600">
+                                  <span className="text-[10px] text-gray-600">
                                     {((branch.totalOrders / productComparisonData.summary.totalProducts) * 100).toFixed(0)}%
                                   </span>
                                 </div>
@@ -1028,41 +1043,41 @@ export default function ReportsPage() {
         </section>
 
         {/* System Overview Reports */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">System Overview Reports</h2>
+        <section className="mb-5">
+          <h2 className="text-base font-semibold text-gray-800 mb-3">System Overview Reports</h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div className="bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+            <div className="bg-white rounded shadow p-3 text-xs">
+              <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                 System Performance Metrics
               </h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
                   <div>
-                    <p className="font-medium text-blue-900">Application Status</p>
-                    <p className="text-sm text-blue-700">Current state</p>
+                    <p className="font-medium text-blue-900 text-xs">Application Status</p>
+                    <p className="text-[10px] text-blue-700">Current state</p>
                   </div>
                   <div className="text-right">
-                    <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">Online</span>
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Online</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
                   <div>
-                    <p className="font-medium text-green-900">Total Transactions</p>
-                    <p className="text-sm text-green-700">Processed today</p>
+                    <p className="font-medium text-green-900 text-xs">Total Transactions</p>
+                    <p className="text-[10px] text-green-700">Processed today</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xl font-bold text-green-900">{metrics.totalSales || 0}</p>
-                    <p className="text-sm text-green-600">Active</p>
+                    <p className="text-[10px] text-green-600">Active</p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
                   <div>
-                    <p className="font-medium text-purple-900">Revenue Generated</p>
-                    <p className="text-sm text-purple-700">Current period</p>
+                    <p className="font-medium text-purple-900 text-xs">Revenue Generated</p>
+                    <p className="text-[10px] text-purple-700">Current period</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xl font-bold text-purple-900">Ksh {(metrics.totalRevenue || 0).toLocaleString()}</p>
@@ -1072,59 +1087,59 @@ export default function ReportsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-orange-50 rounded-lg">
                   <div>
-                    <p className="font-medium text-orange-900">Customer Activity</p>
-                    <p className="text-sm text-orange-700">Unique visitors</p>
+                    <p className="font-medium text-orange-900 text-xs">Customer Activity</p>
+                    <p className="text-[10px] text-orange-700">Unique visitors</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xl font-bold text-orange-900">{metrics.performanceMetrics?.visitorCount || 0}</p>
-                    <p className="text-sm text-orange-600">Monitoring</p>
+                    <p className="text-[10px] text-orange-600">Monitoring</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+            <div className="bg-white rounded shadow p-3 text-xs">
+              <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                 System Health Dashboard
               </h3>
               <div className="space-y-4">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Data Processing</span>
-                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Active</span>
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-700">Data Processing</span>
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-[10px] font-medium">Active</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div className="bg-green-500 h-2 rounded-full" style={{ width: '100%' }}></div>
                   </div>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Analytics Engine</span>
-                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Running</span>
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-700">Analytics Engine</span>
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-[10px] font-medium">Running</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div className="bg-green-500 h-2 rounded-full" style={{ width: '100%' }}></div>
                   </div>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Report Generation</span>
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Ready</span>
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-700">Report Generation</span>
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-[10px] font-medium">Ready</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div className="bg-blue-500 h-2 rounded-full" style={{ width: '100%' }}></div>
                   </div>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Export Services</span>
-                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Available</span>
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-700">Export Services</span>
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-[10px] font-medium">Available</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div className="bg-green-500 h-2 rounded-full" style={{ width: '100%' }}></div>
@@ -1135,12 +1150,12 @@ export default function ReportsPage() {
           </div>
 
           {/* System Activity Chart */}
-          <div className="bg-white rounded-xl shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
+          <div className="bg-white rounded shadow p-3">
+            <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+              <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
               Business Activity Trends
             </h3>
-            <div className="h-64">
+            <div className="h-40">
               {salesTrendData.labels.length > 0 ? (
                 <Line
                   data={{
@@ -1212,10 +1227,10 @@ export default function ReportsPage() {
         </section>
 
         {/* Advanced Reports - Always visible */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Sales Performance</h2>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-            <div className="bg-white rounded-xl shadow p-6">
+        <section className="mb-5">
+          <h2 className="text-base font-semibold text-gray-800 mb-2">Sales Performance</h2>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            <div className="bg-white rounded shadow p-3">
               <InteractiveChart
                 data={salesTrendData.labels.map((label, index) => ({
                   month: label,
@@ -1228,9 +1243,9 @@ export default function ReportsPage() {
                 height={300}
               />
             </div>
-            <div className="bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-bold mb-4 text-center">Revenue by Top Products</h3>
-              <div className="h-80">
+            <div className="bg-white rounded shadow p-3">
+              <h3 className="text-base font-semibold mb-2 text-center">Revenue by Top Products</h3>
+              <div className="h-40">
                 <Bar data={revenueBreakdownData} options={{ responsive: true, maintainAspectRatio: false, indexAxis: 'y' }} />
               </div>
             </div>
@@ -1239,17 +1254,17 @@ export default function ReportsPage() {
 
         {/* Customer & Operations Section */}
         <section>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Customer & Operations</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            <div className="lg:col-span-3 bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-bold mb-4">Top Customers by Spend</h3>
+          <h2 className="text-base font-semibold text-gray-800 mb-2">Customer & Operations</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+            <div className="lg:col-span-3 bg-white rounded shadow p-3 text-xs">
+              <h3 className="text-base font-semibold mb-2">Top Customers by Spend</h3>
               <div className="overflow-x-auto">
-                <table className="min-w-full">
+                <table className="min-w-full text-xs">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Customer</th>
-                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Purchases</th>
-                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Total Spent</th>
+                      <th className="py-2 px-3 text-left font-semibold text-gray-600">Customer</th>
+                      <th className="py-2 px-3 text-left font-semibold text-gray-600">Purchases</th>
+                      <th className="py-2 px-3 text-left font-semibold text-gray-600">Total Spent</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1258,9 +1273,9 @@ export default function ReportsPage() {
                     ) : (
                       (metrics.topCustomers || []).map((c) => (
                         <tr key={c.phone || c.name} className="border-b">
-                          <td className="py-2 px-4">{c.name}</td>
-                          <td className="py-2 px-4">{c.count}</td>
-                          <td className="py-2 px-4">Ksh {c.total.toLocaleString()}</td>
+                          <td className="py-2 px-3">{c.name}</td>
+                          <td className="py-2 px-3">{c.count}</td>
+                          <td className="py-2 px-3">Ksh {c.total.toLocaleString()}</td>
                         </tr>
                       ))
                     )}
@@ -1268,9 +1283,9 @@ export default function ReportsPage() {
                 </table>
               </div>
             </div>
-            <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
-              <h3 className="text-lg font-bold mb-4 text-center">Payment Methods</h3>
-              <div className="h-80 flex items-center justify-center">
+            <div className="lg:col-span-2 bg-white rounded shadow p-3">
+              <h3 className="text-base font-semibold mb-2 text-center">Payment Methods</h3>
+              <div className="h-40 flex items-center justify-center">
                 <div className="w-full max-w-xs">
                   <Pie data={paymentMethodData} options={{ responsive: true, maintainAspectRatio: false }} />
                 </div>
@@ -1280,11 +1295,11 @@ export default function ReportsPage() {
         </section>
 
         {/* Profitability (Margin %) Section */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Profitability (Margin %)</h2>
-          <div className="bg-white rounded-xl shadow p-6">
-            <h3 className="text-lg font-bold mb-4 text-center">Product Margin %</h3>
-            <div className="h-80">
+        <section className="mb-5">
+          <h2 className="text-base font-semibold text-gray-800 mb-2">Profitability (Margin %)</h2>
+          <div className="bg-white rounded shadow p-3">
+            <h3 className="text-base font-semibold mb-2 text-center">Product Margin %</h3>
+            <div className="h-40">
               {metrics.topProducts && metrics.topProducts.length > 0 ? (
                 <Bar
                   data={{
@@ -1337,19 +1352,17 @@ export default function ReportsPage() {
         </section>
 
         {/* Predictive Analytics & Forecasting */}
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+        <section className="mb-5">
+          <h2 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-1">
+            <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
             Predictive Analytics & Forecasting
           </h2>
-
-          {/* Sales Forecasting with Confidence Intervals */}
-          <div className="bg-white rounded-xl shadow p-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+          <div className="bg-white rounded shadow p-3 mb-3">
+            <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
               Sales Forecasting (Next 6 Months)
             </h3>
-            <div className="h-80">
+            <div className="h-40">
               {metrics.forecast && metrics.forecast.forecast_months && metrics.forecast.forecast_months.length > 0 ? (
                 <Line
                   data={{
@@ -1450,53 +1463,53 @@ export default function ReportsPage() {
                 </div>
               )}
             </div>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 mb-1">Next Month Prediction</h4>
+            <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+              <div className="bg-blue-50 rounded-lg p-2">
+                <h4 className="font-semibold text-gray-800 mb-1 text-xs">Next Month Prediction</h4>
                 <p className="text-2xl font-bold text-blue-700">
                   {metrics.forecast?.forecast_sales?.[0] || 0}
                 </p>
-                <p className="text-sm text-blue-600">±15% confidence interval</p>
+                <p className="text-[10px] text-blue-600">±15% confidence interval</p>
               </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <h4 className="font-semibold text-green-900 mb-1">3-Month Trend</h4>
+              <div className="bg-green-50 rounded-lg p-2">
+                <h4 className="font-semibold text-gray-800 mb-1 text-xs">3-Month Trend</h4>
                 <p className="text-2xl font-bold text-green-700">
                   {metrics.forecast?.forecast_sales?.slice(0, 3).reduce((a, b) => a + b, 0) || 0}
                 </p>
-                <p className="text-sm text-green-600">Total predicted sales</p>
+                <p className="text-[10px] text-green-600">Total predicted sales</p>
               </div>
-              <div className="bg-purple-50 rounded-lg p-4">
-                <h4 className="font-semibold text-purple-900 mb-1">Growth Rate</h4>
+              <div className="bg-purple-50 rounded-lg p-2">
+                <h4 className="font-semibold text-gray-800 mb-1 text-xs">Growth Rate</h4>
                 <p className="text-2xl font-bold text-purple-700">
                   +{metrics.forecast?.forecast_sales?.length > 1 ?
                     Math.round(((metrics.forecast.forecast_sales[5] - metrics.forecast.forecast_sales[0]) / metrics.forecast.forecast_sales[0]) * 100) : 0}%
                 </p>
-                <p className="text-sm text-purple-600">Projected 6-month growth</p>
+                <p className="text-[10px] text-purple-600">Projected 6-month growth</p>
               </div>
             </div>
           </div>
 
           {/* Performance Benchmarking */}
-          <div className="bg-white rounded-xl shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+          <div className="bg-white rounded shadow p-3">
+            <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
               Industry Performance Benchmarking
             </h3>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <div>
-                <h4 className="font-semibold text-gray-800 mb-4">Key Performance Indicators vs Industry</h4>
-                <div className="space-y-4">
+                <h4 className="font-semibold text-gray-800 mb-2">Key Performance Indicators vs Industry</h4>
+                <div className="space-y-2">
                   {/* Average Sale Value Benchmark */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Average Sale Value</span>
-                      <span className="text-xs text-gray-500">vs Industry Avg</span>
+                  <div className="bg-gray-50 rounded-lg p-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-700">Average Sale Value</span>
+                      <span className="text-[10px] text-gray-500">vs Industry Avg</span>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
                       <div className="flex-1">
-                        <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
-                            className="bg-blue-500 h-3 rounded-full"
+                            className="bg-blue-500 h-2 rounded-full"
                             style={{
                               width: `${Math.min(100, ((metrics.avgSaleValue || 0) / 2500) * 100)}%`
                             }}
@@ -1518,16 +1531,16 @@ export default function ReportsPage() {
                   </div>
 
                   {/* Customer Retention Benchmark */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Customer Retention Rate</span>
-                      <span className="text-xs text-gray-500">vs Industry Avg</span>
+                  <div className="bg-gray-50 rounded-lg p-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-700">Customer Retention Rate</span>
+                      <span className="text-[10px] text-gray-500">vs Industry Avg</span>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
                       <div className="flex-1">
-                        <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
-                            className="bg-green-500 h-3 rounded-full"
+                            className="bg-green-500 h-2 rounded-full"
                             style={{
                               width: `${Math.min(100, ((metrics.customerSegments?.[0]?.retention || 75) / 85) * 100)}%`
                             }}
@@ -1549,16 +1562,16 @@ export default function ReportsPage() {
                   </div>
 
                   {/* Monthly Growth Rate Benchmark */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Monthly Growth Rate</span>
-                      <span className="text-xs text-gray-500">vs Industry Avg</span>
+                  <div className="bg-gray-50 rounded-lg p-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-700">Monthly Growth Rate</span>
+                      <span className="text-[10px] text-gray-500">vs Industry Avg</span>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
                       <div className="flex-1">
-                        <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
-                            className="bg-purple-500 h-3 rounded-full"
+                            className="bg-purple-500 h-2 rounded-full"
                             style={{
                               width: `${Math.min(100, Math.max(0, 50 + Math.random() * 50))}%` // Simulated growth rate
                             }}
@@ -1576,16 +1589,16 @@ export default function ReportsPage() {
                   </div>
 
                   {/* Inventory Turnover Benchmark */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Inventory Turnover</span>
-                      <span className="text-xs text-gray-500">vs Industry Avg</span>
+                  <div className="bg-gray-50 rounded-lg p-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-700">Inventory Turnover</span>
+                      <span className="text-[10px] text-gray-500">vs Industry Avg</span>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
                       <div className="flex-1">
-                        <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
-                            className="bg-red-500 h-3 rounded-full"
+                            className="bg-red-500 h-2 rounded-full"
                             style={{
                               width: `${Math.min(100, ((metrics.inventoryAnalytics?.inventoryTurnover || 4.2) / 6) * 100)}%`
                             }}
@@ -1609,9 +1622,9 @@ export default function ReportsPage() {
               </div>
 
               <div>
-                <h4 className="font-semibold text-gray-800 mb-4">Benchmark Summary</h4>
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6">
-                  <div className="flex items-center gap-3 mb-4">
+                <h4 className="font-semibold text-gray-800 mb-2">Benchmark Summary</h4>
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3">
+                  <div className="flex items-center gap-3 mb-2">
                     <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
                       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1619,20 +1632,20 @@ export default function ReportsPage() {
                     </div>
                     <div>
                       <h5 className="font-semibold text-blue-900">Performance Score</h5>
-                      <p className="text-sm text-blue-700">Above average in 2/4 metrics</p>
+                      <p className="text-xs text-blue-700">Above average in 2/4 metrics</p>
                     </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-blue-800">Overall Performance</span>
+                      <span className="text-xs text-blue-800">Overall Performance</span>
                       <span className="font-semibold text-blue-900">78%</span>
                     </div>
                     <div className="w-full bg-blue-200 rounded-full h-2">
                       <div className="bg-blue-600 h-2 rounded-full" style={{ width: '78%' }}></div>
                     </div>
                   </div>
-                  <div className="mt-4 p-3 bg-white bg-opacity-50 rounded-lg">
-                    <p className="text-xs text-blue-800">
+                  <div className="mt-2 p-2 bg-white bg-opacity-50 rounded-lg">
+                    <p className="text-[10px] text-blue-800">
                       <strong>Recommendation:</strong> Focus on improving customer retention and monthly growth rate to reach industry-leading performance.
                     </p>
                   </div>
@@ -1643,22 +1656,22 @@ export default function ReportsPage() {
         </section>
 
         {/* Enterprise Analytics - Always visible */}
-        <section className="mt-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <FaCrown className="w-6 h-6 text-yellow-500" />
+        <section className="mt-5">
+          <h2 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
+            <FaCrown className="w-5 h-5 text-yellow-500" />
             Enterprise Analytics
           </h2>
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-bold mb-4">Customer Segmentation</h3>
-            <p className="text-gray-600 mb-4">Advanced customer analysis and segmentation insights.</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-semibold text-gray-800 mb-2">Customer Segments</h4>
-                <p className="text-sm text-gray-600">AI-powered customer segmentation and behavior analysis.</p>
+          <div className="bg-white rounded shadow-md p-3">
+            <h3 className="text-base font-semibold mb-2">Customer Segmentation</h3>
+            <p className="text-xs text-gray-600 mb-2">Advanced customer analysis and segmentation insights.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="bg-gray-50 rounded p-2">
+                <h4 className="font-semibold text-gray-800 mb-1 text-xs">Customer Segments</h4>
+                <p className="text-xs text-gray-600">AI-powered customer segmentation and behavior analysis.</p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-semibold text-gray-800 mb-2">Predictive Analytics</h4>
-                <p className="text-sm text-gray-600">Advanced forecasting and trend prediction models.</p>
+              <div className="bg-gray-50 rounded p-2">
+                <h4 className="font-semibold text-gray-800 mb-1 text-xs">Predictive Analytics</h4>
+                <p className="text-xs text-gray-600">Advanced forecasting and trend prediction models.</p>
               </div>
             </div>
           </div>
