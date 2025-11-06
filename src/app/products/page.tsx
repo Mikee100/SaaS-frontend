@@ -14,9 +14,6 @@ import Tooltip from '@/components/Tooltip';
 import { useBranch } from "@/contexts/BranchContext";
 import Image from 'next/image';
 import API_BASE_URL from '../../config/apiConfig';
-import { categoryStorage } from '@/utils/categoryStorage';
-import { Category } from '@/types/categories';
-import { CustomFieldRenderer } from '@/components/CustomFieldRenderer';
 
 interface Product {
   id: string;
@@ -31,8 +28,6 @@ interface Product {
     id: string;
     name: string;
   };
-  categoryId?: string;
-  category?: Category;
 }
 
 export default function ProductsPage() {
@@ -57,9 +52,6 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [sortField, setSortField] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number | boolean>>({});
   const itemsPerPage = 20;
 
   const { data: limits } = usePlanLimits();
@@ -81,15 +73,6 @@ export default function ProductsPage() {
   const canCreateProducts = hasPermission(user, 'create_products');
   const canEditProducts = hasPermission(user, 'edit_products');
   const canDeleteProducts = hasPermission(user, 'delete_products');
-
-  // Load categories on component mount
-  useEffect(() => {
-    async function loadCategories() {
-      const loadedCategories = await categoryStorage.getCategories();
-      setCategories(loadedCategories);
-    }
-    loadCategories();
-  }, []);
 
   useEffect(() => {
     async function fetchBranches() {
@@ -184,7 +167,6 @@ export default function ProductsPage() {
       return;
     }
 
-    // Validate selectedBranchId before creating product
     if (!selectedBranchId || typeof selectedBranchId !== 'string' || selectedBranchId.trim() === '') {
       setError('Please select a valid branch before creating a product.');
       return;
@@ -201,9 +183,7 @@ export default function ProductsPage() {
         stock: parseInt(formData.get("stock") as string),
         description: formData.get("description"),
         supplier: formData.get("supplier"),
-        categoryId: selectedCategoryId || undefined,
-        customFields: selectedCategoryId ? customFieldValues : undefined,
-        branchId: selectedBranchId, // Add branchId to payload
+        branchId: selectedBranchId,
       }, { 'x-branch-id': selectedBranchId || '' }) as Product;
       setProducts([newProduct, ...products]);
       setShowAddForm(false);
@@ -231,8 +211,6 @@ export default function ProductsPage() {
           stock: parseInt(formData.get("stock") as string),
           description: formData.get("description"),
           supplier: formData.get("supplier"),
-          categoryId: selectedCategoryId || undefined,
-          customFields: selectedCategoryId ? customFieldValues : undefined,
         }, { 'x-branch-id': selectedBranchId || '' });
         setEditProduct(null);
       }
@@ -248,16 +226,12 @@ export default function ProductsPage() {
   }
 
   const resetForm = () => {
-    setSelectedCategoryId('');
-    setCustomFieldValues({});
     setEditProduct(null);
     setShowAddForm(false);
   };
 
   function openEditModal(product: Product) {
     setEditProduct(product);
-    setSelectedCategoryId(product.categoryId || '');
-    setCustomFieldValues(product.customFields || {});
     setShowAddForm(true);
   }
 
@@ -266,18 +240,6 @@ export default function ProductsPage() {
     await apiDelete(`/products/${id}`, { 'x-branch-id': selectedBranchId || '' });
     fetchProducts();
   }
-
-  const handleCategoryChange = (categoryId: string) => {
-    setSelectedCategoryId(categoryId);
-    setCustomFieldValues({}); // Reset custom fields when category changes
-  };
-
-  const handleCustomFieldChange = (fieldId: string, value: string | number | boolean) => {
-    setCustomFieldValues(prev => ({
-      ...prev,
-      [fieldId]: value
-    }));
-  };
 
   async function handleBulkUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -437,9 +399,8 @@ export default function ProductsPage() {
 
   // Helper to flatten product fields for table display
   function flattenProduct(product: Product): { [key: string]: string | number | boolean | undefined; margin: string } {
-    // Exclude 'category' from the spread to avoid type errors
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { customFields, supplier, category, ...rest } = product;
+   
+    const { customFields, supplier, ...rest } = product;
     const flat: { [key: string]: string | number | boolean | undefined; margin: string } = { ...rest, ...(customFields || {}), margin: '' };
 
     // Add supplier name if exists
@@ -822,23 +783,6 @@ export default function ProductsPage() {
                 <div>
               </div>
 
-              {/* Category Selection */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-0.5">Category</label>
-                <select
-                  value={selectedCategoryId}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-xs"
-                >
-                  <option value="">No category</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-0.5">Description</label>
                 <textarea
@@ -848,31 +792,6 @@ export default function ProductsPage() {
                   className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-xs"
                 />
               </div>
-
-              {/* Custom Fields Section */}
-              {(() => {
-                const selectedCategory = categories.find(c => c.id === selectedCategoryId);
-                return (
-                  selectedCategoryId &&
-                  Array.isArray(selectedCategory?.customFields) &&
-                  selectedCategory.customFields &&
-                  selectedCategory.customFields.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900 mb-2">Custom Fields</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {selectedCategory.customFields.map((field) => (
-                          <CustomFieldRenderer
-                            key={field.id}
-                            field={field}
-                            value={customFieldValues[field.name] || (field.type === 'boolean' ? false : '')}
-                            onChange={(value) => handleCustomFieldChange(field.name, value)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )
-                );
-              })()}
 
               <div className="flex gap-2 pt-1">
                 <button
