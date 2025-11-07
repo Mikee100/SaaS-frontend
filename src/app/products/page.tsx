@@ -6,7 +6,7 @@ import { usePlanLimits } from '@/hooks/usePlanLimits';
 import PlanGuard from '@/components/PlanGuard';
 import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
-import { FaPlus, FaBox, FaExclamationTriangle, FaSearch, FaDownload, FaTrash, FaEdit, FaQrcode, FaUpload, FaLock, FaSortAmountDown, FaPrint, FaTimes, FaChevronLeft, FaChevronRight, FaStore, FaLayerGroup, FaChartBar, FaTags } from 'react-icons/fa';
+import { FaPlus, FaBox, FaExclamationTriangle, FaSearch, FaDownload, FaTrash, FaEdit, FaQrcode, FaUpload, FaLock, FaSortAmountDown, FaPrint, FaTimes, FaChevronLeft, FaChevronRight, FaStore, FaLayerGroup, FaChartBar } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
@@ -518,13 +518,6 @@ export default function ProductsPage() {
             </div>
           }>
             <div className="flex flex-col sm:flex-row gap-2">
-              <Link
-                href="/products/categories"
-                className="flex items-center gap-1 px-2 py-1.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-xs"
-              >
-                <FaTags className="w-3 h-3" />
-                Categories
-              </Link>
               <button
                 onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
                 className="px-2 py-1.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 flex items-center gap-1 text-xs"

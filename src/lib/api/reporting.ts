@@ -1,75 +1,15 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { getSession } from 'next-auth/react';
-import { Session } from 'next-auth';
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
 
-// Extend Session type to include accessToken
-interface CustomSession extends Session {
-  accessToken?: string;
+/**
+ * Utility function for merging class names.
+ * 
+ * This function takes in multiple class names as inputs and returns a single class name string.
+ * It uses the `clsx` function from the `clsx` library to merge the class names, and then passes the result to the `twMerge` function from the `tailwind-merge` library to handle any Tailwind-specific class name merging.
+ * 
+ * @param inputs - Multiple class names to be merged.
+ * @returns A single class name string.
+ */
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_REPORTING_SERVICE_URL || 'http://localhost:3001/api';
-
-interface AxiosInstanceConfig {
-  baseURL: string;
-  headers?: Record<string, string>;
-}
-
-const axiosInstance: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {},
-} as AxiosInstanceConfig);
-
-// Remove custom AxiosRequestConfigWithAuth interface and use InternalAxiosRequestConfig from axios
-import type { InternalAxiosRequestConfig } from 'axios';
-
-axiosInstance.interceptors.request.use(
-  async (config: InternalAxiosRequestConfig) => {
-    const session = await getSession() as CustomSession;
-    if (session?.accessToken) {
-      if (config.headers && typeof config.headers.set === 'function') {
-        config.headers.set('Authorization', `Bearer ${session.accessToken}`);
-      } else if (config.headers) {
-        config.headers['Authorization'] = `Bearer ${session.accessToken}`;
-      }
-    }
-    return config;
-  },
-  (error: unknown) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor for error handling
-axiosInstance.interceptors.response.use(
-  (response: AxiosResponse) => response,
-  (error) => {
-    // Handle errors globally
-    console.error('API Error:', error);
-    return Promise.reject(error);
-  }
-);
-
-// API methods
-export const reportingApi = {
-  // Sales Reports
-  getSalesReport: (params: Record<string, unknown>) => 
-    axiosInstance.get('/reports/sales', { params }),
-  
-  // Sales Trends
-  getSalesTrends: (params: Record<string, unknown>) => 
-    axiosInstance.get('/reports/sales-trends', { params }),
-  
-  // Customer Segmentation
-  getCustomerSegments: (params: Record<string, unknown>) => 
-    axiosInstance.get('/reports/customer-segmentation', { params }),
-  
-  // Branch Reports
-  getBranchReports: (branchId: string, params: Record<string, unknown>) => 
-    axiosInstance.get(`/reports/branches/${branchId}`, { params }),
-  
-  // Tenant Analytics
-  getTenantAnalytics: (tenantId: string, params: Record<string, unknown>) => 
-    axiosInstance.get(`/reports/tenants/${tenantId}`, { params }),
-};
-
-export default axiosInstance;

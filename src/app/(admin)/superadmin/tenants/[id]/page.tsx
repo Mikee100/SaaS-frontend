@@ -193,8 +193,8 @@ const fetchMpesaConfig = useCallback(async () => {
 
   if (loadingData) {
     return (
-      <main style={{ padding: "2rem" }}>
-        <div style={{ textAlign: "center", padding: "2rem" }}>
+      <main style={{ padding: "1rem", background: "#f8fafc", minHeight: "100vh" }}>
+        <div style={{ textAlign: "center", padding: "1rem", fontSize: "13px", color: "#64748b" }}>
           Loading tenant data...
         </div>
       </main>
@@ -203,8 +203,8 @@ const fetchMpesaConfig = useCallback(async () => {
 
   if (!tenant) {
     return (
-      <main style={{ padding: "2rem" }}>
-        <div style={{ textAlign: "center", padding: "2rem" }}>
+      <main style={{ padding: "1rem", background: "#f8fafc", minHeight: "100vh" }}>
+        <div style={{ textAlign: "center", padding: "1rem", fontSize: "13px", color: "#64748b" }}>
           Tenant not found
         </div>
       </main>
@@ -212,95 +212,98 @@ const fetchMpesaConfig = useCallback(async () => {
   }
 
   return (
-    <main style={{ padding: "2rem" }}>
-      <div style={{ marginBottom: "2rem" }}>
+    <main style={{ padding: "1rem", background: "#f8fafc", minHeight: "100vh" }}>
+      <div style={{ marginBottom: "1rem" }}>
         <button
           onClick={() => router.push('/superadmin/tenants')}
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "0.5rem",
+            gap: "0.3rem",
             background: "none",
             border: "none",
-            color: "#3b82f6",
+            color: "#2563eb",
             cursor: "pointer",
-            fontSize: "16px",
-            marginBottom: "1rem"
+            fontSize: "13px",
+            marginBottom: "0.7rem",
+            fontWeight: 500
           }}
         >
-          <FaArrowLeft /> Back to Tenants
+          <FaArrowLeft /> Back
         </button>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: "0.5rem" }}>{tenant.name}</h1>
-            <p style={{ color: "#6b7280", fontSize: "18px" }}>{tenant.businessType}</p>
-            <p style={{ color: "#6b7280" }}>{tenant.contactEmail} • {tenant.contactPhone}</p>
+            <h1 style={{ fontSize: 16, fontWeight: "bold", marginBottom: "0.2rem", color: "#1e293b" }}>{tenant.name}</h1>
+            <p style={{ color: "#64748b", fontSize: "12px", marginBottom: "0.2rem" }}>{tenant.businessType}</p>
+            <p style={{ color: "#64748b", fontSize: "12px" }}>{tenant.contactEmail} • {tenant.contactPhone}</p>
           </div>
 
           <button
             onClick={handleEnterAccount}
             style={{
-              background: "#3b82f6",
+              background: "#2563eb",
               color: "#fff",
-              padding: "0.75rem 1.5rem",
-              borderRadius: "6px",
+              padding: "0.3rem 0.8rem",
+              borderRadius: "5px",
               border: "none",
               cursor: "pointer",
-              fontWeight: "500",
+              fontWeight: 500,
               display: "flex",
               alignItems: "center",
-              gap: "0.5rem",
-              fontSize: "16px"
+              gap: "0.3rem",
+              fontSize: "12px",
+              boxShadow: "0 1px 2px rgba(37,99,235,0.04)"
             }}
           >
-            <FaArrowRight /> Enter Account
+            <FaArrowRight /> Enter
           </button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
-        <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-            <FaUsers style={{ color: "#3b82f6" }} />
-            <h3 style={{ fontSize: 14, color: "#6b7280", margin: 0 }}>Users</h3>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+        gap: "0.7rem",
+        marginBottom: "1.2rem"
+      }}>
+        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
+            <FaUsers style={{ color: "#2563eb", fontSize: "13px" }} />
+            <span style={{ fontSize: "11px", color: "#64748b" }}>Users</span>
           </div>
-          <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937", margin: 0 }}>{tenant.userCount}</p>
+          <div style={{ fontSize: 15, fontWeight: "bold", color: "#1e293b" }}>{tenant.userCount}</div>
         </div>
-
-        <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-            <FaStore style={{ color: "#10b981" }} />
-            <h3 style={{ fontSize: 14, color: "#6b7280", margin: 0 }}>Products</h3>
+        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
+            <FaStore style={{ color: "#059669", fontSize: "13px" }} />
+            <span style={{ fontSize: "11px", color: "#64748b" }}>Products</span>
           </div>
-          <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937", margin: 0 }}>{tenant.productCount}</p>
+          <div style={{ fontSize: 15, fontWeight: "bold", color: "#1e293b" }}>{tenant.productCount}</div>
         </div>
-
-        <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-            <FaReceipt style={{ color: "#f59e0b" }} />
-            <h3 style={{ fontSize: 14, color: "#6b7280", margin: 0 }}>Transactions</h3>
+        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
+            <FaReceipt style={{ color: "#f59e0b", fontSize: "13px" }} />
+            <span style={{ fontSize: "11px", color: "#64748b" }}>Transactions</span>
           </div>
-          <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937", margin: 0 }}>{tenant.salesCount}</p>
+          <div style={{ fontSize: 15, fontWeight: "bold", color: "#1e293b" }}>{tenant.salesCount}</div>
         </div>
-
-        <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-            <FaBuilding style={{ color: "#8b5cf6" }} />
-            <h3 style={{ fontSize: 14, color: "#6b7280", margin: 0 }}>Branches</h3>
+        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
+            <FaBuilding style={{ color: "#8b5cf6", fontSize: "13px" }} />
+            <span style={{ fontSize: "11px", color: "#64748b" }}>Branches</span>
           </div>
-          <p style={{ fontSize: 32, fontWeight: "bold", color: "#1f2937", margin: 0 }}>{tenant.branchCount}</p>
+          <div style={{ fontSize: 15, fontWeight: "bold", color: "#1e293b" }}>{tenant.branchCount}</div>
         </div>
-
-        <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-            <FaStore style={{ color: "#ef4444" }} />
-            <h3 style={{ fontSize: 14, color: "#6b7280", margin: 0 }}>Database Space</h3>
+        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
+            <FaStore style={{ color: "#ef4444", fontSize: "13px" }} />
+            <span style={{ fontSize: "11px", color: "#64748b" }}>DB Space</span>
           </div>
-          <p style={{ fontSize: 24, fontWeight: "bold", color: "#1f2937", margin: 0 }}>{tenant.spaceUsedMB} MB</p>
-          <div style={{ marginTop: "0.5rem" }}>
-            <div style={{ width: "100%", height: "8px", background: "#e5e7eb", borderRadius: "4px", overflow: "hidden" }}>
+          <div style={{ fontSize: 13, fontWeight: "bold", color: "#1e293b" }}>{tenant.spaceUsedMB} MB</div>
+          <div style={{ marginTop: "0.2rem" }}>
+            <div style={{ width: "100%", height: "6px", background: "#e5e7eb", borderRadius: "3px", overflow: "hidden" }}>
               <div
                 style={{
                   width: `${Math.min((parseFloat(tenant.spaceUsedMB) / 1000) * 100, 100)}%`,
@@ -315,17 +318,18 @@ const fetchMpesaConfig = useCallback(async () => {
       </div>
 
       {/* Tabs */}
-      <div style={{ borderBottom: "1px solid #e5e7eb", marginBottom: "2rem" }}>
-        <nav style={{ display: "flex", gap: "2rem" }}>
+      <div style={{ borderBottom: "1px solid #e5e7eb", marginBottom: "1.2rem" }}>
+        <nav style={{ display: "flex", gap: "1rem" }}>
           <button
             onClick={() => setActiveTab('overview')}
             style={{
-              padding: "1rem 0",
+              padding: "0.5rem 0",
               border: "none",
               background: "none",
-              borderBottom: activeTab === 'overview' ? "2px solid #3b82f6" : "2px solid transparent",
-              color: activeTab === 'overview' ? "#3b82f6" : "#6b7280",
+              borderBottom: activeTab === 'overview' ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === 'overview' ? "#2563eb" : "#64748b",
               fontWeight: activeTab === 'overview' ? "600" : "500",
+              fontSize: "12px",
               cursor: "pointer"
             }}
           >
@@ -334,12 +338,13 @@ const fetchMpesaConfig = useCallback(async () => {
           <button
             onClick={() => setActiveTab('products')}
             style={{
-              padding: "1rem 0",
+              padding: "0.5rem 0",
               border: "none",
               background: "none",
-              borderBottom: activeTab === 'products' ? "2px solid #3b82f6" : "2px solid transparent",
-              color: activeTab === 'products' ? "#3b82f6" : "#6b7280",
+              borderBottom: activeTab === 'products' ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === 'products' ? "#2563eb" : "#64748b",
               fontWeight: activeTab === 'products' ? "600" : "500",
+              fontSize: "12px",
               cursor: "pointer"
             }}
           >
@@ -348,12 +353,13 @@ const fetchMpesaConfig = useCallback(async () => {
           <button
             onClick={() => setActiveTab('transactions')}
             style={{
-              padding: "1rem 0",
+              padding: "0.5rem 0",
               border: "none",
               background: "none",
-              borderBottom: activeTab === 'transactions' ? "2px solid #3b82f6" : "2px solid transparent",
-              color: activeTab === 'transactions' ? "#3b82f6" : "#6b7280",
+              borderBottom: activeTab === 'transactions' ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === 'transactions' ? "#2563eb" : "#64748b",
               fontWeight: activeTab === 'transactions' ? "600" : "500",
+              fontSize: "12px",
               cursor: "pointer"
             }}
           >
@@ -362,12 +368,13 @@ const fetchMpesaConfig = useCallback(async () => {
           <button
             onClick={() => setActiveTab('analytics')}
             style={{
-              padding: "1rem 0",
+              padding: "0.5rem 0",
               border: "none",
               background: "none",
-              borderBottom: activeTab === 'analytics' ? "2px solid #3b82f6" : "2px solid transparent",
-              color: activeTab === 'analytics' ? "#3b82f6" : "#6b7280",
+              borderBottom: activeTab === 'analytics' ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === 'analytics' ? "#2563eb" : "#64748b",
               fontWeight: activeTab === 'analytics' ? "600" : "500",
+              fontSize: "12px",
               cursor: "pointer"
             }}
           >
@@ -376,12 +383,13 @@ const fetchMpesaConfig = useCallback(async () => {
           <button
             onClick={() => setActiveTab('integrations')}
             style={{
-              padding: "1rem 0",
+              padding: "0.5rem 0",
               border: "none",
               background: "none",
-              borderBottom: activeTab === 'integrations' ? "2px solid #3b82f6" : "2px solid transparent",
-              color: activeTab === 'integrations' ? "#3b82f6" : "#6b7280",
+              borderBottom: activeTab === 'integrations' ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === 'integrations' ? "#2563eb" : "#64748b",
               fontWeight: activeTab === 'integrations' ? "600" : "500",
+              fontSize: "12px",
               cursor: "pointer"
             }}
           >
@@ -392,20 +400,20 @@ const fetchMpesaConfig = useCallback(async () => {
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
           <div>
-            <h3 style={{ fontSize: 20, fontWeight: "bold", marginBottom: "1rem" }}>Recent Products</h3>
-            <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
+            <h3 style={{ fontSize: 13, fontWeight: "bold", marginBottom: "0.5rem", color: "#334155" }}>Recent Products</h3>
+            <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
               {products.slice(0, 5).map(product => (
-                <div key={product.id} style={{ padding: "1rem", borderBottom: "1px solid #e5e7eb" }}>
+                <div key={product.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
                   <div style={{ fontWeight: "500" }}>{product.name}</div>
-                  <div style={{ fontSize: "14px", color: "#6b7280" }}>
+                  <div style={{ color: "#64748b" }}>
                     {formatCurrency(product.price)} • Stock: {product.inventory[0]?.quantity || 0}
                   </div>
                 </div>
               ))}
               {products.length === 0 && (
-                <div style={{ padding: "2rem", textAlign: "center", color: "#6b7280" }}>
+                <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
                   No products found
                 </div>
               )}
@@ -413,16 +421,16 @@ const fetchMpesaConfig = useCallback(async () => {
           </div>
 
           <div>
-            <h3 style={{ fontSize: 20, fontWeight: "bold", marginBottom: "1rem" }}>Recent Transactions</h3>
-            <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
+            <h3 style={{ fontSize: 13, fontWeight: "bold", marginBottom: "0.5rem", color: "#334155" }}>Recent Transactions</h3>
+            <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
               {transactions.slice(0, 5).map(transaction => (
-                <div key={transaction.id} style={{ padding: "1rem", borderBottom: "1px solid #e5e7eb" }}>
+                <div key={transaction.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
                   <div style={{ fontWeight: "500" }}>{formatCurrency(transaction.total)}</div>
-                  <div style={{ fontSize: "14px", color: "#6b7280" }}>{formatDate(transaction.createdAt)}</div>
+                  <div style={{ color: "#64748b" }}>{formatDate(transaction.createdAt)}</div>
                 </div>
               ))}
               {transactions.length === 0 && (
-                <div style={{ padding: "2rem", textAlign: "center", color: "#6b7280" }}>
+                <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
                   No transactions found
                 </div>
               )}
@@ -432,36 +440,36 @@ const fetchMpesaConfig = useCallback(async () => {
       )}
 
       {activeTab === 'analytics' && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
           <div>
-            <h3 style={{ fontSize: 20, fontWeight: "bold", marginBottom: "1rem" }}>Space Usage Trend</h3>
-            <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-              <div style={{ height: "200px", display: "flex", alignItems: "end", justifyContent: "center", background: "#f9fafb", borderRadius: "4px" }}>
-                <div style={{ width: "60%", height: `${Math.min((parseFloat(tenant.spaceUsedMB) / 1000) * 100, 100)}%`, background: "#3b82f6", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }}></div>
+            <h3 style={{ fontSize: 13, fontWeight: "bold", marginBottom: "0.5rem", color: "#334155" }}>Space Usage Trend</h3>
+            <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+              <div style={{ height: "80px", display: "flex", alignItems: "end", justifyContent: "center", background: "#f9fafb", borderRadius: "4px" }}>
+                <div style={{ width: "60%", height: `${Math.min((parseFloat(tenant.spaceUsedMB) / 1000) * 100, 100)}%`, background: "#2563eb", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }}></div>
               </div>
-              <p style={{ textAlign: "center", marginTop: "1rem", color: "#6b7280" }}>
+              <p style={{ textAlign: "center", marginTop: "0.5rem", color: "#64748b", fontSize: "12px" }}>
                 Current usage: {tenant.spaceUsedMB} MB
               </p>
             </div>
           </div>
 
           <div>
-            <h3 style={{ fontSize: 20, fontWeight: "bold", marginBottom: "1rem" }}>Resource Distribution</h3>
-            <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <h3 style={{ fontSize: 13, fontWeight: "bold", marginBottom: "0.5rem", color: "#334155" }}>Resource Distribution</h3>
+            <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
                 {tenant.resourceSpaceUsage && Object.entries(tenant.resourceSpaceUsage).map(([resource, bytes]) => {
                   const mb = (bytes / (1024 * 1024)).toFixed(2);
                   const maxBytes = Math.max(...Object.values(tenant.resourceSpaceUsage!));
                   const percentage = maxBytes > 0 ? (bytes / maxBytes) * 100 : 0;
 
                   return (
-                    <div key={resource} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ color: "#6b7280" }}>{resource}</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <div style={{ width: "100px", height: "8px", background: "#e5e7eb", borderRadius: "4px", overflow: "hidden" }}>
-                          <div style={{ width: `${percentage}%`, height: "100%", background: "#10b981" }}></div>
+                    <div key={resource} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
+                      <span style={{ color: "#64748b" }}>{resource}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                        <div style={{ width: "60px", height: "6px", background: "#e5e7eb", borderRadius: "3px", overflow: "hidden" }}>
+                          <div style={{ width: `${percentage}%`, height: "100%", background: "#059669" }}></div>
                         </div>
-                        <span style={{ fontSize: "14px", color: "#1f2937" }}>{mb} MB</span>
+                        <span style={{ color: "#1e293b" }}>{mb} MB</span>
                       </div>
                     </div>
                   );
@@ -473,27 +481,27 @@ const fetchMpesaConfig = useCallback(async () => {
       )}
 
       {activeTab === 'products' && (
-        <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
-          <div style={{ padding: "1.5rem", borderBottom: "1px solid #e5e7eb" }}>
-            <h3 style={{ fontSize: 20, fontWeight: "bold", margin: 0 }}>All Products</h3>
+        <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+          <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
+            <h3 style={{ fontSize: 13, fontWeight: "bold", margin: 0, color: "#334155" }}>All Products</h3>
           </div>
           {products.map(product => (
-            <div key={product.id} style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #e5e7eb" }}>
+            <div key={product.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "500" }}>{product.name}</div>
-                  <div style={{ fontSize: "14px", color: "#6b7280" }}>
+                  <div style={{ color: "#64748b" }}>
                     Stock: {product.inventory[0]?.quantity || 0}
                   </div>
                 </div>
-                <div style={{ fontWeight: "600", color: "#1f2937" }}>
+                <div style={{ fontWeight: "600", color: "#1e293b" }}>
                   {formatCurrency(product.price)}
                 </div>
               </div>
             </div>
           ))}
           {products.length === 0 && (
-            <div style={{ padding: "2rem", textAlign: "center", color: "#6b7280" }}>
+            <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
               No products found
             </div>
           )}
@@ -501,27 +509,27 @@ const fetchMpesaConfig = useCallback(async () => {
       )}
 
       {activeTab === 'transactions' && (
-        <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
-          <div style={{ padding: "1.5rem", borderBottom: "1px solid #e5e7eb" }}>
-            <h3 style={{ fontSize: 20, fontWeight: "bold", margin: 0 }}>All Transactions</h3>
+        <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+          <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
+            <h3 style={{ fontSize: 13, fontWeight: "bold", margin: 0, color: "#334155" }}>All Transactions</h3>
           </div>
           {transactions.map(transaction => (
-            <div key={transaction.id} style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #e5e7eb" }}>
+            <div key={transaction.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: "500" }}>Transaction #{transaction.id.slice(-8)}</div>
-                  <div style={{ fontSize: "14px", color: "#6b7280" }}>
+                  <div style={{ color: "#64748b" }}>
                     {formatDate(transaction.createdAt)}
                   </div>
                 </div>
-                <div style={{ fontWeight: "600", color: "#1f2937" }}>
+                <div style={{ fontWeight: "600", color: "#1e293b" }}>
                   {formatCurrency(transaction.total)}
                 </div>
               </div>
             </div>
           ))}
           {transactions.length === 0 && (
-            <div style={{ padding: "2rem", textAlign: "center", color: "#6b7280" }}>
+            <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
               No transactions found
             </div>
           )}
@@ -529,28 +537,28 @@ const fetchMpesaConfig = useCallback(async () => {
       )}
 
       {activeTab === 'integrations' && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
           {/* M-Pesa Integration */}
-          <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
-            <div style={{ padding: "1.5rem", borderBottom: "1px solid #e5e7eb" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-                <FaPlug style={{ color: "#10b981" }} />
-                <h3 style={{ fontSize: 20, fontWeight: "bold", margin: 0 }}>M-Pesa Integration</h3>
+          <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+            <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.5rem" }}>
+                <FaPlug style={{ color: "#059669", fontSize: "13px" }} />
+                <span style={{ fontSize: 13, fontWeight: "bold", color: "#334155" }}>M-Pesa Integration</span>
                 {mpesaStatus === 'connected' ? (
-                  <FaCheckCircle style={{ color: "#10b981" }} />
+                  <FaCheckCircle style={{ color: "#059669", fontSize: "13px" }} />
                 ) : (
-                  <FaSpinner style={{ color: "#f59e0b", animation: "spin 1s linear infinite" }} />
+                  <FaSpinner style={{ color: "#f59e0b", fontSize: "13px", animation: "spin 1s linear infinite" }} />
                 )}
               </div>
-              <p style={{ color: "#6b7280", fontSize: "14px" }}>
-                Configure M-Pesa payment gateway for mobile money transactions
-              </p>
+              <span style={{ color: "#64748b", fontSize: "12px" }}>
+                Configure M-Pesa payment gateway
+              </span>
             </div>
 
-            <div style={{ padding: "1.5rem" }}>
+            <div style={{ padding: "0.7rem" }}>
               <form onSubmit={(e) => e.preventDefault()}>
-                <div style={{ marginBottom: "1rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                <div style={{ marginBottom: "0.5rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
                     Consumer Key
                   </label>
                   <input
@@ -559,17 +567,16 @@ const fetchMpesaConfig = useCallback(async () => {
                     onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaConsumerKey: e.target.value }))}
                     style={{
                       width: "100%",
-                      padding: "0.5rem",
+                      padding: "0.3rem",
                       border: "1px solid #d1d5db",
-                      borderRadius: "4px",
-                      fontSize: "14px"
+                      borderRadius: "3px",
+                      fontSize: "12px"
                     }}
                     placeholder="Enter M-Pesa Consumer Key"
                   />
                 </div>
-
-                <div style={{ marginBottom: "1rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                <div style={{ marginBottom: "0.5rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
                     Consumer Secret
                   </label>
                   <input
@@ -578,17 +585,16 @@ const fetchMpesaConfig = useCallback(async () => {
                     onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaConsumerSecret: e.target.value }))}
                     style={{
                       width: "100%",
-                      padding: "0.5rem",
+                      padding: "0.3rem",
                       border: "1px solid #d1d5db",
-                      borderRadius: "4px",
-                      fontSize: "14px"
+                      borderRadius: "3px",
+                      fontSize: "12px"
                     }}
                     placeholder="Enter M-Pesa Consumer Secret"
                   />
                 </div>
-
-                <div style={{ marginBottom: "1rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                <div style={{ marginBottom: "0.5rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
                     Short Code
                   </label>
                   <input
@@ -597,17 +603,16 @@ const fetchMpesaConfig = useCallback(async () => {
                     onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaShortCode: e.target.value }))}
                     style={{
                       width: "100%",
-                      padding: "0.5rem",
+                      padding: "0.3rem",
                       border: "1px solid #d1d5db",
-                      borderRadius: "4px",
-                      fontSize: "14px"
+                      borderRadius: "3px",
+                      fontSize: "12px"
                     }}
                     placeholder="Enter M-Pesa Short Code"
                   />
                 </div>
-
-                <div style={{ marginBottom: "1rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                <div style={{ marginBottom: "0.5rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
                     Passkey
                   </label>
                   <input
@@ -616,17 +621,16 @@ const fetchMpesaConfig = useCallback(async () => {
                     onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaPasskey: e.target.value }))}
                     style={{
                       width: "100%",
-                      padding: "0.5rem",
+                      padding: "0.3rem",
                       border: "1px solid #d1d5db",
-                      borderRadius: "4px",
-                      fontSize: "14px"
+                      borderRadius: "3px",
+                      fontSize: "12px"
                     }}
                     placeholder="Enter M-Pesa Passkey"
                   />
                 </div>
-
-                <div style={{ marginBottom: "1rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                <div style={{ marginBottom: "0.5rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
                     Callback URL
                   </label>
                   <input
@@ -635,17 +639,16 @@ const fetchMpesaConfig = useCallback(async () => {
                     onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaCallbackUrl: e.target.value }))}
                     style={{
                       width: "100%",
-                      padding: "0.5rem",
+                      padding: "0.3rem",
                       border: "1px solid #d1d5db",
-                      borderRadius: "4px",
-                      fontSize: "14px"
+                      borderRadius: "3px",
+                      fontSize: "12px"
                     }}
                     placeholder="https://your-domain.com/mpesa/callback"
                   />
                 </div>
-
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.5rem" }}>
+                <div style={{ marginBottom: "0.7rem" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
                     Environment
                   </label>
                   <select
@@ -653,60 +656,60 @@ const fetchMpesaConfig = useCallback(async () => {
                     onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaEnvironment: e.target.value }))}
                     style={{
                       width: "100%",
-                      padding: "0.5rem",
+                      padding: "0.3rem",
                       border: "1px solid #d1d5db",
-                      borderRadius: "4px",
-                      fontSize: "14px"
+                      borderRadius: "3px",
+                      fontSize: "12px"
                     }}
                   >
                     <option value="sandbox">Sandbox</option>
                     <option value="production">Production</option>
                   </select>
                 </div>
-
-                <div style={{ display: "flex", gap: "1rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
                     onClick={saveMpesaConfig}
                     disabled={savingMpesa}
                     style={{
-                      background: "#3b82f6",
+                      background: "#2563eb",
                       color: "#fff",
-                      padding: "0.75rem 1.5rem",
-                      borderRadius: "6px",
+                      padding: "0.3rem 0.8rem",
+                      borderRadius: "5px",
                       border: "none",
                       cursor: savingMpesa ? "not-allowed" : "pointer",
                       fontWeight: "500",
                       display: "flex",
                       alignItems: "center",
-                      gap: "0.5rem",
-                      opacity: savingMpesa ? 0.6 : 1
+                      gap: "0.2rem",
+                      opacity: savingMpesa ? 0.6 : 1,
+                      fontSize: "12px"
                     }}
                   >
                     {savingMpesa ? <FaSpinner style={{ animation: "spin 1s linear infinite" }} /> : <FaCheckCircle />}
-                    {savingMpesa ? 'Saving...' : 'Save Configuration'}
+                    {savingMpesa ? 'Saving...' : 'Save'}
                   </button>
-
                   <button
                     type="button"
                     onClick={testMpesaConnection}
                     disabled={testingMpesa}
                     style={{
-                      background: "#10b981",
+                      background: "#059669",
                       color: "#fff",
-                      padding: "0.75rem 1.5rem",
-                      borderRadius: "6px",
+                      padding: "0.3rem 0.8rem",
+                      borderRadius: "5px",
                       border: "none",
                       cursor: testingMpesa ? "not-allowed" : "pointer",
                       fontWeight: "500",
                       display: "flex",
                       alignItems: "center",
-                      gap: "0.5rem",
-                      opacity: testingMpesa ? 0.6 : 1
+                      gap: "0.2rem",
+                      opacity: testingMpesa ? 0.6 : 1,
+                      fontSize: "12px"
                     }}
                   >
                     {testingMpesa ? <FaSpinner style={{ animation: "spin 1s linear infinite" }} /> : <FaPlug />}
-                    {testingMpesa ? 'Testing...' : 'Test Connection'}
+                    {testingMpesa ? 'Testing...' : 'Test'}
                   </button>
                 </div>
               </form>
@@ -714,41 +717,38 @@ const fetchMpesaConfig = useCallback(async () => {
           </div>
 
           {/* Integration Status */}
-          <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
-            <div style={{ padding: "1.5rem", borderBottom: "1px solid #e5e7eb" }}>
-              <h3 style={{ fontSize: 20, fontWeight: "bold", margin: 0 }}>Integration Status</h3>
+          <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+            <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
+              <span style={{ fontSize: 13, fontWeight: "bold", color: "#334155" }}>Integration Status</span>
             </div>
-
-            <div style={{ padding: "1.5rem" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ padding: "0.7rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.7rem", fontSize: "12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#6b7280" }}>M-Pesa</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ color: "#64748b" }}>M-Pesa</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
                     {mpesaStatus === 'connected' ? (
                       <>
-                        <FaCheckCircle style={{ color: "#10b981" }} />
-                        <span style={{ color: "#10b981", fontWeight: "500" }}>Connected</span>
+                        <FaCheckCircle style={{ color: "#059669", fontSize: "13px" }} />
+                        <span style={{ color: "#059669", fontWeight: "500" }}>Connected</span>
                       </>
                     ) : (
                       <>
-                        <FaSpinner style={{ color: "#f59e0b", animation: "spin 1s linear infinite" }} />
+                        <FaSpinner style={{ color: "#f59e0b", fontSize: "13px", animation: "spin 1s linear infinite" }} />
                         <span style={{ color: "#f59e0b", fontWeight: "500" }}>Disconnected</span>
                       </>
                     )}
                   </div>
                 </div>
-
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#6b7280" }}>Webhook Status</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <FaCheckCircle style={{ color: "#10b981" }} />
-                    <span style={{ color: "#10b981", fontWeight: "500" }}>Active</span>
+                  <span style={{ color: "#64748b" }}>Webhook Status</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
+                    <FaCheckCircle style={{ color: "#059669", fontSize: "13px" }} />
+                    <span style={{ color: "#059669", fontWeight: "500" }}>Active</span>
                   </div>
                 </div>
-
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#6b7280" }}>Last Sync</span>
-                  <span style={{ color: "#1f2937", fontWeight: "500" }}>2 hours ago</span>
+                  <span style={{ color: "#64748b" }}>Last Sync</span>
+                  <span style={{ color: "#1e293b", fontWeight: "500" }}>2 hours ago</span>
                 </div>
               </div>
             </div>

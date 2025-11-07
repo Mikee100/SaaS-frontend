@@ -135,6 +135,9 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
               <NavLink href="/superadmin/health" icon={<FiMonitor />} active={isActive('/admin/superadmin/health')}>
                 System Health
               </NavLink>
+               <NavLink href="/superadmin/monitoring" icon={<FiMonitor />} active={isActive('/admin/superadmin/monitoring')}>
+                Monitoring
+              </NavLink>
               <NavLink href="/superadmin/logs" icon={<FiFileText />} active={isActive('/admin/superadmin/logs')}>
                 Audit Logs
               </NavLink>
