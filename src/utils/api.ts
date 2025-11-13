@@ -30,50 +30,82 @@ class EnhancedAPI {
       ...this.getAuthHeaders(),
       ...options.headers,
     };
-  
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        credentials: 'include',
-      });
-      
-      const responseText = await response.text();
-      let responseData;
-      
+
+    const maxRetries = 5;
+    let attempt = 0;
+
+    while (attempt <= maxRetries) {
       try {
-        responseData = responseText ? JSON.parse(responseText) : null;
-      } catch (e) {
-        console.error('Failed to parse JSON response:', e, 'Response text:', responseText);
-        throw new Error('Invalid JSON response from server');
-      }
-      
-      if (!response.ok) {
-        console.error(`[API] Request failed with status ${response.status}`, {
-          status: response.status,
-          statusText: response.statusText,
-          url,
-          response: responseData || responseText,
-          requestHeaders: headers,
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          credentials: 'include',
         });
-        
-        // Handle 401 Unauthorized
-        if (response.status === 401) {
-          // Clear invalid token
-          localStorage.removeItem('token');
+
+        const responseText = await response.text();
+        let responseData;
+
+        try {
+          responseData = responseText ? JSON.parse(responseText) : null;
+        } catch (e) {
+          console.error('Failed to parse JSON response:', e, 'Response text:', responseText);
+          throw new Error('Invalid JSON response from server');
         }
-        
-        const errorMessage = responseData?.message || 
-                            response.statusText || 
-                            `HTTP error! status: ${response.status}`;
-        throw new Error(errorMessage);
+
+        if (!response.ok) {
+          // Handle 429 Too Many Requests with retry
+          if (response.status === 429 && attempt < maxRetries) {
+            const delay = Math.min(Math.pow(2, attempt) * 1000, 10000); // Exponential backoff: 1s, 2s, 4s, 8s, 10s (capped at 10s)
+            console.warn(`[API] Rate limited (429). Retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries + 1})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            attempt++;
+            continue;
+          }
+
+          // Handle ThrottlerException (NestJS rate limiting) with retry
+          const errorMessage = responseData?.message ||
+                              response.statusText ||
+                              `HTTP error! status: ${response.status}`;
+
+          if (errorMessage.includes('Too Many Requests') && attempt < maxRetries) {
+            const delay = Math.min(Math.pow(2, attempt) * 1000, 10000); // Exponential backoff: 1s, 2s, 4s, 8s, 10s (capped at 10s)
+            console.warn(`[API] Rate limited (ThrottlerException). Retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries + 1})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            attempt++;
+            continue;
+          }
+
+          // Only log errors that are not retried rate limits
+          if ((response.status !== 429 && !errorMessage.includes('Too Many Requests')) || attempt >= maxRetries) {
+            console.error(`[API] Request failed with status ${response.status}`, {
+              status: response.status,
+              statusText: response.statusText,
+              url,
+              response: responseData || responseText,
+              requestHeaders: headers,
+            });
+          }
+
+          // Handle 401 Unauthorized
+          if (response.status === 401) {
+            // Clear invalid token
+            localStorage.removeItem('token');
+          }
+
+          throw new Error(errorMessage);
+        }
+
+        return responseData;
+      } catch (error) {
+        if (attempt >= maxRetries) {
+          console.error('API request failed after retries:', error);
+          throw error;
+        }
+        attempt++;
       }
-      
-      return responseData;
-    } catch (error) {
-      console.error('API request failed:', error);
-      throw error;
     }
+
+    throw new Error('Unexpected error in makeRequest');
   }
 
   async get<T = unknown>(endpoint: string, headers?: Record<string, string>): Promise<T> {

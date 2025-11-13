@@ -200,7 +200,7 @@ export default function DashboardPage() {
 
   return (
     <AuthGuard>
-      <PlanGuard requiredPlan="Pro">
+      <PlanGuard requiredFeature="advanced_analytics">
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
           <LogoEnforcement />
           <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

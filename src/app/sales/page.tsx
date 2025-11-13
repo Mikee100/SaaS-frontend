@@ -12,7 +12,7 @@ import {
   FaShoppingCart, FaMoneyBillWave, FaMobileAlt, FaTimes, FaChevronLeft,
   FaChevronRight, FaKeyboard, FaHistory, FaUser, FaUndo, FaRedo,
   FaStar, FaExclamationTriangle,
-  FaFilter, FaSort, FaTh, FaList, FaPlus, FaMinus, FaCheck
+  FaSort, FaTh, FaList, FaPlus, FaMinus, FaCheck
 } from 'react-icons/fa';
 import MpesaPayment from '@/components/MpesaPayment';
 import { hasPermission } from '@/utils/permissions';
@@ -34,6 +34,14 @@ type Product = {
   sku?: string;
   description?: string;
 };
+
+type Pagination = {
+  page: number;
+  limit: number;
+  total: number;
+  pageCount: number;
+};
+
 
 type CartItem = Product & { quantity: number };
 
@@ -68,13 +76,11 @@ export default function SalesPage() {
   const [checkoutStep, setCheckoutStep] = useState(1);
   const totalCheckoutSteps = 3;
 
-  const [searchTerm] = useState("");
   const [businessInfo, setBusinessInfo] = useState<Record<string, unknown> | null>(null);
   const [showScanner, setShowScanner] = useState(false);
 
 
   // New state for enhanced features
-  const [selectedCategory, setSelectedCategory] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "price" | "stock">("name");
@@ -96,15 +102,22 @@ export default function SalesPage() {
 
   // Constants
   const productsPerPage = 12;
-  const filteredProducts = products
+  const filteredProducts = Array.isArray(products) ? products
     .filter(product => {
-      const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
       const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            product.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            product.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
+      return matchesSearch;
     })
-    .sort((a, b) => {
+    .sort((a: Product, b: Product) => {
+      // First, sort by stock availability: in-stock products first
+      const aInStock = a.stock > 0;
+      const bInStock = b.stock > 0;
+
+      if (aInStock && !bInStock) return -1; // a comes first (in stock)
+      if (!aInStock && bInStock) return 1;  // b comes first (in stock)
+
+      // If both are in the same stock category, sort by the chosen criteria
       let aValue: string | number;
       let bValue: string | number;
 
@@ -131,7 +144,7 @@ export default function SalesPage() {
       } else {
         return (bValue as number) - (aValue as number);
       }
-    });
+    }) : [];
   
   const pageCount = Math.ceil(filteredProducts.length / productsPerPage);
   const paginatedProducts = filteredProducts.slice(
@@ -142,7 +155,6 @@ export default function SalesPage() {
   const cartSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const vatAmount = cartSubtotal * VAT_RATE;
   const cartTotal = cartSubtotal + vatAmount;
-  const availableCategories = ["all", ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
 
   // ProductCard component for virtualized list
   const ProductCard = ({ product, style, isVirtualized = false }: { product: Product; style?: React.CSSProperties; isVirtualized?: boolean }) => (
@@ -206,40 +218,86 @@ export default function SalesPage() {
     </div>
   );
 
+  const fetchProducts = useCallback(async () => {
+    if (!selectedBranchId) {
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+        const data = await apiGet(`/products?page=1&limit=1000`, { 'x-branch-id': selectedBranchId || '' }) as { products: Product[]; pagination: Pagination };
+    // API now returns { products: Product[], pagination: {...} }
+      setProducts(data.products || []);
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Failed to fetch products");
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedBranchId]);
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Clear cache for current tenant to ensure fresh data
-        productCache.invalidateCache(user?.tenantId);
+    fetchProducts();
+  }, [fetchProducts]);
 
-        // Fetch products using cache with branch header
-        const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
-        const products = await productCache.getProducts(() => apiGet("/products", headers), user?.tenantId);
-        console.log('Fetched products:', products);
-        setProducts(products);
+  const fetchData = useCallback(async () => {
+    if (!user?.tenantId) {
+      console.log('Skipping fetchData: No tenantId available');
+      setLoading(false);
+      return;
+    }
 
-        // Categories removed for simplification
+    console.log(`Fetching data for tenant: ${user.tenantId}, branch: ${selectedBranchId || 'none'}`);
+    console.log(`API Base URL: ${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}`);
 
-        // Fetch other data in parallel
-        const [businessInfo/*, recentSalesData*/] = await Promise.all([
-          apiGet("/tenant/me"),
-          apiGet("/sales/recent").catch(() => [])
-        ]);
+    try {
+      setLoading(true);
+      setError(null);
 
-        setBusinessInfo(businessInfo as Record<string, unknown>);
-        // Remove: setRecentSales(recentSalesData as Record<string, unknown>[]);
-      } catch (error) {
-        console.error('Error loading data:', error);
-        setError("Failed to load data. Please try again.");
-      } finally {
-        setLoading(false);
+      // Fetch other data in parallel
+      const [businessInfo/*, recentSalesData*/] = await Promise.all([
+        apiGet("/tenant/me"),
+        apiGet("/sales/recent").catch(() => [])
+      ]);
+
+      setBusinessInfo(businessInfo as Record<string, unknown>);
+      // Cache business info for faster receipt generation
+      cacheBusinessInfo(businessInfo as Record<string, unknown>);
+      // Remove: setRecentSales(recentSalesData as Record<string, unknown>[]);
+    } catch (error: unknown) {
+      console.error('Error loading data:', error);
+
+      // More specific error handling
+      if (error instanceof Error && error.message.includes('401')) {
+        setError("Authentication failed. Please log in again.");
+        localStorage.removeItem('token');
+      } else if (error instanceof Error && error.message.includes('Failed to fetch')) {
+        setError("Network error. Check your connection and try again.");
+      } else if (error instanceof Error && error.message.includes('Invalid JSON')) {
+        setError("Server response error. Please try again later.");
+      } else if (error instanceof Error) {
+        setError(`Failed to load data: ${error.message || 'Unknown error'}. Please try again.`);
+      } else {
+        setError("Failed to load data: Unknown error. Please try again.");
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.tenantId, selectedBranchId]);
 
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Separate effect to refetch when user changes (e.g., login)
+  useEffect(() => {
     if (user?.tenantId) {
       fetchData();
     }
-  }, [selectedBranchId, user?.tenantId]);
+  }, [user?.tenantId, fetchData]);
 
   useEffect(() => {
     const fetchBranches = async () => {
@@ -250,12 +308,22 @@ export default function SalesPage() {
         if ((data as { id: string; name: string }[]).length > 0 && !selectedBranchId) {
           setSelectedBranchId((data as { id: string; name: string }[])[0].id);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error fetching branches:', error);
       }
     };
     fetchBranches();
   }, [selectedBranchId, setSelectedBranchId]);
+
+  // Cache business info for faster receipt generation
+  const cacheBusinessInfo = (businessInfo: Record<string, unknown>) => {
+    const cacheData = {
+      data: businessInfo,
+      timestamp: Date.now(),
+      expiresAt: Date.now() + (5 * 60 * 1000) // 5 minutes
+    };
+    localStorage.setItem('businessInfoCache', JSON.stringify(cacheData));
+  };
 
   // Cart management functions with history
   const saveToHistory = useCallback((newCart: CartItem[]) => {
@@ -461,6 +529,17 @@ const clearCart = useCallback(() => {
       }));
       productCache.updateProducts(stockUpdates, user?.tenantId);
 
+      // Update local products state
+      setProducts(prevProducts =>
+        (prevProducts || []).map(product => {
+          const cartItem = cart.find(item => item.id === product.id);
+          if (cartItem) {
+            return { ...product, stock: product.stock - cartItem.quantity };
+          }
+          return product;
+        })
+      );
+
       // Reset form state
       clearCart();
       setCheckoutOpen(false);
@@ -579,14 +658,22 @@ const clearCart = useCallback(() => {
   if (error) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <div className="text-center p-6 bg-white rounded-xl shadow-sm max-w-md">
-        <h1 className="text-xl font-bold text-red-600 mb-2">Error</h1>
+        <h1 className="text-xl font-bold text-red-600 mb-2">Error Loading Sales</h1>
         <p className="text-gray-700 mb-4">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-        >
-          Retry
-        </button>
+        <div className="flex gap-2 justify-center">
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            Retry
+          </button>
+          <button 
+            onClick={() => router.push('/dashboard')}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+          >
+            Go to Dashboard
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -750,25 +837,6 @@ const clearCart = useCallback(() => {
 
                 {/* Enhanced Filters */}
                 <div className="flex items-center gap-4">
-                  {/* Category Filter */}
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
-                    <div className="relative">
-                      <FaFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
-                      <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                      >
-                        {availableCategories.map(category => (
-                          <option key={category} value={category}>
-                            {category === 'all' ? 'All Categories' : category}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
                   {/* Sort By */}
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
@@ -826,7 +894,7 @@ const clearCart = useCallback(() => {
                     <FaSearch className="w-12 h-12 mx-auto text-gray-300 mb-4" />
                     <h3 className="text-lg font-medium text-gray-900">No products found</h3>
                     <p className="mt-1 text-sm text-gray-500">
-                      {searchTerm ? 'Try a different search term' : 'No products available'}
+                      {searchQuery ? 'Try a different search term' : 'No products available for this branch/tenant. Check with administrator or add products in Inventory.'}
                     </p>
                   </div>
                 ) : (

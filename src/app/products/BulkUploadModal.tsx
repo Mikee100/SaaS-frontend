@@ -1,7 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { FaUpload, FaTimes, FaCheck, FaExclamationTriangle, FaDownload } from 'react-icons/fa';
-import * as XLSX from 'xlsx';
+import { FaUpload, FaTimes, FaCheck, FaExclamationTriangle } from 'react-icons/fa';
 
 interface BulkUploadModalProps {
   isOpen: boolean;
@@ -55,19 +54,6 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onSu
     }
   };
 
-  const downloadTemplate = () => {
-    const headers = ['Name', 'SKU', 'Price', 'Cost', 'Stock', 'Description'];
-    const sampleData = [
-      ['Sample Product 1', 'SP001', '29.99', '15.00', '100', 'This is a sample product'],
-      ['Sample Product 2', 'SP002', '49.99', '25.00', '50', 'Another sample product'],
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Products');
-    XLSX.writeFile(wb, 'products_template.xlsx');
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -95,17 +81,6 @@ const BulkUploadModal: React.FC<BulkUploadModalProps> = ({ isOpen, onClose, onSu
                 <li>• Upload .xlsx or .xls files only</li>
                 <li>• Maximum 1000 products per upload</li>
               </ul>
-            </div>
-
-            {/* Template Download */}
-            <div className="flex justify-center">
-              <button
-                onClick={downloadTemplate}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-              >
-                <FaDownload className="w-4 h-4" />
-                Download Template
-              </button>
             </div>
 
             {/* File Upload */}

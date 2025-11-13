@@ -1,13 +1,11 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback /*, useRef*/ } from "react";
 import Link from "next/link";
 import { apiGet, apiPost, apiDelete, apiPut } from "@/utils/api";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
-import PlanGuard from '@/components/PlanGuard';
 import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
-import { FaPlus, FaBox, FaExclamationTriangle, FaSearch, FaDownload, FaTrash, FaEdit, FaQrcode, FaUpload, FaLock, FaSortAmountDown, FaPrint, FaTimes, FaChevronLeft, FaChevronRight, FaStore, FaLayerGroup, FaChartBar } from 'react-icons/fa';
-import * as XLSX from 'xlsx';
+import { FaBox, FaExclamationTriangle, FaSearch, FaTrash, FaEdit, FaQrcode, FaLock, FaSortAmountDown, FaPrint, FaTimes, FaChevronRight, FaLayerGroup, FaChartBar } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
@@ -40,19 +38,19 @@ export default function ProductsPage() {
   const [error, setError] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{ length: number } | null>(null);
-  const [uploadError, setUploadError] = useState("");
-  const [clearMsg, setClearMsg] = useState("");
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [loadMoreError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [qrCodeProductId, setQrCodeProductId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [sortField, setSortField] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const itemsPerPage = 20;
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [itemsPerPage, setItemsPerPage] = useState(() => parseInt(localStorage.getItem('productsItemsPerPage') || '20', 10));
+  const [showUsageBanner, setShowUsageBanner] = useState(true);
 
   const { data: limits } = usePlanLimits();
 
@@ -107,32 +105,85 @@ export default function ProductsPage() {
     // The products will be fetched by the useEffect below
   };
 
-  // Fetch products when selected branch changes
+  // Load more products function
+  const loadMoreProducts = useCallback(async () => {
+    if (!selectedBranchId || loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    try {
+      const nextPage = Math.floor(products.length / itemsPerPage) + 1;
+      console.log('Loading more products for branch:', selectedBranchId, 'page:', nextPage, 'search:', debouncedSearch);
+
+      const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
+      const data = await apiGet(`/products?page=${nextPage}&limit=${itemsPerPage}&branchId=${selectedBranchId}${searchParam}`) as { products: Product[]; pagination: unknown };
+
+      if (data.products && data.products.length > 0) {
+        setProducts(prev => [...prev, ...data.products]);
+        setHasMore(data.products.length === itemsPerPage);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Failed to load more products");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [selectedBranchId, loadingMore, hasMore, products.length, itemsPerPage, debouncedSearch]);
+
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    localStorage.setItem('productsItemsPerPage', newItemsPerPage.toString());
+    // Reset products and fetch initial data with new limit
+    setProducts([]);
+    setHasMore(true);
+    setCurrentPage(1);
+  };
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300); // 300ms delay
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Initial load when branch or debounced search changes
   useEffect(() => {
     if (selectedBranchId) {
-      const fetchData = async () => {
+      const fetchInitialData = async () => {
         try {
           setLoading(true);
-          console.log('Fetching products for branch:', selectedBranchId);
-          const data = await apiGet(`/products?branchId=${selectedBranchId}`);
-          setProducts(Array.isArray(data) ? data : []);
+          setProducts([]);
+          setHasMore(true);
+          setCurrentPage(1);
+          console.log('Fetching initial products for branch:', selectedBranchId, 'search:', debouncedSearch);
+
+          const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
+          const data = await apiGet(`/products?page=1&limit=${itemsPerPage}&branchId=${selectedBranchId}${searchParam}`) as { products: Product[]; pagination: unknown };
+          setProducts(data.products || []);
+          setHasMore(data.products && data.products.length === itemsPerPage);
           setError('');
         } catch (err: unknown) {
           const error = err as Error;
           setError(error.message || "Failed to fetch products");
           setProducts([]);
+          setHasMore(false);
         } finally {
           setLoading(false);
         }
       };
 
-      fetchData();
+      fetchInitialData();
     } else {
       // If no branch is selected, clear products
       setProducts([]);
       setLoading(false);
+      setHasMore(false);
     }
-  }, [selectedBranchId]);
+  }, [selectedBranchId, itemsPerPage, debouncedSearch]);
 
   const fetchProducts = useCallback(async () => {
     if (!selectedBranchId) {
@@ -143,8 +194,10 @@ export default function ProductsPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await apiGet(`/products`, { 'x-branch-id': selectedBranchId || '' });
-      setProducts(data as Product[]);
+      const data = await apiGet(`/products?page=${currentPage}&limit=${itemsPerPage}`, { 'x-branch-id': selectedBranchId || '' }) as { products: Product[]; pagination: unknown };
+      // API now returns { products: Product[], pagination: {...} }
+
+      setProducts(data.products || []);
     } catch (err: unknown) {
       const error = err as Error;
       setError(error.message || "Failed to fetch products");
@@ -152,7 +205,7 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedBranchId]);
+  }, [selectedBranchId, currentPage, itemsPerPage]);
 
   useEffect(() => {
     fetchProducts();
@@ -241,131 +294,6 @@ export default function ProductsPage() {
     fetchProducts();
   }
 
-  async function handleBulkUpload(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setUploading(true);
-    setUploadResult(null);
-    setUploadError("");
-    setUploadProgress(0);
-    const formData = new FormData();
-    const fileInput = (e.target as HTMLFormElement).file as HTMLInputElement;
-    if (!fileInput.files || fileInput.files.length === 0) {
-      setUploadError("Please select a file.");
-      setUploading(false);
-      setUploadProgress(null);
-      return;
-    }
-    formData.append("file", fileInput.files[0]);
-    try {
-      // Use XMLHttpRequest for upload progress
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${API_BASE_URL}/products/bulk-upload`);
-        xhr.setRequestHeader("Authorization", `Bearer ${localStorage.getItem("token")}`);
-        xhr.setRequestHeader("x-branch-id", selectedBranchId || "");
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            setUploadProgress(Math.round((event.loaded / event.total) * 30)); // 0-30% for upload
-          }
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const data = JSON.parse(xhr.responseText);
-            setUploadResult(data.summary);
-            // Start polling for backend progress
-            if (data.uploadId) {
-              pollBackendProgress(data.uploadId);
-            } else {
-              setUploadProgress(100);
-              setTimeout(() => setUploadProgress(null), 1500);
-            }
-            fetchProducts();
-            resolve();
-          } else {
-            setUploadError("Bulk upload failed");
-            setUploadProgress(null);
-            reject(new Error("Bulk upload failed"));
-          }
-        };
-        xhr.onerror = () => {
-          setUploadError("Bulk upload failed");
-          setUploadProgress(null);
-          reject(new Error("Bulk upload failed"));
-        };
-        xhr.send(formData);
-      });
-    } catch (err: unknown) {
-      const error = err as Error;
-      setUploadError(error.message || "Bulk upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function pollBackendProgress(uploadId: string) {
-    let finished = false;
-    const token = localStorage.getItem("token");
-    while (!finished) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/products/bulk-upload-progress/${uploadId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-        if (!res.ok) break;
-        const progress = await res.json();
-        if (progress && progress.total) {
-          // 30-100% for backend processing
-          const percent = 30 + Math.round((progress.processed / progress.total) * 70);
-          setUploadProgress(percent);
-          if (progress.processed >= progress.total) {
-            finished = true;
-            setTimeout(() => setUploadProgress(null), 1500);
-          }
-        } else {
-          finished = true;
-          setUploadProgress(100);
-          setTimeout(() => setUploadProgress(null), 1500);
-        }
-      } catch {
-        finished = true;
-        setUploadProgress(100);
-        setTimeout(() => setUploadProgress(null), 1500);
-      }
-      await new Promise(r => setTimeout(r, 500));
-    }
-  }
-
-  function downloadTemplate() {
-    // Create a simple template with required fields
-    const ws = XLSX.utils.json_to_sheet([
-      { name: "Sample Product", sku: "SKU001", price: 10.99, cost: 7.50, description: "Sample desc", stock: 100, customField1: "value" }
-    ]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Products");
-    XLSX.writeFile(wb, "product-upload-template.xlsx");
-  }
-
-  async function handleClearAll() {
-    if (!confirm("Are you sure you want to delete ALL products? This cannot be undone.")) return;
-    setClearMsg("");
-    try {
-      const res = await fetch(`${API_BASE_URL}/products/clear-all`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` },
-      });
-      if (!res.ok) throw new Error("Failed to clear products");
-      const data = await res.json();
-      setClearMsg(`Deleted ${data.deletedCount} products.`);
-      fetchProducts();
-    } catch (err: unknown) {
-      const error = err as Error;
-      setClearMsg(error.message || "Failed to clear products");
-    }
-  }
-
   // Sort products
   const sortedProducts = [...products].sort((a, b) => {
     const aValue = a[sortField as keyof Product] || '';
@@ -382,20 +310,11 @@ export default function ProductsPage() {
       : (bValue as number) - (aValue as number);
   });
 
-  const filteredProducts = sortedProducts.filter(
-    p => p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase())
-  );
+  // Display all loaded products (infinite scroll style)
+  const currentProducts = sortedProducts;
 
-  // Pagination logic
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentProducts = filteredProducts.slice(startIndex, endIndex);
-
-  // Reset to first page when search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search]);
+  // Show loading indicator when search is being debounced
+  const isSearching = search !== debouncedSearch;
 
   // Helper to flatten product fields for table display
   function flattenProduct(product: Product): { [key: string]: string | number | boolean | undefined; margin: string } {
@@ -443,13 +362,6 @@ export default function ProductsPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-[300px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
 
   // Check if user has permission to view products
   if (!canViewProducts) {
@@ -470,228 +382,149 @@ export default function ProductsPage() {
 
   return (
     <AuthGuard>
-      <div className="max-w-screen-2xl mx-auto px-1 sm:px-2 lg:px-3 py-2">
-        {/* Header Section */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 mb-2">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <FaBox className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Products</h1>
-                <p className="text-xs text-gray-600">Manage your product catalog</p>
-              </div>
-            </div>
-
-            {/* Branch Selector */}
-            <div className="mt-2">
-              <label className="block text-xs font-medium text-gray-700 mb-0.5">Select Branch</label>
-              {branchesLoading ? (
-                <div className="text-gray-400 text-xs">Loading branches...</div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedBranchId || ''}
-                    onChange={e => handleBranchChange(e.target.value)}
-                    className="px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm text-xs"
-                    style={{ minWidth: 120 }}
-                    disabled={false}
-                  >
-                    <option value="" disabled>Select a branch</option>
-                    {branches.map(branch => (
-                      <option key={branch.id} value={branch.id}>{branch.name}</option>
-                    ))}
-                  </select>
-                  <div className="flex items-center gap-1 text-xs text-gray-500">
-                    <FaStore className="w-3 h-3" />
-                    <span>{branches.find(b => b.id === selectedBranchId)?.name || 'No branch selected'}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <PlanGuard requiredPlan="Basic" fallback={
-            <div className="text-center p-2 bg-gray-50 rounded border border-gray-200">
-              <p className="text-xs text-gray-600">Product management requires Basic plan or higher</p>
-            </div>
-          }>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
-                className="px-2 py-1.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 flex items-center gap-1 text-xs"
-              >
-                {viewMode === 'grid' ? (
-                  <>
-                    <FaSortAmountDown className="w-3 h-3" />
-                    Table
-                  </>
-                ) : (
-                  <>
-                    <FaLayerGroup className="w-3 h-3" />
-                    Grid
-                  </>
-                )}
-              </button>
-              <button onClick={() => window.print()} className="flex items-center gap-1 px-2 py-1.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-xs">
-                <FaPrint className="w-3 h-3" />
-                Print
-              </button>
-              {canCreateProducts ? (
-                <button
-                  onClick={() => setShowAddForm(true)}
-                  disabled={!canCreate()}
-                  className={`flex items-center gap-1 px-2 py-1.5 rounded font-medium text-xs ${
-                    canCreate()
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  <FaPlus className="w-3 h-3" />
-                  Add
-                </button>
-              ) : (
-                <Tooltip content="You don't have permission to create products. Contact your administrator.">
-                  <button
-                    disabled
-                    className="flex items-center gap-1 px-2 py-1.5 rounded font-medium bg-gray-300 text-gray-500 cursor-not-allowed text-xs"
-                  >
-                    <FaPlus className="w-3 h-3" />
-                    Add
-                  </button>
-                </Tooltip>
-              )}
-            </div>
-          </PlanGuard>
-        </div>
-
-        {/* Usage Warning */}
-        {isNearLimit && (
-          <div className="mb-2 p-2 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded">
-            <div className="flex items-center gap-2">
+      <div className="max-w-screen-2xl mx-auto px-2 sm:px-4 py-2">
+        {/* Usage Warning Banner (auto-dismiss) */}
+        {isNearLimit && showUsageBanner && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md">
+            <div className="flex items-center gap-2 p-2 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded shadow">
               <FaExclamationTriangle className="text-amber-600 w-4 h-4" />
-              <div>
-                <h4 className="font-medium text-amber-800 text-xs">Approaching Product Limit</h4>
-                <p className="text-xs text-amber-700">
-                  You&apos;ve used {limits?.usage.products.current} of {limits?.usage.products.limit} products.
-                  Consider upgrading to add more products.
-                </p>
+              <div className="flex-1">
+                <span className="font-medium text-amber-800 text-xs">Approaching Product Limit:</span>
+                <span className="text-xs text-amber-700 ml-1">
+                  {limits?.usage.products.current} of {limits?.usage.products.limit} used.
+                </span>
               </div>
-            </div>
-            <div className="mt-1">
               <a
                 href="/settings/billing"
-                className="inline-flex items-center px-2 py-0.5 bg-amber-600 text-white rounded text-xs hover:bg-amber-700"
+                className="px-2 py-0.5 bg-amber-600 text-white rounded text-xs hover:bg-amber-700"
               >
-                Upgrade Plan
+                Upgrade
               </a>
+              <button
+                onClick={() => setShowUsageBanner(false)}
+                className="ml-1 p-1 text-amber-700 hover:text-amber-900 rounded-full hover:bg-amber-100"
+                title="Dismiss"
+              >
+                <FaTimes className="w-3 h-3" />
+              </button>
             </div>
           </div>
         )}
 
-        {/* Navigation to Analytics */}
-        <div className="mb-2 p-2 bg-blue-50 rounded border border-blue-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-blue-800">Product Management</h2>
-            <div className="flex gap-2">
-              <Link
-                href="/products/analytics"
-                className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-              >
-                <FaChartBar className="w-3 h-3" />
-                Analytics
-              </Link>
-              <Link
-                href="/products/variations"
-                className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
-              >
-                <FaLayerGroup className="w-3 h-3" />
-                Variations
-              </Link>
+        {/* Header: Title, Branch, Actions */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <FaBox className="w-5 h-5 text-blue-600" />
             </div>
-          </div>
-        </div>
-
-        {/* Search and Bulk Actions */}
-        <div className="mb-3 p-2 bg-white rounded border border-gray-200 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Search Products</label>
-              <div className="relative max-w-xs">
-                <FaSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Search by name, SKU, or description..."
-                  className="w-full pl-7 pr-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold text-gray-900 truncate">Products</h1>
+              <p className="text-xs text-gray-600 truncate">Manage your product catalog</p>
             </div>
-            <div className="flex flex-wrap gap-1">
-              <button onClick={downloadTemplate} className="flex items-center gap-1 px-2 py-1.5 rounded bg-gray-100 border border-gray-200 hover:bg-gray-200 font-medium text-xs">
-                <FaDownload className="w-3 h-3" />
-                Template
-              </button>
-              <form onSubmit={handleBulkUpload} className="flex items-center gap-1">
-                <input
-                  type="file"
-                  name="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="text-xs border border-gray-300 rounded p-0.5"
-                />
-                <button
-                  type="submit"
-                  disabled={uploading}
-                  className="flex items-center gap-1 px-2 py-1.5 rounded bg-blue-100 border border-blue-200 hover:bg-blue-200 font-medium text-xs text-blue-700 transition disabled:opacity-50"
+            {/* Branch Selector */}
+            <div className="ml-4 flex items-center gap-1">
+              <label className="text-xs font-medium text-gray-700">Branch:</label>
+              {branchesLoading ? (
+                <span className="text-gray-400 text-xs">Loading...</span>
+              ) : (
+                <select
+                  value={selectedBranchId || ''}
+                  onChange={e => handleBranchChange(e.target.value)}
+                  className="px-2 py-1 border border-gray-300 rounded bg-white text-xs"
+                  style={{ minWidth: 100 }}
                 >
-                  <FaUpload className="w-3 h-3" />
-                  Bulk
-                </button>
-              </form>
-              <button onClick={handleClearAll} className="flex items-center gap-1 px-2 py-1.5 rounded bg-red-50 border border-red-200 hover:bg-red-100 font-medium text-xs text-red-700">
-                <FaTrash className="w-3 h-3" />
-                Clear
-              </button>
+                  <option value="" disabled>Select</option>
+                  {branches.map(branch => (
+                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
-
-          {/* Upload Progress */}
-          {uploadProgress !== null && (
-            <div className="mt-2">
-              <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
-                <span>Uploading...</span>
-                <span>{uploadProgress}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                ></div>
-              </div>
-            </div>
-          )}
-
-          {/* Upload Results */}
-          {uploadResult && (
-            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-              <p className="text-sm text-green-800">Upload completed: {uploadResult.length} products processed</p>
-            </div>
-          )}
-
-          {uploadError && (
-            <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
-              <p className="text-sm text-red-800">{uploadError}</p>
-            </div>
-          )}
-
-          {clearMsg && (
-            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-              <p className="text-sm text-blue-800">{clearMsg}</p>
-            </div>
-          )}
+          {/* Actions: View, Print, Add, Analytics, Variations */}
+          <div className="flex flex-wrap gap-1 items-center">
+            <button
+              onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
+              className="px-2 py-1 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 flex items-center gap-1 text-xs"
+              title={viewMode === 'grid' ? 'Switch to Table' : 'Switch to Grid'}
+            >
+              {viewMode === 'grid' ? <FaSortAmountDown className="w-3 h-3" /> : <FaLayerGroup className="w-3 h-3" />}
+              {viewMode === 'grid' ? 'Table' : 'Grid'}
+            </button>
+            <button onClick={() => window.print()} className="flex items-center gap-1 px-2 py-1 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-xs">
+              <FaPrint className="w-3 h-3" />
+            </button>
+            <Link
+              href="/products/analytics"
+              className="inline-flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+            >
+              <FaChartBar className="w-3 h-3" />
+            </Link>
+            <Link
+              href="/products/variations"
+              className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
+            >
+              <FaLayerGroup className="w-3 h-3" />
+            </Link>
+           
+          </div>
         </div>
+
+        {/* Product Count, Search, Items Per Page, Bulk Actions */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2">
+          <div className="flex items-center gap-3 flex-1">
+            <h3 className="text-sm font-semibold text-gray-800">
+              {loading || isSearching ? 'Loading...' : `${products.length} Product${products.length !== 1 ? 's' : ''}`}
+            </h3>
+            <span className="text-xs text-gray-500">
+              {selectedBranchId ? `(${branches.find(b => b.id === selectedBranchId)?.name || ''})` : ''}
+              {hasMore && !loading && !isSearching && <span className="text-blue-600 ml-1">• More available</span>}
+            </span>
+            <label className="text-xs font-medium text-gray-700 ml-4">Items:</label>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => handleItemsPerPageChange(parseInt(e.target.value, 10))}
+              className="px-2 py-1 border border-gray-300 rounded bg-white text-xs"
+              disabled={loading || isSearching}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative max-w-xs">
+              <FaSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name, SKU, desc..."
+                className="w-full pl-7 pr-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                style={{ minWidth: 180 }}
+              />
+              {isSearching && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500"></div>
+                </div>
+              )}
+            </div>
+            {/* Bulk Actions */}
+           
+          </div>
+        </div>
+
+        {/* Upload Progress/Results/ClearMsg */}
+        {(loadMoreError) && (
+          <div className="mb-2">
+            {loadMoreError && (
+              <div className="mb-1 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
+                {loadMoreError}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Add/Edit Product Form */}
         {showAddForm && (
@@ -773,7 +606,7 @@ export default function ProductsPage() {
                     className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-xs"
                   />
                 </div>
-                <div>
+              <div>
               </div>
 
               <div>
@@ -819,312 +652,356 @@ export default function ProductsPage() {
           </div>
         )}
 
-        {/* Products Display Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-          <div>
-            <h3 className="text-base font-semibold text-gray-800">
-              {filteredProducts.length} Product{filteredProducts.length !== 1 ? 's' : ''}
-            </h3>
-            <p className="text-xs text-gray-500">
-              {selectedBranchId ? `Showing products for ${branches.find(b => b.id === selectedBranchId)?.name}` : 'Select a branch to view products'}
-            </p>
-          </div>
-        </div>
 
-        {/* Grid View */}
-        {viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {currentProducts.map((product) => (
-              <div key={product.id} className="bg-white rounded border border-gray-200 p-3 shadow-sm hover:shadow transition-shadow">
+        {/* Products Content */}
+        {loading || isSearching ? (
+          // Loading skeleton for products section
+          <div className="bg-white rounded border border-gray-200 shadow-sm">
+            <div className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={`skeleton-${index}`} className="bg-gray-50 rounded border border-gray-200 p-3 animate-pulse">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 bg-gray-200 rounded w-8 h-8"></div>
+                        <div className="space-y-1">
+                          <div className="h-4 bg-gray-200 rounded w-24"></div>
+                          <div className="h-3 bg-gray-200 rounded w-16"></div>
+                        </div>
+                      </div>
+                      <div className="h-6 bg-gray-200 rounded-full w-20"></div>
+                    </div>
+                    <div className="space-y-2 mb-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400 text-sm">Price:</span>
+                        <div className="h-4 bg-gray-200 rounded w-12"></div>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400 text-sm">Cost:</span>
+                        <div className="h-4 bg-gray-200 rounded w-10"></div>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400 text-sm">Margin:</span>
+                        <div className="h-4 bg-gray-200 rounded w-8"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Grid View */}
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {currentProducts.map((product) => (
+                  <div key={product.id} className="bg-white rounded border border-gray-200 p-3 shadow-sm hover:shadow transition-shadow">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 bg-blue-100 rounded">
+                          <FaBox className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-800 text-sm line-clamp-1">{product.name}</h3>
+                          <p className="text-xs text-gray-500">SKU: {product.sku}</p>
+                        </div>
+                      </div>
+                      <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        product.stock > 10 ? 'bg-green-100 text-green-800' :
+                        product.stock > 0 ? 'bg-amber-100 text-amber-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {product.stock} in stock
+                      </div>
+                    </div>
+                    <div className="space-y-1 mb-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Price:</span>
+                        <span className="font-semibold text-gray-800">${product.price.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Cost:</span>
+                        <span className="font-semibold text-gray-800">${(product.cost || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Margin:</span>
+                        <span className={`font-semibold ${product.price > 0 ? (product.price - product.cost) / product.price * 100 >= 20 ? 'text-green-600' : 'text-amber-600' : 'text-gray-800'}`}>
+                          {product.price > 0 ? `${((product.price - product.cost) / product.price * 100).toFixed(1)}%` : 'N/A'}
+                        </span>
+                      </div>
+                      {product.supplier && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Supplier:</span>
+                          <span className="font-semibold text-gray-800">{product.supplier.name}</span>
+                        </div>
+                      )}
+                      {product.description && (
+                        <div className="text-xs text-gray-600 line-clamp-2">
+                          {product.description}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-1 pt-2 border-t border-gray-100">
+                      {canEditProducts ? (
+                        <button
+                          onClick={() => openEditModal(product)}
+                          className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded bg-gray-100 border border-gray-200 hover:bg-gray-200 text-xs font-medium transition"
+                        >
+                          <FaEdit className="w-3 h-3" />
+                          Edit
+                        </button>
+                      ) : (
+                        <Tooltip content="You don&apos;t have permission to edit products. Contact your administrator.">
+                          <button
+                            disabled
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded bg-gray-100 border border-gray-200 text-gray-400 text-xs font-medium cursor-not-allowed"
+                          >
+                            <FaEdit className="w-3 h-3" />
+                            Edit
+                          </button>
+                        </Tooltip>
+                      )}
+
+                      <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
+                        <button disabled className="flex items-center gap-1 px-2 py-1 rounded bg-green-50 border border-green-200 text-green-300 text-xs font-medium cursor-not-allowed">
+                          <FaQrcode className="w-3 h-3" />
+                          QR
+                          <FaLock className="w-2 h-2" />
+                        </button>
+                      }>
+                        <button
+                          onClick={() => setQrCodeProductId(product.id)}
+                          className="flex items-center gap-1 px-2 py-1 rounded bg-green-50 border border-green-200 hover:bg-green-100 text-xs font-medium text-green-700 transition"
+                        >
+                          <FaQrcode className="w-3 h-3" />
+                          QR
+                        </button>
+                      </FeatureGuard>
+
+                      {canDeleteProducts ? (
+                        <button
+                          onClick={() => handleDelete(product.id)}
+                          className="flex items-center gap-1 px-2 py-1 rounded bg-red-50 border border-red-200 hover:bg-red-100 text-xs font-medium text-red-700 transition"
+                        >
+                          <FaTrash className="w-3 h-3" />
+                        </button>
+                      ) : (
+                        <Tooltip content="You don't have permission to delete products. Contact your administrator.">
+                          <button
+                            disabled
+                            className="flex items-center gap-1 px-2 py-1 rounded bg-red-50 border border-red-200 text-red-300 text-xs font-medium cursor-not-allowed"
+                          >
+                            <FaTrash className="w-3 h-3" />
+                          </button>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+            // Table View
+            <div className="bg-white rounded border border-gray-200 overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {allColumns.filter(col => visibleColumns.includes(col)).map(col => (
+                        <th
+                          key={col}
+                          className="px-2 py-2 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition"
+                          onClick={() => handleSort(col)}
+                        >
+                          <div className="flex items-center gap-1">
+                            <span>{col.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</span>
+                            {sortField === col && (
+                              <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                            )}
+                          </div>
+                        </th>
+                      ))}
+                      <th className="px-2 py-2 font-semibold text-gray-600 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {currentProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={visibleColumns.length + 1} className="text-center py-8 text-gray-400">
+                          <div className="flex flex-col items-center justify-center py-8">
+                            <FaBox className="w-12 h-12 text-gray-300 mb-3" />
+                            <p className="text-gray-500">No products found.</p>
+                            {search && (
+                              <p className="text-sm text-gray-400 mt-1">Try a different search term</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      currentProducts.map((product) => {
+                        const flat = flattenProduct(product);
+                        return (
+                          <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                            {allColumns.filter(col => visibleColumns.includes(col)).map(col => {
+                              let displayValue: string | number | boolean | undefined = flat[col] ?? '-';
+                              let className = '';
+                              if (col === 'price' || col === 'cost') {
+                                displayValue = `$${typeof flat[col] === 'number' ? flat[col].toFixed(2) : flat[col]}`;
+                              } else if (col === 'margin') {
+                                const marginValue = typeof flat[col] === 'string' && flat[col] !== 'N/A' ? parseFloat(flat[col]) : 0;
+                                className = marginValue >= 20 ? 'text-green-600 font-semibold' : marginValue >= 0 ? 'text-amber-600 font-semibold' : 'text-red-600 font-semibold';
+                                displayValue = flat[col] === 'N/A' ? 'N/A' : `${flat[col]}%`;
+                              }
+                              return (
+                                <td key={col} className={`px-2 py-2 whitespace-nowrap ${className}`}>
+                                  {displayValue}
+                                </td>
+                              );
+                            })}
+                            <td className="px-2 py-2">
+                              <div className="flex justify-end gap-2">
+                                {canEditProducts ? (
+                                  <button
+                                    onClick={() => openEditModal(product)}
+                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                    title="Edit"
+                                  >
+                                    <FaEdit className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <Tooltip content="You don't have permission to edit products. Contact your administrator.">
+                                    <button
+                                      disabled
+                                      className="p-2 text-gray-400 rounded-lg cursor-not-allowed"
+                                    >
+                                      <FaEdit className="w-4 h-4" />
+                                    </button>
+                                  </Tooltip>
+                                )}
+
+                                <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
+                                  <button disabled className="p-2 text-gray-400 rounded-lg cursor-not-allowed" title="QR Code (Upgrade required)">
+                                    <FaQrcode className="w-4 h-4" />
+                                  </button>
+                                }>
+                                  <button
+                                    onClick={() => setQrCodeProductId(product.id)}
+                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
+                                    title="QR Code"
+                                  >
+                                    <FaQrcode className="w-4 h-4" />
+                                  </button>
+                                </FeatureGuard>
+
+                                {canDeleteProducts ? (
+                                  <button
+                                    onClick={() => handleDelete(product.id)}
+                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                                    title="Delete"
+                                  >
+                                    <FaTrash className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <Tooltip content="You don't have permission to delete products. Contact your administrator.">
+                                    <button
+                                      disabled
+                                      className="p-2 text-gray-400 rounded-lg cursor-not-allowed"
+                                    >
+                                      <FaTrash className="w-4 h-4" />
+                                    </button>
+                                  </Tooltip>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            )}
+          </>
+          
+        )}
+
+        {/* Load More Section */}
+        {hasMore && !loading && !isSearching && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={loadMoreProducts}
+              disabled={loadingMore}
+              className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow transition disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ minWidth: 200 }}
+            >
+              {loadingMore ? (
+                <>
+                  <span className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></span>
+                  Loading Products...
+                </>
+              ) : (
+                <>
+                  Load More Products
+                  <FaChevronRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Loading Skeleton for Load More */}
+        {loadingMore && (
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={`skeleton-${index}`} className="bg-white rounded border border-gray-200 p-3 shadow-sm animate-pulse">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className="p-1 bg-blue-100 rounded">
-                      <FaBox className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-800 text-sm line-clamp-1">{product.name}</h3>
-                      <p className="text-xs text-gray-500">SKU: {product.sku}</p>
+                    <div className="p-1 bg-gray-200 rounded w-8 h-8"></div>
+                    <div className="space-y-1">
+                      <div className="h-4 bg-gray-200 rounded w-24"></div>
+                      <div className="h-3 bg-gray-200 rounded w-16"></div>
                     </div>
                   </div>
-                  <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                    product.stock > 10 ? 'bg-green-100 text-green-800' :
-                    product.stock > 0 ? 'bg-amber-100 text-amber-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {product.stock} in stock
-                  </div>
+                  <div className="h-6 bg-gray-200 rounded-full w-20"></div>
                 </div>
-                <div className="space-y-1 mb-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Price:</span>
-                    <span className="font-semibold text-gray-800">${product.price.toFixed(2)}</span>
+                <div className="space-y-2 mb-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400 text-sm">Price:</span>
+                    <div className="h-4 bg-gray-200 rounded w-12"></div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Cost:</span>
-                    <span className="font-semibold text-gray-800">${product.cost.toFixed(2)}</span>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400 text-sm">Cost:</span>
+                    <div className="h-4 bg-gray-200 rounded w-10"></div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Margin:</span>
-                    <span className={`font-semibold ${product.price > 0 ? (product.price - product.cost) / product.price * 100 >= 20 ? 'text-green-600' : 'text-amber-600' : 'text-gray-800'}`}>
-                      {product.price > 0 ? `${((product.price - product.cost) / product.price * 100).toFixed(1)}%` : 'N/A'}
-                    </span>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400 text-sm">Margin:</span>
+                    <div className="h-4 bg-gray-200 rounded w-8"></div>
                   </div>
-                  {product.supplier && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Supplier:</span>
-                      <span className="font-semibold text-gray-800">{product.supplier.name}</span>
-                    </div>
-                  )}
-                  {product.description && (
-                    <div className="text-xs text-gray-600 line-clamp-2">
-                      {product.description}
-                    </div>
-                  )}
                 </div>
                 <div className="flex gap-1 pt-2 border-t border-gray-100">
-                  {canEditProducts ? (
-                    <button
-                      onClick={() => openEditModal(product)}
-                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded bg-gray-100 border border-gray-200 hover:bg-gray-200 text-xs font-medium transition"
-                    >
-                      <FaEdit className="w-3 h-3" />
-                      Edit
-                    </button>
-                  ) : (
-                    <Tooltip content="You don&apos;t have permission to edit products. Contact your administrator.">
-                      <button
-                        disabled
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded bg-gray-100 border border-gray-200 text-gray-400 text-xs font-medium cursor-not-allowed"
-                      >
-                        <FaEdit className="w-3 h-3" />
-                        Edit
-                      </button>
-                    </Tooltip>
-                  )}
-
-                  <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
-                    <button disabled className="flex items-center gap-1 px-2 py-1 rounded bg-green-50 border border-green-200 text-green-300 text-xs font-medium cursor-not-allowed">
-                      <FaQrcode className="w-3 h-3" />
-                      QR
-                      <FaLock className="w-2 h-2" />
-                    </button>
-                  }>
-                    <button
-                      onClick={() => setQrCodeProductId(product.id)}
-                      className="flex items-center gap-1 px-2 py-1 rounded bg-green-50 border border-green-200 hover:bg-green-100 text-xs font-medium text-green-700 transition"
-                    >
-                      <FaQrcode className="w-3 h-3" />
-                      QR
-                    </button>
-                  </FeatureGuard>
-
-                  {canDeleteProducts ? (
-                    <button
-                      onClick={() => handleDelete(product.id)}
-                      className="flex items-center gap-1 px-2 py-1 rounded bg-red-50 border border-red-200 hover:bg-red-100 text-xs font-medium text-red-700 transition"
-                    >
-                      <FaTrash className="w-3 h-3" />
-                    </button>
-                  ) : (
-                    <Tooltip content="You don't have permission to delete products. Contact your administrator.">
-                      <button
-                        disabled
-                        className="flex items-center gap-1 px-2 py-1 rounded bg-red-50 border border-red-200 text-red-300 text-xs font-medium cursor-not-allowed"
-                      >
-                        <FaTrash className="w-3 h-3" />
-                      </button>
-                    </Tooltip>
-                  )}
+                  <div className="flex-1 h-8 bg-gray-200 rounded"></div>
+                  <div className="w-8 h-8 bg-gray-200 rounded"></div>
+                  <div className="w-8 h-8 bg-gray-200 rounded"></div>
                 </div>
               </div>
             ))}
           </div>
-        ) : (
-        // Table View
-        <div className="bg-white rounded border border-gray-200 overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
-              <thead className="bg-gray-50">
-                <tr>
-                  {allColumns.filter(col => visibleColumns.includes(col)).map(col => (
-                    <th 
-                      key={col} 
-                      className="px-2 py-2 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition"
-                      onClick={() => handleSort(col)}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>{col.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</span>
-                        {sortField === col && (
-                          <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                  <th className="px-2 py-2 font-semibold text-gray-600 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {currentProducts.length === 0 ? (
-                  <tr>
-                    <td colSpan={visibleColumns.length + 1} className="text-center py-8 text-gray-400">
-                      <div className="flex flex-col items-center justify-center py-8">
-                        <FaBox className="w-12 h-12 text-gray-300 mb-3" />
-                        <p className="text-gray-500">No products found.</p>
-                        {search && (
-                          <p className="text-sm text-gray-400 mt-1">Try a different search term</p>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  currentProducts.map((product) => {
-                    const flat = flattenProduct(product);
-                    return (
-                      <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                        {allColumns.filter(col => visibleColumns.includes(col)).map(col => {
-                          let displayValue: string | number | boolean | undefined = flat[col] ?? '-';
-                          let className = '';
-                          if (col === 'price' || col === 'cost') {
-                            displayValue = `$${typeof flat[col] === 'number' ? flat[col].toFixed(2) : flat[col]}`;
-                          } else if (col === 'margin') {
-                            const marginValue = typeof flat[col] === 'string' && flat[col] !== 'N/A' ? parseFloat(flat[col]) : 0;
-                            className = marginValue >= 20 ? 'text-green-600 font-semibold' : marginValue >= 0 ? 'text-amber-600 font-semibold' : 'text-red-600 font-semibold';
-                            displayValue = flat[col] === 'N/A' ? 'N/A' : `${flat[col]}%`;
-                          }
-                          return (
-                            <td key={col} className={`px-2 py-2 whitespace-nowrap ${className}`}>
-                              {displayValue}
-                            </td>
-                          );
-                        })}
-                        <td className="px-2 py-2">
-                          <div className="flex justify-end gap-2">
-                            {canEditProducts ? (
-                              <button 
-                                onClick={() => openEditModal(product)} 
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                                title="Edit"
-                              >
-                                <FaEdit className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <Tooltip content="You don&apos;t have permission to edit products. Contact your administrator.">
-                                <button 
-                                  disabled
-                                  className="p-2 text-gray-400 rounded-lg cursor-not-allowed"
-                                >
-                                  <FaEdit className="w-4 h-4" />
-                                </button>
-                              </Tooltip>
-                            )}
-                            
-                            <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
-                              <button disabled className="p-2 text-gray-400 rounded-lg cursor-not-allowed" title="QR Code (Upgrade required)">
-                                <FaQrcode className="w-4 h-4" />
-                              </button>
-                            }>
-                              <button 
-                                onClick={() => setQrCodeProductId(product.id)} 
-                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
-                                title="QR Code"
-                              >
-                                <FaQrcode className="w-4 h-4" />
-                              </button>
-                            </FeatureGuard>
-                            
-                            {canDeleteProducts ? (
-                              <button 
-                                onClick={() => handleDelete(product.id)} 
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                                title="Delete"
-                              >
-                                <FaTrash className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <Tooltip content="You don't have permission to delete products. Contact your administrator.">
-                                <button 
-                                  disabled
-                                  className="p-2 text-gray-400 rounded-lg cursor-not-allowed"
-                                >
-                                  <FaTrash className="w-4 h-4" />
-                                </button>
-                              </Tooltip>
-                            )}
-                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="mt-3 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="text-xs text-gray-600">
-              Showing {startIndex + 1} to {Math.min(endIndex, filteredProducts.length)} of {filteredProducts.length} products
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                className="flex items-center gap-1 px-2 py-1 border border-gray-300 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition"
-              >
-                <FaChevronLeft className="w-3 h-3" />
-                Previous
-              </button>
-              
-              <div className="flex gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-                  
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`w-10 h-10 text-xs rounded-lg transition ${
-                        currentPage === pageNum
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                
-                {totalPages > 5 && (
-                  <span className="px-2 py-2 text-gray-500">...</span>
-                )}
-              </div>
-              
-              <button
-                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-                className="flex items-center gap-1 px-2 py-1 border border-gray-300 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition"
-              >
-                Next
-                <FaChevronRight className="w-3 h-3" />
-              </button>
+        {!hasMore && products.length > 0 && (
+          <div className="mt-6 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-sm text-green-700 font-medium">
+                All products loaded ({products.length} total)
+              </span>
             </div>
           </div>
         )}
 
         {/* Empty State */}
-        {products.length === 0 && !loading && !search && (
+        {products.length === 0 && !loading && !isSearching && (
           <div className="text-center py-8 bg-white rounded border border-gray-200">
             <FaBox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
             <h3 className="text-base font-medium text-gray-900 mb-1">No products yet</h3>

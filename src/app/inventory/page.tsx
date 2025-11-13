@@ -590,26 +590,94 @@ export default function InventoryPage() {
           </>
         )}
 
-        {/* Pagination: smaller paddings/text */}
+        {/* Pagination: Enhanced for large datasets */}
         {totalPages > 1 && (
-          <div className="flex justify-center items-center gap-2 mb-3">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="px-2 py-1 border border-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 font-semibold text-xs"
-            >
-              Previous
-            </button>
-            <span className="mx-2 text-xs text-gray-500 font-semibold">
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="px-2 py-1 border border-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 font-semibold text-xs"
-            >
-              Next
-            </button>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mb-3">
+            <div className="text-xs text-gray-600">
+              Showing {startIndex + 1} to {Math.min(endIndex, filtered.length)} of {filtered.length} products
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 font-semibold text-xs"
+              >
+                Previous
+              </button>
+
+              <div className="flex gap-1">
+                {(() => {
+                  const pages = [];
+                  const maxVisiblePages = 7; // Show up to 7 page buttons
+
+                  if (totalPages <= maxVisiblePages) {
+                    // Show all pages if total is small
+                    for (let i = 1; i <= totalPages; i++) {
+                      pages.push(i);
+                    }
+                  } else {
+                    // Smart pagination for large page counts
+                    if (currentPage <= 4) {
+                      // Near the beginning
+                      for (let i = 1; i <= 5; i++) {
+                        pages.push(i);
+                      }
+                      pages.push('...');
+                      pages.push(totalPages);
+                    } else if (currentPage >= totalPages - 3) {
+                      // Near the end
+                      pages.push(1);
+                      pages.push('...');
+                      for (let i = totalPages - 4; i <= totalPages; i++) {
+                        pages.push(i);
+                      }
+                    } else {
+                      // In the middle
+                      pages.push(1);
+                      pages.push('...');
+                      for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+                        pages.push(i);
+                      }
+                      pages.push('...');
+                      pages.push(totalPages);
+                    }
+                  }
+
+                  return pages.map((page, index) => {
+                    if (page === '...') {
+                      return (
+                        <span key={`ellipsis-${index}`} className="px-2 py-2 text-gray-500">
+                          ...
+                        </span>
+                      );
+                    }
+
+                    const pageNum = page as number;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-10 h-10 text-xs rounded-lg transition ${
+                          currentPage === pageNum
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 font-semibold text-xs"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
 

@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useCallback } from 'react';
 import Link from 'next/link';
-import { FaUpload, FaCheck, FaTimes, FaDownload, FaArrowLeft, FaExclamationTriangle, FaSpinner } from 'react-icons/fa';
+import { FaUpload, FaCheck, FaTimes, FaArrowLeft, FaExclamationTriangle, FaSpinner } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 import { apiGet } from '@/utils/api';
 import { useBranch } from "@/contexts/BranchContext";
@@ -9,6 +9,7 @@ import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import AuthGuard from '@/components/AuthGuard';
 import API_BASE_URL from '../../../config/apiConfig';
+import { usePlanLimits } from '@/hooks/usePlanLimits';
 
 interface ProductPreview {
   id: string;
@@ -32,6 +33,7 @@ interface Supplier {
 const BulkAddProductsPage: React.FC = () => {
   const { user } = useUser();
   const { selectedBranchId } = useBranch();
+  const { data: planLimits } = usePlanLimits();
   const [products, setProducts] = useState<ProductPreview[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -178,6 +180,18 @@ const BulkAddProductsPage: React.FC = () => {
       return;
     }
 
+    // Check if upload would exceed product limits
+    if (planLimits) {
+      const currentUsage = planLimits.usage.products.current;
+      const limit = planLimits.usage.products.limit;
+      const newTotal = currentUsage + validProducts.length;
+
+      if (newTotal > limit) {
+        alert(`Upload would exceed your product limit. Current: ${currentUsage}/${limit}, Attempting to add: ${validProducts.length}`);
+        return;
+      }
+    }
+
     setUploading(true);
     setUploadProgress(0);
 
@@ -210,10 +224,18 @@ const BulkAddProductsPage: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Upload failed');
       }
 
       const result = await response.json();
+
+      // Check if limit was exceeded
+      if (result.limitExceeded) {
+        alert(`Upload blocked: ${result.summary.errors[0]}`);
+        return;
+      }
+
       setUploadResults({
         success: result.summary?.successful || 0,
         failed: result.summary?.failed || 0,
@@ -234,23 +256,6 @@ const BulkAddProductsPage: React.FC = () => {
     }
   };
 
-  const downloadTemplate = () => {
-    const ws = XLSX.utils.json_to_sheet([
-      {
-        name: "Sample Product",
-        sku: "SKU001",
-        price: 10.99,
-        cost: 7.50,
-        stock: 100,
-        description: "Sample product description",
-        supplierId: ""
-      }
-    ]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Products");
-    XLSX.writeFile(wb, "product-upload-template.xlsx");
-  };
-
   if (!canCreateProducts) {
     return (
       <AuthGuard>
@@ -267,7 +272,8 @@ const BulkAddProductsPage: React.FC = () => {
 
   return (
     <AuthGuard>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
@@ -294,6 +300,19 @@ const BulkAddProductsPage: React.FC = () => {
                 Upload an Excel file (.xlsx) with your product data. The system will automatically detect and map your columns.
               </p>
 
+              {/* Plan Limits Warning */}
+              {planLimits && (
+                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center justify-center gap-2 text-blue-800">
+                    <FaExclamationTriangle className="w-5 h-5" />
+                    <span className="font-medium">Product Limit: {planLimits.usage.products.current}/{planLimits.usage.products.limit}</span>
+                  </div>
+                  {planLimits.usage.products.current / planLimits.usage.products.limit >= 0.8 && (
+                    <p className="text-gray-600 mb-4">You don&apos;t have permission to create products.</p>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -307,15 +326,7 @@ const BulkAddProductsPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex justify-center gap-4">
-                  <button
-                    onClick={downloadTemplate}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-200 transition"
-                  >
-                    <FaDownload className="w-4 h-4" />
-                    Download Template
-                  </button>
-                </div>
+                
               </div>
             </div>
           </div>
@@ -427,6 +438,43 @@ const BulkAddProductsPage: React.FC = () => {
                   <p className="text-gray-600">
                     {products.filter(p => p.isValid).length} valid products, {products.filter(p => !p.isValid).length} with errors
                   </p>
+
+                  {/* Upload Limit Check */}
+                  {planLimits && (() => {
+                    const validCount = products.filter(p => p.isValid).length;
+                    const currentUsage = planLimits.usage.products.current;
+                    const limit = planLimits.usage.products.limit;
+                    const newTotal = currentUsage + validCount;
+                    const wouldExceed = newTotal > limit;
+                    const approachingLimit = (newTotal / limit) >= 0.8;
+
+                    return (
+                      <div className={`mt-3 p-3 rounded-lg ${wouldExceed ? 'bg-red-50 border border-red-200' : approachingLimit ? 'bg-yellow-50 border border-yellow-200' : 'bg-green-50 border border-green-200'}`}>
+                        <div className="flex items-center gap-2">
+                          {wouldExceed ? (
+                            <FaTimes className="w-4 h-4 text-red-600" />
+                          ) : approachingLimit ? (
+                            <FaExclamationTriangle className="w-4 h-4 text-yellow-600" />
+                          ) : (
+                            <FaCheck className="w-4 h-4 text-green-600" />
+                          )}
+                          <span className={`text-sm font-medium ${wouldExceed ? 'text-red-800' : approachingLimit ? 'text-yellow-800' : 'text-green-800'}`}>
+                            After upload: {newTotal}/{limit} products
+                          </span>
+                        </div>
+                        {wouldExceed && (
+                          <p className="text-xs text-red-700 mt-1">
+                            This upload would exceed your plan limit. Please reduce the number of products or upgrade your plan.
+                          </p>
+                        )}
+                        {approachingLimit && !wouldExceed && (
+                          <p className="text-xs text-yellow-700 mt-1">
+                            This upload will bring you close to your product limit.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-3">
                   <button
@@ -437,7 +485,18 @@ const BulkAddProductsPage: React.FC = () => {
                   </button>
                   <button
                     onClick={handleUpload}
-                    disabled={uploading || products.filter(p => p.isValid).length === 0}
+                    disabled={
+                      !!(
+                        uploading ||
+                        products.filter(p => p.isValid).length === 0 ||
+                        (planLimits && (() => {
+                          const validCount = products.filter(p => p.isValid).length;
+                          const currentUsage = planLimits.usage.products.current;
+                          const limit = planLimits.usage.products.limit;
+                          return currentUsage + validCount > limit;
+                        })())
+                      )
+                    }
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2"
                   >
                     {uploading ? <FaSpinner className="w-4 h-4 animate-spin" /> : <FaUpload className="w-4 h-4" />}
@@ -477,6 +536,19 @@ const BulkAddProductsPage: React.FC = () => {
                     <div className="text-sm text-red-700">Failed</div>
                   </div>
                 </div>
+
+                {/* Updated Usage Info */}
+                {planLimits && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center justify-center gap-2 text-blue-800">
+                      <FaCheck className="w-4 h-4" />
+                      <span className="text-sm font-medium">
+                        Updated Product Count: {(planLimits.usage.products.current + uploadResults.success)}/{planLimits.usage.products.limit}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {uploadResults.errors.length > 0 && (
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Errors:</h4>
@@ -537,7 +609,8 @@ const BulkAddProductsPage: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      
     </AuthGuard>
   );
 };
