@@ -698,7 +698,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center py-12">
             <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied!</h2>
             <p className="text-gray-600 mb-4">You don&apos;t have permission to view expenses.</p>
             <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
           </div>
