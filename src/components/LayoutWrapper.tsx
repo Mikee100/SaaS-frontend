@@ -32,6 +32,9 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
       }`}>
         {children}
       </main>
+      <footer className="bg-white border-t border-gray-200 py-2 px-4 text-center text-xs text-gray-600">
+        © {new Date().getFullYear()} Adeera Company. All rights reserved. | Software by Adeera Company | <a href="https://www.adeeraunitech.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">Visit our website</a>
+      </footer>
     </>
   );
 }

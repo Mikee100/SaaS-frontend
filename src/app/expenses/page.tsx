@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { apiGet, apiPost, apiDelete } from "@/utils/api";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
-import { FaDollarSign, FaCalendarAlt, FaBuilding, FaSave, FaTimesCircle, FaExclamationTriangle, FaPlus, FaEye, FaEdit, FaTrash, /* FaCheckCircle, FaClock, */ FaRedo, FaFileDownload, FaChartBar, FaHistory, FaSync } from 'react-icons/fa';
+import { FaDollarSign, FaCalendarAlt, /* FaBuilding, */ FaSave, FaTimesCircle, FaExclamationTriangle, FaPlus, FaEye, FaEdit, FaTrash, /* FaCheckCircle, FaClock, */ FaRedo, FaFileDownload, FaChartBar, FaHistory, FaSync } from 'react-icons/fa';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { hasPermission } from '@/utils/permissions';
@@ -15,7 +15,12 @@ interface Expense {
   id: string;
   amount: number;
   description: string;
-  category: string;
+  categoryId: string;
+  category?: {
+    id: string;
+    name: string;
+    color?: string;
+  };
   expenseType: 'one_time' | 'recurring';
   frequency?: 'daily' | 'weekly' | 'monthly' | 'yearly';
   nextDueDate?: string;
@@ -55,6 +60,30 @@ interface SalarySchemeFormData {
   userId: string;
   branchId?: string;
   notes?: string;
+}
+
+interface SalaryScheme {
+  id: string;
+  employeeName: string;
+  salaryAmount: number;
+  frequency: 'monthly' | 'yearly';
+  startDate: string;
+  nextDueDate?: string;
+  lastPaidDate?: string;
+  userId: string;
+  branchId?: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    name: string;
+  };
+  branch?: {
+    id: string;
+    name: string;
+  };
 }
 
 interface PDFTemplate {
@@ -98,16 +127,18 @@ interface PastMonthsData {
   }[];
 }
 
+const getCategoryName = (expense: Expense): string => expense.category?.name || 'other';
+
 export default function ExpensesPage() {
   console.log('ExpensesPage component rendered');
   const { user } = useUser();
-  const [activeTab, setActiveTab] = useState<'current' | 'comparison' | 'past' | 'salaries'>('current');
+  const [activeTab, setActiveTab] = useState<'current' | 'comparison' | 'past' | 'salaries' | 'records'>('current');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [, setSuccess] = useState<string | null>(null); // Used for showing success messages
   const [drawerType, setDrawerType] = useState<'create' | 'details' | null>(null);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [branchFilter, setBranchFilter] = useState<string | null>(null);
@@ -117,10 +148,10 @@ export default function ExpensesPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page] = useState(1);
   const [limit] = useState(10);
-  const [branchComparison, setBranchComparison] = useState<BranchComparisonData | null>(null);
-  const [pastMonthsData, setPastMonthsData] = useState<PastMonthsData | null>(null);
+  const [branchComparison] = useState<BranchComparisonData | null>(null);
+  const [pastMonthsData] = useState<PastMonthsData | null>(null);
   const [resetting, setResetting] = useState(false);
-  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
+  const [users] = useState<{ id: string; name: string }[]>([]);
   const [salaryForm, setSalaryForm] = useState<SalarySchemeFormData>({
     employeeName: '',
     salaryAmount: 0,
@@ -139,6 +170,63 @@ export default function ExpensesPage() {
   const [exportType, setExportType] = useState<'csv' | 'pdf'>('csv');
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
   const [salaryAssigning, setSalaryAssigning] = useState(false);
+  const [salarySchemes, setSalarySchemes] = useState<SalaryScheme[]>([]);
+  const [loadingSchemes, setLoadingSchemes] = useState(false);
+  const [selectedSalaryScheme, setSelectedSalaryScheme] = useState<SalaryScheme | null>(null);
+  const [salaryDrawerType, setSalaryDrawerType] = useState<'details' | 'create' | null>(null);
+  const [isEditingSalary, setIsEditingSalary] = useState(false);
+  const [selectedSalarySchemeForEdit, setSelectedSalarySchemeForEdit] = useState<SalaryScheme | null>(null);
+  const [currentMonthSalaryTotal, setCurrentMonthSalaryTotal] = useState<{ monthName: string; totalAmount: number; salarySchemeCount: number } | null>(null);
+  const [salarySummaryLoading, setSalarySummaryLoading] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [salaryTotalForMonth, setSalaryTotalForMonth] = useState<{ monthName: string; totalAmount: number; salarySchemeCount: number } | null>(null);
+  const [fetchingMonthlyTotal, setFetchingMonthlyTotal] = useState(false);
+
+  const [fetchingCurrentMonthExpenses, /* setFetchingCurrentMonthExpenses */] = useState(false);
+  const [currentMonthExpensesTotal, /* setCurrentMonthExpensesTotal */] = useState<{ monthName: string; totalAmount: number; expenseCount: number } | null>(null);
+  const [expenseSelectedMonth, setExpenseSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [expenseSelectedYear, setExpenseSelectedYear] = useState<number>(new Date().getFullYear());
+  const [fetchingExpenseMonthlyTotal, /* setFetchingExpenseMonthlyTotal */] = useState(false);
+  const [expenseTotalForSelectedMonth, /* setExpenseTotalForSelectedMonth */] = useState<{ monthName: string; totalAmount: number; expenseCount: number } | null>(null);
+
+
+  
+  const fetchCurrentMonthSalaryTotal = useCallback(async () => {
+    try {
+      setSalarySummaryLoading(true);
+      console.log('Fetching current month salary total');
+      const response = await apiGet('/salary-schemes/current-month-total');
+      console.log('Current month salary total API response:', response);
+      setCurrentMonthSalaryTotal((response as { data: { monthName: string; totalAmount: number; salarySchemeCount: number } }).data);
+    } catch (error) {
+      console.error('Failed to fetch current month salary total:', error);
+      setError('Failed to load current month salary total');
+      setCurrentMonthSalaryTotal(null);
+    } finally {
+      setSalarySummaryLoading(false);
+    }
+  }, []);
+
+  const fetchSalaryTotalForMonth = useCallback(async () => {
+    try {
+      setFetchingMonthlyTotal(true);
+      console.log(`Fetching salary total for month: ${selectedMonth}, year: ${selectedYear}`);
+      const response = await apiGet(`/salary-schemes/total-expense?month=${selectedMonth}&year=${selectedYear}`);
+      console.log('Salary total API response:', response);
+      setSalaryTotalForMonth((response as { data: { monthName: string; totalAmount: number; salarySchemeCount: number } }).data);
+    } catch (error) {
+      console.error('Failed to fetch monthly salary total:', error);
+      setError('Failed to load monthly salary total');
+    } finally {
+      setFetchingMonthlyTotal(false);
+    }
+  }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    fetchCurrentMonthSalaryTotal();
+    fetchSalaryTotalForMonth();
+  }, [fetchCurrentMonthSalaryTotal, fetchSalaryTotalForMonth]);
 
   // Fetch tenant data on mount
   const fetchTenantData = useCallback(async () => {
@@ -158,12 +246,19 @@ export default function ExpensesPage() {
     fetchTenantData();
   }, [fetchTenantData]);
 
-  const fetchUsers = useCallback(async () => {
+  
+
+  const fetchSalarySchemes = useCallback(async () => {
     try {
-      const data = await apiGet('/user');
-      setUsers(data as { id: string; name: string }[]);
-    } catch {
-      // ignore user fetch error for now
+      setLoadingSchemes(true);
+      const response = await apiGet('/salary-schemes');
+      const data = (response as { data?: unknown })?.data || response || [];
+      setSalarySchemes(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to fetch salary schemes:', error);
+      setError('Failed to load salary schemes');
+    } finally {
+      setLoadingSchemes(false);
     }
   }, []);
 
@@ -171,25 +266,9 @@ export default function ExpensesPage() {
   const canViewExpenses = hasPermission(user, 'view_sales');
   const canCreateExpenses = hasPermission(user, 'create_sales');
 
-  // Fetch functions for new tabs
-  const fetchBranchComparison = useCallback(async () => {
-    try {
-      const response = await apiGet('/expenses/comparison/branches');
-      setBranchComparison((response as { data: BranchComparisonData }).data);
-    } catch (error) {
-      console.error('Failed to fetch branch comparison:', error);
-    }
-  }, []);
+ 
 
-  const fetchPastMonthsData = useCallback(async () => {
-    try {
-      const response = await apiGet('/expenses/past-months?months=12');
-      setPastMonthsData((response as { data: PastMonthsData }).data);
-    } catch (error) {
-      console.error('Failed to fetch past months data:', error);
-    }
-  }, []);
-
+  
   const handleMonthlyReset = async () => {
     if (!confirm('Are you sure you want to reset monthly expenses? This will archive all current month expenses.')) return;
     setResetting(true);
@@ -206,14 +285,11 @@ export default function ExpensesPage() {
   };
 
   useEffect(() => {
-    if (activeTab === 'comparison' && !branchComparison) {
-      fetchBranchComparison();
-    } else if (activeTab === 'past' && !pastMonthsData) {
-      fetchPastMonthsData();
-    } else if (activeTab === 'salaries' && users.length === 0) {
-      fetchUsers();
+    if (activeTab === 'records') {
+      
+      
     }
-  }, [activeTab, branchComparison, pastMonthsData, fetchBranchComparison, fetchPastMonthsData, users.length, fetchUsers]);
+  }, [activeTab, search, branchFilter, expenseTypeFilter]);
 
   const handleDownloadReport = () => {
     if (filteredExpenses.length === 0) {
@@ -243,7 +319,7 @@ export default function ExpensesPage() {
           expense.id,
           expense.amount.toFixed(2),
           `"${expense.description.replace(/"/g, '""')}"`,
-          (expense.category || 'other').replace('_', ' '),
+          getCategoryName(expense).replace('_', ' '),
           expense.expenseType === 'recurring' ? 'Recurring' : 'One-time',
           expense.frequency || '',
           expense.nextDueDate ? new Date(expense.nextDueDate).toLocaleDateString() : '',
@@ -308,7 +384,7 @@ export default function ExpensesPage() {
         expense.id.substring(0, 8) + '...', // Truncate ID for PDF
         `$${expense.amount.toFixed(2)}`,
         expense.description.length > 30 ? expense.description.substring(0, 27) + '...' : expense.description,
-        (expense.category || 'other').replace('_', ' '),
+        getCategoryName(expense).replace('_', ' '),
         expense.expenseType === 'recurring' ? 'Recurring' : 'One-time',
         new Date(expense.createdAt).toLocaleDateString(),
         expense.branch?.name || '',
@@ -372,7 +448,55 @@ export default function ExpensesPage() {
       if (params.toString()) url += `?${params.toString()}`;
       const response = await apiGet(url);
       const data = (response as { data?: unknown })?.data || response || [];
-      setExpenses(Array.isArray(data) ? data : []);
+      const expenseData = Array.isArray(data) ? data : [];
+      try {
+        const salaryResponse = await apiGet('/salary-schemes');
+        const salaryData = (salaryResponse as { data?: unknown })?.data || salaryResponse || [];
+        const salaryExpenses: Expense[] = Array.isArray(salaryData)
+          ? salaryData.map((scheme: unknown) => {
+              const s = scheme as {
+                id: string;
+                salaryAmount: number;
+                employeeName: string;
+                frequency: string;
+                nextDueDate?: string;
+                branchId?: string;
+                notes?: string;
+                isActive: boolean;
+                startDate: string;
+                updatedAt: string;
+                user: { id: string; name: string };
+                branch?: { id: string; name: string };
+              };
+              // Cast frequency to the correct union type
+            const allowedFrequencies = ['daily', 'weekly', 'monthly', 'yearly'] as const;
+type AllowedFrequency = typeof allowedFrequencies[number];
+const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
+  ? (s.frequency as AllowedFrequency)
+  : undefined;
+              return {
+                id: 'salary-' + s.id,
+                amount: s.salaryAmount,
+                description: 'Salary for ' + s.employeeName,
+                categoryId: 'salary',
+                category: { id: 'salary', name: 'salary' },
+                expenseType: 'recurring' as const,
+                frequency,
+                nextDueDate: s.nextDueDate,
+                branchId: s.branchId,
+                notes: s.notes,
+                isActive: s.isActive,
+                createdAt: s.startDate,
+                updatedAt: s.updatedAt,
+                user: s.user,
+                branch: s.branch,
+              };
+            })
+          : [];
+        setExpenses([...expenseData, ...salaryExpenses]);
+      } catch {
+        setExpenses(expenseData);
+      }
     } catch {
       setError('Failed to load expenses');
       setExpenses([]);
@@ -397,12 +521,20 @@ export default function ExpensesPage() {
     if (search) {
       filtered = filtered.filter(expense =>
         expense.description.toLowerCase().includes(search.toLowerCase()) ||
-        expense.category.toLowerCase().includes(search.toLowerCase()) ||
+        getCategoryName(expense).toLowerCase().includes(search.toLowerCase()) ||
         (expense.branch?.name.toLowerCase().includes(search.toLowerCase()))
       );
     }
 
     // Apply sorting
+    const compare = (a: string | number, b: string | number): number => {
+      if (typeof a === 'string' && typeof b === 'string') {
+        return a.localeCompare(b);
+      } else {
+        return (a as number) - (b as number);
+      }
+    };
+
     filtered.sort((a, b) => {
       let aValue: string | number, bValue: string | number;
 
@@ -412,8 +544,8 @@ export default function ExpensesPage() {
           bValue = b.amount;
           break;
         case 'category':
-          aValue = a.category;
-          bValue = a.category;
+          aValue = getCategoryName(a);
+          bValue = getCategoryName(b);
           break;
         case 'createdAt':
         default:
@@ -423,9 +555,9 @@ export default function ExpensesPage() {
       }
 
       if (sortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
+        return compare(aValue, bValue);
       } else {
-        return aValue < bValue ? 1 : -1;
+        return compare(bValue, aValue);
       }
     });
 
@@ -510,18 +642,28 @@ export default function ExpensesPage() {
     }
   };
 
-  const getCategoryColor = (category: string) => {
-    const colors: { [key: string]: string } = {
-      salary: 'bg-emerald-100 text-emerald-800',
-      office_supplies: 'bg-blue-100 text-blue-800',
-      utilities: 'bg-green-100 text-green-800',
-      rent: 'bg-purple-100 text-purple-800',
-      marketing: 'bg-orange-100 text-orange-800',
-      travel: 'bg-indigo-100 text-indigo-800',
-      equipment: 'bg-red-100 text-red-800',
-      other: 'bg-gray-100 text-gray-800',
-    };
-    return colors[category] || colors.other;
+  const handleDeleteSalaryScheme = async (scheme: SalaryScheme) => {
+    setCreating(true);
+    setError(null);
+    try {
+      await apiDelete(`/salary-schemes/${scheme.id}`);
+      setSuccess('Salary scheme deleted successfully!');
+      setSalaryDrawerType(null);
+      setSelectedSalaryScheme(null);
+      await fetchSalarySchemes();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error: unknown) {
+      setError((error as { message?: string })?.message || 'Failed to delete salary scheme');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Accept category argument for compatibility with usages
+  // Remove unused parameter to fix lint error
+  const getCategoryColor = () => {
+    // No color classes, just plain text
+    return '';
   };
 
   const getExpenseTypeIcon = (type: string) => {
@@ -531,7 +673,7 @@ export default function ExpensesPage() {
   // Calculate summary totals
   const totalAmount = Array.isArray(expenses) ? expenses.reduce((sum, exp) => sum + exp.amount, 0) : 0;
   const categoryTotals = Array.isArray(expenses) ? expenses.reduce((acc, exp) => {
-    acc[exp.category] = (acc[exp.category] || 0) + exp.amount;
+    acc[getCategoryName(exp)] = (acc[getCategoryName(exp)] || 0) + exp.amount;
     return acc;
   }, {} as Record<string, number>) : {};
   const branchTotals = Array.isArray(expenses) ? expenses.reduce((acc, exp) => {
@@ -540,7 +682,7 @@ export default function ExpensesPage() {
     }
     return acc;
   }, {} as Record<string, number>) : {};
-  const salaryTotal = categoryTotals['salary'] || 0;
+  const salaryTotal = currentMonthSalaryTotal?.totalAmount || 0;
 
   if (loading) {
     return (
@@ -580,11 +722,19 @@ export default function ExpensesPage() {
     setSalaryAssigning(true);
     setError(null);
     try {
-      await apiPost('/salary-schemes', {
-        ...salaryForm,
-        userId: salaryForm.employeeName,
-      });
-      setSuccess('Salary assigned successfully!');
+      if (isEditingSalary && selectedSalarySchemeForEdit) {
+        // Edit existing salary scheme
+        await apiPut(`/salary-schemes/${selectedSalarySchemeForEdit.id}`, {
+          ...salaryForm,
+        });
+        setSuccess('Salary scheme updated successfully!');
+      } else {
+        // Create new salary scheme
+        await apiPost('/salary-schemes', {
+          ...salaryForm,
+        });
+        setSuccess('Salary assigned successfully!');
+      }
       setSalaryForm({
         employeeName: '',
         salaryAmount: 0,
@@ -594,10 +744,14 @@ export default function ExpensesPage() {
         branchId: '',
         notes: '',
       });
+      setIsEditingSalary(false);
+      setSelectedSalarySchemeForEdit(null);
+      setSalaryDrawerType(null);
       await fetchExpenses();
+      await fetchSalarySchemes();
       setTimeout(() => setSuccess(null), 3000);
     } catch (error: unknown) {
-      setError((error as { message?: string })?.message || 'Failed to assign salary');
+      setError((error as { message?: string })?.message || `Failed to ${isEditingSalary ? 'update' : 'assign'} salary`);
     } finally {
       setSalaryAssigning(false);
     }
@@ -605,53 +759,40 @@ export default function ExpensesPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Modern Glassmorphism Header */}
-          <div className="sticky top-0 z-30 mb-8">
-            <div className="backdrop-blur-xl bg-white/80 border border-white/20 rounded-2xl shadow-2xl shadow-blue-500/10 p-6">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                      <FaDollarSign className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                        Expenses
-                      </h1>
-                      <p className="text-sm text-gray-600 font-medium">Track and manage your business expenses</p>
-                    </div>
-                  </div>
+      <div className="min-h-screen bg-white">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
+          {/* Compact Header */}
+          <div className="mb-4">
+            <div className="bg-white border border-gray-100 rounded-lg shadow p-3">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FaDollarSign className="w-5 h-5 text-blue-500" />
+                  <h1 className="text-xl font-bold text-gray-900">Expenses</h1>
+                  <span className="text-xs text-gray-500 font-medium">Track and manage your business expenses</span>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2 p-1 bg-gray-100/80 rounded-xl backdrop-blur-sm">
-                    <select
-                      value={exportType}
-                      onChange={(e) => setExportType(e.target.value as 'csv' | 'pdf')}
-                      className="px-3 py-2 bg-transparent border-0 text-sm font-medium text-gray-700 focus:ring-0 focus:outline-none"
-                    >
-                      <option value="csv">CSV Export</option>
-                      <option value="pdf">PDF Export</option>
-                    </select>
-                  </div>
-
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={exportType}
+                    onChange={(e) => setExportType(e.target.value as 'csv' | 'pdf')}
+                    className="px-2 py-1 bg-white border border-gray-200 rounded text-xs"
+                  >
+                    <option value="csv">CSV Export</option>
+                    <option value="pdf">PDF Export</option>
+                  </select>
                   <button
                     onClick={handleDownloadReport}
-                    className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs flex items-center gap-1"
                   >
-                    <FaFileDownload className="w-4 h-4" />
-                    Export Report
+                    <FaFileDownload className="w-3 h-3" />
+                    Export
                   </button>
-
                   {canCreateExpenses && (
                     <button
                       onClick={() => setDrawerType('create')}
-                      className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
+                      className="px-3 py-1.5 bg-emerald-500 text-white rounded hover:bg-emerald-600 text-xs flex items-center gap-1"
                     >
-                      <FaPlus className="w-4 h-4" />
-                      Add Expense
+                      <FaPlus className="w-3 h-3" />
+                      Add
                     </button>
                   )}
                 </div>
@@ -659,14 +800,14 @@ export default function ExpensesPage() {
             </div>
           </div>
 
-        {/* Filters Row */}
-        <div className="flex flex-wrap items-center gap-3 mb-4 px-1">
+        {/* Filters Row - compact */}
+        <div className="flex flex-wrap items-center gap-2 mb-2 px-1">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search description, category, branch..."
-            className="flex-1 min-w-[120px] px-2 py-1 border border-gray-200 rounded bg-white text-xs"
+            placeholder="Search..."
+            className="flex-1 min-w-[100px] px-2 py-1 border border-gray-200 rounded bg-white text-xs"
           />
           <select
             value={sortBy}
@@ -706,11 +847,11 @@ export default function ExpensesPage() {
           </select>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 mb-6 border-b border-gray-100 pb-2">
+        {/* Tabs - smaller */}
+        <div className="flex items-center gap-1 mb-3 border-b border-gray-100 pb-1">
           <button
             onClick={() => setActiveTab('current')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
+            className={`px-2 py-1 rounded text-xs font-medium ${
               activeTab === 'current'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -721,7 +862,7 @@ export default function ExpensesPage() {
           </button>
           <button
             onClick={() => setActiveTab('salaries')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
+            className={`px-2 py-1 rounded text-xs font-medium ${
               activeTab === 'salaries'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -732,7 +873,7 @@ export default function ExpensesPage() {
           </button>
           <button
             onClick={() => setActiveTab('comparison')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
+            className={`px-2 py-1 rounded text-xs font-medium ${
               activeTab === 'comparison'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -743,7 +884,7 @@ export default function ExpensesPage() {
           </button>
           <button
             onClick={() => setActiveTab('past')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
+            className={`px-2 py-1 rounded text-xs font-medium ${
               activeTab === 'past'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -752,92 +893,136 @@ export default function ExpensesPage() {
             <FaCalendarAlt className="w-3 h-3 inline mr-1" />
             Past Months
           </button>
+          <button
+            onClick={() => setActiveTab('records')}
+            className={`px-2 py-1 rounded text-xs font-medium ${
+              activeTab === 'records'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <FaEye className="w-3 h-3 inline mr-1" />
+            Records
+          </button>
         </div>
 
-        {/* Summary & Breakdown - Only show in 'current' tab */}
-        {activeTab === 'current' && (
-          <div className="mb-8">
-            <div className="flex gap-4 overflow-x-auto pb-2">
-              {/* Total Expenses */}
-              <div className="min-w-[180px] bg-white rounded-lg p-4 shadow-sm flex flex-col justify-between">
-                <span className="text-xs text-gray-500 mb-1">Total Expenses</span>
-                <div className="flex items-center gap-2">
-                  <FaDollarSign className="w-4 h-4 text-blue-400" />
-                  <span className="text-lg font-bold">${totalAmount.toFixed(2)}</span>
-                </div>
-              </div>
-              {/* Categories Count */}
-              <div className="min-w-[180px] bg-white rounded-lg p-4 shadow-sm flex flex-col justify-between">
-                <span className="text-xs text-gray-500 mb-1">Categories</span>
-                <div className="flex items-center gap-2">
-                  <FaBuilding className="w-4 h-4 text-purple-400" />
-                  <span className="text-lg font-bold">{Object.keys(categoryTotals).length}</span>
-                </div>
-              </div>
-              {/* Branches Count */}
-              <div className="min-w-[180px] bg-white rounded-lg p-4 shadow-sm flex flex-col justify-between">
-                <span className="text-xs text-gray-500 mb-1">Branches</span>
-                <div className="flex items-center gap-2">
-                  <FaBuilding className="w-4 h-4 text-green-400" />
-                  <span className="text-lg font-bold">{Object.keys(branchTotals).length}</span>
-                </div>
-              </div>
-              {/* By Category */}
-              <div className="min-w-[220px] bg-gray-50 rounded-lg p-4 shadow-sm flex flex-col">
-                <span className="text-xs font-semibold text-gray-700 mb-2">By Category</span>
-                <div className="space-y-1 max-h-24 overflow-y-auto">
-                  {Object.entries(categoryTotals).length === 0 ? (
-                    <p className="text-gray-400 text-xs">No expenses yet</p>
-                  ) : (
-                    Object.entries(categoryTotals).map(([cat, amt]) => (
-                      <div key={cat} className="flex items-center justify-between text-xs">
-                        <span className="capitalize">{cat.replace('_', ' ')}</span>
-                        <span className="font-bold">${amt.toFixed(2)}</span>
-                      </div>
-                    )))
-                  }
-                </div>
-              </div>
-              {/* By Branch */}
-              <div className="min-w-[220px] bg-gray-50 rounded-lg p-4 shadow-sm flex flex-col">
-                <span className="text-xs font-semibold text-gray-700 mb-2">By Branch</span>
-                <div className="space-y-1 max-h-24 overflow-y-auto">
-                  {Object.keys(branchTotals).length === 0 ? (
-                    <p className="text-gray-400 text-xs">No branch expenses yet</p>
-                  ) : (
-                    Object.entries(branchTotals).map(([branch, amt]) => (
-                      <div key={branch} className="flex items-center justify-between text-xs">
-                        <span>{branch}</span>
-                        <span className="font-bold">${amt.toFixed(2)}</span>
-                      </div>
-                    )))
-                  }
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Salary Summary */}
-        <div className="mb-8">
-          <div className="bg-white rounded-lg p-4 shadow-sm flex items-center justify-between">
+   
+        {/* Salary Summary - compact */}
+        <div className="mb-4">
+          <div className="bg-white rounded p-2 shadow-sm flex items-center justify-between border border-gray-100">
             <div>
-              <h4 className="text-sm font-semibold text-emerald-700 mb-1">Total Salary Expenses</h4>
-              <p className="text-xs text-emerald-600">Employee salaries as business expenses</p>
+              <h1 className="text-xs font-semibold text-gray-700 mb-0.5">Total Salary Expenses</h1>
+              <p className="text-[11px] text-gray-500">Employee salaries as business expenses</p>
             </div>
-            <div className="flex items-center gap-2">
-              <FaDollarSign className="w-5 h-5 text-emerald-400" />
-              <span className="text-xl font-bold">${salaryTotal.toFixed(2)}</span>
+            <div className="flex items-center gap-1">
+              <FaDollarSign className="w-4 h-4 text-gray-400" />
+              <span className="text-base font-bold">${salaryTotal.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
         {/* Divider */}
-        <div className="border-t border-gray-100 my-6" />
+        <div className="border-t border-gray-100 my-3" />
 
         {/* Tab Content */}
         {activeTab === 'current' && (
           <>
+            {/* Current Month Expenses Summary */}
+            <div className="mb-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Month Expenses Summary</h3>
+                {fetchingCurrentMonthExpenses ? (
+                  <div className="flex justify-center items-center py-4">
+                    <Spinner />
+                  </div>
+                ) : currentMonthExpensesTotal ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
+                      <h4 className="font-semibold text-red-900 mb-2">{currentMonthExpensesTotal.monthName}</h4>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-red-700">Total Expenses:</span>
+                          <span className="font-bold">${currentMonthExpensesTotal.totalAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-red-700">Expense Count:</span>
+                          <span className="font-bold">{currentMonthExpensesTotal.expenseCount}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    No expense data available for current month.
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Monthly Expenses Total Section */}
+            <div className="mb-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Expenses Total</h3>
+                <div className="flex flex-wrap items-center gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                    <select
+                      value={expenseSelectedMonth}
+                      onChange={(e) => setExpenseSelectedMonth(parseInt(e.target.value))}
+                      className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm bg-white"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                    <select
+                      value={expenseSelectedYear}
+                      onChange={(e) => setExpenseSelectedYear(parseInt(e.target.value))}
+                      className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm bg-white"
+                    >
+                      {Array.from({ length: 5 }, (_, i) => {
+                        const year = new Date().getFullYear() - 2 + i;
+                        return (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+                {fetchingExpenseMonthlyTotal ? (
+                  <div className="flex justify-center items-center py-4">
+                    <Spinner />
+                  </div>
+                ) : expenseTotalForSelectedMonth ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
+                      <h4 className="font-semibold text-red-900 mb-2">{expenseTotalForSelectedMonth.monthName}</h4>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-red-700">Total Expenses:</span>
+                          <span className="font-bold">${expenseTotalForSelectedMonth.totalAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-red-700">Expense Count:</span>
+                          <span className="font-bold">{expenseTotalForSelectedMonth.expenseCount}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    No expense data available for the selected month.
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Expenses Table (desktop) / Cards (mobile) */}
             {filteredExpenses.length === 0 ? (
               <div className="text-center py-10">
@@ -881,7 +1066,7 @@ export default function ExpensesPage() {
                       >
                         <td className="py-2 px-3 font-bold text-gray-900">${expense.amount.toFixed(2)}</td>
                         <td className="py-2 px-3 text-xs">{expense.description}</td>
-                        <td className="py-2 px-3 text-xs capitalize">{(expense.category || 'other').replace('_', ' ')}</td>
+                        <td className="py-2 px-3 text-xs capitalize">{getCategoryName(expense).replace('_', ' ')}</td>
                         <td className="py-2 px-3 text-xs">
                           {expense.expenseType === 'recurring' ? (
                             <span className="text-orange-700">Recurring</span>
@@ -920,105 +1105,122 @@ export default function ExpensesPage() {
 
         {activeTab === 'salaries' && (
           <>
-            {/* Salary Assignment Form */}
-            <div className="mb-8 bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-xl p-4 shadow-sm border border-gray-100">
-              <h4 className="text-base font-semibold text-gray-800 mb-2">Assign Salary to Worker</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Worker Selection */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Worker *</label>
-                  <select
-                    value={salaryForm.employeeName}
-                    onChange={e => handleSalaryFormChange('employeeName', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
-                  >
-                    <option value="">Select worker</option>
-                    {users.map(user => (
-                      <option key={user.id} value={user.id}>{user.name}</option>
-                    ))}
-                  </select>
-                </div>
-                {/* Salary Amount */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Salary Amount *</label>
-                  <input
-                    type="number"
-                    value={salaryForm.salaryAmount}
-                    onChange={e => handleSalaryFormChange('salaryAmount', parseFloat(e.target.value) || 0)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                {/* Frequency */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Frequency</label>
-                  <select
-                    value={salaryForm.frequency}
-                    onChange={e => handleSalaryFormChange('frequency', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
-                  >
-                    <option value="monthly">Monthly</option>
-                    <option value="yearly">Yearly</option>
-                  </select>
-                </div>
-                {/* Start Date */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Start Date *</label>
-                  <input
-                    type="date"
-                    value={salaryForm.startDate}
-                    onChange={e => handleSalaryFormChange('startDate', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
-                  />
-                </div>
-                {/* Branch (optional) */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Branch</label>
-                  <select
-                    value={salaryForm.branchId || ''}
-                    onChange={e => handleSalaryFormChange('branchId', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
-                  >
-                    <option value="">Select branch</option>
-                    {branches.map(branch => (
-                      <option key={branch.id} value={branch.id}>{branch.name}</option>
-                    ))}
-                  </select>
-                </div>
-                {/* Notes */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
-                  <textarea
-                    value={salaryForm.notes || ''}
-                    onChange={e => handleSalaryFormChange('notes', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
-                    placeholder="Additional notes..."
-                    rows={2}
-                  />
-                </div>
+            {/* Current Month Salary Summary */}
+            <div className="mb-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Month Salary Summary</h3>
+                {salarySummaryLoading ? (
+                  <div className="flex justify-center items-center py-4">
+                    <Spinner />
+                  </div>
+                ) : currentMonthSalaryTotal ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg p-4 border border-emerald-200">
+                      <h4 className="font-semibold text-emerald-900 mb-2">{currentMonthSalaryTotal.monthName}</h4>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-emerald-700">Total Salary:</span>
+                          <span className="font-bold">${currentMonthSalaryTotal.totalAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-emerald-700">Active Schemes:</span>
+                          <span className="font-bold">{currentMonthSalaryTotal.salarySchemeCount}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    No salary data available for current month.
+                  </div>
+                )}
               </div>
-              <div className="flex justify-end gap-3 mt-4">
-                <button
-                  onClick={handleAssignSalary}
-                  disabled={salaryAssigning || !salaryForm.employeeName || !salaryForm.salaryAmount || !salaryForm.startDate}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold flex items-center gap-2 text-sm disabled:opacity-50"
-                >
-                  {salaryAssigning ? <Spinner /> : <FaSave className="w-4 h-4" />}
-                  Assign Salary
-                </button>
-              </div>
-              {/* Error/Success */}
-              {error && <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm shadow">{error}</div>}
-              {success && <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm shadow">{success}</div>}
             </div>
-            {/* Salary Expenses Table */}
-            {filteredExpenses.filter(exp => exp.category === 'salary').length === 0 ? (
+            {/* Monthly Salary Total Section */}
+            <div className="mb-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Salary Total</h3>
+                <div className="flex flex-wrap items-center gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm bg-white"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                      className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm bg-white"
+                    >
+                      {Array.from({ length: 5 }, (_, i) => {
+                        const year = new Date().getFullYear() - 2 + i;
+                        return (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+                {fetchingMonthlyTotal ? (
+                  <div className="flex justify-center items-center py-4">
+                    <Spinner />
+                  </div>
+                ) : salaryTotalForMonth ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg p-4 border border-emerald-200">
+                      <h4 className="font-semibold text-emerald-900 mb-2">{salaryTotalForMonth.monthName}</h4>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-emerald-700">Total Salary:</span>
+                          <span className="font-bold">${salaryTotalForMonth.totalAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-emerald-700">Active Schemes:</span>
+                          <span className="font-bold">{salaryTotalForMonth.salarySchemeCount}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    No salary data available for the selected month.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Add New Salary Scheme Button */}
+            <div className="mb-8">
+              <button
+                onClick={() => setSalaryDrawerType('create')}
+                className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
+              >
+                <FaPlus className="w-4 h-4" />
+                Add New Salary Scheme
+              </button>
+            </div>
+            {/* Salary Schemes Table */}
+            {loadingSchemes ? (
+              <div className="flex justify-center items-center min-h-[200px]">
+                <Spinner />
+              </div>
+            ) : salarySchemes.length === 0 ? (
               <div className="text-center py-10">
                 <FaDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                <h3 className="text-base font-semibold text-gray-900 mb-1">No salary expenses found</h3>
-                <p className="text-gray-400 text-xs mb-2">No expenses categorized as salary</p>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">No salary schemes found</h3>
+                <p className="text-gray-400 text-xs mb-2">Assign a salary to get started</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -1026,51 +1228,87 @@ export default function ExpensesPage() {
                   <thead>
                     <tr className="text-xs text-gray-500 border-b">
                       <th className="py-2 px-3 text-left">Amount</th>
-                      <th className="py-2 px-3 text-left">Description</th>
-                      <th className="py-2 px-3 text-left">Type</th>
-                      <th className="py-2 px-3 text-left">Date</th>
+                      <th className="py-2 px-3 text-left">Employee</th>
+                      <th className="py-2 px-3 text-left">Frequency</th>
+                      <th className="py-2 px-3 text-left">Start Date</th>
+                      <th className="py-2 px-3 text-left">Next Due Date</th>
+                      <th className="py-2 px-3 text-left">Last Paid Date</th>
                       <th className="py-2 px-3 text-left">Branch</th>
+                      <th className="py-2 px-3 text-left">Notes</th>
                       <th className="py-2 px-3 text-left">Status</th>
                       <th className="py-2 px-3"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredExpenses.filter(exp => exp.category === 'salary').map(expense => (
+                    {salarySchemes.map(scheme => (
                       <tr
-                        key={expense.id}
+                        key={scheme.id}
                         className="border-b hover:bg-blue-50 cursor-pointer"
                         onClick={() => {
-                          setSelectedExpense(expense);
-                          setDrawerType('details');
+                          setSelectedSalaryScheme(scheme);
+                          setSalaryDrawerType('details');
                         }}
                       >
-                        <td className="py-2 px-3 font-bold text-gray-900">${expense.amount.toFixed(2)}</td>
-                        <td className="py-2 px-3 text-xs">{expense.description}</td>
+                        <td className="py-2 px-3 font-bold text-gray-900">${scheme.salaryAmount.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-xs">{scheme.user?.name || scheme.employeeName}</td>
+                        <td className="py-2 px-3 text-xs capitalize">{scheme.frequency}</td>
+                        <td className="py-2 px-3 text-xs">{new Date(scheme.startDate).toLocaleDateString()}</td>
+                        <td className="py-2 px-3 text-xs">{scheme.nextDueDate ? new Date(scheme.nextDueDate).toLocaleDateString() : '-'}</td>
+                        <td className="py-2 px-3 text-xs">{scheme.lastPaidDate ? new Date(scheme.lastPaidDate).toLocaleDateString() : '-'}</td>
+                        <td className="py-2 px-3 text-xs">{scheme.branch?.name || ''}</td>
+                        <td className="py-2 px-3 text-xs max-w-[120px] truncate" title={scheme.notes || ''}>{scheme.notes || '-'}</td>
                         <td className="py-2 px-3 text-xs">
-                          {expense.expenseType === 'recurring' ? (
-                            <span className="text-orange-700">Recurring</span>
-                          ) : (
-                            <span className="text-gray-700">One-time</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-xs">{new Date(expense.createdAt).toLocaleDateString()}</td>
-                        <td className="py-2 px-3 text-xs">{expense.branch?.name || ''}</td>
-                        <td className="py-2 px-3 text-xs">
-                          <span className={expense.isActive ? 'text-green-600' : 'text-red-600'}>
-                            {expense.isActive ? 'Active' : 'Inactive'}
+                          <span className={scheme.isActive ? 'text-green-600' : 'text-red-600'}>
+                            {scheme.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 flex gap-1">
                           <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              setSelectedExpense(expense);
-                              setDrawerType('details');
+                            onClick={() => {
+                              setSelectedSalaryScheme(scheme);
+                              setSalaryDrawerType('details');
                             }}
                             className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
                           >
                             <FaEye className="w-3 h-3" />
                             View
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSalarySchemeForEdit(scheme);
+                              setSalaryForm({
+                                employeeName: scheme.employeeName,
+                                salaryAmount: scheme.salaryAmount,
+                                frequency: scheme.frequency,
+                                startDate: scheme.startDate.split('T')[0], // Format for date input
+                                userId: scheme.userId,
+                                branchId: scheme.branchId || '',
+                                notes: scheme.notes || '',
+                              });
+                              setIsEditingSalary(true);
+                              setSalaryDrawerType('create'); // Reuse the form drawer
+                            }}
+                            className="text-yellow-600 hover:text-yellow-800 text-xs flex items-center gap-1"
+                          >
+                            <FaEdit className="w-3 h-3" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log('Delete button clicked for scheme', scheme.id);
+                              if (confirm('Are you sure you want to delete this salary scheme?')) {
+                                console.log('Confirmed delete');
+                                handleDeleteSalaryScheme(scheme);
+                              } else {
+                                console.log('Delete cancelled');
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-800 text-xs flex items-center gap-1"
+                          >
+                            <FaTrash className="w-3 h-3" />
+                            Delete
                           </button>
                         </td>
                       </tr>
@@ -1186,9 +1424,153 @@ export default function ExpensesPage() {
           </div>
         )}
 
+        {activeTab === 'records' && (
+          <>
+            {/* All Expenses Records Summary */}
+            <div className="mb-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">All Expenses Records Summary</h3>
+                {(() => {
+                  const recordsExpenses = expenses.filter(exp => !exp.id.startsWith('salary-'));
+                  const totalAmount = recordsExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+                  const totalCount = recordsExpenses.length;
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                        <h4 className="font-semibold text-blue-900 mb-2">Total Records</h4>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-blue-700">Count:</span>
+                            <span className="font-bold">{totalCount}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-blue-700">Total Amount:</span>
+                            <span className="font-bold">${totalAmount.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Expenses Records Table */}
+            {(() => {
+              const recordsExpenses = expenses.filter(exp => !exp.id.startsWith('salary-'));
+              const filteredRecords = recordsExpenses.filter(expense =>
+                expense.description.toLowerCase().includes(search.toLowerCase()) ||
+                getCategoryName(expense).toLowerCase().includes(search.toLowerCase()) ||
+                (expense.branch?.name.toLowerCase().includes(search.toLowerCase()))
+              ).sort((a, b) => {
+                let aValue: string | number, bValue: string | number;
+
+                switch (sortBy) {
+                  case 'amount':
+                    aValue = a.amount;
+                    bValue = b.amount;
+                    break;
+                  case 'category':
+                    aValue = getCategoryName(a);
+                    bValue = getCategoryName(b);
+                    break;
+                  case 'createdAt':
+                  default:
+                    aValue = new Date(a.createdAt).getTime();
+                    bValue = new Date(b.createdAt).getTime();
+                    break;
+                }
+
+                if (sortOrder === 'asc') {
+                  return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+                } else {
+                  return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+                }
+              });
+
+              return filteredRecords.length === 0 ? (
+                <div className="text-center py-10">
+                  <FaDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                  <h3 className="text-base font-semibold text-gray-900 mb-1">No expense records found</h3>
+                  <p className="text-gray-400 text-xs mb-2">Start by adding your first expense</p>
+                  {canCreateExpenses && (
+                    <button
+                      onClick={() => setDrawerType('create')}
+                      className="px-3 py-1.5 bg-blue-600 text-white rounded shadow hover:bg-blue-700 font-semibold flex items-center gap-1 text-xs"
+                    >
+                      <FaPlus className="w-3 h-3" />
+                      Add Expense
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white rounded-lg shadow-sm">
+                    <thead>
+                      <tr className="text-xs text-gray-500 border-b">
+                        <th className="py-2 px-3 text-left">Amount</th>
+                        <th className="py-2 px-3 text-left">Description</th>
+                        <th className="py-2 px-3 text-left">Category</th>
+                        <th className="py-2 px-3 text-left">Type</th>
+                        <th className="py-2 px-3 text-left">Date</th>
+                        <th className="py-2 px-3 text-left">Branch</th>
+                        <th className="py-2 px-3 text-left">Status</th>
+                        <th className="py-2 px-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRecords.map(expense => (
+                        <tr
+                          key={expense.id}
+                          className="border-b hover:bg-blue-50 cursor-pointer"
+                          onClick={() => {
+                            setSelectedExpense(expense);
+                            setDrawerType('details');
+                          }}
+                        >
+                          <td className="py-2 px-3 font-bold text-gray-900">${expense.amount.toFixed(2)}</td>
+                          <td className="py-2 px-3 text-xs">{expense.description}</td>
+                          <td className="py-2 px-3 text-xs capitalize">{getCategoryName(expense).replace('_', ' ')}</td>
+                          <td className="py-2 px-3 text-xs">
+                            {expense.expenseType === 'recurring' ? (
+                              <span className="text-orange-700">Recurring</span>
+                            ) : (
+                              <span className="text-gray-700">One-time</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-xs">{new Date(expense.createdAt).toLocaleDateString()}</td>
+                          <td className="py-2 px-3 text-xs">{expense.branch?.name || ''}</td>
+                          <td className="py-2 px-3 text-xs">
+                            <span className={expense.isActive ? 'text-green-600' : 'text-red-600'}>
+                              {expense.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                setSelectedExpense(expense);
+                                setDrawerType('details');
+                              }}
+                              className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
+                            >
+                              <FaEye className="w-3 h-3" />
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </>
+        )}
+
         {/* Drawer Backdrop */}
         <AnimatePresence>
-          {drawerType && (
+          {(drawerType || salaryDrawerType) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1197,6 +1579,8 @@ export default function ExpensesPage() {
               onClick={() => {
                 setDrawerType(null);
                 setSelectedExpense(null);
+                setSalaryDrawerType(null);
+                setSelectedSalaryScheme(null);
                 setFormData({
                   amount: 0,
                   description: '',
@@ -1205,8 +1589,9 @@ export default function ExpensesPage() {
                 });
                 setError(null);
               }}
+           
             />
-          )}
+          ) }
         </AnimatePresence>
 
         {/* Drawer Panel */}
@@ -1437,8 +1822,8 @@ export default function ExpensesPage() {
                     <div className="text-sm text-gray-600">{selectedExpense.description}</div>
                   </div>
                   <div className="text-right">
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(selectedExpense.category || 'other')}`}>
-                      {(selectedExpense.category || 'other').replace('_', ' ')}
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor()}`}>
+                      {getCategoryName(selectedExpense).replace('_', ' ')}
                     </span>
                     <div className="mt-2 flex items-center gap-1">
                       {getExpenseTypeIcon(selectedExpense.expenseType)}
@@ -1520,7 +1905,7 @@ export default function ExpensesPage() {
                       setFormData({
                         amount: selectedExpense.amount,
                         description: selectedExpense.description,
-                        category: selectedExpense.category,
+                        category: getCategoryName(selectedExpense),
                         expenseType: selectedExpense.expenseType,
                         frequency: selectedExpense.frequency,
                         nextDueDate: selectedExpense.nextDueDate,
@@ -1542,6 +1927,302 @@ export default function ExpensesPage() {
                   >
                     <FaTrash className="w-4 h-4" />
                     Delete
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Salary Create/Edit Drawer */}
+        <AnimatePresence>
+          {salaryDrawerType === 'create' && (
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white/90 z-50 shadow-2xl border-l border-gray-100 flex flex-col rounded-l-xl"
+              style={{ maxHeight: '100vh' }}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white/90 z-10 rounded-t-xl">
+                <h3 className="text-lg font-bold text-gray-900">{isEditingSalary ? 'Edit Salary Scheme' : 'Add New Salary Scheme'}</h3>
+                <button
+                  onClick={() => {
+                    setSalaryDrawerType(null);
+                    setSalaryForm({
+                      employeeName: '',
+                      salaryAmount: 0,
+                      frequency: 'monthly',
+                      startDate: '',
+                      userId: '',
+                      branchId: '',
+                      notes: '',
+                    });
+                    setIsEditingSalary(false);
+                    setSelectedSalarySchemeForEdit(null);
+                    setError(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition"
+                >
+                  <FaTimesCircle className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="overflow-y-auto px-6 py-6 flex-1 space-y-6">
+                {/* Salary Info Section */}
+                <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-xl p-4 shadow-sm border border-gray-100">
+                  <h4 className="text-base font-semibold text-gray-800 mb-2">Salary Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Select Employee */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Select Employee *</label>
+                      <select
+                        value={salaryForm.userId}
+                        onChange={(e) => {
+                          const selectedUserId = e.target.value;
+                          const selectedUser = users.find(user => user.id === selectedUserId);
+                          handleSalaryFormChange('userId', selectedUserId);
+                          handleSalaryFormChange('employeeName', selectedUser ? selectedUser.name : '');
+                        }}
+                        className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
+                      >
+                        <option value="">Select an employee</option>
+                        {users.map(user => (
+                          <option key={user.id} value={user.id}>{user.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Salary Amount */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Salary Amount *</label>
+                      <div className="relative">
+                        <FaDollarSign className="absolute left-2 top-1/2 transform -translate-y-1/2 text-emerald-400 w-4 h-4" />
+                        <input
+                          type="number"
+                          value={salaryForm.salaryAmount}
+                          onChange={(e) => handleSalaryFormChange('salaryAmount', parseFloat(e.target.value) || 0)}
+                          className="w-full pl-8 pr-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Frequency */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Frequency</label>
+                    <select
+                      value={salaryForm.frequency}
+                      onChange={(e) => handleSalaryFormChange('frequency', e.target.value as 'monthly' | 'yearly')}
+                      className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                  {/* Start Date */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Start Date *</label>
+                    <input
+                      type="date"
+                      value={salaryForm.startDate}
+                      onChange={(e) => handleSalaryFormChange('startDate', e.target.value)}
+                      className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
+                    />
+                  </div>
+                </div>
+                {/* Branch Selection */}
+                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-xl p-4 shadow-sm border border-gray-100">
+                  <h4 className="text-base font-semibold text-gray-800 mb-2">Branch</h4>
+                  <select
+                    value={salaryForm.branchId || ''}
+                    onChange={(e) => handleSalaryFormChange('branchId', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                  >
+                    <option value="">Select branch</option>
+                    {branches.map(branch => (
+                      <option key={branch.id} value={branch.id}>{branch.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Notes Section */}
+                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-xl p-4 shadow-sm border border-gray-100">
+                  <h4 className="text-base font-semibold text-gray-800 mb-2">Notes</h4>
+                  <textarea
+                    value={salaryForm.notes || ''}
+                    onChange={(e) => handleSalaryFormChange('notes', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                    placeholder="Additional notes..."
+                    rows={3}
+                  />
+                </div>
+                {/* Error */}
+                {error && (
+                  <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm shadow">
+                    {error}
+                  </div>
+                )}
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 mt-2 sticky bottom-0 bg-white/90 py-2 rounded-b-xl">
+                  <button
+                    onClick={() => {
+                      setSalaryDrawerType(null);
+                      setSalaryForm({
+                        employeeName: '',
+                        salaryAmount: 0,
+                        frequency: 'monthly',
+                        startDate: '',
+                        userId: '',
+                        branchId: '',
+                        notes: '',
+                      });
+                      setIsEditingSalary(false);
+                      setSelectedSalarySchemeForEdit(null);
+                      setError(null);
+                    }}
+                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold text-sm"
+                    disabled={salaryAssigning}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAssignSalary}
+                    disabled={salaryAssigning || !salaryForm.employeeName || !salaryForm.salaryAmount || !salaryForm.startDate}
+                    className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-green-600 text-white rounded-lg hover:scale-105 hover:shadow-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-150 text-sm"
+                  >
+                    {salaryAssigning ? (
+                      <>
+                        <Spinner />
+                        {isEditingSalary ? 'Updating...' : 'Assigning...'}
+                      </>
+                    ) : (
+                      <>
+                        <FaSave className="w-5 h-5" />
+                        {isEditingSalary ? 'Update Salary' : 'Assign Salary'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Salary Details Drawer */}
+        <AnimatePresence>
+          {salaryDrawerType === 'details' && selectedSalaryScheme && (
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-white/90 z-50 shadow-2xl border-l border-gray-100 flex flex-col rounded-l-xl"
+              style={{ maxHeight: '100vh' }}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white/90 z-10 rounded-t-xl">
+                <h3 className="text-lg font-bold text-gray-900">Salary Scheme Details</h3>
+                <button
+                  onClick={() => {
+                    setSalaryDrawerType(null);
+                    setSelectedSalaryScheme(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition"
+                >
+                  <FaTimesCircle className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="overflow-y-auto px-6 py-6 flex-1 space-y-6">
+                {/* Amount and Employee Section */}
+                <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
+                  <div>
+                    <div className="text-2xl font-bold text-gray-900">${selectedSalaryScheme.salaryAmount.toFixed(2)}</div>
+                    <div className="text-sm text-gray-600">{selectedSalaryScheme.user?.name || selectedSalaryScheme.employeeName}</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 text-emerald-800">
+                      Salary
+                    </span>
+                    <div className="mt-2 flex items-center gap-1">
+                      <FaRedo className="w-4 h-4 text-emerald-500" />
+                      <span className="text-sm text-gray-600 capitalize">
+                        {selectedSalaryScheme.frequency}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {/* Details Grid Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white/80 rounded-xl p-5 border border-gray-100 shadow-sm">
+                    <h4 className="font-medium text-gray-900 mb-3">Basic Information</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Employee ID:</span>
+                        <span>{selectedSalaryScheme.userId}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Employee Name:</span>
+                        <span>{selectedSalaryScheme.user?.name || selectedSalaryScheme.employeeName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Start Date:</span>
+                        <span>{new Date(selectedSalaryScheme.startDate).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Created:</span>
+                        <span>{new Date(selectedSalaryScheme.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      {selectedSalaryScheme.branch && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Branch:</span>
+                          <span>{selectedSalaryScheme.branch.name}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-white/80 rounded-xl p-5 border border-gray-100 shadow-sm">
+                    <h4 className="font-medium text-gray-900 mb-3">Payment Details</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Status:</span>
+                        <span className={selectedSalaryScheme.isActive ? 'text-green-600' : 'text-red-600'}>
+                          {selectedSalaryScheme.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Next Due Date:</span>
+                        <span>{selectedSalaryScheme.nextDueDate ? new Date(selectedSalaryScheme.nextDueDate).toLocaleDateString() : '-'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Last Paid Date:</span>
+                        <span>{selectedSalaryScheme.lastPaidDate ? new Date(selectedSalaryScheme.lastPaidDate).toLocaleDateString() : '-'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Frequency:</span>
+                        <span className="capitalize">{selectedSalaryScheme.frequency}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Notes Section */}
+                {selectedSalaryScheme.notes && (
+                  <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-2xl p-4 shadow-sm border border-gray-100">
+                    <h4 className="font-medium text-gray-900 mb-3">Notes</h4>
+                    <div className="text-sm text-gray-700">
+                      {selectedSalaryScheme.notes}
+                    </div>
+                  </div>
+                )}
+                {/* Action Buttons - For now, just close; add edit/delete if needed later */}
+                <div className="flex justify-end gap-3 mt-2">
+                  <button
+                    onClick={() => {
+                      setSalaryDrawerType(null);
+                      setSelectedSalaryScheme(null);
+                    }}
+                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold text-sm"
+                  >
+                    Close
                   </button>
                 </div>
               </div>

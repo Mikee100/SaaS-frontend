@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import BranchSwitcher from '@/components/BranchSwitcher';
+import { useUser } from '@/components/UserContext';
 import {
   FiTrendingUp,
   FiDollarSign,
@@ -76,6 +77,11 @@ function generateMockCustomerGrowth(totalCustomers: number): Record<string, numb
   }
 
   return result;
+}
+
+interface Tenant {
+  name: string;
+  logoUrl?: string;
 }
 
 interface AnalyticsData {
@@ -299,7 +305,8 @@ function formatChartData(data: Record<string, number>) {
 }
 
 export default function DashboardPage() {
-
+  const userContext = useUser();
+  const [tenant, setTenant] = useState<Tenant | null>(null);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const {  loading: limitsLoading } = usePlanLimits();
@@ -313,6 +320,24 @@ export default function DashboardPage() {
     total: number[];
   } | null>(null);
   const lowStockProducts = (analyticsData?.topProducts || []).filter((p) => (p.sales ?? 0) < stockThreshold);
+
+  // Fetch tenant data
+  useEffect(() => {
+    const fetchTenant = async () => {
+      if (!userContext.user?.tenantId) return;
+
+      try {
+        const tenantData = await apiGet('/tenant/me');
+        setTenant(tenantData as Tenant);
+      } catch (error) {
+        console.error('Error fetching tenant:', error);
+      }
+    };
+
+    if (userContext.user) {
+      fetchTenant();
+    }
+  }, [userContext.user]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -426,7 +451,7 @@ export default function DashboardPage() {
           {/* Header */}
           <div className="mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Dashboard</h1>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{tenant?.name || 'Business'} Dashboard</h1>
               <p className="text-gray-600 mt-1 text-base">
                 Welcome back! Here&apos;s what&apos;s happening with your business.
               </p>

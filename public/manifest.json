@@ -1,7 +1,7 @@
 {
-  "name": "SaaS Platform",
-  "short_name": "SaaS Platform",
-  "description": "Modern SaaS platform with offline capabilities and plan-based access control",
+  "name": "Adeera Platform",
+  "short_name": "Adeera Platform",
+  "description": "Modern Adeera platform with offline capabilities and plan-based access control",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

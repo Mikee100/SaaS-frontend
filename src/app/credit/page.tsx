@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
-import { FaCreditCard, FaMoneyBillWave, FaCalendarAlt, FaUser, FaPhone, FaExclamationTriangle, FaCheckCircle, FaClock, FaPlus, FaEye, FaDollarSign, FaTimesCircle, FaUsers, FaFilePdf, FaFileExcel } from 'react-icons/fa';
+import { FaCreditCard, FaMoneyBillWave, FaCalendarAlt, FaUser, FaPhone, FaExclamationTriangle, FaCheckCircle, FaClock, FaPlus, FaEye, FaDollarSign, FaTimesCircle, FaUsers, FaFilePdf, FaFileExcel, FaBuilding } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Spinner from '@/components/Spinner';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 
@@ -35,6 +35,11 @@ interface Credit {
         name: string;
       };
     }>;
+    Branch?: {
+      id: string;
+      name: string;
+      address: string | null;
+    };
   };
   payments: Array<{
     id: string;
@@ -179,6 +184,38 @@ export default function CreditManagementPage() {
       });
     });
     return Object.entries(trends).map(([month, amount]) => ({ month, amount })).sort((a, b) => new Date(a.month + ' 1').getTime() - new Date(b.month + ' 1').getTime());
+  }, [credits]);
+
+  // Compute credits by customer (all customers)
+  const creditsByCustomer = useMemo(() => {
+    const customerMap: { [key: string]: { name: string; total: number } } = {};
+    credits.forEach(credit => {
+      const key = credit.customerName;
+      if (!customerMap[key]) {
+        customerMap[key] = { name: key, total: 0 };
+      }
+      customerMap[key].total += credit.totalAmount;
+    });
+    return Object.values(customerMap)
+      .sort((a, b) => b.total - a.total)
+      .map(customer => ({ name: customer.name, total: customer.total }));
+  }, [credits]);
+
+  // Compute credits by branch (placeholder - branch data not available in current structure)
+  const creditsByBranch = useMemo(() => {
+    // Since branch info is not available in the current data structure,
+    // we'll show a single entry for all credits
+    return [{ name: 'All Branches', total: credits.reduce((sum, credit) => sum + credit.totalAmount, 0), count: credits.length }];
+  }, [credits]);
+
+  // Compute credit creation trends by month
+  const creditCreationTrends = useMemo(() => {
+    const trends: { [key: string]: number } = {};
+    credits.forEach(credit => {
+      const month = new Date(credit.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+      trends[month] = (trends[month] || 0) + 1; // Count of credits created
+    });
+    return Object.entries(trends).map(([month, count]) => ({ month, count })).sort((a, b) => new Date(a.month + ' 1').getTime() - new Date(b.month + ' 1').getTime());
   }, [credits]);
 
   // Export functions
@@ -858,6 +895,64 @@ export default function CreditManagementPage() {
               </div>
             </div>
 
+            {/* Credits by Customer Chart */}
+            <div className="bg-white rounded shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <FaUsers className="w-4 h-4" />
+                  Credits by Customer
+                </h2>
+              </div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={creditsByCustomer}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
+                    <YAxis />
+                    <Tooltip formatter={(value) => [`$${(value as number).toFixed(2)}`, 'Total Credit']} />
+                    <Bar dataKey="total" fill="#3b82f6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Credits by Branch Chart */}
+            <div className="bg-white rounded shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <FaBuilding className="w-4 h-4" />
+                  Credits by Branch
+                </h2>
+              </div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={creditsByBranch}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
+                    <YAxis />
+                  <Tooltip formatter={(value) => [`$${(value as number).toFixed(2)}`, 'Total Credit']} />
+                    <Bar dataKey="total" fill="#10b981" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Credit Creation Trends Chart */}
+            <div className="bg-white rounded shadow-sm border border-gray-100 p-6">
+              <h2 className="text-base font-semibold text-gray-900 mb-4">Credit Creation Trends</h2>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={creditCreationTrends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => [`${value} credits`, 'Count']} />
+                    <Line type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
             {/* Summary Statistics */}
             <div className="bg-white rounded shadow-sm border border-gray-100 p-6">
               <h2 className="text-base font-semibold text-gray-900 mb-4">Summary Statistics</h2>
@@ -1062,6 +1157,12 @@ export default function CreditManagementPage() {
                   <h4 className="font-medium text-gray-900 mb-2 text-xs">Sale Items</h4>
                   <div className="bg-gray-50 rounded p-2">
                     <div className="space-y-1 text-xs">
+                      {selectedCredit.sale.Branch && (
+                        <div className="flex items-center gap-1 text-gray-600 mb-2">
+                          <FaBuilding className="w-3 h-3" />
+                          <span>Branch: {selectedCredit.sale.Branch.name} {selectedCredit.sale.Branch.address && `(${selectedCredit.sale.Branch.address})`}</span>
+                        </div>
+                      )}
                       {selectedCredit.sale.SaleItem.map((item, index) => (
                         <div key={index} className="flex justify-between items-center">
                           <span>{item.product.name}</span>

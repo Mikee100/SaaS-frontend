@@ -4,10 +4,14 @@ import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
-import { FaBox, FaShoppingCart, FaChartLine, FaCreditCard, FaCog, FaSignOutAlt, FaBars, FaTimes, FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, FaMapMarkerAlt, FaRobot } from 'react-icons/fa';
+import {
+  FaBoxOpen, FaShoppingBasket, FaChartBar, FaCreditCard, /* FaCog, */ FaSignOutAlt, FaBars, FaTimes,
+  FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, /* FaMapMarkerAlt, */ FaRobot, FaTachometerAlt,
+  FaLayerGroup, FaUpload, FaHistory, FaUsers, FaMoneyBillWave, FaFileInvoiceDollar, /* FaBuilding, */ FaBullseye
+} from 'react-icons/fa';
+import { MdOutlineInventory2, MdOutlineAnalytics, MdOutlineReport, MdOutlineSettings } from 'react-icons/md';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
-import { FaTachometerAlt } from 'react-icons/fa';
 import { apiGet } from '@/utils/api';
 import Image from 'next/image';
 
@@ -19,12 +23,6 @@ interface Tenant {
   // Add other fields as needed
 }
 
-interface Branch {
-  name: string;
-  // Add other fields as needed
-}
-
-
 
 export default function PlanBasedNav() {
   const userContext = useUser();
@@ -33,8 +31,9 @@ export default function PlanBasedNav() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
   const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [branch, setBranch] = useState<Branch | null>(null);
+
   const [tenantBranchLoading, setTenantBranchLoading] = useState(true);
+  const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
 
   // Close dropdowns when navigating to a different page, but open relevant ones for reports
@@ -56,12 +55,12 @@ export default function PlanBasedNav() {
       }
 
       try {
-        const [tenantData, branchData] = await Promise.all([
+        const [tenantData] = await Promise.all([
           apiGet('/tenant/me'),
           apiGet(`/branches/${userContext.user.branchId}`)
         ]);
         setTenant(tenantData as Tenant);
-        setBranch(branchData as Branch);
+      
       } catch (error) {
         console.error('Error fetching tenant or branch:', error);
       } finally {
@@ -74,79 +73,78 @@ export default function PlanBasedNav() {
     }
   }, [userContext.user]);
 
-    // Always call hooks at top level!
-    const navigationItems = React.useMemo(() => [
-      { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
-      {
-        name: 'AI Assistant',
-        href: '/ai-assistant',
-        icon: FaRobot,
-        requiredPlan: null,
-        requiredPermission: null
-      },
-      {
-        name: 'Products & Inventory',
-        href: '/products',
-        icon: FaBox,
-        requiredPlan: null,
-        requiredPermission: 'view_products',
-        subItems: [
-          { name: 'Product List', href: '/products', requiredPermission: 'view_products' },
-          { name: 'Bulk Upload', href: '/products/bulk-add', requiredPermission: 'create_products' },
-          { name: 'Bulk Upload Records', href: '/products/bulk-upload-records', requiredPermission: 'view_products' },
-          { name: 'Basic Inventory', href: '/inventory', requiredPermission: 'view_inventory' },
-          { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory' },
-          { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory' },
-          {
-            name: 'Reports',
-            href: '/products/reports',
-            requiredPermission: 'view_inventory',
-            // Add all reports as subItems here
-            subItems: [
-              { name: 'Product Sales', href: '/products/reports/product-sales', requiredPermission: 'view_sales' },
-              { name: 'Inventory Levels', href: '/products/reports/inventory-levels', requiredPermission: 'view_inventory' },
-              { name: 'Low Stock Alerts', href: '/products/reports/low-stock-alerts', requiredPermission: 'view_inventory' },
-              { name: 'Product Performance', href: '/products/reports/product-performance', requiredPermission: 'view_analytics' },
-              { name: 'Inventory Turnover', href: '/products/reports/inventory-turnover', requiredPermission: 'view_inventory' },
-              { name: 'Supplier Performance', href: '/products/reports/supplier-performance', requiredPermission: 'view_inventory' },
-              { name: 'Product Category Analysis', href: '/products/reports/product-category-analysis', requiredPermission: 'view_analytics' },
-              { name: 'Inventory Movement', href: '/products/reports/inventory-movement', requiredPermission: 'view_inventory' },
-              { name: 'Inventory Aging', href: '/products/reports/inventory-aging', requiredPermission: 'view_inventory' },
-              { name: 'Stockout & Lost Sales', href: '/products/reports/stockout-lost-sales', requiredPermission: 'view_inventory' },
-              { name: 'Inventory Valuation', href: '/products/reports/inventory-valuation', requiredPermission: 'view_inventory' }
-            ]
-          }
-        ]
-      },
-      {
-        name: 'Transactions',
-        href: '/sales',
-        icon: FaShoppingCart,
-        requiredPlan: null,
-        requiredPermission: 'view_sales',
-        subItems: [
-          { name: 'Sales', href: '/sales', requiredPermission: 'view_sales' },
-          { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales' },
-          { name: 'M-Pesa Transactions', href: '/mpesa-transactions', requiredPermission: 'view_sales' },
-          { name: 'Sales Target', href: '/sales/targets', requiredPermission: 'view_sales' }, // <-- Added here
-        ]
-      },
-      {
-        name: 'Reports & Analytics',
-        href: '/analytics',
-        icon: FaChartLine,
-        requiredPlan: null,
-        requiredPermission: 'view_analytics',
-        subItems: [
-          { name: 'Analytics', href: '/analytics', requiredPermission: 'view_analytics' },
-          { name: 'Reports', href: '/reports', requiredPermission: 'view_reports' }
-        ]
-      },
- { name: 'Credit', href: '/credit', icon: FaCreditCard, requiredPlan: null, requiredPermission: 'view_users' },
-    
-  { name: 'Expenses', href: '/expenses', icon: FaCreditCard, requiredPlan: null, requiredPermission: 'view_users' },
-    { name: 'Settings', href: '/settings', icon: FaCog, requiredPlan: null, requiredPermission: null },
-    { name: 'Billing & Subscription', href: '/account/billing', icon: FaCreditCard, requiredPlan: null, requiredPermission: null },
+  // Improved icon mapping for main and sub items
+  const navigationItems = React.useMemo(() => [
+    { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
+    {
+      name: 'AI Assistant',
+      href: '/ai-assistant',
+      icon: FaRobot,
+      requiredPlan: null,
+      requiredPermission: null
+    },
+    {
+      name: 'Products & Inventory',
+      href: '/products',
+      icon: FaBoxOpen,
+      requiredPlan: null,
+      requiredPermission: 'view_products',
+      subItems: [
+        { name: 'Product List', href: '/products', requiredPermission: 'view_products', icon: FaLayerGroup },
+        { name: 'Bulk Upload', href: '/products/bulk-add', requiredPermission: 'create_products', icon: FaUpload },
+        { name: 'Bulk Upload Records', href: '/products/bulk-upload-records', requiredPermission: 'view_products', icon: FaHistory },
+        { name: 'Basic Inventory', href: '/inventory', requiredPermission: 'view_inventory', icon: MdOutlineInventory2 },
+        { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory', icon: MdOutlineInventory2 },
+        { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory', icon: FaUsers },
+        {
+          name: 'Reports',
+          href: '/products/reports',
+          requiredPermission: 'view_inventory',
+          icon: MdOutlineReport,
+          subItems: [
+            { name: 'Product Sales', href: '/products/reports/product-sales', requiredPermission: 'view_sales', icon: FaFileInvoiceDollar },
+            { name: 'Inventory Levels', href: '/products/reports/inventory-levels', requiredPermission: 'view_inventory', icon: MdOutlineInventory2 },
+            { name: 'Low Stock Alerts', href: '/products/reports/low-stock-alerts', requiredPermission: 'view_inventory', icon: FaBullseye },
+            { name: 'Product Performance', href: '/products/reports/product-performance', requiredPermission: 'view_analytics', icon: FaChartBar },
+            { name: 'Inventory Turnover', href: '/products/reports/inventory-turnover', requiredPermission: 'view_inventory', icon: FaHistory },
+            { name: 'Supplier Performance', href: '/products/reports/supplier-performance', requiredPermission: 'view_inventory', icon: FaUsers },
+            { name: 'Product Category Analysis', href: '/products/reports/product-category-analysis', requiredPermission: 'view_analytics', icon: FaLayerGroup },
+            { name: 'Inventory Movement', href: '/products/reports/inventory-movement', requiredPermission: 'view_inventory', icon: FaBoxOpen },
+            { name: 'Inventory Aging', href: '/products/reports/inventory-aging', requiredPermission: 'view_inventory', icon: FaHistory },
+            { name: 'Stockout & Lost Sales', href: '/products/reports/stockout-lost-sales', requiredPermission: 'view_inventory', icon: FaMoneyBillWave },
+            { name: 'Inventory Valuation', href: '/products/reports/inventory-valuation', requiredPermission: 'view_inventory', icon: FaCreditCard }
+          ]
+        }
+      ]
+    },
+    {
+      name: 'Transactions',
+      href: '/sales',
+      icon: FaShoppingBasket,
+      requiredPlan: null,
+      requiredPermission: 'view_sales',
+      subItems: [
+        { name: 'Sales', href: '/sales', requiredPermission: 'view_sales', icon: FaShoppingBasket },
+        { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales', icon: FaHistory },
+        { name: 'M-Pesa Transactions', href: '/mpesa-transactions', requiredPermission: 'view_sales', icon: FaMoneyBillWave },
+        { name: 'Sales Target', href: '/sales/targets', requiredPermission: 'view_sales', icon: FaBullseye },
+      ]
+    },
+    {
+      name: 'Reports & Analytics',
+      href: '/analytics',
+      icon: MdOutlineAnalytics,
+      requiredPlan: null,
+      requiredPermission: 'view_analytics',
+      subItems: [
+        { name: 'Analytics', href: '/analytics', requiredPermission: 'view_analytics', icon: MdOutlineAnalytics },
+        { name: 'Reports', href: '/reports', requiredPermission: 'view_reports', icon: MdOutlineReport }
+      ]
+    },
+    { name: 'Credit', href: '/credit', icon: FaCreditCard, requiredPlan: null, requiredPermission: 'view_users' },
+    { name: 'Expenses', href: '/expenses', icon: FaMoneyBillWave, requiredPlan: null, requiredPermission: 'view_users' },
+    { name: 'Settings', href: '/settings', icon: MdOutlineSettings, requiredPlan: null, requiredPermission: null },
+    { name: 'Billing & Subscription', href: '/account/billing', icon: FaFileInvoiceDollar, requiredPlan: null, requiredPermission: null },
   ], []);
 
   type PlanName = 'Basic' | 'Pro' | 'Enterprise';
@@ -241,6 +239,15 @@ export default function PlanBasedNav() {
     }
   };
 
+  // Helper for toggling submenus (by key)
+  const handleToggleSubmenu = (key: string) => {
+    setOpenSubmenus((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  // Navigation
   return (
     <>
       {/* Mobile menu button */}
@@ -254,7 +261,7 @@ export default function PlanBasedNav() {
       </div>
 
       {/* Sidebar */}
-      <div className={`fixed top-0 left-0 h-full bg-white shadow-lg border-r z-30 transition-all duration-300 ease-in-out ${
+      <div className={`fixed top-0 left-0 h-full bg-white shadow-xl border-r z-30 transition-all duration-300 ease-in-out ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       } ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
         {/* Desktop collapse/expand button */}
@@ -290,25 +297,8 @@ export default function PlanBasedNav() {
                   />
                 </div>
               )}
-
-              {/* Business and Branch Info */}
-              {!sidebarCollapsed && !sidebarOpen && (
-                <div className="text-center">
-                  <h1 className="text-sm font-semibold text-gray-900 leading-tight">
-                    {tenant?.name || 'Business Name'}
-                  </h1>
-                  <div className="flex items-center justify-center mt-1 space-x-1">
-                    <FaMapMarkerAlt className="w-3 h-3 text-gray-500" />
-                    <p className="text-xs text-gray-600">
-                      {branch?.name || 'Branch'}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
-
-
 
           {/* Navigation */}
           <nav className="flex-1 p-2 overflow-y-auto">
@@ -317,13 +307,116 @@ export default function PlanBasedNav() {
                 const Icon = item.icon;
                 const hasSubItems = item.subItems && item.subItems.length > 0;
                 const isDropdownOpen = openDropdowns.has(item.name);
-                const isActive = pathname === item.href || (hasSubItems && item.subItems?.some(subItem => pathname === subItem.href));
-
+                const isActive =
+                  pathname === item.href ||
+                  (hasSubItems && item.subItems?.some((subItem) => pathname === subItem.href));
+                // Mobile: show all subitems as collapsible accordions
+                if (hasSubItems && !sidebarCollapsed && sidebarOpen) {
+                  const submenuKey = item.href || item.name;
+                  const open = !!openSubmenus[submenuKey];
+                  return (
+                    <div key={item.name} className="mb-1">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSubmenu(submenuKey)}
+                        className={`flex items-center justify-between w-full px-3 py-2 rounded text-base font-medium transition-all duration-200 ${
+                          isActive
+                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                            : 'text-gray-700 hover:text-blue-700 hover:bg-blue-50'
+                        }`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <Icon className="w-5 h-5" />
+                          {item.name}
+                        </span>
+                        <span>
+                          {open ? (
+                            <FaChevronUp className="w-4 h-4" />
+                          ) : (
+                            <FaChevronDown className="w-4 h-4" />
+                          )}
+                        </span>
+                      </button>
+                      {open && (
+                        <div className="ml-4 mt-1">
+                          {item.subItems?.map((subItem) => {
+                            const SubIcon = subItem.icon || FaChevronRight;
+                            const isSubActive = pathname === subItem.href;
+                            const hasNested = subItem.subItems && subItem.subItems.length > 0;
+                            const submenuKey = subItem.href || subItem.name;
+                            const openNested = !!openSubmenus[submenuKey];
+                            return (
+                              <div key={subItem.name}>
+                                {hasNested ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleSubmenu(submenuKey)}
+                                    className={`flex items-center w-full space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                      isSubActive || openNested
+                                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    <SubIcon className="w-4 h-4" />
+                                    <span>{subItem.name}</span>
+                                    <span className="ml-auto">
+                                      {openNested ? (
+                                        <FaChevronUp className="w-3 h-3" />
+                                      ) : (
+                                        <FaChevronDown className="w-3 h-3" />
+                                      )}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <a
+                                    href={subItem.href}
+                                    className={`flex items-center space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                      isSubActive
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    <SubIcon className="w-4 h-4" />
+                                    <span>{subItem.name}</span>
+                                  </a>
+                                )}
+                                {/* Nested subitems */}
+                                {hasNested && openSubmenus[submenuKey] && (
+                                  <div className="ml-4">
+                                    {subItem.subItems.map((nested) => {
+                                      const NestedIcon = nested.icon || FaChevronRight;
+                                      const isNestedActive = pathname === nested.href;
+                                      return (
+                                        <a
+                                          key={nested.name}
+                                          href={nested.href}
+                                          className={`flex items-center space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                            isNestedActive
+                                              ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                          }`}
+                                        >
+                                          <NestedIcon className="w-4 h-4" />
+                                          <span>{nested.name}</span>
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                // Desktop: dropdown or tooltip
                 if (hasSubItems) {
-                  // Dropdown item
                   const dropdownContent = (
                     <div key={item.name}>
                       <button
+                        type="button"
                         onClick={() => {
                           const newOpenDropdowns = new Set(openDropdowns);
                           if (isDropdownOpen) {
@@ -349,34 +442,87 @@ export default function PlanBasedNav() {
                         </div>
                         {!sidebarCollapsed && (
                           <div className="flex-shrink-0">
-                            {isDropdownOpen ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
+                            {isDropdownOpen ? (
+                              <FaChevronUp className="w-3 h-3" />
+                            ) : (
+                              <FaChevronDown className="w-3 h-3" />
+                            )}
                           </div>
                         )}
                       </button>
-
                       {!sidebarCollapsed && isDropdownOpen && (
                         <div className="ml-6 mt-1 space-y-1">
                           {item.subItems?.map((subItem) => {
                             const isSubActive = pathname === subItem.href;
+                            const SubIcon = subItem.icon || FaChevronRight;
+                            const hasNested = subItem.subItems && subItem.subItems.length > 0;
+                            const submenuKey = subItem.href || subItem.name;
+                            const open = !!openSubmenus[submenuKey];
                             return (
-                              <a
-                                key={subItem.name}
-                                href={subItem.href}
-                                className={`flex items-center space-x-3 px-3 py-2 rounded text-sm transition-all duration-200 ${
-                                  isSubActive
-                                    ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
-                              >
-                                <span className="whitespace-nowrap">{subItem.name}</span>
-                              </a>
+                              <div key={subItem.name}>
+                                {hasNested ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleSubmenu(submenuKey)}
+                                    className={`flex items-center w-full space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                      isSubActive || open
+                                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    <SubIcon className="w-4 h-4" />
+                                    <span>{subItem.name}</span>
+                                    <span className="ml-auto">
+                                      {open ? (
+                                        <FaChevronUp className="w-3 h-3" />
+                                      ) : (
+                                        <FaChevronDown className="w-3 h-3" />
+                                      )}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <a
+                                    href={subItem.href}
+                                    className={`flex items-center space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                      isSubActive
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    <SubIcon className="w-4 h-4" />
+                                    <span>{subItem.name}</span>
+                                  </a>
+                                )}
+                                {/* Nested subitems */}
+                                {hasNested && open && (
+                                  <div className="ml-4">
+                                    {subItem.subItems.map((nested) => {
+                                      const NestedIcon = nested.icon || FaChevronRight;
+                                      const isNestedActive = pathname === nested.href;
+                                      return (
+                                        <a
+                                          key={nested.name}
+                                          href={nested.href}
+                                          className={`flex items-center space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                            isNestedActive
+                                              ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                          }`}
+                                        >
+                                          <NestedIcon className="w-4 h-4" />
+                                          <span>{nested.name}</span>
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
                       )}
                     </div>
                   );
-
                   return sidebarCollapsed ? (
                     <Tooltip key={item.name} content={item.name} position="right">
                       <a
@@ -415,7 +561,6 @@ export default function PlanBasedNav() {
                       )}
                     </a>
                   );
-
                   return sidebarCollapsed ? (
                     <Tooltip key={item.name} content={item.name} position="right">
                       {linkContent}
@@ -427,8 +572,6 @@ export default function PlanBasedNav() {
               })}
             </div>
           </nav>
-
-
 
           {/* Fixed Logout Button at Bottom - Show in both states */}
           <div className="absolute bottom-0 left-0 w-full border-t border-gray-200 bg-white">
@@ -457,10 +600,11 @@ export default function PlanBasedNav() {
       {/* Overlay for mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+          className="fixed inset-0 bg-white/60 backdrop-blur-sm z-20 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
     </>
   );
 }
+

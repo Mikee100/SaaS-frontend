@@ -54,11 +54,13 @@ export default function ProductAnalyticsPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const productsData = await apiGet<Product[]>('/products');
+        
+        const response = await apiGet<{ products: Product[], pagination: unknown }>('/products');
 
-        setProducts(productsData || []);
+        const productsData = response?.products || [];
+        setProducts(productsData);
         // For now, compute analytics locally since we don't have a dedicated endpoint
-        const computedAnalytics = computeAnalytics(productsData || []);
+        const computedAnalytics = computeAnalytics(productsData);
         setAnalytics(computedAnalytics);
       } catch (err: unknown) {
         const error = err as Error;
