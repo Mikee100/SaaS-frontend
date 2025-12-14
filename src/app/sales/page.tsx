@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import React from "react";
 import Spinner from '@/components/Spinner';
@@ -18,10 +18,13 @@ import MpesaPayment from '@/components/MpesaPayment';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
+import { useQuery } from '@tanstack/react-query';
 
 import ProductSkeleton from '@/components/ProductSkeleton';
 import { useBranch } from "@/contexts/BranchContext";
 import { productCache } from '@/lib/productCache';
+import { useTenant } from '@/hooks/useTenant';
+import { useBranches } from '@/hooks/useBranches';
 
 
 
@@ -60,7 +63,21 @@ export default function SalesPage() {
   const { user } = useUser();
   const router = useRouter();
   const { selectedBranchId, setSelectedBranchId } = useBranch();
-  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  
+  // Use React Query hooks for data fetching
+  const { data: tenantData } = useTenant();
+  const { data: branchesData = [] } = useBranches();
+  
+  // Convert branches data format
+  const branches = branchesData.map(b => ({ id: b.id, name: b.name }));
+  
+  // Auto-select first branch if none selected
+  useEffect(() => {
+    if (branches.length > 0 && !selectedBranchId) {
+      setSelectedBranchId(branches[0].id);
+    }
+  }, [branches, selectedBranchId, setSelectedBranchId]);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,12 +95,30 @@ export default function SalesPage() {
 
   const [businessInfo, setBusinessInfo] = useState<Record<string, unknown> | null>(null);
   const [showScanner, setShowScanner] = useState(false);
+  
+  // Set business info from tenant data
+  useEffect(() => {
+    if (tenantData) {
+      setBusinessInfo(tenantData as Record<string, unknown>);
+      cacheBusinessInfo(tenantData as Record<string, unknown>);
+    }
+  }, [tenantData]);
 
 
   // New state for enhanced features
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "price" | "stock">("name");
+  
+  // Debounce search query to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300); // 300ms debounce delay
+    
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
   const [sortOrder] = useState('asc');
 
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
@@ -102,14 +137,13 @@ export default function SalesPage() {
 
   // Constants
   const productsPerPage = 12;
-  const filteredProducts = Array.isArray(products) ? products
-    .filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           product.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           product.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch;
-    })
-    .sort((a: Product, b: Product) => {
+  
+  // Since we're using server-side search, we only need to sort client-side
+  // Filtering is done on the server via debouncedSearchQuery
+  const filteredProducts = useMemo(() => {
+    if (!Array.isArray(products)) return [];
+    
+    return products.sort((a: Product, b: Product) => {
       // First, sort by stock availability: in-stock products first
       const aInStock = a.stock > 0;
       const bInStock = b.stock > 0;
@@ -144,12 +178,21 @@ export default function SalesPage() {
       } else {
         return (bValue as number) - (aValue as number);
       }
-    }) : [];
+    });
+  }, [products, sortBy, sortOrder]);
+  
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchQuery]);
   
   const pageCount = Math.ceil(filteredProducts.length / productsPerPage);
-  const paginatedProducts = filteredProducts.slice(
-    (currentPage - 1) * productsPerPage, 
-    currentPage * productsPerPage
+  const paginatedProducts = useMemo(() => 
+    filteredProducts.slice(
+      (currentPage - 1) * productsPerPage, 
+      currentPage * productsPerPage
+    ),
+    [filteredProducts, currentPage, productsPerPage]
   );
   const VAT_RATE = 0.16; // 16% VAT rate for Kenya
   const cartSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -218,102 +261,50 @@ export default function SalesPage() {
     </div>
   );
 
-  const fetchProducts = useCallback(async () => {
-    if (!selectedBranchId) {
-      setProducts([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-        const data = await apiGet(`/products?page=1&limit=1000`, { 'x-branch-id': selectedBranchId || '' }) as { products: Product[]; pagination: Pagination };
-    // API now returns { products: Product[], pagination: {...} }
-      setProducts(data.products || []);
-    } catch (err: unknown) {
-      const error = err as Error;
-      setError(error.message || "Failed to fetch products");
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedBranchId]);
+  // Fetch products using React Query with server-side search and pagination
+  // Optimized: Fetch smaller batches, search on server, only fetch when needed
+  const { data: productsData, isLoading: productsLoading, error: productsError } = useQuery({
+    queryKey: ['products', 'sales', selectedBranchId, debouncedSearchQuery],
+    queryFn: async () => {
+      if (!selectedBranchId) return { products: [], pagination: null };
+      
+      // Build query parameters
+      const searchParam = debouncedSearchQuery ? `&search=${encodeURIComponent(debouncedSearchQuery)}` : '';
+      
+      // For POS: 
+      // - If searching: fetch up to 50 matching products (sufficient for search results)
+      // - If no search: fetch 100 most recent/in-stock products (quick initial load)
+      const limit = debouncedSearchQuery ? 50 : 100;
+      
+      const data = await apiGet(
+        `/products?page=1&limit=${limit}${searchParam}`, 
+        { 'x-branch-id': selectedBranchId }
+      ) as { products: Product[]; pagination: Pagination };
+      
+      return data;
+    },
+    enabled: !!selectedBranchId,
+    staleTime: debouncedSearchQuery ? 30 * 1000 : 2 * 60 * 1000, // Shorter cache for search results
+    cacheTime: 5 * 60 * 1000,
+    keepPreviousData: true, // Keep previous results while fetching new search
+  });
 
+  // Update products state when query data changes
   useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
-
-  const fetchData = useCallback(async () => {
-    if (!user?.tenantId) {
-      console.log('Skipping fetchData: No tenantId available');
-      setLoading(false);
-      return;
-    }
-
-    console.log(`Fetching data for tenant: ${user.tenantId}, branch: ${selectedBranchId || 'none'}`);
-    console.log(`API Base URL: ${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}`);
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Fetch other data in parallel
-      const [businessInfo/*, recentSalesData*/] = await Promise.all([
-        apiGet("/tenant/me"),
-        apiGet("/sales/recent").catch(() => [])
-      ]);
-
-      setBusinessInfo(businessInfo as Record<string, unknown>);
-      // Cache business info for faster receipt generation
-      cacheBusinessInfo(businessInfo as Record<string, unknown>);
-      // Remove: setRecentSales(recentSalesData as Record<string, unknown>[]);
-    } catch (error: unknown) {
-      console.error('Error loading data:', error);
-
-      // More specific error handling
-      if (error instanceof Error && error.message.includes('401')) {
-        setError("Authentication failed. Please log in again.");
-        localStorage.removeItem('token');
-      } else if (error instanceof Error && error.message.includes('Failed to fetch')) {
-        setError("Network error. Check your connection and try again.");
-      } else if (error instanceof Error && error.message.includes('Invalid JSON')) {
-        setError("Server response error. Please try again later.");
-      } else if (error instanceof Error) {
-        setError(`Failed to load data: ${error.message || 'Unknown error'}. Please try again.`);
-      } else {
-        setError("Failed to load data: Unknown error. Please try again.");
-      }
-    } finally {
+    if (productsData) {
+      setProducts(productsData.products || []);
       setLoading(false);
     }
-  }, [user?.tenantId, selectedBranchId]);
+  }, [productsData]);
 
+  // Update loading and error states
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // Separate effect to refetch when user changes (e.g., login)
-  useEffect(() => {
-    if (user?.tenantId) {
-      fetchData();
+    setLoading(productsLoading);
+    if (productsError) {
+      const error = productsError instanceof Error ? productsError : new Error('Failed to fetch products');
+      setError(error.message);
     }
-  }, [user?.tenantId, fetchData]);
-
-  useEffect(() => {
-    const fetchBranches = async () => {
-      try {
-        const data = await apiGet('/branches');
-        setBranches(data as { id: string; name: string }[]);
-        // Only set the first branch if none is selected
-        if ((data as { id: string; name: string }[]).length > 0 && !selectedBranchId) {
-          setSelectedBranchId((data as { id: string; name: string }[])[0].id);
-        }
-      } catch (error: unknown) {
-        console.error('Error fetching branches:', error);
-      }
-    };
-    fetchBranches();
-  }, [selectedBranchId, setSelectedBranchId]);
+  }, [productsLoading, productsError]);
 
   // Cache business info for faster receipt generation
   const cacheBusinessInfo = (businessInfo: Record<string, unknown>) => {

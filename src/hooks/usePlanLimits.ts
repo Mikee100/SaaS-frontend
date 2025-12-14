@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/utils/api';
+import { useUser } from '@/components/UserContext';
 
 export interface PlanLimitsData {
   currentPlan: string;
@@ -20,36 +21,25 @@ export interface PlanLimitsData {
   };
 }
 
+/**
+ * Hook for fetching plan limits with React Query caching
+ * Plan limits rarely change, so we cache for 10-15 minutes
+ */
 export function usePlanLimits() {
-  const [data, setData] = useState<PlanLimitsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { user } = useUser();
 
-  const fetchPlanLimits = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await apiGet<PlanLimitsData>('/user/me/plan-limits');
-      setData(response);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch plan limits');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchPlanLimits();
-  }, [fetchPlanLimits]);
-
-  const refetch = useCallback(() => {
-    fetchPlanLimits();
-  }, [fetchPlanLimits]);
+  const query = useQuery({
+    queryKey: ['plan-limits', user?.userId || user?.id],
+    queryFn: () => apiGet<PlanLimitsData>('/user/me/plan-limits'),
+    enabled: !!user,
+    staleTime: 10 * 60 * 1000, // 10 minutes - plan limits rarely change
+    cacheTime: 15 * 60 * 1000, // 15 minutes cache
+  });
 
   return {
-    data,
-    loading,
-    error,
-    refetch,
+    data: query.data ?? null,
+    loading: query.isLoading,
+    error: query.error ? (query.error instanceof Error ? query.error.message : 'Failed to fetch plan limits') : null,
+    refetch: query.refetch,
   };
 }

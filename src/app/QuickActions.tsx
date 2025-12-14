@@ -34,7 +34,7 @@ export default function QuickActions() {
     {
       label: "Manage Inventory",
       icon: <FiPackage className="h-5 w-5" />,
-      onClick: () => router.push("/inventory"),
+      onClick: () => router.push("/products/unified"),
       color: "bg-emerald-100 text-emerald-600 hover:bg-emerald-200"
     },
     {

@@ -20,8 +20,7 @@ export default function MainNavbar() {
       
       <div className="flex items-center gap-6">
         <Link href="/sales" className="text-gray-700 hover:text-blue-600 transition">Sales</Link>
-        <Link href="/products" className="text-gray-700 hover:text-blue-600 transition">Products</Link>
-        <Link href="/inventory" className="text-gray-700 hover:text-blue-600 transition">Inventory</Link>
+        <Link href="/products/unified" className="text-gray-700 hover:text-blue-600 transition">Products & Inventory</Link>
         <Link href="/analytics" className="text-gray-700 hover:text-blue-600 transition">Analytics</Link>
         {hasPermission(user, 'manage_settings') && (
           <Link href="/settings" className="text-gray-700 hover:text-blue-600 transition">Settings</Link>

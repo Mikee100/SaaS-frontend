@@ -278,7 +278,7 @@ const BulkAddProductsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Link
-              href="/products"
+              href="/products/unified"
               className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition"
             >
               <FaArrowLeft className="w-5 h-5" />

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
+import { useTenant } from '@/hooks/useTenant';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
 import {
@@ -16,23 +17,15 @@ import { apiGet } from '@/utils/api';
 import Image from 'next/image';
 
 
-
-interface Tenant {
-  name: string;
-  logoUrl?: string;
-  // Add other fields as needed
-}
-
-
 export default function PlanBasedNav() {
   const userContext = useUser();
   const { data: limits, loading: limitsLoading } = usePlanLimits();
+  const { data: tenantData, isLoading: tenantLoading } = useTenant();
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
-  const [tenant, setTenant] = useState<Tenant | null>(null);
 
-  const [tenantBranchLoading, setTenantBranchLoading] = useState(true);
+  const tenantBranchLoading = tenantLoading;
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
 
@@ -46,32 +39,11 @@ export default function PlanBasedNav() {
     setOpenDropdowns(newOpen);
   }, [pathname]);
 
-  // Fetch tenant and branch data
-  useEffect(() => {
-    const fetchTenantAndBranch = async () => {
-      if (!userContext.user?.tenantId || !userContext.user?.branchId) {
-        setTenantBranchLoading(false);
-        return;
-      }
-
-      try {
-        const [tenantData] = await Promise.all([
-          apiGet('/tenant/me'),
-          apiGet(`/branches/${userContext.user.branchId}`)
-        ]);
-        setTenant(tenantData as Tenant);
-      
-      } catch (error) {
-        console.error('Error fetching tenant or branch:', error);
-      } finally {
-        setTenantBranchLoading(false);
-      }
-    };
-
-    if (userContext.user) {
-      fetchTenantAndBranch();
-    }
-  }, [userContext.user]);
+  // Get tenant name and logo from cached data
+  const tenant = tenantData ? {
+    name: tenantData.name || '',
+    logoUrl: tenantData.logo as string | undefined,
+  } : null;
 
   // Improved icon mapping for main and sub items
   const navigationItems = React.useMemo(() => [
@@ -85,16 +57,14 @@ export default function PlanBasedNav() {
     },
     {
       name: 'Products & Inventory',
-      href: '/products',
+      href: '/products/unified',
       icon: FaBoxOpen,
       requiredPlan: null,
       requiredPermission: 'view_products',
       subItems: [
-        { name: 'Product List', href: '/products', requiredPermission: 'view_products', icon: FaLayerGroup },
+        { name: 'Unified Management', href: '/products/unified', requiredPermission: 'view_products', icon: FaLayerGroup },
         { name: 'Bulk Upload', href: '/products/bulk-add', requiredPermission: 'create_products', icon: FaUpload },
         { name: 'Bulk Upload Records', href: '/products/bulk-upload-records', requiredPermission: 'view_products', icon: FaHistory },
-        { name: 'Basic Inventory', href: '/inventory', requiredPermission: 'view_inventory', icon: MdOutlineInventory2 },
-        { name: 'Advanced Inventory', href: '/inventory/advanced', requiredPermission: 'view_inventory', icon: MdOutlineInventory2 },
         { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory', icon: FaUsers },
         {
           name: 'Reports',

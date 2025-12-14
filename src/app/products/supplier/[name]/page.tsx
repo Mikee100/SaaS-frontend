@@ -101,7 +101,7 @@ export default function SupplierProductsPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Products</h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <Link
-            href="/products"
+            href="/products/unified"
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <FaArrowLeft className="w-4 h-4" />
@@ -125,7 +125,7 @@ export default function SupplierProductsPage() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Link
-              href="/products"
+              href="/products/unified"
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <FaArrowLeft className="w-5 h-5" />
@@ -198,7 +198,7 @@ export default function SupplierProductsPage() {
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Found</h3>
             <p className="text-gray-500 mb-4">No products found for supplier {supplierName}.</p>
             <Link
-              href="/products"
+              href="/products/unified"
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <FaArrowLeft className="w-4 h-4" />

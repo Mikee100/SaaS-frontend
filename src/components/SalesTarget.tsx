@@ -204,7 +204,7 @@ export default function SalesTargetComponent({ currentRevenue, totalSales, filte
                 {/* Target Input/Edit */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Target Revenue ($)
+                    Target Revenue (Ksh)
                   </label>
                   {editing === key ? (
                     <input
@@ -218,7 +218,7 @@ export default function SalesTargetComponent({ currentRevenue, totalSales, filte
                     />
                   ) : (
                     <div className="text-lg font-bold text-gray-900">
-                      ${target.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      Ksh {target.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   )}
                 </div>
@@ -265,7 +265,7 @@ export default function SalesTargetComponent({ currentRevenue, totalSales, filte
       <div className="mt-6 pt-6 border-t border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
           <div>
-            <div className="text-2xl font-bold text-gray-900">${currentRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="text-2xl font-bold text-gray-900"> Ksh {currentRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             <div className="text-sm text-gray-600">Total Revenue</div>
           </div>
           <div>
@@ -274,7 +274,7 @@ export default function SalesTargetComponent({ currentRevenue, totalSales, filte
           </div>
           <div>
             <div className="text-2xl font-bold text-gray-900">
-              ${totalSales > 0 ? (currentRevenue / totalSales).toFixed(2) : '0.00'}
+              Ksh {totalSales > 0 ? (currentRevenue / totalSales).toFixed(2) : '0.00'}
             </div>
             <div className="text-sm text-gray-600">Average Sale</div>
           </div>

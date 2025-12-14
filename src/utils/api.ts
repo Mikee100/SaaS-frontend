@@ -1,10 +1,16 @@
 
 import API_BASE_URL from '../config/apiConfig';
 
-
+// Request deduplication: prevent concurrent identical requests
+interface PendingRequest {
+  promise: Promise<unknown>;
+  timestamp: number;
+}
 
 class EnhancedAPI {
   private isOnline = true;
+  private pendingRequests = new Map<string, PendingRequest>();
+  private readonly REQUEST_DEDUP_TIMEOUT = 5000; // 5 seconds
 
   private getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
@@ -21,10 +27,44 @@ class EnhancedAPI {
     return headers;
   }
 
+  /**
+   * Get a unique key for request deduplication
+   */
+  private getRequestKey(endpoint: string, options: RequestInit): string {
+    const method = options.method || 'GET';
+    const body = options.body ? JSON.stringify(options.body) : '';
+    const headers = JSON.stringify(options.headers || {});
+    return `${method}:${endpoint}:${body}:${headers}`;
+  }
+
+  /**
+   * Clean up stale pending requests
+   */
+  private cleanupPendingRequests(): void {
+    const now = Date.now();
+    for (const [key, request] of this.pendingRequests.entries()) {
+      if (now - request.timestamp > this.REQUEST_DEDUP_TIMEOUT) {
+        this.pendingRequests.delete(key);
+      }
+    }
+  }
+
   private async makeRequest<T = unknown>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // Clean up stale requests
+    this.cleanupPendingRequests();
+
+    // Check for duplicate pending requests
+    const requestKey = this.getRequestKey(endpoint, options);
+    const pendingRequest = this.pendingRequests.get(requestKey);
+    
+    if (pendingRequest) {
+      // Return existing promise if request is already pending
+      return pendingRequest.promise as Promise<T>;
+    }
+
     const url = `${API_BASE_URL}${endpoint}`;
     const headers = {
       ...this.getAuthHeaders(),
@@ -34,7 +74,9 @@ class EnhancedAPI {
     const maxRetries = 5;
     let attempt = 0;
 
-    while (attempt <= maxRetries) {
+    // Create the request promise
+    const requestPromise = (async (): Promise<T> => {
+      while (attempt <= maxRetries) {
       try {
         const response = await fetch(url, {
           ...options,
@@ -95,7 +137,7 @@ class EnhancedAPI {
           throw new Error(errorMessage);
         }
 
-        return responseData;
+        return responseData as T;
       } catch (error) {
         if (attempt >= maxRetries) {
           console.error('API request failed after retries:', error);
@@ -103,9 +145,27 @@ class EnhancedAPI {
         }
         attempt++;
       }
-    }
+      }
 
-    throw new Error('Unexpected error in makeRequest');
+      throw new Error('Unexpected error in makeRequest');
+    })();
+
+    // Store pending request for deduplication
+    this.pendingRequests.set(requestKey, {
+      promise: requestPromise,
+      timestamp: Date.now(),
+    });
+
+    // Clean up after request completes
+    requestPromise
+      .finally(() => {
+        this.pendingRequests.delete(requestKey);
+      })
+      .catch(() => {
+        // Error already handled above
+      });
+
+    return requestPromise as Promise<T>;
   }
 
   async get<T = unknown>(endpoint: string, headers?: Record<string, string>): Promise<T> {

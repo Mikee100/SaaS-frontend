@@ -100,7 +100,7 @@ export default function ProductDetailPage() {
     if (!confirm("Delete this product?")) return;
     try {
       await apiDelete(`/products/${productId}`, { 'x-branch-id': selectedBranchId || '' });
-      router.push('/products');
+      router.push('/products/unified');
     } catch (err: unknown) {
       setError((err as { message?: string })?.message || 'Failed to delete product');
     }
@@ -190,7 +190,7 @@ export default function ProductDetailPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Product Not Found</h2>
           <p className="text-gray-600 mb-4">The product you&apos;re looking for doesn&apos;t exist.</p>
           <Link
-            href="/products"
+            href="/products/unified"
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <FaArrowLeft className="w-4 h-4" />
@@ -208,7 +208,7 @@ export default function ProductDetailPage() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Link
-              href="/products"
+              href="/products/unified"
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <FaArrowLeft className="w-5 h-5" />

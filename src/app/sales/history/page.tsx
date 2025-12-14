@@ -4,9 +4,12 @@ import { DocumentTextIcon, DocumentChartBarIcon, CalendarDaysIcon, UserIcon, Cre
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import QRCode from 'qrcode';
 import SalesTargetComponent from "@/components/SalesTarget";
+import { useTenant } from '@/hooks/useTenant';
+import { useBranches } from '@/hooks/useBranches';
 
 
 
@@ -53,15 +56,14 @@ function toCSV(rows: Record<string, unknown>[], columns: string[]): string {
 }
 
 export default function SalesHistoryPage() {
+  // Use cached tenant data hook at component level
+  const { data: tenantData } = useTenant();
+  const { data: branchesData = [] } = useBranches();
+  
+  // Convert branches data format
+  const branches = branchesData.map(b => ({ id: b.id, name: b.name }));
 
-const [sales, setSales] = useState<Sale[]>([]);
-const [loading, setLoading] = useState(true);
-const [error, setError] = useState("");
-const [isPrinting, setIsPrinting] = useState(false);
-
-  // Branch state
-  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
-  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
 
   // Filter state
@@ -71,72 +73,98 @@ const [isPrinting, setIsPrinting] = useState(false);
   const [filterEnd, setFilterEnd] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  // Filtering logic
-  const filteredSales = sales.filter((sale) => {
+  // Pagination state - server-side
+  const [page, setPage] = useState(1);
+  const perPage = 20; // Increased from 10 for better performance
+
+  // Build query parameters for server-side filtering and pagination
+  const queryParams = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set('page', page.toString());
+    params.set('limit', perPage.toString());
+    
+    if (selectedBranchId && selectedBranchId !== "all") {
+      params.set('branchId', selectedBranchId);
+    }
+    if (filterStart) {
+      params.set('startDate', filterStart);
+    }
+    if (filterEnd) {
+      params.set('endDate', filterEnd);
+    }
+    if (filterCashier) {
+      params.set('cashier', filterCashier);
+    }
+    if (filterPayment) {
+      params.set('paymentType', filterPayment);
+    }
+    
+    return params.toString();
+  }, [page, perPage, selectedBranchId, filterStart, filterEnd, filterCashier, filterPayment]);
+
+  // Fetch sales with server-side pagination and filtering
+  const { 
+    data: salesData, 
+    isLoading: loading, 
+    error: salesError 
+  } = useQuery({
+    queryKey: ['sales', 'history', selectedBranchId, page, filterStart, filterEnd, filterCashier, filterPayment],
+    queryFn: async () => {
+      const headers = selectedBranchId && selectedBranchId !== "all" 
+        ? { 'x-branch-id': selectedBranchId } 
+        : undefined;
+      
+      const response = await apiGet<{ 
+        sales: Sale[]; 
+        pagination?: { total: number; page: number; limit: number; pageCount: number };
+      }>(`/sales?${queryParams}`, headers);
+      
+      // Handle both array response and object with sales property
+      if (Array.isArray(response)) {
+        return { sales: response, pagination: null };
+      }
+      return response;
+    },
+    staleTime: 1 * 60 * 1000, // 1 minute - sales history changes frequently
+    cacheTime: 5 * 60 * 1000,
+    keepPreviousData: true, // Keep previous page while loading new page
+  });
+
+  const sales = salesData?.sales || [];
+  const pagination = salesData?.pagination;
+  
+  // Client-side filtering for remaining filters (if server doesn't support them)
+  const filteredSales = useMemo(() => sales.filter((sale) => {
     const saleDate = new Date(sale.date);
     const startOk = !filterStart || saleDate >= new Date(filterStart);
     const endOk = !filterEnd || saleDate <= new Date(filterEnd + 'T23:59:59');
     const cashierOk = !filterCashier || sale.cashier === filterCashier;
     const paymentOk = !filterPayment || sale.paymentType === filterPayment;
     return startOk && endOk && cashierOk && paymentOk;
-  });
+  }), [sales, filterStart, filterEnd, filterCashier, filterPayment]);
 
-  // Pagination state
-  const [page, setPage] = useState(1);
-  const perPage = 10;
-  const pageCount = Math.ceil(filteredSales.length / perPage);
-  const pagedSales = filteredSales.slice((page - 1) * perPage, page * perPage);
-
-  // Fetch branches
-useEffect(() => {
-    async function fetchBranches() {
-      setBranchesLoading(true);
-      try {
-        const data = await apiGet<{ id: string; name: string }[]>('/branches');
-        setBranches(data);
-        // Set initial branch to "all" if none selected
-        if (data?.length > 0 && selectedBranchId === "all") {
-          // Keep "all" selected
-        }
-      } catch (error) {
-        console.error('Error fetching branches:', error);
-      } finally {
-        setBranchesLoading(false);
-      }
-    }
-    fetchBranches();
-  }, [selectedBranchId]);
-
-  // Fetch sales (filtered by branch)
+  // Use server pagination if available, otherwise client-side
+  const pageCount = pagination?.pageCount || Math.ceil(filteredSales.length / perPage);
+  const pagedSales = filteredSales;
+  const error = salesError ? 'Failed to load sales data. Please try again.' : "";
+  
+  // Reset to page 1 when filters change
   useEffect(() => {
-    async function fetchSales() {
-      setLoading(true);
-      setError("");
-      try {
-        const headers = selectedBranchId && selectedBranchId !== "all" ? { 'x-branch-id': selectedBranchId } : undefined;
-        const data = await apiGet<Sale[]>('/sales', headers);
-        setSales(data || []);
-      } catch (err) {
-        console.error('Error fetching sales:', err);
-        setError('Failed to load sales data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    }
+    setPage(1);
+  }, [selectedBranchId, filterStart, filterEnd, filterCashier, filterPayment]);
 
-    if (selectedBranchId) {
-      fetchSales();
-    }
-  }, [selectedBranchId]);
+  // Summary calculations - memoized
+  const { totalRevenue, totalSales: totalSalesCount, avgSaleValue } = useMemo(() => {
+    const revenue = filteredSales.reduce((sum, s) => sum + (s.total || 0), 0);
+    const count = filteredSales.length;
+    const avg = count > 0 ? revenue / count : 0;
+    return { totalRevenue: revenue, totalSales: count, avgSaleValue: avg };
+  }, [filteredSales]);
 
-  // Summary calculations
-  const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total || 0), 0);
-  const totalSales = filteredSales.length;
-  const avgSaleValue = totalSales > 0 ? totalRevenue / totalSales : 0;
-
-  // Unique values for filters
-  const allCashiers = unique(sales.map(s => s.cashier).filter(Boolean));
-  const allPayments = unique(sales.map(s => s.paymentType).filter(Boolean));
+  // Unique values for filters - memoized
+  // Note: These may be limited by pagination, consider fetching separately if needed
+  const allCashiers = useMemo(() => unique(sales.map(s => s.cashier).filter(Boolean)), [sales]);
+  const allPayments = useMemo(() => unique(sales.map(s => s.paymentType).filter(Boolean)), [sales]);
 
   // Export CSV handler
   function handleExportCSV() {
@@ -179,31 +207,9 @@ useEffect(() => {
     if (!filteredSales.length) return;
 
     try {
-      // Fetch tenant data including PDF template settings
-      type TenantData = {
-        name?: string;
-        address?: string;
-        contactPhone?: string;
-        contactEmail?: string;
-        currency?: string;
-        pdfTemplate?: {
-          orientation?: string;
-          paperSize?: string;
-          margins?: string;
-          fontSize?: string;
-          primaryColor?: string;
-          secondaryColor?: string;
-          businessName?: boolean;
-          businessAddress?: boolean;
-          businessPhone?: boolean;
-          businessEmail?: boolean;
-          branchInfo?: boolean;
-          footerText?: string;
-        };
-      };
-      const tenantData = await apiGet<TenantData>('/tenant/me');
+      // Use tenant data from hook (already available at component level)
       const pdfTemplate = tenantData?.pdfTemplate || {};
-      const currency = tenantData.currency || 'KES';
+      const currency = tenantData?.currency || 'KES';
 
       // Set up PDF document with template settings
       const doc = new jsPDF({
@@ -393,16 +399,16 @@ useEffect(() => {
             [key: string]: unknown;
           };
         };
-        const businessData = await apiGet<BusinessData>('/tenant/me');
-        const pdfTemplate = businessData?.pdfTemplate || {};
+        // Use tenant data from hook (already available at component level)
+        const pdfTemplate = tenantData?.pdfTemplate || {};
         businessInfo = {
-          name: businessData.name || "Business Name",
-          businessType: businessData.businessType || "Retail",
-          address: businessData.address || "Business Address",
-          contactPhone: businessData.contactPhone || "Phone Number",
-          kraPin: businessData.kraPin || "KRA PIN",
-          vatNumber: businessData.vatNumber || "VAT Number",
-          currency: businessData.currency || pdfTemplate.currency || "KES"
+          name: tenantData?.name || "Business Name",
+          businessType: (tenantData as any)?.businessType || "Retail",
+          address: tenantData?.address || "Business Address",
+          contactPhone: tenantData?.contactPhone || "Phone Number",
+          kraPin: (tenantData as any)?.kraPin || "KRA PIN",
+          vatNumber: (tenantData as any)?.vatNumber || "VAT Number",
+          currency: tenantData?.currency || pdfTemplate.currency || "KES"
         };
       } catch (error) {
         console.warn('Could not fetch business info, using defaults:', error);
@@ -864,7 +870,7 @@ useEffect(() => {
       {/* Sales Target Component */}
       <SalesTargetComponent
         currentRevenue={totalRevenue}
-        totalSales={totalSales}
+        totalSales={totalSalesCount}
         filteredSales={filteredSales}
       />
 
@@ -877,7 +883,7 @@ useEffect(() => {
             </div>
             <div>
               <p className="text-[10px] text-blue-700 font-medium leading-tight">Total Sales</p>
-              <p className="text-base font-bold text-blue-900 leading-tight">{totalSales}</p>
+              <p className="text-base font-bold text-blue-900 leading-tight">{totalSalesCount}</p>
             </div>
           </div>
           <p className="text-[9px] text-blue-600 mt-0.5 leading-tight">Completed transactions</p>

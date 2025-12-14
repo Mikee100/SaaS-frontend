@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { apiGet } from '@/utils/api';
+import { useQuery } from '@tanstack/react-query';
 import AuthGuard from '@/components/AuthGuard';
 import AIInsights from '@/components/AIInsights';
 import AdvancedSegments from '@/components/AdvancedSegments';
@@ -66,49 +67,37 @@ interface AnalyticsData {
 
 export default function AnalyticsPage() {
   const { user } = useUser();
-  const [basicData, setBasicData] = useState<AnalyticsData | null>(null);
-  const [advancedData, setAdvancedData] = useState<AnalyticsData | null>(null);
-  const [enterpriseData, setEnterpriseData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [alertBannerExpanded, setAlertBannerExpanded] = useState(false);
 
   // Permission checks
   const canViewAnalytics = hasPermission(user, 'view_analytics');
 
-  useEffect(() => {
-    const fetchAnalytics = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch basic analytics (available to all)
-        const basic = await apiGet('/analytics/basic') as AnalyticsData;
-        setBasicData(basic);
+  // Fetch analytics data using React Query - parallel queries with shared cache
+  const { data: basicData, isLoading: basicLoading } = useQuery({
+    queryKey: ['analytics', 'basic'],
+    queryFn: () => apiGet('/analytics/basic') as Promise<AnalyticsData>,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    cacheTime: 5 * 60 * 1000,
+  });
 
-        // Try to fetch advanced analytics (Pro+)
-        try {
-          const advanced = await apiGet('/analytics/advanced') as AnalyticsData;
-          setAdvancedData(advanced);
-        } catch {
-          console.log('Advanced analytics not available');
-        }
+  const { data: advancedData } = useQuery({
+    queryKey: ['analytics', 'advanced'],
+    queryFn: () => apiGet('/analytics/advanced') as Promise<AnalyticsData>,
+    staleTime: 2 * 60 * 1000,
+    cacheTime: 5 * 60 * 1000,
+    retry: false, // Don't retry if endpoint doesn't exist
+  });
 
-        // Try to fetch enterprise analytics (Enterprise only)
-        try {
-          const enterprise = await apiGet('/analytics/enterprise') as AnalyticsData;
-          setEnterpriseData(enterprise);
-        } catch {
-          console.log('Enterprise analytics not available');
-        }
-      } catch (error) {
-        console.error('Error fetching analytics:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const { data: enterpriseData } = useQuery({
+    queryKey: ['analytics', 'enterprise'],
+    queryFn: () => apiGet('/analytics/enterprise') as Promise<AnalyticsData>,
+    staleTime: 2 * 60 * 1000,
+    cacheTime: 5 * 60 * 1000,
+    retry: false, // Don't retry if endpoint doesn't exist
+  });
 
-    fetchAnalytics();
-  }, []);
+  const loading = basicLoading;
 
   if (loading) {
     return (

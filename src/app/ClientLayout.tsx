@@ -5,7 +5,6 @@ import { useUser } from "@/components/UserContext";
 import { BranchProvider } from "@/contexts/BranchContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { DashboardProvider } from "@/contexts/DashboardContext";
-import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -59,14 +58,12 @@ function ClientContent({ children }: { children: ReactNode }) {
 
 export default function ClientLayout({ children }: { children: ReactNode }) {
   return (
-    <ReactQueryProvider>
-      <ThemeProvider>
-        <DashboardProvider>
-          <ClientContent>
-            {children}
-          </ClientContent>
-        </DashboardProvider>
-      </ThemeProvider>
-    </ReactQueryProvider>
+    <ThemeProvider>
+      <DashboardProvider>
+        <ClientContent>
+          {children}
+        </ClientContent>
+      </DashboardProvider>
+    </ThemeProvider>
   );
 }

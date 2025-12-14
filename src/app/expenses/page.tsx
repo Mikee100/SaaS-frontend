@@ -7,6 +7,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
+import { useTenant } from '@/hooks/useTenant';
 import Spinner from '@/components/Spinner';
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -228,23 +229,18 @@ export default function ExpensesPage() {
     fetchSalaryTotalForMonth();
   }, [fetchCurrentMonthSalaryTotal, fetchSalaryTotalForMonth]);
 
-  // Fetch tenant data on mount
-  const fetchTenantData = useCallback(async () => {
-    try {
-      console.log('Fetching tenant data...');
-      const tenantData = await apiGet<Tenant>('/tenant/me');
-      console.log('Tenant data fetched:', tenantData);
+  // Use React Query hook for tenant data (cached and shared across components)
+  const { data: tenantData } = useTenant();
+  
+  // Log tenant data when available (for debugging)
+  useEffect(() => {
+    if (tenantData) {
+      console.log('Tenant data loaded:', tenantData);
       console.log('Tenant data keys:', Object.keys(tenantData || {}));
       console.log('PDF Template:', tenantData?.pdfTemplate);
       console.log('PDF Template details:', JSON.stringify(tenantData?.pdfTemplate, null, 2));
-    } catch (error) {
-      console.error('Error fetching tenant data:', error);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchTenantData();
-  }, [fetchTenantData]);
+  }, [tenantData]);
 
   
 

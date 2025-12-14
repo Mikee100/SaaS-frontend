@@ -20,6 +20,8 @@ import {
   Filler,
 } from "chart.js";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
+import { useBranches } from '@/hooks/useBranches';
+import { useQuery } from "@tanstack/react-query";
 import { FaCrown,  FaChartBar, FaExchangeAlt, FaFilter } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
@@ -182,105 +184,121 @@ export default function ReportsPage() {
   // Collapsible alert banner state and setter
   const [alertCollapsed, setAlertCollapsed] = useState(true);
 
-  useEffect(() => {
-    const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
-    apiGet("/products", headers).then((data) => setProducts(data as Product[])).catch(() => setProducts([]));
-  }, [selectedBranchId]);
-
-  // Fetch branches for filtering
-  useEffect(() => {
-    const fetchBranches = async () => {
-      if (!user?.tenantId) return;
-      setLoadingBranches(true);
-      try {
-        const data = await apiGet(`/branches`);
-        setBranches(data as Branch[]);
-      } catch (error) {
-        console.error('Failed to fetch branches:', error);
-      } finally {
-        setLoadingBranches(false);
+  // Fetch products using React Query (only for low stock filtering)
+  const { data: productsData } = useQuery({
+    queryKey: ['products', 'reports', selectedBranchId],
+    queryFn: async () => {
+      if (!selectedBranchId) return [];
+      const headers = { 'x-branch-id': selectedBranchId };
+      const data = await apiGet("/products", headers);
+      // Handle both array and object with products property
+      if (Array.isArray(data)) {
+        return data as Product[];
       }
-    };
-    fetchBranches();
-  }, [user?.tenantId]);
+      return (data as { products?: Product[] })?.products || [];
+    },
+    enabled: !!selectedBranchId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - products don't change often in reports context
+    cacheTime: 10 * 60 * 1000,
+    select: (data) => data.map(p => ({ id: p.id, name: p.name, stock: p.stock })),
+  });
+  const products = productsData || [];
+
+  // Fetch branches using React Query
+  const { data: branchesData = [], isLoading: branchesLoading } = useBranches();
+  const branches = branchesData as Branch[];
+  const loadingBranches = branchesLoading;
 
   // Fetch branch comparison data when in comparison mode
-  useEffect(() => {
-    if (comparisonMode && user?.tenantId) {
-      const fetchBranchComparison = async () => {
-        try {
-          const [timeSeriesData, productData] = await Promise.all([
-            apiGet(`/api/reports/branches/${user.tenantId}/comparison/timeseries?timeRange=30days`),
-            apiGet(`/api/reports/branches/${user.tenantId}/comparison/products?timeRange=30days`)
-          ]);
-          setBranchComparisonData(timeSeriesData as BranchComparisonData);
-          setProductComparisonData(productData as ProductComparisonData);
-        } catch (error) {
-          console.error('Failed to fetch branch comparison data:', error);
-        }
+  const { data: branchComparisonQuery } = useQuery({
+    queryKey: ['reports', 'branch-comparison', user?.tenantId],
+    queryFn: async () => {
+      if (!user?.tenantId) return null;
+      const [timeSeriesData, productData] = await Promise.all([
+        apiGet(`/api/reports/branches/${user.tenantId}/comparison/timeseries?timeRange=30days`),
+        apiGet(`/api/reports/branches/${user.tenantId}/comparison/products?timeRange=30days`)
+      ]);
+      return {
+        branchComparison: timeSeriesData as BranchComparisonData,
+        productComparison: productData as ProductComparisonData,
       };
-      fetchBranchComparison();
-    }
-  }, [comparisonMode, user?.tenantId]);
+    },
+    enabled: comparisonMode && !!user?.tenantId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    cacheTime: 5 * 60 * 1000,
+  });
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
+    if (branchComparisonQuery) {
+      setBranchComparisonData(branchComparisonQuery.branchComparison);
+      setProductComparisonData(branchComparisonQuery.productComparison);
+    }
+  }, [branchComparisonQuery]);
 
-    // Use branch-specific endpoint if a branch is selected and not in comparison mode
-    const fetchData = async () => {
-      try {
-        let data: Metrics;
+  // Fetch metrics/reports data using React Query
+  const { data: metricsData, isLoading: metricsLoading, error: metricsError } = useQuery({
+    queryKey: ['reports', 'metrics', selectedReportBranch, comparisonMode, user?.tenantId],
+    queryFn: async () => {
+      let data: Metrics;
 
-        if (selectedReportBranch !== "all" && !comparisonMode && user?.tenantId) {
-          // Fetch branch-specific data
-          const branchData = await apiGet(`/api/reports/branches/${user.tenantId}/sales?timeRange=30days&branchId=${selectedReportBranch}`) as {
-            totalOrders?: number;
-            totalSales?: number;
-            averageOrderValue?: number;
-            topProducts?: Array<{ productId: string; productName: string; quantitySold: number; totalRevenue: number }>;
-            paymentMethods?: Array<{ method: string; amount: number }>;
-            salesTrend?: Array<{ date: string; sales: number }>;
-          };
-          // Transform branch data to match Metrics interface
-          data = {
-            totalSales: branchData.totalOrders || 0,
-            totalRevenue: branchData.totalSales || 0,
-            avgSaleValue: branchData.averageOrderValue || 0,
-            topProducts: branchData.topProducts?.map(p => ({
-              id: p.productId,
-              name: p.productName,
-              unitsSold: p.quantitySold,
-              revenue: p.totalRevenue,
-            })) || [],
-            lowStock: [],
-            paymentBreakdown: branchData.paymentMethods?.reduce((acc, pm) => {
-              acc[pm.method] = pm.amount;
-              return acc;
-            }, {} as Record<string, number>) || {},
-            salesByMonth: branchData.salesTrend?.reduce((acc, trend) => {
-              acc[trend.date] = trend.sales;
-              return acc;
-            }, {} as Record<string, number>) || {},
-            topCustomers: [],
-            forecast: { forecast_months: [], forecast_sales: [] },
-            customerSegments: [],
-          };
-        } else {
-          // Fetch general dashboard data
-          data = await apiGet(`/analytics/dashboard`) as Metrics;
-        }
-
-        setMetrics(data);
-      } catch (err: unknown) {
-        setError((err as Error).message || "An error occurred while fetching data.");
-      } finally {
-        setLoading(false);
+      if (selectedReportBranch !== "all" && !comparisonMode && user?.tenantId) {
+        // Fetch branch-specific data
+        const branchData = await apiGet(`/api/reports/branches/${user.tenantId}/sales?timeRange=30days&branchId=${selectedReportBranch}`) as {
+          totalOrders?: number;
+          totalSales?: number;
+          averageOrderValue?: number;
+          topProducts?: Array<{ productId: string; productName: string; quantitySold: number; totalRevenue: number }>;
+          paymentMethods?: Array<{ method: string; amount: number }>;
+          salesTrend?: Array<{ date: string; sales: number }>;
+        };
+        // Transform branch data to match Metrics interface
+        data = {
+          totalSales: branchData.totalOrders || 0,
+          totalRevenue: branchData.totalSales || 0,
+          avgSaleValue: branchData.averageOrderValue || 0,
+          topProducts: branchData.topProducts?.map(p => ({
+            id: p.productId,
+            name: p.productName,
+            unitsSold: p.quantitySold,
+            revenue: p.totalRevenue,
+          })) || [],
+          lowStock: [],
+          paymentBreakdown: branchData.paymentMethods?.reduce((acc, pm) => {
+            acc[pm.method] = pm.amount;
+            return acc;
+          }, {} as Record<string, number>) || {},
+          salesByMonth: branchData.salesTrend?.reduce((acc, trend) => {
+            acc[trend.date] = trend.sales;
+            return acc;
+          }, {} as Record<string, number>) || {},
+          topCustomers: [],
+          forecast: { forecast_months: [], forecast_sales: [] },
+          customerSegments: [],
+        };
+      } else {
+        // Fetch general dashboard data
+        data = await apiGet(`/analytics/dashboard`) as Metrics;
       }
-    };
 
-    fetchData();
-  }, [selectedReportBranch, comparisonMode, user?.tenantId]);
+      return data;
+    },
+    enabled: !!user?.tenantId,
+    staleTime: 2 * 60 * 1000, // 2 minutes - reports data changes frequently
+    cacheTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (metricsData) {
+      setMetrics(metricsData);
+    }
+  }, [metricsData]);
+
+  useEffect(() => {
+    setLoading(metricsLoading);
+    if (metricsError) {
+      setError(metricsError instanceof Error ? metricsError.message : "An error occurred while fetching data.");
+    }
+  }, [metricsLoading, metricsError]);
 
   // Map backend dashboard data to frontend chart formats
   const { salesTrendData, revenueBreakdownData, paymentMethodData } = useMemo(() => {

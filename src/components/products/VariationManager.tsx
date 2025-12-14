@@ -1,0 +1,645 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { FaPlus, FaEdit, FaTrash, FaSave, FaTimes, FaMagic } from 'react-icons/fa';
+import {
+  ProductAttribute,
+  ProductVariation,
+  VariationAttributeInput,
+} from '@/types/product-variations';
+import {
+  productAttributesApi,
+  productVariationsApi,
+} from '@/lib/api/product-variations';
+
+interface VariationManagerProps {
+  productId: string;
+  baseSku?: string;
+  basePrice?: number;
+  baseCost?: number;
+  branchId?: string;
+  onVariationsChange?: (variations: ProductVariation[]) => void;
+}
+
+export default function VariationManager({
+  productId,
+  baseSku = '',
+  basePrice = 0,
+  baseCost = 0,
+  branchId,
+  onVariationsChange,
+}: VariationManagerProps) {
+  const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
+  const [variations, setVariations] = useState<ProductVariation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingVariation, setEditingVariation] = useState<string | null>(null);
+
+  // Generate variations state
+  const [selectedAttributes, setSelectedAttributes] = useState<
+    VariationAttributeInput[]
+  >([]);
+  const [variationMatrix, setVariationMatrix] = useState<
+    Array<{
+      attributes: Record<string, string>;
+      sku: string;
+      price: number;
+      cost: number;
+      stock: number;
+    }>
+  >([]);
+
+  // Create single variation state
+  const [newVariation, setNewVariation] = useState<{
+    sku: string;
+    attributes: Record<string, string>;
+    price: number;
+    cost: number;
+    stock: number;
+  }>({
+    sku: '',
+    attributes: {},
+    price: basePrice,
+    cost: baseCost,
+    stock: 0,
+  });
+
+  useEffect(() => {
+    loadData();
+  }, [productId]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [attrs, vars] = await Promise.all([
+        productAttributesApi.getAll(true),
+        productVariationsApi.getByProduct(productId),
+      ]);
+      setAttributes(attrs);
+      setVariations(vars);
+      if (onVariationsChange) {
+        onVariationsChange(vars);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateVariations = async () => {
+    try {
+      setError('');
+      const result = await productVariationsApi.generate(productId, {
+        productId,
+        attributes: selectedAttributes,
+        skuPrefix: baseSku,
+        branchId,
+      });
+      setVariations(result.variations);
+      if (onVariationsChange) {
+        onVariationsChange(result.variations);
+      }
+      setShowGenerateModal(false);
+      setSelectedAttributes([]);
+      setVariationMatrix([]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to generate variations');
+    }
+  };
+
+  const handleCreateVariation = async () => {
+    try {
+      setError('');
+      await productVariationsApi.create(productId, {
+        productId,
+        ...newVariation,
+        branchId,
+      });
+      await loadData();
+      setShowCreateModal(false);
+      setNewVariation({
+        sku: '',
+        attributes: {},
+        price: basePrice,
+        cost: baseCost,
+        stock: 0,
+      });
+    } catch (err: any) {
+      setError(err.message || 'Failed to create variation');
+    }
+  };
+
+  const handleDeleteVariation = async (variationId: string) => {
+    if (!confirm('Delete this variation?')) return;
+    try {
+      await productVariationsApi.delete(variationId);
+      await loadData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete variation');
+    }
+  };
+
+  const handleUpdateVariation = async (
+    variationId: string,
+    updates: Partial<ProductVariation>,
+  ) => {
+    try {
+      await productVariationsApi.update(variationId, updates);
+      await loadData();
+      setEditingVariation(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update variation');
+    }
+  };
+
+  // Generate variation matrix preview
+  const generateMatrix = () => {
+    if (selectedAttributes.length === 0) {
+      setVariationMatrix([]);
+      return;
+    }
+
+    const combinations = cartesianProduct(
+      selectedAttributes.map((attr) => attr.values),
+    );
+
+    const matrix = combinations.map((combination) => {
+      const attrs: Record<string, string> = {};
+      selectedAttributes.forEach((attr, idx) => {
+        attrs[attr.attributeName] = combination[idx];
+      });
+
+      const skuSuffix = combination.join('-').replace(/\s+/g, '');
+      const sku = baseSku ? `${baseSku}-${skuSuffix}` : `VAR-${skuSuffix}`;
+
+      return {
+        attributes: attrs,
+        sku,
+        price: basePrice,
+        cost: baseCost,
+        stock: 0,
+      };
+    });
+
+    setVariationMatrix(matrix);
+  };
+
+  useEffect(() => {
+    generateMatrix();
+  }, [selectedAttributes, baseSku, basePrice, baseCost]);
+
+  const cartesianProduct = (arrays: string[][]): string[][] => {
+    if (arrays.length === 0) return [[]];
+    const [first, ...rest] = arrays;
+    const restCombinations = cartesianProduct(rest);
+    return first.flatMap((value) =>
+      restCombinations.map((combination) => [value, ...combination]),
+    );
+  };
+
+  const addAttributeToGenerate = () => {
+    setSelectedAttributes([
+      ...selectedAttributes,
+      { attributeName: '', values: [] },
+    ]);
+  };
+
+  const updateAttributeInGenerate = (
+    index: number,
+    attributeName: string,
+    values: string[],
+  ) => {
+    const updated = [...selectedAttributes];
+    updated[index] = { attributeName, values };
+    setSelectedAttributes(updated);
+  };
+
+  const removeAttributeFromGenerate = (index: number) => {
+    setSelectedAttributes(selectedAttributes.filter((_, i) => i !== index));
+  };
+
+  if (loading) {
+    return <div className="p-4">Loading variations...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
+
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold">Product Variations</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowGenerateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            <FaMagic /> Generate Variations
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          >
+            <FaPlus /> Add Variation
+          </button>
+        </div>
+      </div>
+
+      {variations.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          No variations yet. Generate or create variations to get started.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border border-gray-200">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-4 py-2 text-left border-b">SKU</th>
+                {attributes
+                  .filter((attr) =>
+                    variations.some((v) => v.attributes[attr.name]),
+                  )
+                  .map((attr) => (
+                    <th key={attr.id} className="px-4 py-2 text-left border-b">
+                      {attr.displayName || attr.name}
+                    </th>
+                  ))}
+                <th className="px-4 py-2 text-left border-b">Price</th>
+                <th className="px-4 py-2 text-left border-b">Cost</th>
+                <th className="px-4 py-2 text-left border-b">Stock</th>
+                <th className="px-4 py-2 text-left border-b">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {variations.map((variation) => (
+                <tr key={variation.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 border-b">{variation.sku}</td>
+                  {attributes
+                    .filter((attr) => variation.attributes[attr.name])
+                    .map((attr) => (
+                      <td key={attr.id} className="px-4 py-2 border-b">
+                        {variation.attributes[attr.name]}
+                      </td>
+                    ))}
+                  <td className="px-4 py-2 border-b">
+                    {editingVariation === variation.id ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        defaultValue={variation.price || basePrice}
+                        className="w-20 px-2 py-1 border rounded"
+                        onBlur={(e) =>
+                          handleUpdateVariation(variation.id, {
+                            price: parseFloat(e.target.value),
+                          })
+                        }
+                      />
+                    ) : (
+                      `$${(variation.price || basePrice).toFixed(2)}`
+                    )}
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    {editingVariation === variation.id ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        defaultValue={variation.cost || baseCost}
+                        className="w-20 px-2 py-1 border rounded"
+                        onBlur={(e) =>
+                          handleUpdateVariation(variation.id, {
+                            cost: parseFloat(e.target.value),
+                          })
+                        }
+                      />
+                    ) : (
+                      `$${(variation.cost || baseCost).toFixed(2)}`
+                    )}
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    {editingVariation === variation.id ? (
+                      <input
+                        type="number"
+                        defaultValue={variation.stock}
+                        className="w-20 px-2 py-1 border rounded"
+                        onBlur={(e) =>
+                          handleUpdateVariation(variation.id, {
+                            stock: parseInt(e.target.value),
+                          })
+                        }
+                      />
+                    ) : (
+                      variation.stock
+                    )}
+                  </td>
+                  <td className="px-4 py-2 border-b">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() =>
+                          setEditingVariation(
+                            editingVariation === variation.id ? null : variation.id,
+                          )
+                        }
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <FaEdit />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteVariation(variation.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <FaTrash />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Generate Variations Modal */}
+      {showGenerateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">Generate Variations</h3>
+              <button
+                onClick={() => setShowGenerateModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {selectedAttributes.map((attr, idx) => (
+                <div key={idx} className="border p-4 rounded">
+                  <div className="flex gap-2 mb-2">
+                    <select
+                      value={attr.attributeName}
+                      onChange={(e) => {
+                        const selectedAttr = attributes.find(
+                          (a) => a.name === e.target.value,
+                        );
+                        updateAttributeInGenerate(
+                          idx,
+                          e.target.value,
+                          selectedAttr?.values.map((v) => v.value) || [],
+                        );
+                      }}
+                      className="flex-1 px-3 py-2 border rounded"
+                    >
+                      <option value="">Select Attribute</option>
+                      {attributes.map((a) => (
+                        <option key={a.id} value={a.name}>
+                          {a.displayName || a.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => removeAttributeFromGenerate(idx)}
+                      className="px-3 py-2 bg-red-600 text-white rounded"
+                    >
+                      <FaTrash />
+                    </button>
+                  </div>
+                  {attr.attributeName && (
+                    <div className="flex flex-wrap gap-2">
+                      {attributes
+                        .find((a) => a.name === attr.attributeName)
+                        ?.values.map((val) => (
+                          <label
+                            key={val.id}
+                            className="flex items-center gap-2 px-3 py-1 border rounded cursor-pointer hover:bg-gray-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={attr.values.includes(val.value)}
+                              onChange={(e) => {
+                                const newValues = e.target.checked
+                                  ? [...attr.values, val.value]
+                                  : attr.values.filter((v) => v !== val.value);
+                                updateAttributeInGenerate(
+                                  idx,
+                                  attr.attributeName,
+                                  newValues,
+                                );
+                              }}
+                            />
+                            {val.displayName || val.value}
+                            {val.color && (
+                              <span
+                                className="w-4 h-4 rounded border"
+                                style={{ backgroundColor: val.color }}
+                              />
+                            )}
+                          </label>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              <button
+                onClick={addAttributeToGenerate}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+              >
+                <FaPlus /> Add Attribute
+              </button>
+
+              {variationMatrix.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold mb-2">
+                    Preview: {variationMatrix.length} variations will be created
+                  </h4>
+                  <div className="max-h-60 overflow-y-auto border rounded">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-2 py-1 text-left">SKU</th>
+                          {selectedAttributes.map((attr) => (
+                            <th key={attr.attributeName} className="px-2 py-1 text-left">
+                              {attr.attributeName}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {variationMatrix.slice(0, 10).map((row, idx) => (
+                          <tr key={idx}>
+                            <td className="px-2 py-1">{row.sku}</td>
+                            {selectedAttributes.map((attr) => (
+                              <td key={attr.attributeName} className="px-2 py-1">
+                                {row.attributes[attr.attributeName]}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                        {variationMatrix.length > 10 && (
+                          <tr>
+                            <td
+                              colSpan={selectedAttributes.length + 1}
+                              className="px-2 py-1 text-center text-gray-500"
+                            >
+                              ... and {variationMatrix.length - 10} more
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => setShowGenerateModal(false)}
+                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerateVariations}
+                  disabled={selectedAttributes.length === 0 || variationMatrix.length === 0}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  Generate {variationMatrix.length} Variations
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Single Variation Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">Create Variation</h3>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">SKU</label>
+                <input
+                  type="text"
+                  value={newVariation.sku}
+                  onChange={(e) =>
+                    setNewVariation({ ...newVariation, sku: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded"
+                  placeholder="e.g., PROD-BLK-38"
+                />
+              </div>
+
+              {attributes.map((attr) => (
+                <div key={attr.id}>
+                  <label className="block text-sm font-medium mb-1">
+                    {attr.displayName || attr.name}
+                  </label>
+                  <select
+                    value={newVariation.attributes[attr.name] || ''}
+                    onChange={(e) =>
+                      setNewVariation({
+                        ...newVariation,
+                        attributes: {
+                          ...newVariation.attributes,
+                          [attr.name]: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full px-3 py-2 border rounded"
+                  >
+                    <option value="">Select {attr.name}</option>
+                    {attr.values.map((val) => (
+                      <option key={val.id} value={val.value}>
+                        {val.displayName || val.value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newVariation.price}
+                    onChange={(e) =>
+                      setNewVariation({
+                        ...newVariation,
+                        price: parseFloat(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 border rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Cost</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newVariation.cost}
+                    onChange={(e) =>
+                      setNewVariation({
+                        ...newVariation,
+                        cost: parseFloat(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 border rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Stock</label>
+                  <input
+                    type="number"
+                    value={newVariation.stock}
+                    onChange={(e) =>
+                      setNewVariation({
+                        ...newVariation,
+                        stock: parseInt(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 border rounded"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateVariation}
+                  disabled={!newVariation.sku}
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
+                >
+                  Create Variation
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

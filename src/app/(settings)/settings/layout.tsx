@@ -8,39 +8,32 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div style={{
-      display: 'flex',
-      minHeight: '100vh',
-      background: '#f7fafd'
-    }}>
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <SettingsSidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
-      <main style={{
-        flex: 1,
-        padding: '2.5rem 2rem',
-        maxWidth: 900,
-        margin: '0 auto',
-        background: 'none',
-        borderRadius: 0,
-        boxShadow: 'none',
-        minHeight: 'calc(100vh - 4rem)',
-        display: 'flex',
-        flexDirection: 'column',
-        marginLeft: sidebarCollapsed ? '4rem' : '15rem', // Adjust margin based on collapsed state
-        transition: 'margin-left 0.3s ease',
-      }}>
+      <main 
+        className="flex-1 flex flex-col transition-all duration-300 ease-in-out"
+        style={{
+          marginLeft: sidebarCollapsed ? '4rem' : '15rem',
+          padding: '2rem 2.5rem',
+          maxWidth: '1200px',
+          width: '100%',
+        }}
+      >
         <div className="mb-6">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md border border-gray-200 hover:border-gray-300"
           >
             <FaArrowLeft className="w-4 h-4" />
             Back to Dashboard
           </Link>
         </div>
-        {children}
+        <div className="flex-1">
+          {children}
+        </div>
       </main>
     </div>
   );

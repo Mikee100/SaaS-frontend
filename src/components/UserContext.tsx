@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext, useEffect, useState, ReactNode, Dispatch, SetStateAction, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode, Dispatch, SetStateAction, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { apiGet } from "@/utils/api";
 
@@ -34,6 +34,63 @@ interface UserProviderProps {
   skipUserFetch?: boolean; // Add this prop to skip user fetching
 }
 
+// Cache configuration
+const USER_CACHE_KEY = 'user_cache_data';
+const USER_CACHE_TIMESTAMP_KEY = 'user_cache_timestamp';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache TTL
+
+// Cache utilities
+const getCachedUser = (): { user: User | null; isValid: boolean } => {
+  if (typeof window === 'undefined') return { user: null, isValid: false };
+  
+  try {
+    const cachedData = localStorage.getItem(USER_CACHE_KEY);
+    const cachedTimestamp = localStorage.getItem(USER_CACHE_TIMESTAMP_KEY);
+    
+    if (!cachedData || !cachedTimestamp) {
+      return { user: null, isValid: false };
+    }
+    
+    const timestamp = parseInt(cachedTimestamp, 10);
+    const now = Date.now();
+    const isValid = (now - timestamp) < CACHE_TTL_MS;
+    
+    if (!isValid) {
+      // Clear expired cache
+      localStorage.removeItem(USER_CACHE_KEY);
+      localStorage.removeItem(USER_CACHE_TIMESTAMP_KEY);
+      return { user: null, isValid: false };
+    }
+    
+    return { user: JSON.parse(cachedData), isValid: true };
+  } catch (error) {
+    console.error('Error reading user cache:', error);
+    return { user: null, isValid: false };
+  }
+};
+
+const setCachedUser = (user: User | null): void => {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    if (user) {
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+      localStorage.setItem(USER_CACHE_TIMESTAMP_KEY, Date.now().toString());
+    } else {
+      localStorage.removeItem(USER_CACHE_KEY);
+      localStorage.removeItem(USER_CACHE_TIMESTAMP_KEY);
+    }
+  } catch (error) {
+    console.error('Error setting user cache:', error);
+  }
+};
+
+const clearUserCache = (): void => {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(USER_CACHE_KEY);
+  localStorage.removeItem(USER_CACHE_TIMESTAMP_KEY);
+};
+
 export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFetch = false }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,16 +98,39 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   const router = useRouter();
   const pathname = usePathname();
   
-  // Helper to fetch user
-  const fetchUser = useCallback(async () => {
+  // Refs to prevent concurrent requests and track initialization
+  const fetchingRef = useRef(false);
+  const initializedRef = useRef(false);
+  
+  // Helper to fetch user with caching and request deduplication
+  const fetchUser = useCallback(async (forceRefresh: boolean = false) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) {
       setUser(null);
+      clearUserCache();
       setLoading(false);
       return;
     }
 
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = getCachedUser();
+      if (cached.isValid && cached.user) {
+        setUser(cached.user);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Prevent concurrent requests
+    if (fetchingRef.current) {
+      return;
+    }
+
+    fetchingRef.current = true;
     setLoading(true);
+    
     try {
       const userData = await apiGet('/user/me') as User;
 
@@ -80,17 +160,21 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         localStorage.setItem('selectedBranchId', userData.branchId);
       }
 
+      // Update cache and state
+      setCachedUser(normalizedUser);
       setUser(normalizedUser);
       setError(null);
     } catch (err) {
       console.error('Error fetching user:', err);
       setUser(null);
+      clearUserCache();
       setError('Authentication failed. Please log in again.');
       localStorage.removeItem('token');
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
-  }, []); // No dependencies needed, or add dependencies if you use any from props/state
+  }, []);
 
   // 1. Wrap 'isAuthPath' in useCallback to stabilize its reference
   const isAuthPath = useCallback(() => {
@@ -110,7 +194,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     return isAuth;
   }, [pathname]);
 
-// ...existing code...
+  // Initialize user data only once on mount (not on every route change)
   useEffect(() => {
     // CRITICAL: If skipUserFetch is true, completely skip all authentication logic
     if (skipUserFetch) {
@@ -118,6 +202,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       setUser(null);
       setLoading(false);
       setError(null);
+      initializedRef.current = true;
       return;
     }
 
@@ -127,22 +212,47 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       setUser(null);
       setLoading(false);
       setError(null);
+      initializedRef.current = true;
       return;
     }
 
-    // Only fetch user data for non-auth pages
-    fetchUser();
+    // Only fetch once on initial mount, not on every route change
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      fetchUser(false); // Use cache if available
+    }
+  }, [skipUserFetch, isAuthPath, fetchUser]); // Only run once on mount or when skipUserFetch changes
 
-    // Listen for login/logout in other tabs - only for non-auth pages
+  // Handle pathname changes - clear state when navigating to auth pages (but don't refetch on route changes)
+  useEffect(() => {
+    if (skipUserFetch) return;
+    
+    if (isAuthPath()) {
+      // Clear user state when navigating to auth pages
+      setUser(null);
+      setLoading(false);
+      setError(null);
+    } else if (!initializedRef.current) {
+      // If we navigate from auth to non-auth and haven't initialized yet, fetch once
+      initializedRef.current = true;
+      fetchUser(false);
+    }
+  }, [pathname, skipUserFetch, isAuthPath, fetchUser]);
+
+  // Listen for login/logout in other tabs
+  useEffect(() => {
+    if (skipUserFetch || isAuthPath()) return;
+
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'token' && !isAuthPath() && !skipUserFetch) {
-        fetchUser();
+        // Clear cache on token change from other tabs
+        clearUserCache();
+        fetchUser(true); // Force refresh on storage event
       }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [skipUserFetch, pathname, isAuthPath, fetchUser]);
-// ...existing code...
+  }, [skipUserFetch, isAuthPath, fetchUser]);
   // Additional effect to prevent redirects on auth pages
   useEffect(() => {
     if (isAuthPath() || skipUserFetch) {
@@ -219,8 +329,11 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
             localStorage.setItem('selectedBranchId', user.branchId);
           }
 
-          // Refresh user data from the server
-          await fetchUser();
+          // Cache the user from login response immediately
+          setCachedUser(normalizedUser);
+          
+          // Refresh user data from the server (force refresh to ensure latest data)
+          await fetchUser(true);
 
           // Redirect based on user role
           const isSuperAdmin = normalizedUser.isSuperadmin || normalizedUser.roles?.includes('superadmin');
@@ -251,15 +364,18 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   // Logout function
   const logout = useCallback(() => {
     localStorage.removeItem('token');
+    clearUserCache();
     setUser(null);
     setError(null);
+    initializedRef.current = false; // Reset initialization flag
     router.push('/login');
   }, [router]);
 
   // 2. Wrap 'refreshUser' in useCallback
-  // Manual refresh
+  // Manual refresh - forces a fresh API call
   const refreshUser = useCallback(async () => {
-    await fetchUser();
+    clearUserCache();
+    await fetchUser(true); // Force refresh
   }, [fetchUser]);
 
   // Clear error
