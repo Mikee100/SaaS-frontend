@@ -1,7 +1,7 @@
 "use client";
 import PlanGuard from '@/components/PlanGuard';
 import UsageDashboard from '@/components/UsageDashboard';
-import { FaCog, FaUsers, FaChartLine, FaCrown, FaDownload, FaShare, FaSearch, FaBell, FaShieldAlt, FaPlug, FaTrash, FaPlus, FaEnvelope, FaCheck, FaSave, FaEdit, FaTimes } from 'react-icons/fa';
+import { FaCog, FaUsers, FaChartLine, FaCrown, FaDownload, FaShare, FaSearch, FaBell, FaShieldAlt, FaTrash, FaPlus, FaCheck, FaSave, FaTimes } from 'react-icons/fa';
 import { useEffect, useState } from 'react';
 import { apiGet, apiPut, apiPost, apiDelete } from '@/utils/api';
 
@@ -266,7 +266,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Basic Settings</h2>
-                  <p className="text-gray-500 text-sm mt-1">Update your organization's basic information</p>
+                  <p className="text-gray-500 text-sm mt-1">Update your organization&apos;s basic information</p>
                 </div>
               </div>
 

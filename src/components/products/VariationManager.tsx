@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaSave, FaTimes, FaMagic } from 'react-icons/fa';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FaPlus, FaEdit, FaTrash, FaTimes, FaMagic } from 'react-icons/fa';
 import {
   ProductAttribute,
   ProductVariation,
@@ -11,6 +11,16 @@ import {
   productAttributesApi,
   productVariationsApi,
 } from '@/lib/api/product-variations';
+
+// Helper function for cartesian product (pure function, no dependencies)
+const cartesianProduct = (arrays: string[][]): string[][] => {
+  if (arrays.length === 0) return [[]];
+  const [first, ...rest] = arrays;
+  const restCombinations = cartesianProduct(rest);
+  return first.flatMap((value) =>
+    restCombinations.map((combination) => [value, ...combination]),
+  );
+};
 
 interface VariationManagerProps {
   productId: string;
@@ -66,11 +76,7 @@ export default function VariationManager({
     stock: 0,
   });
 
-  useEffect(() => {
-    loadData();
-  }, [productId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [attrs, vars] = await Promise.all([
@@ -82,12 +88,16 @@ export default function VariationManager({
       if (onVariationsChange) {
         onVariationsChange(vars);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load data');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [productId, onVariationsChange]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleGenerateVariations = async () => {
     try {
@@ -105,8 +115,8 @@ export default function VariationManager({
       setShowGenerateModal(false);
       setSelectedAttributes([]);
       setVariationMatrix([]);
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate variations');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to generate variations');
     }
   };
 
@@ -127,8 +137,8 @@ export default function VariationManager({
         cost: baseCost,
         stock: 0,
       });
-    } catch (err: any) {
-      setError(err.message || 'Failed to create variation');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create variation');
     }
   };
 
@@ -137,8 +147,8 @@ export default function VariationManager({
     try {
       await productVariationsApi.delete(variationId);
       await loadData();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete variation');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete variation');
     }
   };
 
@@ -150,13 +160,13 @@ export default function VariationManager({
       await productVariationsApi.update(variationId, updates);
       await loadData();
       setEditingVariation(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to update variation');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update variation');
     }
   };
 
   // Generate variation matrix preview
-  const generateMatrix = () => {
+  const generateMatrix = useCallback(() => {
     if (selectedAttributes.length === 0) {
       setVariationMatrix([]);
       return;
@@ -185,20 +195,11 @@ export default function VariationManager({
     });
 
     setVariationMatrix(matrix);
-  };
+  }, [selectedAttributes, baseSku, basePrice, baseCost]);
 
   useEffect(() => {
     generateMatrix();
-  }, [selectedAttributes, baseSku, basePrice, baseCost]);
-
-  const cartesianProduct = (arrays: string[][]): string[][] => {
-    if (arrays.length === 0) return [[]];
-    const [first, ...rest] = arrays;
-    const restCombinations = cartesianProduct(rest);
-    return first.flatMap((value) =>
-      restCombinations.map((combination) => [value, ...combination]),
-    );
-  };
+  }, [generateMatrix]);
 
   const addAttributeToGenerate = () => {
     setSelectedAttributes([
@@ -233,8 +234,13 @@ export default function VariationManager({
         </div>
       )}
 
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Product Variations</h3>
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h3 className="text-lg font-semibold">Product Variations</h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Generate all combinations (e.g., Black-39, Black-40, Grey-39, Grey-40) or create individual variations
+          </p>
+        </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowGenerateModal(true)}
@@ -246,7 +252,7 @@ export default function VariationManager({
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           >
-            <FaPlus /> Add Variation
+            <FaPlus /> Add Single Variation
           </button>
         </div>
       </div>
@@ -369,7 +375,12 @@ export default function VariationManager({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">Generate Variations</h3>
+              <div>
+                <h3 className="text-xl font-bold">Generate Variations</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Create all combinations automatically (e.g., Black-39, Black-40, Grey-39, Grey-40)
+                </p>
+              </div>
               <button
                 onClick={() => setShowGenerateModal(false)}
                 className="text-gray-500 hover:text-gray-700"
@@ -378,10 +389,31 @@ export default function VariationManager({
               </button>
             </div>
 
+            <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
+              <p className="text-sm text-blue-900 font-semibold mb-2">
+                💡 How to create combinations like &quot;Black Converse size 39, 40, 41, 42, 43&quot; and &quot;Grey Converse size 39, 40, 41, 42&quot;:
+              </p>
+              <ol className="text-sm text-blue-800 space-y-1 ml-4 list-decimal">
+                <li>Click &quot;Add Another Attribute&quot; below</li>
+                <li>Select <strong>Color</strong> attribute, then check: <strong>Black, Grey</strong></li>
+                <li>Click &quot;Add Another Attribute&quot; again</li>
+                <li>Select <strong>Size</strong> attribute, then check: <strong>39, 40, 41, 42, 43</strong></li>
+                <li>Review the preview - you&apos;ll see all 10 combinations (Black-39, Black-40, ..., Grey-43)</li>
+                <li>Click &quot;Generate Variations&quot; to create them all!</li>
+              </ol>
+            </div>
+
             <div className="space-y-4">
+              {selectedAttributes.length === 0 && (
+                <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded">
+                  <p className="mb-2">No attributes selected yet.</p>
+                  <p className="text-sm">Click &quot;Add Attribute&quot; below to start generating combinations.</p>
+                </div>
+              )}
+
               {selectedAttributes.map((attr, idx) => (
-                <div key={idx} className="border p-4 rounded">
-                  <div className="flex gap-2 mb-2">
+                <div key={idx} className="border-2 border-blue-200 p-4 rounded-lg bg-white">
+                  <div className="flex gap-2 mb-3">
                     <select
                       value={attr.attributeName}
                       onChange={(e) => {
@@ -394,54 +426,74 @@ export default function VariationManager({
                           selectedAttr?.values.map((v) => v.value) || [],
                         );
                       }}
-                      className="flex-1 px-3 py-2 border rounded"
+                      className="flex-1 px-3 py-2 border rounded font-medium"
                     >
-                      <option value="">Select Attribute</option>
-                      {attributes.map((a) => (
+                      <option value="">Select Attribute (e.g., Color, Size)</option>
+                      {attributes
+                        .filter(a => !selectedAttributes.some(sa => sa.attributeName === a.name && sa.attributeName !== attr.attributeName))
+                        .map((a) => (
                         <option key={a.id} value={a.name}>
                           {a.displayName || a.name}
                         </option>
                       ))}
                     </select>
-                    <button
-                      onClick={() => removeAttributeFromGenerate(idx)}
-                      className="px-3 py-2 bg-red-600 text-white rounded"
-                    >
-                      <FaTrash />
-                    </button>
+                    {selectedAttributes.length > 1 && (
+                      <button
+                        onClick={() => removeAttributeFromGenerate(idx)}
+                        className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                        title="Remove this attribute"
+                      >
+                        <FaTrash />
+                      </button>
+                    )}
                   </div>
                   {attr.attributeName && (
-                    <div className="flex flex-wrap gap-2">
-                      {attributes
-                        .find((a) => a.name === attr.attributeName)
-                        ?.values.map((val) => (
-                          <label
-                            key={val.id}
-                            className="flex items-center gap-2 px-3 py-1 border rounded cursor-pointer hover:bg-gray-50"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={attr.values.includes(val.value)}
-                              onChange={(e) => {
-                                const newValues = e.target.checked
-                                  ? [...attr.values, val.value]
-                                  : attr.values.filter((v) => v !== val.value);
-                                updateAttributeInGenerate(
-                                  idx,
-                                  attr.attributeName,
-                                  newValues,
-                                );
-                              }}
-                            />
-                            {val.displayName || val.value}
-                            {val.color && (
-                              <span
-                                className="w-4 h-4 rounded border"
-                                style={{ backgroundColor: val.color }}
+                    <div>
+                      <p className="text-xs text-gray-600 mb-2 font-medium">
+                        Select values for <strong>{attributes.find(a => a.name === attr.attributeName)?.displayName || attr.attributeName}</strong>:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {attributes
+                          .find((a) => a.name === attr.attributeName)
+                          ?.values.map((val) => (
+                            <label
+                              key={val.id}
+                              className={`flex items-center gap-2 px-3 py-2 border-2 rounded cursor-pointer transition-all ${
+                                attr.values.includes(val.value)
+                                  ? 'bg-blue-100 border-blue-500 text-blue-700'
+                                  : 'bg-white border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={attr.values.includes(val.value)}
+                                onChange={(e) => {
+                                  const newValues = e.target.checked
+                                    ? [...attr.values, val.value]
+                                    : attr.values.filter((v) => v !== val.value);
+                                  updateAttributeInGenerate(
+                                    idx,
+                                    attr.attributeName,
+                                    newValues,
+                                  );
+                                }}
+                                className="w-4 h-4"
                               />
-                            )}
-                          </label>
-                        ))}
+                              <span className="font-medium">{val.displayName || val.value}</span>
+                              {val.color && (
+                                <span
+                                  className="w-5 h-5 rounded border-2 border-gray-300"
+                                  style={{ backgroundColor: val.color }}
+                                />
+                              )}
+                            </label>
+                          ))}
+                      </div>
+                      {attr.values.length === 0 && (
+                        <p className="text-xs text-amber-600 mt-2">
+                          ⚠️ Select at least one value for this attribute
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -449,52 +501,67 @@ export default function VariationManager({
 
               <button
                 onClick={addAttributeToGenerate}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 w-full justify-center"
               >
-                <FaPlus /> Add Attribute
+                <FaPlus /> Add Another Attribute (e.g., Color, Size, Storage)
               </button>
 
               {variationMatrix.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="font-semibold mb-2">
-                    Preview: {variationMatrix.length} variations will be created
+                <div className="mt-6 p-4 bg-green-50 border-2 border-green-300 rounded-lg">
+                  <h4 className="font-bold mb-3 text-green-800">
+                    ✅ Preview: {variationMatrix.length} variation{variationMatrix.length !== 1 ? 's' : ''} will be created
                   </h4>
-                  <div className="max-h-60 overflow-y-auto border rounded">
+                  <div className="max-h-80 overflow-y-auto border rounded bg-white">
                     <table className="min-w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gray-100 sticky top-0">
                         <tr>
-                          <th className="px-2 py-1 text-left">SKU</th>
+                          <th className="px-3 py-2 text-left font-semibold border-b">SKU</th>
                           {selectedAttributes.map((attr) => (
-                            <th key={attr.attributeName} className="px-2 py-1 text-left">
-                              {attr.attributeName}
+                            <th key={attr.attributeName} className="px-3 py-2 text-left font-semibold border-b">
+                              {attributes.find(a => a.name === attr.attributeName)?.displayName || attr.attributeName}
                             </th>
                           ))}
+                          <th className="px-3 py-2 text-left font-semibold border-b">Price</th>
+                          <th className="px-3 py-2 text-left font-semibold border-b">Cost</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {variationMatrix.slice(0, 10).map((row, idx) => (
-                          <tr key={idx}>
-                            <td className="px-2 py-1">{row.sku}</td>
+                        {variationMatrix.slice(0, 20).map((row, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 border-b font-mono text-xs">{row.sku}</td>
                             {selectedAttributes.map((attr) => (
-                              <td key={attr.attributeName} className="px-2 py-1">
+                              <td key={attr.attributeName} className="px-3 py-2 border-b">
                                 {row.attributes[attr.attributeName]}
                               </td>
                             ))}
+                            <td className="px-3 py-2 border-b">${row.price.toFixed(2)}</td>
+                            <td className="px-3 py-2 border-b">${row.cost.toFixed(2)}</td>
                           </tr>
                         ))}
-                        {variationMatrix.length > 10 && (
+                        {variationMatrix.length > 20 && (
                           <tr>
                             <td
-                              colSpan={selectedAttributes.length + 1}
-                              className="px-2 py-1 text-center text-gray-500"
+                              colSpan={selectedAttributes.length + 3}
+                              className="px-3 py-2 text-center text-gray-500 bg-gray-50"
                             >
-                              ... and {variationMatrix.length - 10} more
+                              ... and {variationMatrix.length - 20} more variation{variationMatrix.length - 20 !== 1 ? 's' : ''}
                             </td>
                           </tr>
                         )}
                       </tbody>
                     </table>
                   </div>
+                  <p className="text-xs text-green-700 mt-2">
+                    💡 Each row represents one unique combination. All will be created with the base price and cost.
+                  </p>
+                </div>
+              )}
+
+              {selectedAttributes.length > 0 && variationMatrix.length === 0 && (
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-300 rounded">
+                  <p className="text-sm text-amber-800">
+                    ⚠️ Please select at least one value for each attribute to generate variations.
+                  </p>
                 </div>
               )}
 
@@ -508,9 +575,9 @@ export default function VariationManager({
                 <button
                   onClick={handleGenerateVariations}
                   disabled={selectedAttributes.length === 0 || variationMatrix.length === 0}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-semibold text-lg shadow-lg"
                 >
-                  Generate {variationMatrix.length} Variations
+                  ✨ Generate {variationMatrix.length} Variation{variationMatrix.length !== 1 ? 's' : ''}
                 </button>
               </div>
             </div>

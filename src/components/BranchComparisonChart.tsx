@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { XAxis, YAxis, ResponsiveContainer, Tooltip, BarChart, Bar, CartesianGrid, Legend } from 'recharts';
+import { XAxis, YAxis, ResponsiveContainer, Tooltip, BarChart, Bar, CartesianGrid } from 'recharts';
 
 interface BranchComparisonChartProps {
   branchData: {

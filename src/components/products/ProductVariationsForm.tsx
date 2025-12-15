@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FaPlus, FaTrash, FaMagic, FaCheck, FaTimes } from 'react-icons/fa';
+import { FaTrash, FaMagic } from 'react-icons/fa';
 import { productAttributesApi, productVariationsApi } from '@/lib/api/product-variations';
-import type { ProductAttribute, ProductVariation } from '@/types/product-variations';
+import type { ProductAttribute } from '@/types/product-variations';
 
 interface ProductVariationsFormProps {
   productId?: string; // If editing existing product
@@ -34,7 +34,6 @@ export default function ProductVariationsForm({
 }: ProductVariationsFormProps) {
   const [step, setStep] = useState<'attributes' | 'variations'>('attributes');
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
-  const [existingVariations, setExistingVariations] = useState<ProductVariation[]>([]);
   
   // Attribute creation (inline)
   const [newAttributeName, setNewAttributeName] = useState('');
@@ -52,10 +51,7 @@ export default function ProductVariationsForm({
 
   useEffect(() => {
     loadAttributes();
-    if (productId) {
-      loadVariations();
-    }
-  }, [productId]);
+  }, []);
 
   const loadAttributes = async () => {
     try {
@@ -66,15 +62,6 @@ export default function ProductVariationsForm({
     }
   };
 
-  const loadVariations = async () => {
-    if (!productId) return;
-    try {
-      const data = await productVariationsApi.getByProduct(productId);
-      setExistingVariations(data);
-    } catch (err) {
-      console.error('Failed to load variations:', err);
-    }
-  };
 
   // Quick create attribute inline
   const handleQuickCreateAttribute = async () => {
@@ -99,8 +86,8 @@ export default function ProductVariationsForm({
         ...selectedAttributes,
         [attribute.name]: attribute.values.map(v => v.value),
       });
-    } catch (err: any) {
-      alert(err.message || 'Failed to create attribute');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to create attribute');
     }
   };
 
@@ -207,10 +194,9 @@ export default function ProductVariationsForm({
         skuPrefix: baseSku,
       });
 
-      await loadVariations();
       alert(`Successfully created ${generatedVariations.length} variations!`);
-    } catch (err: any) {
-      alert(err.message || 'Failed to save variations');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to save variations');
     }
   };
 
@@ -417,3 +403,7 @@ export default function ProductVariationsForm({
     </div>
   );
 }
+
+
+
+

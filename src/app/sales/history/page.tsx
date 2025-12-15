@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import React, { useEffect, useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import QRCode from 'qrcode';
 import SalesTargetComponent from "@/components/SalesTarget";
 import { useTenant } from '@/hooks/useTenant';
@@ -44,6 +44,25 @@ type Sale = {
   };
 };
 
+type PdfTemplate = {
+  businessName?: boolean;
+  businessAddress?: boolean;
+  businessPhone?: boolean;
+  businessEmail?: boolean;
+  branchInfo?: boolean;
+  logo?: boolean;
+  primaryColor?: string;
+  secondaryColor?: string;
+  fontSize?: string;
+  showVat?: boolean;
+  showSubtotal?: boolean;
+  footerText?: string;
+  paperSize?: string;
+  orientation?: string;
+  margins?: string;
+  currency?: string;
+};
+
 function unique<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
 }
@@ -58,7 +77,7 @@ function toCSV(rows: Record<string, unknown>[], columns: string[]): string {
 export default function SalesHistoryPage() {
   // Use cached tenant data hook at component level
   const { data: tenantData } = useTenant();
-  const { data: branchesData = [] } = useBranches();
+  const { data: branchesData = [], isLoading: branchesLoading } = useBranches();
   
   // Convert branches data format
   const branches = branchesData.map(b => ({ id: b.id, name: b.name }));
@@ -126,11 +145,11 @@ export default function SalesHistoryPage() {
       return response;
     },
     staleTime: 1 * 60 * 1000, // 1 minute - sales history changes frequently
-    cacheTime: 5 * 60 * 1000,
-    keepPreviousData: true, // Keep previous page while loading new page
+    gcTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData, // Keep previous page while loading new page
   });
 
-  const sales = salesData?.sales || [];
+  const sales = useMemo(() => salesData?.sales || [], [salesData?.sales]);
   const pagination = salesData?.pagination;
   
   // Client-side filtering for remaining filters (if server doesn't support them)
@@ -208,8 +227,8 @@ export default function SalesHistoryPage() {
 
     try {
       // Use tenant data from hook (already available at component level)
-      const pdfTemplate = tenantData?.pdfTemplate || {};
-      const currency = tenantData?.currency || 'KES';
+      const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+      const currency = (tenantData as { currency?: string })?.currency || pdfTemplate.currency || 'KES';
 
       // Set up PDF document with template settings
       const doc = new jsPDF({
@@ -247,15 +266,15 @@ export default function SalesHistoryPage() {
         yPosition += 6;
       }
 
-      if (pdfTemplate.businessPhone && tenantData?.contactPhone) {
+      if (pdfTemplate.businessPhone && (tenantData as { contactPhone?: string })?.contactPhone) {
         doc.setFontSize(fontSize);
-        doc.text(`Phone: ${tenantData.contactPhone}`, margin, yPosition);
+        doc.text(`Phone: ${(tenantData as { contactPhone?: string }).contactPhone}`, margin, yPosition);
         yPosition += 6;
       }
 
-      if (pdfTemplate.businessEmail && tenantData?.contactEmail) {
+      if (pdfTemplate.businessEmail && (tenantData as { contactEmail?: string })?.contactEmail) {
         doc.setFontSize(fontSize);
-        doc.text(`Email: ${tenantData.contactEmail}`, margin, yPosition);
+        doc.text(`Email: ${(tenantData as { contactEmail?: string }).contactEmail}`, margin, yPosition);
         yPosition += 6;
       }
 
@@ -400,15 +419,15 @@ export default function SalesHistoryPage() {
           };
         };
         // Use tenant data from hook (already available at component level)
-        const pdfTemplate = tenantData?.pdfTemplate || {};
+        const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
         businessInfo = {
           name: tenantData?.name || "Business Name",
-          businessType: (tenantData as any)?.businessType || "Retail",
+          businessType: (tenantData as BusinessData)?.businessType || "Retail",
           address: tenantData?.address || "Business Address",
-          contactPhone: tenantData?.contactPhone || "Phone Number",
-          kraPin: (tenantData as any)?.kraPin || "KRA PIN",
-          vatNumber: (tenantData as any)?.vatNumber || "VAT Number",
-          currency: tenantData?.currency || pdfTemplate.currency || "KES"
+          contactPhone: (tenantData as BusinessData)?.contactPhone || tenantData?.phone || "Phone Number",
+          kraPin: (tenantData as BusinessData)?.kraPin || "KRA PIN",
+          vatNumber: (tenantData as BusinessData)?.vatNumber || "VAT Number",
+          currency: (tenantData as BusinessData)?.currency || pdfTemplate.currency || "KES"
         };
       } catch (error) {
         console.warn('Could not fetch business info, using defaults:', error);

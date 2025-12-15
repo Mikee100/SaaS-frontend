@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaSave, FaTimes, FaCheck } from 'react-icons/fa';
-import { ProductAttribute, ProductAttributeValue } from '@/types/product-variations';
+import { FaPlus, FaTrash, FaTimes } from 'react-icons/fa';
+import { ProductAttribute } from '@/types/product-variations';
 import { productAttributesApi } from '@/lib/api/product-variations';
 
 export default function ProductAttributesManager() {
@@ -10,8 +10,6 @@ export default function ProductAttributesManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingAttribute, setEditingAttribute] = useState<string | null>(null);
-  const [editingValue, setEditingValue] = useState<string | null>(null);
 
   const [newAttribute, setNewAttribute] = useState({
     name: '',
@@ -29,8 +27,8 @@ export default function ProductAttributesManager() {
       setLoading(true);
       const data = await productAttributesApi.getAll(true);
       setAttributes(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load attributes');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load attributes');
     } finally {
       setLoading(false);
     }
@@ -48,8 +46,8 @@ export default function ProductAttributesManager() {
         type: 'text',
         values: [],
       });
-    } catch (err: any) {
-      setError(err.message || 'Failed to create attribute');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create attribute');
     }
   };
 
@@ -58,8 +56,8 @@ export default function ProductAttributesManager() {
     try {
       await productAttributesApi.delete(id);
       await loadAttributes();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete attribute');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete attribute');
     }
   };
 
@@ -68,8 +66,8 @@ export default function ProductAttributesManager() {
       setError('');
       await productAttributesApi.addValue(attributeId, { value });
       await loadAttributes();
-    } catch (err: any) {
-      setError(err.message || 'Failed to add value');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to add value');
     }
   };
 
@@ -78,8 +76,8 @@ export default function ProductAttributesManager() {
     try {
       await productAttributesApi.deleteValue(valueId);
       await loadAttributes();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete value');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete value');
     }
   };
 
@@ -131,7 +129,7 @@ export default function ProductAttributesManager() {
 
       {attributes.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
-          No attributes yet. Create attributes like "Color", "Size", "Storage" to use in product variations.
+          No attributes yet. Create attributes like &quot;Color&quot;, &quot;Size&quot;, &quot;Storage&quot; to use in product variations.
         </div>
       ) : (
         <div className="space-y-4">
@@ -260,7 +258,7 @@ export default function ProductAttributesManager() {
                   onChange={(e) =>
                     setNewAttribute({
                       ...newAttribute,
-                      type: e.target.value as any,
+                      type: e.target.value as 'text' | 'number' | 'color' | 'image',
                     })
                   }
                   className="w-full px-3 py-2 border rounded"

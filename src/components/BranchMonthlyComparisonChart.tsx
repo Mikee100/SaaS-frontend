@@ -43,7 +43,7 @@ export default function BranchMonthlyComparisonChart({
 
   // Transform data for chart
   const chartData = data.months.map((month, index) => {
-    const monthData: any = {
+    const monthData: Record<string, string | number> = {
       month: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
       monthFull: month,
       total: data.total[index] || 0,
@@ -292,4 +292,8 @@ export default function BranchMonthlyComparisonChart({
     </div>
   );
 }
+
+
+
+
 

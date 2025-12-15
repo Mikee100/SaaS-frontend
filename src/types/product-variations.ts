@@ -1,3 +1,11 @@
+// Type for AddAttributeValueRequest
+export interface AddAttributeValueRequest {
+  value: string;
+  displayName?: string;
+  color?: string;
+  image?: string;
+  sortOrder?: number;
+}
 // Product Variation Types
 
 export interface ProductAttribute {

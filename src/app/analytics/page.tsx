@@ -78,14 +78,14 @@ export default function AnalyticsPage() {
     queryKey: ['analytics', 'basic'],
     queryFn: () => apiGet('/analytics/basic') as Promise<AnalyticsData>,
     staleTime: 2 * 60 * 1000, // 2 minutes
-    cacheTime: 5 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   const { data: advancedData } = useQuery({
     queryKey: ['analytics', 'advanced'],
     queryFn: () => apiGet('/analytics/advanced') as Promise<AnalyticsData>,
     staleTime: 2 * 60 * 1000,
-    cacheTime: 5 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     retry: false, // Don't retry if endpoint doesn't exist
   });
 
@@ -93,7 +93,7 @@ export default function AnalyticsPage() {
     queryKey: ['analytics', 'enterprise'],
     queryFn: () => apiGet('/analytics/enterprise') as Promise<AnalyticsData>,
     staleTime: 2 * 60 * 1000,
-    cacheTime: 5 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     retry: false, // Don't retry if endpoint doesn't exist
   });
 

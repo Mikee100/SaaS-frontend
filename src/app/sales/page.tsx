@@ -18,7 +18,7 @@ import MpesaPayment from '@/components/MpesaPayment';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 
 import ProductSkeleton from '@/components/ProductSkeleton';
 import { useBranch } from "@/contexts/BranchContext";
@@ -285,8 +285,8 @@ export default function SalesPage() {
     },
     enabled: !!selectedBranchId,
     staleTime: debouncedSearchQuery ? 30 * 1000 : 2 * 60 * 1000, // Shorter cache for search results
-    cacheTime: 5 * 60 * 1000,
-    keepPreviousData: true, // Keep previous results while fetching new search
+    gcTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData, // Keep previous results while fetching new search
   });
 
   // Update products state when query data changes
@@ -437,25 +437,6 @@ const clearCart = useCallback(() => {
     setCheckoutOpen(true);
     setCheckoutStep(1);
   };
-
- 
-  
-  useEffect(() => {
-    const fetchBranches = async () => {
-      try {
-        const data = await apiGet('/branches');
-        setBranches(data as { id: string; name: string }[]);
-        // Only set the first branch if none is selected
-        const branchData = data as { id: string; name: string }[];
-        if (branchData.length > 0 && !selectedBranchId) {
-          setSelectedBranchId(branchData[0].id);
-        }
-      } catch (error) {
-        console.error('Error fetching branches:', error);
-      }
-    };
-    fetchBranches();
-  }, [selectedBranchId, setSelectedBranchId]);
 
   const handleConfirmSale = async () => {
     setProcessingSale(true);

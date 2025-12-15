@@ -221,7 +221,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       initializedRef.current = true;
       fetchUser(false); // Use cache if available
     }
-  }, [skipUserFetch, isAuthPath, fetchUser]); // Only run once on mount or when skipUserFetch changes
+  }, [skipUserFetch, isAuthPath, fetchUser, pathname]); // Only run once on mount or when skipUserFetch changes
 
   // Handle pathname changes - clear state when navigating to auth pages (but don't refetch on route changes)
   useEffect(() => {

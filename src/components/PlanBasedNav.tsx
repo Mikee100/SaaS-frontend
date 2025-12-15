@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useTenant } from '@/hooks/useTenant';
@@ -13,7 +13,6 @@ import {
 import { MdOutlineInventory2, MdOutlineAnalytics, MdOutlineReport, MdOutlineSettings } from 'react-icons/md';
 import { usePathname } from 'next/navigation';
 import { hasPermission } from '@/utils/permissions';
-import { apiGet } from '@/utils/api';
 import Image from 'next/image';
 
 

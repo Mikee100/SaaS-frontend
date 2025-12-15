@@ -159,8 +159,6 @@ export default function ReportsPage() {
     forecast: { forecast_months: [], forecast_sales: [] },
     customerSegments: [],
   });
-  type Product = { id: string; name: string; stock?: number };
-  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -170,12 +168,10 @@ export default function ReportsPage() {
   const [grouping, setGrouping] = useState<'day' | 'week' | 'month'>('month');
 
   // Branch filtering and comparison
-  const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedReportBranch, setSelectedReportBranch] = useState<string>("all");
   const [comparisonMode, setComparisonMode] = useState(false);
   const [branchComparisonData, setBranchComparisonData] = useState<BranchComparisonData | null>(null);
   const [productComparisonData, setProductComparisonData] = useState<ProductComparisonData | null>(null);
-  const [loadingBranches, setLoadingBranches] = useState(false);
 
   // Permission checks
   const permissionsLoading = !user || !limits;
@@ -199,7 +195,7 @@ export default function ReportsPage() {
     },
     enabled: !!selectedBranchId,
     staleTime: 5 * 60 * 1000, // 5 minutes - products don't change often in reports context
-    cacheTime: 10 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     select: (data) => data.map(p => ({ id: p.id, name: p.name, stock: p.stock })),
   });
   const products = productsData || [];
@@ -225,7 +221,7 @@ export default function ReportsPage() {
     },
     enabled: comparisonMode && !!user?.tenantId,
     staleTime: 2 * 60 * 1000, // 2 minutes
-    cacheTime: 5 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {
@@ -284,7 +280,7 @@ export default function ReportsPage() {
     },
     enabled: !!user?.tenantId,
     staleTime: 2 * 60 * 1000, // 2 minutes - reports data changes frequently
-    cacheTime: 5 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {

@@ -29,11 +29,11 @@ export function usePlanLimits() {
   const { user } = useUser();
 
   const query = useQuery({
-    queryKey: ['plan-limits', user?.userId || user?.id],
+    queryKey: ['plan-limits', user?.id],
     queryFn: () => apiGet<PlanLimitsData>('/user/me/plan-limits'),
     enabled: !!user,
     staleTime: 10 * 60 * 1000, // 10 minutes - plan limits rarely change
-    cacheTime: 15 * 60 * 1000, // 15 minutes cache
+    gcTime: 15 * 60 * 1000, // 15 minutes cache
   });
 
   return {

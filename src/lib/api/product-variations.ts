@@ -6,7 +6,6 @@ import type {
   GenerateVariationsRequest,
   CreateVariationRequest,
   UpdateVariationRequest,
-  AddAttributeValueRequest,
 } from '@/types/product-variations';
 
 // Product Attributes API
@@ -151,11 +150,3 @@ export const productVariationsApi = {
   },
 };
 
-// Type for AddAttributeValueRequest
-export interface AddAttributeValueRequest {
-  value: string;
-  displayName?: string;
-  color?: string;
-  image?: string;
-  sortOrder?: number;
-}

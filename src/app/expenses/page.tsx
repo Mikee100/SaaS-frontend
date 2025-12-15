@@ -87,6 +87,7 @@ interface SalaryScheme {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface PDFTemplate {
   businessName: boolean;
   businessAddress: boolean;
@@ -105,10 +106,6 @@ interface PDFTemplate {
   margins: string;
 }
 
-interface Tenant {
-  name?: string;
-  pdfTemplate?: PDFTemplate;
-}
 
 // Add interfaces for branch comparison and past months data
 interface BranchComparisonData {

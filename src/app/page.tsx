@@ -1,12 +1,11 @@
 "use client";
-import { useEffect, useState, useMemo } from 'react';
+import React from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useTenant } from '@/hooks/useTenant';
 import BranchSwitcher from '@/components/BranchSwitcher';
-import { useUser } from '@/components/UserContext';
 import { useQuery } from '@tanstack/react-query';
 import {
   FiTrendingUp,
@@ -19,7 +18,6 @@ import {
   FiFileText,
   FiShoppingCart,
   FiRepeat,
-  FiTarget,
   FiBarChart2,
 } from 'react-icons/fi';
 
@@ -89,10 +87,6 @@ function generateMockCustomerGrowth(totalCustomers: number): Record<string, numb
   return result;
 }
 
-interface Tenant {
-  name: string;
-  logoUrl?: string;
-}
 
 interface AnalyticsData {
   totalSales?: number;
@@ -370,7 +364,6 @@ function formatChartData(data: Record<string, number>) {
 }
 
 export default function DashboardPage() {
-  const userContext = useUser();
   const { data: tenant, isLoading: tenantLoading } = useTenant();
   const { loading: limitsLoading } = usePlanLimits();
 

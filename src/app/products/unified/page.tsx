@@ -3,9 +3,9 @@
  * Unified Products & Inventory Management Page
  * Combines: Products List, Basic Inventory, and Advanced Inventory
  */
-import { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { apiGet, apiPost, apiDelete, apiPut } from "@/utils/api";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useBranches } from '@/hooks/useBranches';
 import FeatureGuard from '@/components/FeatureGuard';
@@ -15,11 +15,12 @@ import {
   FaCheckCircle, FaTimesCircle, FaArrowUp, FaArrowDown, FaHistory, FaBell, 
   FaChartLine, FaMapMarkerAlt, FaCalculator, FaCog, FaDownload, FaWarehouse,
   FaStore, FaClipboardList, FaSortAmountDown, FaPrint, FaTimes, FaChevronRight,
-  FaLayerGroup, FaChartBar, FaSync
+  FaLayerGroup, FaSync, FaPalette
 } from 'react-icons/fa';
+import ProductAttributesManager from '@/components/products/ProductAttributesManager';
+import VariationManager from '@/components/products/VariationManager';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
-import Tooltip from '@/components/Tooltip';
 import { useBranch } from "@/contexts/BranchContext";
 import Image from 'next/image';
 import API_BASE_URL from '../../../config/apiConfig';
@@ -101,7 +102,7 @@ interface ForecastData {
   confidence: number;
 }
 
-type TabType = 'products' | 'inventory' | 'advanced';
+type TabType = 'products' | 'inventory' | 'advanced' | 'attributes' | 'variations';
 type AdvancedSubTab = 'overview' | 'movements' | 'alerts' | 'forecasting' | 'locations';
 
 export default function UnifiedProductsInventoryPage() {
@@ -112,7 +113,7 @@ export default function UnifiedProductsInventoryPage() {
   
   // Use React Query hooks for data fetching
   const { data: branchesData = [], isLoading: branchesLoading } = useBranches();
-  const branches = branchesData.map(b => ({ id: b.id, name: b.name }));
+  const branches = (Array.isArray(branchesData) ? branchesData : []).map((b: { id: string; name: string }) => ({ id: b.id, name: b.name }));
 
   // Tab state
   const [activeTab, setActiveTab] = useState<TabType>('products');
@@ -222,8 +223,8 @@ export default function UnifiedProductsInventoryPage() {
     },
     enabled: !!selectedBranchId && activeTab === 'products',
     staleTime: 2 * 60 * 1000,
-    cacheTime: 5 * 60 * 1000,
-    keepPreviousData: true,
+    gcTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 
   // Fetch inventory (for inventory and advanced tabs)
@@ -237,7 +238,7 @@ export default function UnifiedProductsInventoryPage() {
     },
     enabled: !!selectedBranchId && (activeTab === 'inventory' || activeTab === 'advanced'),
     staleTime: 1 * 60 * 1000,
-    cacheTime: 3 * 60 * 1000,
+    gcTime: 3 * 60 * 1000,
   });
 
   // Fetch advanced inventory data
@@ -251,10 +252,10 @@ export default function UnifiedProductsInventoryPage() {
     },
     enabled: !!selectedBranchId && activeTab === 'advanced',
     staleTime: 2 * 60 * 1000,
-    cacheTime: 5 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
-  const { data: stockMovements = [], isLoading: movementsLoading } = useQuery({
+  const { data: stockMovements = [] } = useQuery({
     queryKey: ['inventory', 'movements', selectedBranchId],
     queryFn: async () => {
       if (!selectedBranchId) return [];
@@ -264,10 +265,10 @@ export default function UnifiedProductsInventoryPage() {
     },
     enabled: !!selectedBranchId && activeTab === 'advanced' && advancedSubTab === 'movements',
     staleTime: 1 * 60 * 1000,
-    cacheTime: 3 * 60 * 1000,
+    gcTime: 3 * 60 * 1000,
   });
 
-  const { data: alerts = [], isLoading: alertsLoading } = useQuery({
+  const { data: alerts = [] } = useQuery({
     queryKey: ['inventory', 'alerts', selectedBranchId],
     queryFn: async () => {
       if (!selectedBranchId) return [];
@@ -277,10 +278,10 @@ export default function UnifiedProductsInventoryPage() {
     },
     enabled: !!selectedBranchId && activeTab === 'advanced' && advancedSubTab === 'alerts',
     staleTime: 1 * 60 * 1000,
-    cacheTime: 3 * 60 * 1000,
+    gcTime: 3 * 60 * 1000,
   });
 
-  const { data: locations = [], isLoading: locationsLoading } = useQuery({
+  const { data: locations = [] } = useQuery({
     queryKey: ['inventory', 'locations', selectedBranchId],
     queryFn: async () => {
       if (!selectedBranchId) return [];
@@ -290,10 +291,10 @@ export default function UnifiedProductsInventoryPage() {
     },
     enabled: !!selectedBranchId && activeTab === 'advanced',
     staleTime: 5 * 60 * 1000,
-    cacheTime: 10 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
-  const { data: forecastData = [], isLoading: forecastLoading } = useQuery({
+  const { data: forecastData = [] } = useQuery({
     queryKey: ['inventory', 'forecast', selectedBranchId],
     queryFn: async () => {
       if (!selectedBranchId) return [];
@@ -303,7 +304,7 @@ export default function UnifiedProductsInventoryPage() {
     },
     enabled: !!selectedBranchId && activeTab === 'advanced' && advancedSubTab === 'forecasting',
     staleTime: 5 * 60 * 1000,
-    cacheTime: 10 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   // Update products state
@@ -384,7 +385,7 @@ export default function UnifiedProductsInventoryPage() {
       activeAlerts: alerts.filter(alert => !alert.isRead).length,
       totalLocations: locations.length
     };
-  }, [advancedInventoryData, alerts, locations]);
+  }, [activeTab, advancedInventoryData, alerts, locations]);
 
   // Filtered products for inventory tab
   const filteredInventoryProducts = useMemo(() => {
@@ -416,7 +417,7 @@ export default function UnifiedProductsInventoryPage() {
 
       return matchesSearch && matchesLocation && matchesStock;
     });
-  }, [advancedInventoryData, search, locationFilter, stockFilter]);
+  }, [activeTab, advancedInventoryData, search, locationFilter, stockFilter]);
 
   // Sort products
   const sortedProducts = useMemo(() => {
@@ -794,25 +795,29 @@ export default function UnifiedProductsInventoryPage() {
   // Check permissions
   if (!canViewProducts && activeTab === 'products') {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center py-12">
-          <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don&apos;t have permission to view products.</p>
+      <AuthGuard>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center py-12">
+            <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+            <p className="text-gray-600 mb-4">You don&apos;t have permission to view products.</p>
+          </div>
         </div>
-      </div>
+      </AuthGuard>
     );
   }
 
   if (!canViewInventory && (activeTab === 'inventory' || activeTab === 'advanced')) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center py-12">
-          <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don&apos;t have permission to view inventory.</p>
+      <AuthGuard>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center py-12">
+            <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+            <p className="text-gray-600 mb-4">You don&apos;t have permission to view inventory.</p>
+          </div>
         </div>
-      </div>
+      </AuthGuard>
     );
   }
 
@@ -835,414 +840,599 @@ export default function UnifiedProductsInventoryPage() {
 
   return (
     <AuthGuard>
-      <div className="max-w-screen-2xl mx-auto px-2 sm:px-4 py-2">
-        {/* Usage Warning Banner */}
-        {isNearLimit && showUsageBanner && activeTab === 'products' && (
-          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md">
-            <div className="flex items-center gap-2 p-2 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded shadow">
-              <FaExclamationTriangle className="text-amber-600 w-4 h-4" />
-              <div className="flex-1">
-                <span className="font-medium text-amber-800 text-xs">Approaching Product Limit:</span>
-                <span className="text-xs text-amber-700 ml-1">
-                  {limits?.usage.products.current} of {limits?.usage.products.limit} used.
-                </span>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Usage Warning Banner */}
+          {isNearLimit && showUsageBanner && activeTab === 'products' && (
+            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-lg animate-in slide-in-from-top-5">
+              <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-2 border-amber-300 rounded-xl shadow-lg backdrop-blur-sm">
+                <div className="flex-shrink-0">
+                  <FaExclamationTriangle className="text-amber-600 w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-amber-900 text-sm">Approaching Product Limit</p>
+                  <p className="text-sm text-amber-700 mt-0.5">
+                    {limits?.usage.products.current} of {limits?.usage.products.limit} products used
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <a
+                    href="/settings/billing"
+                    className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg text-sm font-semibold hover:from-amber-700 hover:to-orange-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                  >
+                    Upgrade
+                  </a>
+                  <button
+                    onClick={() => setShowUsageBanner(false)}
+                    className="p-2 text-amber-700 hover:text-amber-900 rounded-lg hover:bg-amber-100 transition-colors"
+                    title="Dismiss"
+                    aria-label="Dismiss banner"
+                  >
+                    <FaTimes className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <a
-                href="/settings/billing"
-                className="px-2 py-0.5 bg-amber-600 text-white rounded text-xs hover:bg-amber-700"
-              >
-                Upgrade
-              </a>
-              <button
-                onClick={() => setShowUsageBanner(false)}
-                className="ml-1 p-1 text-amber-700 hover:text-amber-900 rounded-full hover:bg-amber-100"
-                title="Dismiss"
-              >
-                <FaTimes className="w-3 h-3" />
-              </button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <FaBox className="w-5 h-5 text-blue-600" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold text-gray-900 truncate">Products & Inventory</h1>
-              <p className="text-xs text-gray-600 truncate">Unified management for products and stock</p>
-            </div>
-            <div className="ml-4 flex items-center gap-1">
-              <label className="text-xs font-medium text-gray-700">Branch:</label>
-              {branchesLoading ? (
-                <span className="text-gray-400 text-xs">Loading...</span>
-              ) : (
-                <select
-                  value={selectedBranchId || ''}
-                  onChange={e => setSelectedBranchId(e.target.value)}
-                  className="px-2 py-1 border border-gray-300 rounded bg-white text-xs"
-                  style={{ minWidth: 100 }}
-                >
-                  <option value="" disabled>Select</option>
-                  {branches.map(branch => (
-                    <option key={branch.id} value={branch.id}>{branch.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow border border-gray-200 mb-4">
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px">
-              <button
-                onClick={() => setActiveTab('products')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'products'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <FaBox className="w-4 h-4" />
-                  Products
-                </div>
-              </button>
-              <button
-                onClick={() => setActiveTab('inventory')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'inventory'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <FaWarehouse className="w-4 h-4" />
-                  Inventory
-                </div>
-              </button>
-              <button
-                onClick={() => setActiveTab('advanced')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'advanced'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <FaChartLine className="w-4 h-4" />
-                  Advanced
-                </div>
-              </button>
-            </nav>
-          </div>
-
-          {/* Tab Content */}
-          <div className="p-4">
-            {/* PRODUCTS TAB */}
-            {activeTab === 'products' && (
-              <div>
-                {/* Products Header Actions */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-3 flex-1">
-                    <h3 className="text-sm font-semibold text-gray-800">
-                      {loading || isSearching ? 'Loading...' : `${products.length} Product${products.length !== 1 ? 's' : ''}`}
-                    </h3>
-                    <label className="text-xs font-medium text-gray-700 ml-4">Items:</label>
-                    <select
-                      value={itemsPerPage}
-                      onChange={(e) => handleItemsPerPageChange(parseInt(e.target.value, 10))}
-                      className="px-2 py-1 border border-gray-300 rounded bg-white text-xs"
-                      disabled={loading || isSearching}
-                    >
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
+          {/* Header Section */}
+          <div className="mb-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className="flex-shrink-0 p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                    <FaBox className="w-6 h-6 text-white" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative max-w-xs">
-                      <FaSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
-                      <input
-                        type="text"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        placeholder="Search name, SKU, desc..."
-                        className="w-full pl-7 pr-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
-                        style={{ minWidth: 180 }}
-                      />
-                      {isSearching && (
-                        <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500"></div>
+                  <div className="min-w-0 flex-1">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Products & Inventory</h1>
+                    <p className="text-sm text-gray-600">Comprehensive management for your product catalog and stock levels</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                    <FaStore className="w-4 h-4 text-gray-500" />
+                    <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Branch:</label>
+                    {branchesLoading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                        <span className="text-sm text-gray-400">Loading...</span>
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedBranchId || ''}
+                        onChange={e => setSelectedBranchId(e.target.value)}
+                        className="bg-white border-0 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500 rounded-md cursor-pointer min-w-[120px]"
+                        aria-label="Select branch"
+                      >
+                        <option value="" disabled>Select Branch</option>
+                        {branches.map(branch => (
+                          <option key={branch.id} value={branch.id}>{branch.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs Navigation */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
+            <div className="border-b border-gray-200 bg-gray-50/50">
+              <nav className="flex overflow-x-auto scrollbar-hide -mb-px" role="tablist">
+                {[
+                  { id: 'products', label: 'Products', icon: FaBox, count: products.length },
+                  { id: 'inventory', label: 'Inventory', icon: FaWarehouse, count: filteredInventoryProducts.length },
+                  { id: 'advanced', label: 'Advanced', icon: FaChartLine },
+                  { id: 'attributes', label: 'Attributes', icon: FaPalette },
+                  { id: 'variations', label: 'Variations', icon: FaLayerGroup },
+                ].map(({ id, label, icon: Icon, count }) => (
+                  <button
+                    key={id}
+                    onClick={() => setActiveTab(id as TabType)}
+                    role="tab"
+                    aria-selected={activeTab === id}
+                    className={`group relative flex items-center gap-2 px-6 py-4 text-sm font-semibold border-b-2 transition-all duration-200 whitespace-nowrap ${
+                      activeTab === id
+                        ? 'border-blue-600 text-blue-600 bg-blue-50/50'
+                        : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 transition-transform ${activeTab === id ? 'scale-110' : ''}`} />
+                    <span>{label}</span>
+                    {count !== undefined && count > 0 && (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        activeTab === id
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-gray-200 text-gray-600 group-hover:bg-gray-300'
+                      }`}>
+                        {count}
+                      </span>
+                    )}
+                    {activeTab === id && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
+                    )}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Tab Content */}
+            <div className="p-6">
+              {/* PRODUCTS TAB */}
+              {activeTab === 'products' && (
+                <div className="space-y-6">
+                  {/* Products Header Actions */}
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
+                          <span className="text-sm font-bold text-blue-700">
+                            {loading || isSearching ? (
+                              <span className="flex items-center gap-2">
+                                <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-500 border-t-transparent"></div>
+                                Loading...
+                              </span>
+                            ) : (
+                              `${products.length} Product${products.length !== 1 ? 's' : ''}`
+                            )}
+                          </span>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-200">
+                        <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Per page:</label>
+                        <select
+                          value={itemsPerPage}
+                          onChange={(e) => handleItemsPerPageChange(parseInt(e.target.value, 10))}
+                          className="bg-white border-0 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500 rounded-md cursor-pointer"
+                          disabled={loading || isSearching}
+                          aria-label="Items per page"
+                        >
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="relative flex-1 min-w-[280px] max-w-md">
+                        <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={search}
+                          onChange={e => setSearch(e.target.value)}
+                          placeholder="Search products by name, SKU, or description..."
+                          className="w-full pl-11 pr-4 py-2.5 border-2 border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white text-gray-900 placeholder-gray-400"
+                          aria-label="Search products"
+                        />
+                        {isSearching && (
+                          <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                          </div>
+                        )}
+                        {search && !isSearching && (
+                          <button
+                            onClick={() => setSearch('')}
+                            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            aria-label="Clear search"
+                          >
+                            <FaTimes className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
+                        className="px-4 py-2.5 border-2 border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-300 flex items-center gap-2 text-sm font-medium transition-all shadow-sm hover:shadow"
+                        aria-label={`Switch to ${viewMode === 'grid' ? 'table' : 'grid'} view`}
+                      >
+                        {viewMode === 'grid' ? <FaSortAmountDown className="w-4 h-4" /> : <FaLayerGroup className="w-4 h-4" />}
+                        <span className="hidden sm:inline">{viewMode === 'grid' ? 'Table' : 'Grid'}</span>
+                      </button>
+                      {canCreateProducts && (
+                        <button
+                          onClick={() => setShowAddForm(true)}
+                          className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 flex items-center gap-2 text-sm font-semibold transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                          aria-label="Add new product"
+                        >
+                          <FaPlus className="w-4 h-4" />
+                          <span className="hidden sm:inline">Add Product</span>
+                          <span className="sm:hidden">Add</span>
+                        </button>
                       )}
                     </div>
-                    <button
-                      onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
-                      className="px-2 py-1 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 flex items-center gap-1 text-xs"
-                    >
-                      {viewMode === 'grid' ? <FaSortAmountDown className="w-3 h-3" /> : <FaLayerGroup className="w-3 h-3" />}
-                      {viewMode === 'grid' ? 'Table' : 'Grid'}
-                    </button>
-                    {canCreateProducts && (
-                      <button
-                        onClick={() => setShowAddForm(true)}
-                        className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1 text-xs"
-                      >
-                        <FaPlus className="w-3 h-3" />
-                        Add
-                      </button>
-                    )}
                   </div>
-                </div>
 
-                {/* Add/Edit Product Form */}
-                {showAddForm && (
-                  <div className="mb-4 p-3 bg-white rounded shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <h2 className="text-base font-semibold text-gray-800">
-                        {editProduct ? 'Edit Product' : 'Add New Product'}
-                      </h2>
-                      <button
-                        onClick={() => {
-                          setShowAddForm(false);
-                          resetForm();
-                        }}
-                        className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                      >
-                        <FaTimes className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {error && (
-                      <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded">
-                        <p className="text-sm text-red-800">{error}</p>
-                      </div>
-                    )}
-
-                    <form onSubmit={editProduct ? handleEditProduct : handleAddProduct} className="space-y-2">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-0.5">Name *</label>
-                          <input
-                            type="text"
-                            name="name"
-                            defaultValue={editProduct?.name || ''}
-                            required
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-xs"
-                          />
+                  {/* Add/Edit Product Form */}
+                  {showAddForm && (
+                    <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6 mb-6 animate-in slide-in-from-top-5">
+                      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                            <FaBox className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <h2 className="text-xl font-bold text-gray-900">
+                              {editProduct ? 'Edit Product' : 'Add New Product'}
+                            </h2>
+                            <p className="text-sm text-gray-500 mt-0.5">
+                              {editProduct ? 'Update product information' : 'Create a new product in your catalog'}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-0.5">SKU *</label>
-                          <input
-                            type="text"
-                            name="sku"
-                            defaultValue={editProduct?.sku || ''}
-                            required
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-0.5">Price *</label>
-                          <input
-                            type="number"
-                            name="price"
-                            step="0.01"
-                            min="0"
-                            defaultValue={editProduct?.price || ''}
-                            required
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-0.5">Cost</label>
-                          <input
-                            type="number"
-                            name="cost"
-                            step="0.01"
-                            min="0"
-                            defaultValue={editProduct?.cost || ''}
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-0.5">Stock *</label>
-                          <input
-                            type="number"
-                            name="stock"
-                            min="0"
-                            defaultValue={editProduct?.stock || ''}
-                            required
-                            className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-xs"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-0.5">Description</label>
-                        <textarea
-                          name="description"
-                          defaultValue={editProduct?.description || ''}
-                          rows={3}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-xs"
-                        />
-                      </div>
-                      <div className="flex gap-2 pt-1">
                         <button
-                          type="submit"
-                          disabled={saving}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs flex items-center gap-1"
-                        >
-                          {saving ? (
-                            <>
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              {editProduct ? 'Update' : 'Create'}
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => {
                             setShowAddForm(false);
                             resetForm();
                           }}
-                          className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-xs"
+                          className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                          aria-label="Close form"
                         >
-                          Cancel
+                          <FaTimes className="w-5 h-5" />
                         </button>
                       </div>
-                    </form>
-                  </div>
-                )}
 
-                {/* Products Content */}
-                {loading || isSearching ? (
-                  <div className="bg-white rounded border border-gray-200 shadow-sm">
-                    <div className="p-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-                        {Array.from({ length: 6 }).map((_, index) => (
-                          <div key={`skeleton-${index}`} className="bg-gray-50 rounded border border-gray-200 p-3 animate-pulse">
-                            <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
-                            <div className="h-3 bg-gray-200 rounded w-16"></div>
+                      {error && (
+                        <div className="mb-4 p-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-start gap-3">
+                          <FaExclamationTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-semibold text-red-900 mb-1">Error</p>
+                            <p className="text-sm text-red-800">{error}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <form onSubmit={editProduct ? handleEditProduct : handleAddProduct} className="space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Product Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              name="name"
+                              defaultValue={editProduct?.name || ''}
+                              required
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                              placeholder="Enter product name"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              SKU <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              name="sku"
+                              defaultValue={editProduct?.sku || ''}
+                              required
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                              placeholder="Enter SKU"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Price <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                              <input
+                                type="number"
+                                name="price"
+                                step="0.01"
+                                min="0"
+                                defaultValue={editProduct?.price || ''}
+                                required
+                                className="w-full pl-8 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Cost</label>
+                            <div className="relative">
+                              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                              <input
+                                type="number"
+                                name="cost"
+                                step="0.01"
+                                min="0"
+                                defaultValue={editProduct?.cost || ''}
+                                className="w-full pl-8 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Stock Quantity <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              name="stock"
+                              min="0"
+                              defaultValue={editProduct?.stock || ''}
+                              required
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                            <input
+                              type="text"
+                              name="category"
+                              defaultValue={editProduct?.category || ''}
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                              placeholder="Optional category"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                          <textarea
+                            name="description"
+                            defaultValue={editProduct?.description || ''}
+                            rows={4}
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900 resize-none"
+                            placeholder="Enter product description (optional)"
+                          />
+                        </div>
+                        <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+                          <button
+                            type="submit"
+                            disabled={saving}
+                            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 text-sm font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                          >
+                            {saving ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                                <span>Saving...</span>
+                              </>
+                            ) : (
+                              <>
+                                {editProduct ? (
+                                  <>
+                                    <FaCheckCircle className="w-4 h-4" />
+                                    <span>Update Product</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <FaPlus className="w-4 h-4" />
+                                    <span>Create Product</span>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAddForm(false);
+                              resetForm();
+                            }}
+                            className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 text-sm font-semibold transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* Products Content */}
+                  {loading || isSearching ? (
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {Array.from({ length: 8 }).map((_, index) => (
+                          <div key={`skeleton-${index}`} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-gray-200 p-5 animate-pulse">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex items-start gap-3 flex-1">
+                                <div className="w-10 h-10 bg-gray-300 rounded-lg"></div>
+                                <div className="flex-1 space-y-2">
+                                  <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                                  <div className="h-3 bg-gray-300 rounded w-1/2"></div>
+                                </div>
+                              </div>
+                              <div className="w-16 h-6 bg-gray-300 rounded-full"></div>
+                            </div>
+                            <div className="space-y-2 mb-4">
+                              <div className="h-3 bg-gray-300 rounded w-full"></div>
+                              <div className="h-3 bg-gray-300 rounded w-2/3"></div>
+                            </div>
+                            <div className="flex gap-2">
+                              <div className="h-8 bg-gray-300 rounded-lg flex-1"></div>
+                              <div className="h-8 bg-gray-300 rounded-lg w-8"></div>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
-                  </div>
-                ) : (
+                  ) : sortedProducts.length === 0 ? (
+                    <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 shadow-sm p-12">
+                      <div className="text-center">
+                        <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                          <FaBox className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">No products found</h3>
+                        <p className="text-sm text-gray-600 mb-6">
+                          {search ? 'Try adjusting your search criteria' : 'Get started by adding your first product'}
+                        </p>
+                        {canCreateProducts && !search && (
+                          <button
+                            onClick={() => setShowAddForm(true)}
+                            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 text-sm font-semibold inline-flex items-center gap-2 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                          >
+                            <FaPlus className="w-4 h-4" />
+                            Add Your First Product
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
                   <>
                     {viewMode === 'grid' ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {sortedProducts.map((product) => (
-                          <div key={product.id} className="bg-white rounded border border-gray-200 p-3 shadow-sm hover:shadow transition-shadow">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className="p-1 bg-blue-100 rounded">
-                                  <FaBox className="w-4 h-4 text-blue-600" />
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {sortedProducts.map((product) => {
+                          const margin = product.price > 0 ? ((product.price - (product.cost || 0)) / product.price * 100) : 0;
+                          const stockStatus = product.stock > 10 ? 'good' : product.stock > 0 ? 'low' : 'out';
+                          return (
+                            <div 
+                              key={product.id} 
+                              className="group bg-white rounded-xl border-2 border-gray-200 p-5 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all duration-300 transform hover:-translate-y-1"
+                            >
+                              {/* Header */}
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-start gap-3 flex-1 min-w-0">
+                                  <div className="flex-shrink-0 p-2.5 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg group-hover:from-blue-200 group-hover:to-indigo-200 transition-colors">
+                                    <FaBox className="w-5 h-5 text-blue-600" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-2 group-hover:text-blue-600 transition-colors">
+                                      {product.name}
+                                    </h3>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                                        {product.sku}
+                                      </span>
+                                      {product.category && (
+                                        <span className="text-xs text-gray-400 truncate">{product.category}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-bold shadow-sm ${
+                                  stockStatus === 'good' ? 'bg-green-100 text-green-700 border border-green-200' :
+                                  stockStatus === 'low' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                  'bg-red-100 text-red-700 border border-red-200'
+                                }`}>
+                                  {product.stock} units
+                                </div>
+                              </div>
+
+                              {/* Metrics */}
+                              <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                                <div>
+                                  <p className="text-xs font-medium text-gray-500 mb-1">Price</p>
+                                  <p className="text-lg font-bold text-gray-900">${product.price.toFixed(2)}</p>
                                 </div>
                                 <div>
-                                  <h3 className="font-semibold text-gray-800 text-sm line-clamp-1">{product.name}</h3>
-                                  <p className="text-xs text-gray-500">SKU: {product.sku}</p>
+                                  <p className="text-xs font-medium text-gray-500 mb-1">Cost</p>
+                                  <p className="text-lg font-bold text-gray-700">${(product.cost || 0).toFixed(2)}</p>
+                                </div>
+                                <div className="col-span-2 pt-2 border-t border-gray-200">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs font-medium text-gray-500">Profit Margin</p>
+                                    <p className={`text-base font-bold ${
+                                      margin >= 30 ? 'text-green-600' : 
+                                      margin >= 20 ? 'text-amber-600' : 
+                                      margin >= 0 ? 'text-orange-600' : 'text-red-600'
+                                    }`}>
+                                      {margin.toFixed(1)}%
+                                    </p>
+                                  </div>
+                                  <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
+                                    <div 
+                                      className={`h-1.5 rounded-full transition-all ${
+                                        margin >= 30 ? 'bg-green-500' : 
+                                        margin >= 20 ? 'bg-amber-500' : 
+                                        margin >= 0 ? 'bg-orange-500' : 'bg-red-500'
+                                      }`}
+                                      style={{ width: `${Math.min(100, Math.max(0, margin))}%` }}
+                                    ></div>
+                                  </div>
                                 </div>
                               </div>
-                              <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                product.stock > 10 ? 'bg-green-100 text-green-800' :
-                                product.stock > 0 ? 'bg-amber-100 text-amber-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {product.stock} in stock
+
+                              {/* Actions */}
+                              <div className="flex gap-2 pt-4 border-t border-gray-200">
+                                {canEditProducts && (
+                                  <button
+                                    onClick={() => openEditModal(product)}
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium transition-all border border-gray-200 hover:border-gray-300"
+                                    aria-label={`Edit ${product.name}`}
+                                  >
+                                    <FaEdit className="w-3.5 h-3.5" />
+                                    <span className="hidden sm:inline">Edit</span>
+                                  </button>
+                                )}
+                                <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
+                                  <button 
+                                    disabled 
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-green-300 text-sm font-medium cursor-not-allowed"
+                                    aria-label="QR code (upgrade required)"
+                                  >
+                                    <FaQrcode className="w-3.5 h-3.5" />
+                                  </button>
+                                }>
+                                  <button
+                                    onClick={() => setQrCodeProductId(product.id)}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-50 hover:bg-green-100 border border-green-200 hover:border-green-300 text-green-700 text-sm font-medium transition-all"
+                                    aria-label={`Generate QR code for ${product.name}`}
+                                  >
+                                    <FaQrcode className="w-3.5 h-3.5" />
+                                  </button>
+                                </FeatureGuard>
+                                <button
+                                  onClick={() => {
+                                    setSelectedProduct(product);
+                                    setActiveTab('variations');
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 text-blue-700 text-sm font-medium transition-all"
+                                  title="Manage Variations"
+                                  aria-label={`Manage variations for ${product.name}`}
+                                >
+                                  <FaLayerGroup className="w-3.5 h-3.5" />
+                                </button>
+                                {canDeleteProducts && (
+                                  <button
+                                    onClick={() => handleDelete(product.id)}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 hover:border-red-300 text-red-700 text-sm font-medium transition-all"
+                                    aria-label={`Delete ${product.name}`}
+                                  >
+                                    <FaTrash className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </div>
-                            <div className="space-y-1 mb-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-600 text-xs">Price:</span>
-                                <span className="font-semibold text-gray-800 text-xs">${product.price.toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-600 text-xs">Cost:</span>
-                                <span className="font-semibold text-gray-800 text-xs">${(product.cost || 0).toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-gray-600 text-xs">Margin:</span>
-                                <span className={`font-semibold text-xs ${product.price > 0 ? (product.price - product.cost) / product.price * 100 >= 20 ? 'text-green-600' : 'text-amber-600' : 'text-gray-800'}`}>
-                                  {product.price > 0 ? `${((product.price - product.cost) / product.price * 100).toFixed(1)}%` : 'N/A'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex gap-1 pt-2 border-t border-gray-100">
-                              {canEditProducts ? (
-                                <button
-                                  onClick={() => openEditModal(product)}
-                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded bg-gray-100 border border-gray-200 hover:bg-gray-200 text-xs font-medium transition"
-                                >
-                                  <FaEdit className="w-3 h-3" />
-                                  Edit
-                                </button>
-                              ) : null}
-                              <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
-                                <button disabled className="flex items-center gap-1 px-2 py-1 rounded bg-green-50 border border-green-200 text-green-300 text-xs font-medium cursor-not-allowed">
-                                  <FaQrcode className="w-3 h-3" />
-                                  QR
-                                </button>
-                              }>
-                                <button
-                                  onClick={() => setQrCodeProductId(product.id)}
-                                  className="flex items-center gap-1 px-2 py-1 rounded bg-green-50 border border-green-200 hover:bg-green-100 text-xs font-medium text-green-700 transition"
-                                >
-                                  <FaQrcode className="w-3 h-3" />
-                                  QR
-                                </button>
-                              </FeatureGuard>
-                              {canDeleteProducts ? (
-                                <button
-                                  onClick={() => handleDelete(product.id)}
-                                  className="flex items-center gap-1 px-2 py-1 rounded bg-red-50 border border-red-200 hover:bg-red-100 text-xs font-medium text-red-700 transition"
-                                >
-                                  <FaTrash className="w-3 h-3" />
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
-                      <div className="bg-white rounded border border-gray-200 overflow-hidden shadow-sm">
+                      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-lg">
                         <div className="overflow-x-auto">
-                          <table className="min-w-full text-xs">
-                            <thead className="bg-gray-50">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                               <tr>
                                 {allColumns.filter(col => visibleColumns.includes(col)).map(col => (
                                   <th
                                     key={col}
-                                    className="px-2 py-2 font-semibold text-gray-600 text-left cursor-pointer hover:bg-gray-100 transition"
+                                    className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors"
                                     onClick={() => handleSort(col)}
                                   >
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-2">
                                       <span>{col.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</span>
                                       {sortField === col && (
-                                        <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                        <span className="text-blue-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
                                     </div>
                                   </th>
                                 ))}
-                                <th className="px-2 py-2 font-semibold text-gray-600 text-right">Actions</th>
+                                <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="bg-white divide-y divide-gray-200">
                               {sortedProducts.length === 0 ? (
                                 <tr>
-                                  <td colSpan={visibleColumns.length + 1} className="text-center py-8 text-gray-400">
-                                    <div className="flex flex-col items-center justify-center py-8">
-                                      <FaBox className="w-12 h-12 text-gray-300 mb-3" />
-                                      <p className="text-gray-500">No products found.</p>
+                                  <td colSpan={visibleColumns.length + 1} className="text-center py-12">
+                                    <div className="flex flex-col items-center justify-center">
+                                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                        <FaBox className="w-8 h-8 text-gray-400" />
+                                      </div>
+                                      <p className="text-sm font-semibold text-gray-900 mb-1">No products found</p>
+                                      <p className="text-xs text-gray-500">
+                                        {search ? 'Try adjusting your search' : 'Add your first product to get started'}
+                                      </p>
                                     </div>
                                   </td>
                                 </tr>
@@ -1278,6 +1468,16 @@ export default function UnifiedProductsInventoryPage() {
                                               <FaEdit className="w-4 h-4" />
                                             </button>
                                           ) : null}
+                                          <button
+                                            onClick={() => {
+                                              setSelectedProduct(product);
+                                              setActiveTab('variations');
+                                            }}
+                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                            title="Manage Variations"
+                                          >
+                                            <FaLayerGroup className="w-4 h-4" />
+                                          </button>
                                           <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
                                             <button disabled className="p-2 text-gray-400 rounded-lg cursor-not-allowed" title="QR Code (Upgrade required)">
                                               <FaQrcode className="w-4 h-4" />
@@ -1984,6 +2184,48 @@ export default function UnifiedProductsInventoryPage() {
                 </div>
               </div>
             )}
+
+            {/* ATTRIBUTES TAB */}
+            {activeTab === 'attributes' && (
+              <div>
+                <ProductAttributesManager />
+              </div>
+            )}
+
+            {/* VARIATIONS TAB */}
+            {activeTab === 'variations' && (
+              <div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold mb-2">Product Variations</h3>
+                  <p className="text-sm text-gray-600">
+                    Select a product from the Products tab to manage its variations, or create a new product with variations.
+                  </p>
+                </div>
+                {selectedProduct ? (
+                  <VariationManager
+                    productId={selectedProduct.id}
+                    baseSku={selectedProduct.sku}
+                    basePrice={selectedProduct.price}
+                    baseCost={selectedProduct.cost}
+                    branchId={selectedBranchId}
+                  />
+                ) : (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                    <FaLayerGroup className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Product Selected</h3>
+                    <p className="text-gray-600 mb-4">
+                      Go to the Products tab, click on a product, then come back here to manage its variations.
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('products')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Go to Products
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -2405,6 +2647,7 @@ export default function UnifiedProductsInventoryPage() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </AuthGuard>
   );

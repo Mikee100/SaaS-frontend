@@ -28,7 +28,7 @@ export function useBranches() {
     },
     enabled: !!user?.tenantId,
     staleTime: 5 * 60 * 1000, // 5 minutes - branches don't change often
-    cacheTime: 10 * 60 * 1000, // 10 minutes cache
+    gcTime: 10 * 60 * 1000, // 10 minutes cache
   });
 }
 
