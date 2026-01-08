@@ -40,7 +40,12 @@ export default function SubscriptionsPage() {
 
   const fetchSubscriptions = async () => {
     try {
-      const response = await fetch('/api/admin/subscriptions');
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/subscriptions', {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+      });
       if (response.ok) {
         const data = await response.json();
         setSubscriptions(data);

@@ -71,7 +71,12 @@ export default function SubscriptionDetailsModal({
     if (subscriptionId && isOpen) {
       const fetchSubscription = async () => {
         try {
-          const res = await fetch(`/api/admin/subscriptions/${subscriptionId}`);
+          const token = localStorage.getItem('token');
+          const res = await fetch(`/api/admin/subscriptions/${subscriptionId}`, {
+            headers: {
+              'Authorization': token ? `Bearer ${token}` : '',
+            },
+          });
           if (res.ok) {
             const data = await res.json();
             setSubscription(data);
@@ -89,7 +94,12 @@ export default function SubscriptionDetailsModal({
     if (subscription?.Tenant.id) {
       const fetchUsage = async () => {
         try {
-          const res = await fetch(`/api/admin/subscriptions/tenant/${subscription.Tenant.id}/usage`);
+          const token = localStorage.getItem('token');
+          const res = await fetch(`/api/admin/subscriptions/tenant/${subscription.Tenant.id}/usage`, {
+            headers: {
+              'Authorization': token ? `Bearer ${token}` : '',
+            },
+          });
           if (res.ok) {
             const data = await res.json();
             setUsage(data);
@@ -106,8 +116,12 @@ export default function SubscriptionDetailsModal({
     if (!subscription) return;
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`/api/admin/subscriptions/${subscription.id}/cancel-scheduled`, {
         method: 'PATCH',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
       });
 
       if (response.ok) {
