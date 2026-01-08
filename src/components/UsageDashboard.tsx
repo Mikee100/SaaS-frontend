@@ -68,7 +68,6 @@ function UsageMetricCard({ title, icon, current, limit, percentage, color, isExc
         warning: 'text-red-700',
         warningBg: 'bg-red-50',
         border: 'border-red-300',
-        ...base,
       };
     }
 
@@ -82,7 +81,6 @@ function UsageMetricCard({ title, icon, current, limit, percentage, color, isExc
         warning: 'text-orange-700',
         warningBg: 'bg-orange-50',
         border: 'border-orange-300',
-        ...base,
       };
     }
 
@@ -96,7 +94,6 @@ function UsageMetricCard({ title, icon, current, limit, percentage, color, isExc
         warning: 'text-amber-700',
         warningBg: 'bg-amber-50',
         border: 'border-amber-300',
-        ...base,
       };
     }
 
@@ -109,7 +106,6 @@ function UsageMetricCard({ title, icon, current, limit, percentage, color, isExc
       warning: 'text-gray-600',
       warningBg: 'bg-gray-50',
       border: base.normalBorder,
-      ...base,
     };
   };
 

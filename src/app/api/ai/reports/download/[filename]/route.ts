@@ -3,10 +3,10 @@ import { apiGet } from '@/utils/api';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
-    const { filename } = params;
+    const { filename } = await params;
     const authHeader = request.headers.get('authorization');
 
     if (!filename) {

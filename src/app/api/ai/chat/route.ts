@@ -23,7 +23,18 @@ export async function POST(request: Request) {
     console.log('Calling backend AI API with:', message);
 
     // Call the backend AI API
-    const response = await apiPost<{ response: string; category: string; suggestions: string[] }>('/ai/chat', { message }, authHeader ? { 'Authorization': authHeader } : undefined);
+    const response = await apiPost<{ 
+      response: string; 
+      category: string; 
+      suggestions: string[]; 
+      chartData?: any; 
+      reportData?: { 
+        filename: string; 
+        downloadUrl: string; 
+        reportType: string; 
+        format: string 
+      } 
+    }>('/ai/chat', { message }, authHeader ? { 'Authorization': authHeader } : undefined);
 
     console.log('Backend AI Response:', response);
 

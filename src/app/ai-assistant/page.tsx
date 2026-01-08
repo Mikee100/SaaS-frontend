@@ -609,6 +609,7 @@ export default function AIChatPage() {
                             </div>
                             <button
                               onClick={async () => {
+                                if (!message.reportData) return;
                                 try {
                                   const token = localStorage.getItem('token');
                                   const response = await fetch(
