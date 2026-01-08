@@ -179,7 +179,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   // 1. Wrap 'isAuthPath' in useCallback to stabilize its reference
   const isAuthPath = useCallback(() => {
     if (typeof window === 'undefined') {
-      console.log('isAuthPath: Running on server, returning false');
       return false;
     }
     const path = pathname || window.location.pathname;
@@ -190,7 +189,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
                   path.startsWith('/api/') ||
                   path.startsWith('/_next/');
     
-    console.log(`isAuthPath: Path '${path}' is ${isAuth ? 'an auth path' : 'not an auth path'}`);
     return isAuth;
   }, [pathname]);
 
@@ -198,7 +196,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   useEffect(() => {
     // CRITICAL: If skipUserFetch is true, completely skip all authentication logic
     if (skipUserFetch) {
-      console.log('Skipping user fetch for auth page');
       setUser(null);
       setLoading(false);
       setError(null);
@@ -208,7 +205,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
 
     // CRITICAL: Never fetch user data on auth pages to prevent redirect loops
     if (isAuthPath()) {
-      console.log('Auth page detected, completely skipping user fetch:', pathname);
       setUser(null);
       setLoading(false);
       setError(null);
@@ -236,8 +232,12 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       // If we navigate from auth to non-auth and haven't initialized yet, fetch once
       initializedRef.current = true;
       fetchUser(false);
+    } else if (!user && localStorage.getItem('token')) {
+      // If we have a token but no user (e.g., after login redirect), fetch user data
+      initializedRef.current = true;
+      fetchUser(true);
     }
-  }, [pathname, skipUserFetch, isAuthPath, fetchUser]);
+  }, [pathname, skipUserFetch, isAuthPath, fetchUser, user]);
 
   // Listen for login/logout in other tabs
   useEffect(() => {
@@ -271,7 +271,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     try {
       const apiUrl = (process.env.NEXT_PUBLIC_API_URL  || 'http://localhost:9000'   ||  'https://saas-business.duckdns.org').replace(/\/+$/, '');
       const loginUrl = `${apiUrl}/auth/login`;
-      console.log('Attempting to login to:', loginUrl);
 
       const response = await fetch(loginUrl, {
         method: 'POST',
@@ -284,8 +283,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         mode: 'cors',
         body: JSON.stringify({ email, password })
       });
-
-      console.log('Login response status:', response.status);
 
       if (!response.ok) {
         let errorData;
@@ -300,13 +297,10 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       }
 
       const loginResponse = await response.json();
-      console.log('Full login response:', loginResponse);
       const { access_token, user } = loginResponse;
 
       if (access_token) {
-        console.log('Saving token to localStorage:', access_token);
         localStorage.setItem('token', access_token);
-        console.log('Token in localStorage after set:', localStorage.getItem('token'));
 
         // Update user state with the user data from the response
         if (user) {
@@ -322,8 +316,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
             branchId: user.branchId,
             receiptLogo: user.receiptLogo
           };
-          setUser(normalizedUser);
-
+          
           // Store branch ID if available
           if (user.branchId) {
             localStorage.setItem('selectedBranchId', user.branchId);
@@ -332,8 +325,21 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
           // Cache the user from login response immediately
           setCachedUser(normalizedUser);
           
-          // Refresh user data from the server (force refresh to ensure latest data)
-          await fetchUser(true);
+          // Set user state immediately so components can use it
+          setUser(normalizedUser);
+          setLoading(false);
+          setError(null);
+          
+          // Refresh user data from the server in the background (force refresh to ensure latest data)
+          fetchUser(true).catch(() => {
+            // If refresh fails, we still have the user from login response
+          });
+
+          // Reset initialization flag so components on the new page can fetch if needed
+          initializedRef.current = false;
+
+          // Small delay to ensure state is set before redirect
+          await new Promise(resolve => setTimeout(resolve, 100));
 
           // Redirect based on user role
           const isSuperAdmin = normalizedUser.isSuperadmin || normalizedUser.roles?.includes('superadmin');

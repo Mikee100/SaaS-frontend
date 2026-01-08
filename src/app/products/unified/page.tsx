@@ -3,7 +3,7 @@
  * Unified Products & Inventory Management Page
  * Combines: Products List, Basic Inventory, and Advanced Inventory
  */
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { apiGet, apiPost, apiDelete, apiPut } from "@/utils/api";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
@@ -138,6 +138,7 @@ export default function UnifiedProductsInventoryPage() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showUsageBanner, setShowUsageBanner] = useState(true);
+  const [redirectToVariations, setRedirectToVariations] = useState(false);
 
   // Inventory tab states
   const [stockFilter, setStockFilter] = useState("all");
@@ -153,7 +154,92 @@ export default function UnifiedProductsInventoryPage() {
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showAlertSettings, setShowAlertSettings] = useState(false);
+  
+  // Restore selected product from localStorage on mount
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedProductId');
+    }
+    return null;
+  });
+  
+  // Restore active tab from localStorage (only on mount)
+  const hasRestoredTab = useRef(false);
+  useEffect(() => {
+    if (hasRestoredTab.current || typeof window === 'undefined') return;
+    hasRestoredTab.current = true;
+    
+    const savedTab = localStorage.getItem('productsActiveTab') as TabType;
+    if (savedTab && ['products', 'inventory', 'advanced', 'attributes', 'variations'].includes(savedTab)) {
+      setActiveTab(savedTab);
+    }
+  }, [setActiveTab]);
+  
+  // Save active tab to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('productsActiveTab', activeTab);
+    }
+  }, [activeTab]);
+  
+  // Fetch selected product if not in current products list
+  const { data: selectedProductData } = useQuery({
+    queryKey: ['product', selectedProductId, selectedBranchId],
+    queryFn: async () => {
+      if (!selectedProductId || !selectedBranchId) return null;
+      try {
+        const product = await apiGet(`/products/${selectedProductId}`, { 'x-branch-id': selectedBranchId });
+        return product as Product;
+      } catch (err) {
+        console.error('Failed to fetch selected product:', err);
+        // Clear invalid product ID from storage
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('selectedProductId');
+        }
+        setSelectedProductId(null);
+        return null;
+      }
+    },
+    enabled: !!selectedProductId && !!selectedBranchId && !selectedProduct,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Restore selected product when products are loaded or when fetched
+  useEffect(() => {
+    if (!selectedProductId || selectedProduct) return;
+    
+    // First try to find in current products list
+    const product = products.find(p => p.id === selectedProductId);
+    if (product) {
+      setSelectedProduct(product);
+      return;
+    }
+    
+    // If not found in list and we have fetched data, use it
+    if (selectedProductData) {
+      setSelectedProduct(selectedProductData);
+    }
+  }, [selectedProductId, products, selectedProduct, selectedProductData]);
+  
+  // Update localStorage when selectedProduct changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    if (selectedProduct) {
+      const productId = selectedProduct.id;
+      localStorage.setItem('selectedProductId', productId);
+      // Only update selectedProductId if it's different to avoid loops
+      if (selectedProductId !== productId) {
+        setSelectedProductId(productId);
+      }
+    } else {
+      localStorage.removeItem('selectedProductId');
+      if (selectedProductId !== null) {
+        setSelectedProductId(null);
+      }
+    }
+  }, [selectedProduct, selectedProductId]);
   const [movementForm, setMovementForm] = useState({
     type: 'in' as 'in' | 'out' | 'adjustment' | 'transfer',
     quantity: 0,
@@ -455,10 +541,12 @@ export default function UnifiedProductsInventoryPage() {
       return;
     }
 
+    const wantsVariations = formData.get("hasVariations") === "on";
+
     setSaving(true);
     setError("");
     try {
-      await apiPost("/products", {
+      const created = await apiPost("/products", {
         name: formData.get("name"),
         sku: formData.get("sku"),
         price: parseFloat(formData.get("price") as string),
@@ -472,6 +560,12 @@ export default function UnifiedProductsInventoryPage() {
       queryClient.invalidateQueries({ queryKey: ['products', selectedBranchId] });
       setShowAddForm(false);
       resetForm();
+      if (wantsVariations && created?.id) {
+        setSelectedProduct(created);
+        setSelectedProductId(created.id);
+        setRedirectToVariations(true);
+        setActiveTab('variations');
+      }
     } catch (err: unknown) {
       const error = err as Error;
       setError(error.message || "Failed to create/update product");
@@ -1157,6 +1251,26 @@ export default function UnifiedProductsInventoryPage() {
                               placeholder="0"
                             />
                           </div>
+                          <div className="md:col-span-2 flex items-start gap-3 pt-2">
+                            <input
+                              id="hasVariations"
+                              type="checkbox"
+                              name="hasVariations"
+                              className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <div>
+                              <label
+                                htmlFor="hasVariations"
+                                className="block text-sm font-semibold text-gray-700"
+                              >
+                                This product has variations (sizes, colors, etc.)
+                              </label>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                We&rsquo;ll take you to the Variations tab after creating this product so you can
+                                quickly generate options like Size and Color using your attributes.
+                              </p>
+                            </div>
+                          </div>
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
                             <input
@@ -1376,6 +1490,7 @@ export default function UnifiedProductsInventoryPage() {
                                 <button
                                   onClick={() => {
                                     setSelectedProduct(product);
+                                    setSelectedProductId(product.id);
                                     setActiveTab('variations');
                                   }}
                                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 text-blue-700 text-sm font-medium transition-all"
@@ -1471,6 +1586,7 @@ export default function UnifiedProductsInventoryPage() {
                                           <button
                                             onClick={() => {
                                               setSelectedProduct(product);
+                                              setSelectedProductId(product.id);
                                               setActiveTab('variations');
                                             }}
                                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"

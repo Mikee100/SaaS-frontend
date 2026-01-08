@@ -52,7 +52,7 @@ export default function Tooltip({ children, content, position = 'right' }: Toolt
     <>
       <div 
         ref={triggerRef}
-        className="relative inline-block"
+        className="relative block w-full"
         onMouseEnter={() => setIsVisible(true)}
         onMouseLeave={() => setIsVisible(false)}
       >

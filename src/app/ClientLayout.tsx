@@ -18,19 +18,6 @@ function ClientContent({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Debug logging
-  useEffect(() => {
-    console.log('ClientContent - Current path:', pathname);
-    console.log('ClientContent - User state:', {
-      hasUser: !!user,
-      userId: user?.id,
-      userRoles: user?.roles,
-      userBranchId: user?.branchId,
-      canChangeBranch: user?.roles?.includes('owner'),
-      loading: loading
-    });
-  }, [user, loading, pathname]);
-
   // Redirect to login if no user, not loading, and no token
   useEffect(() => {
     if (!loading && !user && !localStorage.getItem('token')) {

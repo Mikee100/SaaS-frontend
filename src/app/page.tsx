@@ -442,11 +442,6 @@ export default function DashboardPage() {
     );
   }
 
-  // Log chart data to debug
-  console.log("Daily:", formatChartData(salesByDay));
-  console.log("Weekly:", formatChartData(salesByWeek));
-  console.log("Monthly:", formatChartData(salesByMonth));
-
   return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
         <div className="max-w-5xl mx-auto px-2 sm:px-3 lg:px-4 py-4">

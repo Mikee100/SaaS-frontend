@@ -45,6 +45,29 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const fetchTheme = async () => {
+      // Check if we have a token before making authenticated requests
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) {
+        // No token, use default theme
+        applyTheme(defaultTheme);
+        setLoading(false);
+        return;
+      }
+
+      // Check if we're on an auth page
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+      const isAuthPath = pathname === '/login' || 
+                        pathname === '/register' || 
+                        pathname === '/forgot-password' || 
+                        pathname === '/reset-password';
+      
+      if (isAuthPath) {
+        // On auth page, use default theme
+        applyTheme(defaultTheme);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         const response = await apiClient.get('/user/me') as { data?: { themePreferences?: Partial<Theme> } };
@@ -55,9 +78,12 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         } else {
           applyTheme(defaultTheme);
         }
-      } catch (err) {
-        setError('Failed to load theme.');
-        console.error(err);
+      } catch (err: any) {
+        // Only log non-401 errors (401 is expected when not authenticated)
+        if (err?.message && !err.message.includes('401') && !err.message.includes('Unauthorized')) {
+          setError('Failed to load theme.');
+          console.error(err);
+        }
         applyTheme(defaultTheme); // Apply default theme on error
       } finally {
         setLoading(false);
@@ -71,11 +97,21 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     setThemeState(updatedTheme);
     applyTheme(updatedTheme);
 
+    // Check if we have a token before saving
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      // No token, theme is saved locally only
+      return;
+    }
+
     try {
       await apiClient.put('/user/me/preferences', { themePreferences: updatedTheme });
-    } catch (err) {
-      setError('Failed to save theme.');
-      console.error(err);
+    } catch (err: any) {
+      // Only log non-401 errors (401 is expected when not authenticated)
+      if (err?.message && !err.message.includes('401') && !err.message.includes('Unauthorized')) {
+        setError('Failed to save theme.');
+        console.error(err);
+      }
       // Optionally revert theme state on save failure
     }
   };

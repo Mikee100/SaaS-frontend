@@ -30,7 +30,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       response: response.response,
       category: response.category,
-      suggestions: response.suggestions
+      suggestions: response.suggestions,
+      chartData: response.chartData,
+      reportData: response.reportData,
     });
   } catch (error) {
     console.error('AI Chat Error:', error);

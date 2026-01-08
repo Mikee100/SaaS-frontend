@@ -36,3 +36,12 @@ export default function ProductAttributesPage() {
 
 
 
+
+
+
+
+
+
+
+
+

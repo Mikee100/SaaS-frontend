@@ -95,6 +95,24 @@ class EnhancedAPI {
         }
 
         if (!response.ok) {
+          const errorMessage = responseData?.message ||
+                              response.statusText ||
+                              `HTTP error! status: ${response.status}`;
+
+          // Handle 401 Unauthorized - DO NOT RETRY
+          if (response.status === 401) {
+            // Clear invalid token
+            localStorage.removeItem('token');
+            console.error(`[API] Request failed with status ${response.status}`, {
+              status: response.status,
+              statusText: response.statusText,
+              url,
+              response: responseData || responseText,
+              requestHeaders: headers,
+            });
+            throw new Error(errorMessage);
+          }
+
           // Handle 429 Too Many Requests with retry
           if (response.status === 429 && attempt < maxRetries) {
             const delay = Math.min(Math.pow(2, attempt) * 1000, 10000); // Exponential backoff: 1s, 2s, 4s, 8s, 10s (capped at 10s)
@@ -105,10 +123,6 @@ class EnhancedAPI {
           }
 
           // Handle ThrottlerException (NestJS rate limiting) with retry
-          const errorMessage = responseData?.message ||
-                              response.statusText ||
-                              `HTTP error! status: ${response.status}`;
-
           if (errorMessage.includes('Too Many Requests') && attempt < maxRetries) {
             const delay = Math.min(Math.pow(2, attempt) * 1000, 10000); // Exponential backoff: 1s, 2s, 4s, 8s, 10s (capped at 10s)
             console.warn(`[API] Rate limited (ThrottlerException). Retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries + 1})`);
@@ -128,17 +142,16 @@ class EnhancedAPI {
             });
           }
 
-          // Handle 401 Unauthorized
-          if (response.status === 401) {
-            // Clear invalid token
-            localStorage.removeItem('token');
-          }
-
           throw new Error(errorMessage);
         }
 
         return responseData as T;
       } catch (error) {
+        // Don't retry 401 errors - they've already been handled above
+        if (error instanceof Error && error.message.includes('401')) {
+          throw error;
+        }
+        
         if (attempt >= maxRetries) {
           console.error('API request failed after retries:', error);
           throw error;

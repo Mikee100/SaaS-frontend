@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useTenant } from '@/hooks/useTenant';
@@ -11,7 +11,8 @@ import {
   FaLayerGroup, FaUpload, FaHistory, FaUsers, FaMoneyBillWave, FaFileInvoiceDollar, /* FaBuilding, */ FaBullseye
 } from 'react-icons/fa';
 import { MdOutlineInventory2, MdOutlineAnalytics, MdOutlineReport, MdOutlineSettings } from 'react-icons/md';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { hasPermission } from '@/utils/permissions';
 import Image from 'next/image';
 
@@ -23,10 +24,39 @@ export default function PlanBasedNav() {
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
+  const [isMobile, setIsMobile] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   const tenantBranchLoading = tenantLoading;
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
+
+  // Detect mobile/tablet viewport
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    // Check immediately on mount
+    if (typeof window !== 'undefined') {
+      checkMobile();
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+    }
+  }, []);
+
+  // Handle sidebar animation state
+  useEffect(() => {
+    if (sidebarOpen) {
+      setIsAnimating(true);
+      // Small delay to ensure smooth start
+      const timer = setTimeout(() => setIsAnimating(false), 400);
+      return () => clearTimeout(timer);
+    } else {
+      setIsAnimating(true);
+      const timer = setTimeout(() => setIsAnimating(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [sidebarOpen]);
 
   // Close dropdowns when navigating to a different page, but open relevant ones for reports
   React.useEffect(() => {
@@ -129,10 +159,18 @@ export default function PlanBasedNav() {
 
   // Check if tenant has an active subscription
   const hasActiveSubscription = React.useMemo(() => {
-    const result = limits && limits.currentPlan !== null; // Any assigned plan is considered active
-  
-    return result;
-  }, [limits]);
+    // If we don't have limits yet (e.g. just logged in), don't block the nav –
+    // assume active until we explicitly know otherwise.
+    if (!limitsLoading && !limits) {
+      return true;
+    }
+
+    if (!limits) {
+      return true;
+    }
+
+    return limits.currentPlan !== null;
+  }, [limits, limitsLoading]);
 
 
   const accessibleItems = React.useMemo(() => {
@@ -180,9 +218,10 @@ export default function PlanBasedNav() {
     return null;
   }
 
-  // Use a regular variable for loading skeleton
-  const isLoading = userContext?.loading || limitsLoading || !userContext?.user || !limits || tenantBranchLoading;
-  if (isLoading) {
+  // Only block rendering while the *user* is unresolved.
+  // Plan/tenant data can load in the background so the nav appears immediately after login.
+  const isUserLoading = userContext?.loading || !userContext?.user;
+  if (isUserLoading) {
     return (
       <div className={`fixed top-0 left-0 h-full bg-white shadow-lg border-r z-50 transition-all duration-300 ${
         sidebarCollapsed ? 'w-16' : 'w-64'
@@ -223,16 +262,44 @@ export default function PlanBasedNav() {
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 bg-white rounded-lg shadow-lg border"
+          className="p-2 bg-white rounded-lg shadow-lg border transition-all duration-200 hover:scale-105 active:scale-95"
+          style={{
+            transform: sidebarOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), scale 0.2s ease-out'
+          }}
         >
           {sidebarOpen ? <FaTimes className="w-5 h-5" /> : <FaBars className="w-5 h-5" />}
         </button>
       </div>
 
       {/* Sidebar */}
-      <div className={`fixed top-0 left-0 h-full bg-white shadow-xl border-r z-30 transition-all duration-300 ease-in-out ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-      } ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
+      {/* On mobile, always show full width when open; on desktop, respect collapsed state */}
+      <div 
+        className={`fixed top-0 left-0 h-full bg-white shadow-xl border-r z-40 ${
+          isMobile 
+            ? (sidebarOpen ? 'translate-x-0' : '-translate-x-full')
+            : 'lg:translate-x-0'
+        } ${(isMobile && sidebarOpen) ? 'w-64' : (sidebarCollapsed ? 'w-16' : 'w-64')}`}
+        style={{
+          ...(isMobile ? {
+            // Mobile: slide in/out animation
+            transition: sidebarOpen 
+              ? 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), width 0.45s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1)'
+              : 'transform 0.4s cubic-bezier(0.4, 0, 1, 1), width 0.4s cubic-bezier(0.4, 0, 1, 1), box-shadow 0.4s cubic-bezier(0.4, 0, 1, 1)',
+            transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+            willChange: isAnimating ? 'transform, width' : 'auto',
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden'
+          } : {
+            // Desktop: only width transition for collapse/expand (no transform needed)
+            transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            transform: 'translateX(0)',
+            willChange: 'width',
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden'
+          })
+        }}
+      >
         {/* Desktop collapse/expand button */}
         <div className="hidden lg:block absolute -right-3 top-4 z-50">
           <Tooltip content={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} position="right">
@@ -241,18 +308,15 @@ export default function PlanBasedNav() {
               className="w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors shadow-sm"
               aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              {sidebarCollapsed ? <FaChevronRight className="w-3 h-3" /> : <FaChevronLeft className="w-3 h-3" />}
+              {sidebarCollapsed ? <FaChevronRight className="w-3.5 h-3.5" /> : <FaChevronLeft className="w-3.5 h-3.5" />}
             </button>
           </Tooltip>
         </div>
-        <div className="flex flex-col h-full relative">
-          {/* Header */}
-          <div className={`border-b border-gray-200 transition-all duration-300 ${
-            sidebarCollapsed ? 'p-3' : 'p-4'
-          }`}>
-            <div className="flex flex-col items-center justify-center space-y-2">
-              {/* Logo */}
-              {!sidebarCollapsed && !sidebarOpen && tenant?.logoUrl && (
+        <div className="flex flex-col h-full relative z-10" style={{ position: 'relative' }}>
+          {/* Header - Minimal spacing */}
+          {!sidebarCollapsed && !sidebarOpen && tenant?.logoUrl && (
+            <div className="border-b border-gray-200 px-4 py-2">
+              <div className="flex items-center justify-center">
                 <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
                   <Image
                     src={tenant.logoUrl}
@@ -265,12 +329,17 @@ export default function PlanBasedNav() {
                     }}
                   />
                 </div>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Navigation */}
-          <nav className="flex-1 p-2 overflow-y-auto">
+          <nav 
+            className="flex-1 p-2 overflow-y-auto custom-scrollbar" 
+            style={{ 
+              paddingBottom: sidebarCollapsed ? '60px' : '120px'
+            }}
+          >
             <div className="space-y-1">
               {accessibleItems.map((item) => {
                 const Icon = item.icon;
@@ -279,8 +348,17 @@ export default function PlanBasedNav() {
                 const isActive =
                   pathname === item.href ||
                   (hasSubItems && item.subItems?.some((subItem) => pathname === subItem.href));
-                // Mobile: show all subitems as collapsible accordions
-                if (hasSubItems && !sidebarCollapsed && sidebarOpen) {
+                
+                // Show subitems as collapsible accordions when:
+                // - On mobile: when sidebar is open (always show accordion, ignore collapsed state)
+                // - On desktop: when sidebar is not collapsed
+                const shouldShowSubmenu = hasSubItems && (
+                  (isMobile && sidebarOpen) || // Mobile: show when sidebar is open
+                  (!isMobile && !sidebarCollapsed) // Desktop: show when not collapsed
+                );
+                const shouldUseDesktopDropdown = hasSubItems && !shouldShowSubmenu;
+                
+                if (shouldShowSubmenu) {
                   const submenuKey = item.href || item.name;
                   const open = !!openSubmenus[submenuKey];
                   return (
@@ -288,21 +366,21 @@ export default function PlanBasedNav() {
                       <button
                         type="button"
                         onClick={() => handleToggleSubmenu(submenuKey)}
-                        className={`flex items-center justify-between w-full px-3 py-2 rounded text-base font-medium transition-all duration-200 ${
+                        className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded text-xs font-medium transition-all duration-200 ${
                           isActive
                             ? 'bg-blue-100 text-blue-700 border border-blue-300'
                             : 'text-gray-700 hover:text-blue-700 hover:bg-blue-50'
                         }`}
                       >
-                        <span className="flex items-center gap-3">
-                          <Icon className="w-5 h-5" />
-                          {item.name}
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Icon className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate text-xs">{item.name}</span>
                         </span>
-                        <span>
+                        <span className="flex-shrink-0">
                           {open ? (
-                            <FaChevronUp className="w-4 h-4" />
+                            <FaChevronUp className="w-3.5 h-3.5" />
                           ) : (
-                            <FaChevronDown className="w-4 h-4" />
+                            <FaChevronDown className="w-3.5 h-3.5" />
                           )}
                         </span>
                       </button>
@@ -320,34 +398,40 @@ export default function PlanBasedNav() {
                                   <button
                                     type="button"
                                     onClick={() => handleToggleSubmenu(submenuKey)}
-                                    className={`flex items-center w-full space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                    className={`flex items-center w-full space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
                                       isSubActive || openNested
                                         ? 'bg-blue-50 text-blue-700 border border-blue-200'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4" />
+                                    <SubIcon className="w-4 h-4 flex-shrink-0" />
                                     <span>{subItem.name}</span>
                                     <span className="ml-auto">
                                       {openNested ? (
-                                        <FaChevronUp className="w-3 h-3" />
+                                        <FaChevronUp className="w-3.5 h-3.5" />
                                       ) : (
-                                        <FaChevronDown className="w-3 h-3" />
+                                        <FaChevronDown className="w-3.5 h-3.5" />
                                       )}
                                     </span>
                                   </button>
                                 ) : (
-                                  <a
+                                  <Link
                                     href={subItem.href}
-                                    className={`flex items-center space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                    onClick={() => {
+                                      // Close sidebar on mobile after navigation
+                                      if (isMobile) {
+                                        setSidebarOpen(false);
+                                      }
+                                    }}
+                                    className={`flex items-center space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
                                       isSubActive
                                         ? 'bg-blue-100 text-blue-700 border border-blue-300'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4" />
+                                    <SubIcon className="w-4 h-4 flex-shrink-0" />
                                     <span>{subItem.name}</span>
-                                  </a>
+                                  </Link>
                                 )}
                                 {/* Nested subitems */}
                                 {hasNested && openSubmenus[submenuKey] && (
@@ -356,18 +440,24 @@ export default function PlanBasedNav() {
                                       const NestedIcon = nested.icon || FaChevronRight;
                                       const isNestedActive = pathname === nested.href;
                                       return (
-                                        <a
+                                        <Link
                                           key={nested.name}
                                           href={nested.href}
-                                          className={`flex items-center space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                          onClick={() => {
+                                            // Close sidebar on mobile after navigation
+                                            if (isMobile) {
+                                              setSidebarOpen(false);
+                                            }
+                                          }}
+                                          className={`flex items-center space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
                                             isNestedActive
                                               ? 'bg-blue-100 text-blue-700 border border-blue-300'
                                               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                           }`}
                                         >
-                                          <NestedIcon className="w-4 h-4" />
+                                          <NestedIcon className="w-4 h-4 flex-shrink-0" />
                                           <span>{nested.name}</span>
-                                        </a>
+                                        </Link>
                                       );
                                     })}
                                   </div>
@@ -380,8 +470,9 @@ export default function PlanBasedNav() {
                     </div>
                   );
                 }
-                // Desktop: dropdown or tooltip
-                if (hasSubItems) {
+                // Desktop: dropdown or tooltip (fallback for collapsed sidebar)
+                // Only use desktop dropdown when NOT using mobile accordion
+                if (shouldUseDesktopDropdown) {
                   const dropdownContent = (
                     <div key={item.name}>
                       <button
@@ -395,26 +486,26 @@ export default function PlanBasedNav() {
                           }
                           setOpenDropdowns(newOpenDropdowns);
                         }}
-                        className={`flex items-center justify-between transition-all duration-200 rounded text-sm font-medium w-full ${
-                          sidebarCollapsed ? 'justify-center px-2 py-3' : 'space-x-3 px-3 py-2'
+                        className={`flex items-center justify-between transition-all duration-200 rounded text-xs font-medium w-full ${
+                          sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'space-x-2 px-2.5 py-2'
                         } ${
                           isActive
                             ? 'bg-blue-50 text-blue-700 border border-blue-200'
                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                         }`}
                       >
-                        <div className="flex items-center space-x-3">
-                          <Icon className="w-5 h-5 flex-shrink-0" />
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <Icon className="w-4 h-4 flex-shrink-0" />
                           {!sidebarCollapsed && (
-                            <span className="whitespace-nowrap">{item.name}</span>
+                            <span className="truncate text-xs">{item.name}</span>
                           )}
                         </div>
                         {!sidebarCollapsed && (
                           <div className="flex-shrink-0">
                             {isDropdownOpen ? (
-                              <FaChevronUp className="w-3 h-3" />
+                              <FaChevronUp className="w-3.5 h-3.5" />
                             ) : (
-                              <FaChevronDown className="w-3 h-3" />
+                              <FaChevronDown className="w-3.5 h-3.5" />
                             )}
                           </div>
                         )}
@@ -433,32 +524,32 @@ export default function PlanBasedNav() {
                                   <button
                                     type="button"
                                     onClick={() => handleToggleSubmenu(submenuKey)}
-                                    className={`flex items-center w-full space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                    className={`flex items-center w-full space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
                                       isSubActive || open
                                         ? 'bg-blue-50 text-blue-700 border border-blue-200'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4" />
+                                    <SubIcon className="w-4 h-4 flex-shrink-0" />
                                     <span>{subItem.name}</span>
                                     <span className="ml-auto">
                                       {open ? (
-                                        <FaChevronUp className="w-3 h-3" />
+                                        <FaChevronUp className="w-3.5 h-3.5" />
                                       ) : (
-                                        <FaChevronDown className="w-3 h-3" />
+                                        <FaChevronDown className="w-3.5 h-3.5" />
                                       )}
                                     </span>
                                   </button>
                                 ) : (
                                   <a
                                     href={subItem.href}
-                                    className={`flex items-center space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                    className={`flex items-center space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
                                       isSubActive
                                         ? 'bg-blue-100 text-blue-700 border border-blue-300'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4" />
+                                    <SubIcon className="w-4 h-4 flex-shrink-0" />
                                     <span>{subItem.name}</span>
                                   </a>
                                 )}
@@ -472,13 +563,13 @@ export default function PlanBasedNav() {
                                         <a
                                           key={nested.name}
                                           href={nested.href}
-                                          className={`flex items-center space-x-2 px-3 py-2 rounded text-sm transition-all duration-200 ${
+                                          className={`flex items-center space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
                                             isNestedActive
                                               ? 'bg-blue-100 text-blue-700 border border-blue-300'
                                               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                           }`}
                                         >
-                                          <NestedIcon className="w-4 h-4" />
+                                          <NestedIcon className="w-4 h-4 flex-shrink-0" />
                                           <span>{nested.name}</span>
                                         </a>
                                       );
@@ -504,7 +595,7 @@ export default function PlanBasedNav() {
                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                         }`}
                       >
-                        <Icon className="w-5 h-5 flex-shrink-0" />
+                        <Icon className="w-4 h-4 flex-shrink-0" />
                       </a>
                     </Tooltip>
                   ) : (
@@ -516,17 +607,17 @@ export default function PlanBasedNav() {
                     <a
                       key={item.name}
                       href={item.href}
-                      className={`flex items-center transition-all duration-200 rounded text-sm font-medium ${
-                        sidebarCollapsed ? 'justify-center px-2 py-3' : 'space-x-3 px-3 py-2'
+                      className={`flex items-center transition-all duration-200 rounded text-xs font-medium ${
+                        sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'space-x-2 px-2.5 py-2'
                       } ${
                         isActive
                           ? 'bg-blue-50 text-blue-700 border border-blue-200'
                           : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                       }`}
                     >
-                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <Icon className="w-4 h-4 flex-shrink-0" />
                       {!sidebarCollapsed && (
-                        <span className="whitespace-nowrap">{item.name}</span>
+                        <span className="truncate text-xs">{item.name}</span>
                       )}
                     </a>
                   );
@@ -542,37 +633,65 @@ export default function PlanBasedNav() {
             </div>
           </nav>
 
-          {/* Fixed Logout Button at Bottom - Show in both states */}
+          {/* Fixed Logout Section at Bottom */}
           <div className="absolute bottom-0 left-0 w-full border-t border-gray-200 bg-white">
             {sidebarCollapsed ? (
               <Tooltip content="Log out" position="right">
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center justify-center px-3 py-2 bg-red-500 text-white rounded-lg font-semibold shadow hover:bg-red-600 transition text-xs"
-                >
-                  <FaSignOutAlt className="w-4 h-4 flex-shrink-0" />
-                </button>
+                <div className="w-full block">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-95"
+                    title="Log out"
+                  >
+                    <FaSignOutAlt className="w-4 h-4 flex-shrink-0" />
+                  </button>
+                </div>
               </Tooltip>
             ) : (
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white rounded-lg font-semibold shadow hover:bg-red-600 transition text-xs"
-              >
-                <FaSignOutAlt className="w-4 h-4 flex-shrink-0" />
-                <span>Log out</span>
-              </button>
+              <div className="p-2 space-y-2">
+                {/* User Info */}
+                {userContext?.user && (
+                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                      {userContext.user.name?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-900 truncate">
+                        {userContext.user.name || 'User'}
+                      </p>
+                      <p className="text-[10px] text-gray-500 truncate">
+                        {userContext.user.email || ''}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {/* Logout Button */}
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs font-medium rounded-lg shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-[0.98] group"
+                >
+                  <FaSignOutAlt className="w-4 h-4 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                  <span>Log out</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
 
       {/* Overlay for mobile */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-white/60 backdrop-blur-sm z-20 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <div
+        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden ${
+          sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        style={{
+          transition: sidebarOpen
+            ? 'opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), backdrop-filter 0.45s cubic-bezier(0.16, 1, 0.3, 1)'
+            : 'opacity 0.35s cubic-bezier(0.4, 0, 1, 1), backdrop-filter 0.35s cubic-bezier(0.4, 0, 1, 1)',
+          willChange: sidebarOpen ? 'opacity, backdrop-filter' : 'auto'
+        }}
+        onClick={() => setSidebarOpen(false)}
+      />
     </>
   );
 }

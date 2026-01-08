@@ -17,7 +17,6 @@ export default function AuthPageWrapper({ children }: AuthPageWrapperProps) {
   // Memoize the auth path check to prevent unnecessary re-renders
   const checkIfAuthPath = useCallback((currentPathname: string) => {
     if (!currentPathname) {
-      console.log('checkIfAuthPath: No pathname provided, returning false');
       return false;
     }
     
@@ -35,13 +34,11 @@ export default function AuthPageWrapper({ children }: AuthPageWrapperProps) {
     
     // Check direct matches first
     if (authPaths.includes(currentPathname)) {
-      console.log(`checkIfAuthPath: Path '${currentPathname}' is an exact auth path match`);
       return true;
     }
     
     // Check if path starts with any auth path
     const isAuthPath = authPaths.some(path => currentPathname.startsWith(path));
-    console.log(`checkIfAuthPath: Path '${currentPathname}' ${isAuthPath ? 'starts with an auth path' : 'is not an auth path'}`);
     
     return isAuthPath;
   }, []);
@@ -49,7 +46,6 @@ export default function AuthPageWrapper({ children }: AuthPageWrapperProps) {
   useEffect(() => {
     if (!pathname) return;
     const isAuth = checkIfAuthPath(pathname);
-    console.log('AuthPageWrapper - pathname:', pathname, 'isAuth:', isAuth);
     setIsAuthPage(isAuth);
   }, [pathname, checkIfAuthPath]);
 

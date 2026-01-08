@@ -12,9 +12,7 @@ const BranchContext = createContext<BranchContextType | undefined>(undefined);
 export const BranchProvider = ({ children, initialBranchId, canChangeBranch = false }: { children: ReactNode; initialBranchId?: string; canChangeBranch?: boolean }) => {
   const [selectedBranchId, setSelectedBranchIdState] = useState<string>(initialBranchId || "");
 
-  // Wrap setSelectedBranchId to add logging
   const setSelectedBranchId = (id: string) => {
-    console.log('[BranchContext] setSelectedBranchId called with:', id);
     setSelectedBranchIdState(id);
   };
 
@@ -25,10 +23,20 @@ export const BranchProvider = ({ children, initialBranchId, canChangeBranch = fa
   );
 };
 
-export const useBranch = () => {
+export const useBranch = (): BranchContextType => {
   const context = useContext(BranchContext);
+
+  // Fallback to a safe no-op context instead of throwing,
+  // so pages that accidentally render outside BranchProvider
+  // don't crash the entire app.
   if (!context) {
-    throw new Error("useBranch must be used within a BranchProvider");
+    return {
+      selectedBranchId: "",
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      setSelectedBranchId: () => {},
+      canChangeBranch: false,
+    };
   }
+
   return context;
 };

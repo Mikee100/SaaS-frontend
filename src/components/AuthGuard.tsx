@@ -25,7 +25,6 @@ export default function AuthGuard({ children, fallback, adminOnly = false }: Aut
   useEffect(() => {
     // Skip all redirect logic for auth pages
     if (isAuthPath) {
-      console.log('Auth page detected in AuthGuard, skipping redirects:', pathname);
       return;
     }
 
@@ -33,7 +32,6 @@ export default function AuthGuard({ children, fallback, adminOnly = false }: Aut
 
     // Check if user is authenticated for non-auth pages
     if (!user) {
-      console.log('No user found, redirecting to login from:', pathname);
       router.push('/login');
       return;
     }
@@ -42,7 +40,6 @@ export default function AuthGuard({ children, fallback, adminOnly = false }: Aut
     if (adminOnly || pathname.startsWith('/admin')) {
       const isAdmin = user?.roles?.includes('admin') || user?.roles?.includes('superadmin') || user?.isSuperadmin;
       if (!isAdmin) {
-        console.log('Admin access denied - redirecting to /');
         router.push('/');
       }
     }

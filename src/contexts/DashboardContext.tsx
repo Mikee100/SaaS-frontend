@@ -66,6 +66,50 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const fetchPreferences = async () => {
       setLoading(true);
+      
+      // Check if we have a token before making authenticated requests
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) {
+        // No token, use cached or default preferences
+        try {
+          const cachedPrefs = await db.get('preferences', 'user-dashboard');
+          if (cachedPrefs) {
+            setPreferences({ ...defaultPreferences, ...cachedPrefs });
+          } else {
+            setPreferences(defaultPreferences);
+          }
+        } catch (err) {
+          setPreferences(defaultPreferences);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      // Check if we're on an auth page
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+      const isAuthPath = pathname === '/login' || 
+                        pathname === '/register' || 
+                        pathname === '/forgot-password' || 
+                        pathname === '/reset-password';
+      
+      if (isAuthPath) {
+        // On auth page, use cached or default preferences
+        try {
+          const cachedPrefs = await db.get('preferences', 'user-dashboard');
+          if (cachedPrefs) {
+            setPreferences({ ...defaultPreferences, ...cachedPrefs });
+          } else {
+            setPreferences(defaultPreferences);
+          }
+        } catch (err) {
+          setPreferences(defaultPreferences);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         const cachedPrefs = await db.get('preferences', 'user-dashboard');
         if (cachedPrefs) {
@@ -82,9 +126,12 @@ export const DashboardProvider = ({ children }: { children: ReactNode }) => {
             await db.set('preferences', { id: 'user-dashboard', ...fetchedPrefs });
           }
         }
-      } catch (err) {
-        setError('Failed to load dashboard preferences.');
-        console.error(err);
+      } catch (err: any) {
+        // Only log non-401 errors (401 is expected when not authenticated)
+        if (err?.message && !err.message.includes('401') && !err.message.includes('Unauthorized')) {
+          setError('Failed to load dashboard preferences.');
+          console.error(err);
+        }
       } finally {
         setLoading(false);
       }
