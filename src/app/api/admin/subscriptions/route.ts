@@ -21,9 +21,25 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: response.statusText }));
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { message: errorText || response.statusText };
+      }
+      
+      console.error('Backend error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData,
+      });
+      
       return NextResponse.json(
-        { error: errorData.message || 'Failed to fetch subscriptions' },
+        { 
+          error: errorData.message || 'Failed to fetch subscriptions',
+          details: errorData,
+        },
         { status: response.status }
       );
     }
@@ -32,8 +48,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error fetching subscriptions:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch subscriptions';
     return NextResponse.json(
-      { error: 'Failed to fetch subscriptions' },
+      { 
+        error: errorMessage,
+        details: error instanceof Error ? error.stack : String(error),
+      },
       { status: 500 }
     );
   }
