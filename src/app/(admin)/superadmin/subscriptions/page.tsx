@@ -123,7 +123,7 @@ export default function SubscriptionsPage() {
                   <TableCell>
                     <div>
                       <div className="font-medium">{subscription.Plan.name}</div>
-                      <div className="text-sm text-muted-foreground">${subscription.Plan.price}/month</div>
+                      <div className="text-sm text-muted-foreground">Ksh {subscription.Plan.price}/month</div>
                     </div>
                   </TableCell>
                   <TableCell>{getStatusBadge(subscription.status)}</TableCell>

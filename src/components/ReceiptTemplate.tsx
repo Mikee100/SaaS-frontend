@@ -135,7 +135,7 @@ export default function ReceiptTemplate({ sale, tenant }: ReceiptProps) {
       <div className="mt-6 space-y-2 bg-gray-50 p-4 rounded-lg">
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">Subtotal</span>
-          <span className="font-medium">${subtotal.toFixed(2)}</span>
+          <span className="font-medium">Ksh {subtotal.toFixed(2)}</span>
         </div>
         {vatAmount > 0 && (
           <div className="flex justify-between text-sm">
@@ -147,19 +147,19 @@ export default function ReceiptTemplate({ sale, tenant }: ReceiptProps) {
           <>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Cash Received</span>
-              <span className="font-medium">${sale.amountReceived.toFixed(2)}</span>
+              <span className="font-medium">Ksh {sale.amountReceived.toFixed(2)}</span>
             </div>
             {sale.change !== undefined && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Change</span>
-                <span className="font-medium text-green-600">${sale.change.toFixed(2)}</span>
+                <span className="font-medium text-green-600">Ksh {sale.change.toFixed(2)}</span>
               </div>
             )}
           </>
         )}
         <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-3 mt-2">
           <span>TOTAL</span>
-          <span className="text-blue-700">${total.toFixed(2)}</span>
+          <span className="text-blue-700">Ksh {total.toFixed(2)}</span>
         </div>
       </div>
       </div>

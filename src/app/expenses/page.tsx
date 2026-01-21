@@ -149,7 +149,7 @@ export default function ExpensesPage() {
   const [branchComparison] = useState<BranchComparisonData | null>(null);
   const [pastMonthsData] = useState<PastMonthsData | null>(null);
   const [resetting, setResetting] = useState(false);
-  const [users] = useState<{ id: string; name: string }[]>([]);
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [salaryForm, setSalaryForm] = useState<SalarySchemeFormData>({
     employeeName: '',
     salaryAmount: 0,
@@ -299,7 +299,7 @@ export default function ExpensesPage() {
         'SaaS Platform - Expenses Report',
         `Generated on: ${reportDate} at ${reportTime}`,
         `Total Expenses: ${filteredExpenses.length}`,
-        `Total Amount: $${totalAmount.toFixed(2)}`,
+        `Total Amount: Ksh ${totalAmount.toFixed(2)}`,
         `Filters Applied: ${branchFilter ? `Branch: ${branches.find(b => b.id === branchFilter)?.name || 'Unknown'}` : 'All Branches'}, Type: ${expenseTypeFilter === 'all' ? 'All Types' : expenseTypeFilter === 'one_time' ? 'One-time' : 'Recurring'}${search ? `, Search: "${search}"` : ''}`,
         '', // Empty line
       ];
@@ -348,7 +348,7 @@ export default function ExpensesPage() {
       doc.setFont('helvetica', 'normal');
       doc.text(`Generated on: ${reportDate} at ${reportTime}`, 20, 50);
       doc.text(`Total Expenses: ${filteredExpenses.length}`, 20, 58);
-      doc.text(`Total Amount: $${totalAmount.toFixed(2)}`, 20, 66);
+      doc.text(`Total Amount: Ksh ${totalAmount.toFixed(2)}`, 20, 66);
 
       // Filters applied
       let yPos = 74;
@@ -368,14 +368,14 @@ export default function ExpensesPage() {
       doc.text(`Categories: ${Object.keys(categoryTotals).length}`, 30, yPos);
       doc.text(`Branches: ${Object.keys(branchTotals).length}`, 100, yPos);
       yPos += 8;
-      doc.text(`Average Expense: $${expenses.length > 0 ? (totalAmount / expenses.length).toFixed(2) : '0.00'}`, 30, yPos);
+      doc.text(`Average Expense: Ksh ${expenses.length > 0 ? (totalAmount / expenses.length).toFixed(2) : '0.00'}`, 30, yPos);
 
       // Table
       yPos += 20;
       const headers = [['ID', 'Amount', 'Description', 'Category', 'Type', 'Created Date', 'Branch', 'Status']];
       const data = filteredExpenses.map(expense => [
         expense.id.substring(0, 8) + '...', // Truncate ID for PDF
-        `$${expense.amount.toFixed(2)}`,
+        `Ksh ${expense.amount.toFixed(2)}`,
         expense.description.length > 30 ? expense.description.substring(0, 27) + '...' : expense.description,
         getCategoryName(expense).replace('_', ' '),
         expense.expenseType === 'recurring' ? 'Recurring' : 'One-time',
@@ -502,6 +502,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
     const fetchAll = async () => {
       await fetchExpenses();
       await fetchBranches();
+      await fetchUsers();
     };
     fetchAll();
   }, [branchFilter, fetchExpenses]);
@@ -568,6 +569,21 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
       setBranches(data as { id: string; name: string }[]);
     } catch {
       // ignore branch fetch error for now
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const data = await apiGet('/user');
+      // Handle both array response and wrapped response
+      const usersData = Array.isArray(data) ? data : (data as { data?: unknown[] })?.data || [];
+      setUsers((usersData as { id: string; name: string }[]).map(user => ({
+        id: user.id,
+        name: user.name
+      })));
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+      // ignore user fetch error for now
     }
   };
 
@@ -909,7 +925,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             </div>
             <div className="flex items-center gap-1">
               <FaDollarSign className="w-4 h-4 text-gray-400" />
-              <span className="text-base font-bold">${salaryTotal.toFixed(2)}</span>
+              <span className="text-base font-bold">Ksh {salaryTotal.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -935,7 +951,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span className="text-red-700">Total Expenses:</span>
-                          <span className="font-bold">${currentMonthExpensesTotal.totalAmount.toFixed(2)}</span>
+                          <span className="font-bold">Ksh {currentMonthExpensesTotal.totalAmount.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-red-700">Expense Count:</span>
@@ -999,7 +1015,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span className="text-red-700">Total Expenses:</span>
-                          <span className="font-bold">${expenseTotalForSelectedMonth.totalAmount.toFixed(2)}</span>
+                          <span className="font-bold">Ksh {expenseTotalForSelectedMonth.totalAmount.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-red-700">Expense Count:</span>
@@ -1057,7 +1073,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                           setDrawerType('details');
                         }}
                       >
-                        <td className="py-2 px-3 font-bold text-gray-900">${expense.amount.toFixed(2)}</td>
+                        <td className="py-2 px-3 font-bold text-gray-900">Ksh {expense.amount.toFixed(2)}</td>
                         <td className="py-2 px-3 text-xs">{expense.description}</td>
                         <td className="py-2 px-3 text-xs capitalize">{getCategoryName(expense).replace('_', ' ')}</td>
                         <td className="py-2 px-3 text-xs">
@@ -1113,7 +1129,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span className="text-emerald-700">Total Salary:</span>
-                          <span className="font-bold">${currentMonthSalaryTotal.totalAmount.toFixed(2)}</span>
+                          <span className="font-bold">Ksh {currentMonthSalaryTotal.totalAmount.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-emerald-700">Active Schemes:</span>
@@ -1177,7 +1193,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span className="text-emerald-700">Total Salary:</span>
-                          <span className="font-bold">${salaryTotalForMonth.totalAmount.toFixed(2)}</span>
+                          <span className="font-bold">Ksh {salaryTotalForMonth.totalAmount.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-emerald-700">Active Schemes:</span>
@@ -1242,7 +1258,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                           setSalaryDrawerType('details');
                         }}
                       >
-                        <td className="py-2 px-3 font-bold text-gray-900">${scheme.salaryAmount.toFixed(2)}</td>
+                        <td className="py-2 px-3 font-bold text-gray-900">Ksh {scheme.salaryAmount.toFixed(2)}</td>
                         <td className="py-2 px-3 text-xs">{scheme.user?.name || scheme.employeeName}</td>
                         <td className="py-2 px-3 text-xs capitalize">{scheme.frequency}</td>
                         <td className="py-2 px-3 text-xs">{new Date(scheme.startDate).toLocaleDateString()}</td>
@@ -1326,7 +1342,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span className="text-blue-700">Total Expenses:</span>
-                            <span className="font-bold">${branch.totalAmount?.toFixed(2)}</span>
+                            <span className="font-bold">Ksh {branch.totalAmount?.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-blue-700">Count:</span>
@@ -1334,7 +1350,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                           </div>
                           <div className="flex justify-between">
                             <span className="text-blue-700">Avg per Expense:</span>
-                            <span className="font-bold">${(branch.totalAmount / branch.expenseCount).toFixed(2)}</span>
+                            <span className="font-bold">Ksh {(branch.totalAmount / branch.expenseCount).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
@@ -1347,7 +1363,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="branchName" />
                         <YAxis />
-                        <Tooltip formatter={(value: number) => [`$${value}`, 'Amount']} />
+                        <Tooltip formatter={(value: number) => [`Ksh ${value}`, 'Amount']} />
                         <Legend />
                         <Bar dataKey="totalAmount" fill="#3b82f6" name="Total Amount" />
                       </BarChart>
@@ -1384,7 +1400,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
                             <span className="text-green-700">Total Expenses:</span>
-                            <span className="font-bold">${record.totalAmount?.toFixed(2)}</span>
+                            <span className="font-bold">Ksh {record.totalAmount?.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-green-700">Count:</span>
@@ -1392,7 +1408,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                           </div>
                           <div className="flex justify-between">
                             <span className="text-green-700">Avg per Expense:</span>
-                            <span className="font-bold">${(record.totalAmount / record.expenseCount).toFixed(2)}</span>
+                            <span className="font-bold">Ksh {(record.totalAmount / record.expenseCount).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
@@ -1405,7 +1421,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="monthName" />
                         <YAxis />
-                        <Tooltip formatter={(value: number) => [`$${value}`, 'Amount']} />
+                        <Tooltip formatter={(value: number) => [`Ksh ${value}`, 'Amount']} />
                         <Legend />
                         <Line type="monotone" dataKey="totalAmount" stroke="#10b981" strokeWidth={2} name="Total Amount" />
                       </LineChart>
@@ -1438,7 +1454,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                           </div>
                           <div className="flex justify-between">
                             <span className="text-blue-700">Total Amount:</span>
-                            <span className="font-bold">${totalAmount.toFixed(2)}</span>
+                            <span className="font-bold">Ksh {totalAmount.toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
@@ -1521,7 +1537,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                             setDrawerType('details');
                           }}
                         >
-                          <td className="py-2 px-3 font-bold text-gray-900">${expense.amount.toFixed(2)}</td>
+                          <td className="py-2 px-3 font-bold text-gray-900">Ksh {expense.amount.toFixed(2)}</td>
                           <td className="py-2 px-3 text-xs">{expense.description}</td>
                           <td className="py-2 px-3 text-xs capitalize">{getCategoryName(expense).replace('_', ' ')}</td>
                           <td className="py-2 px-3 text-xs">
@@ -1625,12 +1641,12 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-1">Amount *</label>
                       <div className="relative">
-                        <FaDollarSign className="absolute left-2 top-1/2 transform -translate-y-1/2 text-blue-400 w-4 h-4" />
+                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-blue-400 text-sm font-medium">Ksh</span>
                         <input
                           type="number"
                           value={formData.amount}
                           onChange={(e) => handleInputChange('amount', parseFloat(e.target.value) || 0)}
-                          className="w-full pl-8 pr-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                          className="w-full pl-12 pr-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
                           placeholder="0.00"
                           min="0"
                           step="0.01"
@@ -1811,7 +1827,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 {/* Amount and Type Section */}
                 <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900">${selectedExpense.amount.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-gray-900">Ksh {selectedExpense.amount.toFixed(2)}</div>
                     <div className="text-sm text-gray-600">{selectedExpense.description}</div>
                   </div>
                   <div className="text-right">
@@ -1989,12 +2005,12 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-1">Salary Amount *</label>
                       <div className="relative">
-                        <FaDollarSign className="absolute left-2 top-1/2 transform -translate-y-1/2 text-emerald-400 w-4 h-4" />
+                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-emerald-400 text-sm font-medium">Ksh</span>
                         <input
                           type="number"
                           value={salaryForm.salaryAmount}
                           onChange={(e) => handleSalaryFormChange('salaryAmount', parseFloat(e.target.value) || 0)}
-                          className="w-full pl-8 pr-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
+                          className="w-full pl-12 pr-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
                           placeholder="0.00"
                           min="0"
                           step="0.01"
@@ -2129,7 +2145,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 {/* Amount and Employee Section */}
                 <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900">${selectedSalaryScheme.salaryAmount.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-gray-900">Ksh {selectedSalaryScheme.salaryAmount.toFixed(2)}</div>
                     <div className="text-sm text-gray-600">{selectedSalaryScheme.user?.name || selectedSalaryScheme.employeeName}</div>
                   </div>
                   <div className="text-right">

@@ -338,8 +338,8 @@ export default function ProductVariationsForm({
                       {name}
                     </th>
                   ))}
-                  <th className="px-4 py-2 text-left">Price</th>
-                  <th className="px-4 py-2 text-left">Cost</th>
+                  <th className="px-4 py-2 text-left">Selling Price</th>
+                  <th className="px-4 py-2 text-left">Buying Price</th>
                   <th className="px-4 py-2 text-left">Stock</th>
                 </tr>
               </thead>
@@ -403,6 +403,7 @@ export default function ProductVariationsForm({
     </div>
   );
 }
+
 
 
 

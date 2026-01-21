@@ -393,6 +393,45 @@ export default function UnifiedProductsInventoryPage() {
     gcTime: 10 * 60 * 1000,
   });
 
+  // Fetch products for variations tab (simplified, all products)
+  const { data: variationsProductsData } = useQuery({
+    queryKey: ['products', 'variations', selectedBranchId],
+    queryFn: async () => {
+      if (!selectedBranchId) return [];
+      const data = await apiGet(`/products?page=1&limit=1000&branchId=${selectedBranchId}`, { 'x-branch-id': selectedBranchId }) as { products: Product[]; pagination: unknown };
+      return Array.isArray(data?.products) ? data.products : [];
+    },
+    enabled: !!selectedBranchId && (activeTab === 'variations'),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  // Fetch all products for inventory tab
+  const { data: inventoryProductsData } = useQuery({
+    queryKey: ['products', 'inventory', selectedBranchId],
+    queryFn: async () => {
+      if (!selectedBranchId) return [];
+      const data = await apiGet(`/products?page=1&limit=1000&branchId=${selectedBranchId}`, { 'x-branch-id': selectedBranchId }) as { products: Product[]; pagination: unknown };
+      return Array.isArray(data?.products) ? data.products : [];
+    },
+    enabled: !!selectedBranchId && (activeTab === 'inventory'),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  // Fetch all products for advanced tab
+  const { data: advancedProductsData } = useQuery({
+    queryKey: ['products', 'advanced', selectedBranchId],
+    queryFn: async () => {
+      if (!selectedBranchId) return [];
+      const data = await apiGet(`/products?page=1&limit=1000&branchId=${selectedBranchId}`, { 'x-branch-id': selectedBranchId }) as { products: Product[]; pagination: unknown };
+      return Array.isArray(data?.products) ? data.products : [];
+    },
+    enabled: !!selectedBranchId && (activeTab === 'advanced'),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
   // Update products state
   useEffect(() => {
     if (productsData && activeTab === 'products') {
@@ -436,27 +475,92 @@ export default function UnifiedProductsInventoryPage() {
     return [...new Set(inv.map(i => i.product?.category).filter(Boolean))];
   }, [activeTab, products, inventoryData, advancedInventoryData]);
 
-  // Calculate statistics for inventory tab
+  // Filtered products for inventory tab - merge products with inventory entries
+  const filteredInventoryProducts = useMemo(() => {
+    if (activeTab !== 'inventory') return [];
+    
+    // Use products from inventoryProductsData when on inventory tab, otherwise fallback to products state
+    const productsForInventory = (activeTab === 'inventory' && inventoryProductsData) 
+      ? inventoryProductsData 
+      : products;
+    
+    // Get all inventory items with products
+    const inv = inventoryData || [];
+    const inventoryMap = new Map(inv.map(item => [item.productId || item.product?.id, item]));
+    
+    // Merge products with their inventory entries (or create synthetic entries for products without inventory)
+    const allInventoryItems = productsForInventory.map(product => {
+      const existingInv = inventoryMap.get(product.id);
+      if (existingInv) {
+        return existingInv;
+      }
+      // Create synthetic inventory item for product without inventory entry
+      return {
+        id: `synth_${product.id}`,
+        productId: product.id,
+        quantity: product.stock || 0,
+        product: product,
+        location: "Main Warehouse",
+        minStock: 0,
+        maxStock: 1000,
+        reorderPoint: 10,
+      } as any;
+    });
+    
+    return allInventoryItems.filter(item => {
+      const product = item.product;
+      if (!product) return false;
+      
+      const matchesSearch = product.name?.toLowerCase().includes(search.toLowerCase()) || 
+                           product.sku?.toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = categoryFilter === "all" || product.category === categoryFilter;
+      
+      const qty = item.quantity || 0;
+      if (stockFilter === "in") return matchesSearch && matchesCategory && qty > 0;
+      if (stockFilter === "out") return matchesSearch && matchesCategory && qty === 0;
+      if (stockFilter === "low") return matchesSearch && matchesCategory && qty > 0 && qty <= 5;
+      return matchesSearch && matchesCategory;
+    });
+  }, [activeTab, inventoryData, inventoryProductsData, products, search, stockFilter, categoryFilter]);
+
+  // Calculate statistics for inventory tab - use all merged products
   const inventoryStats = useMemo(() => {
     if (activeTab !== 'inventory' && activeTab !== 'advanced') return null;
-    const inv = activeTab === 'advanced' ? (advancedInventoryData || []) : (inventoryData || []);
-    const allProducts = inv.map(i => i.product).filter(Boolean);
+    
+    // For inventory tab, use all products (with or without inventory entries)
+    let inv: any[] = [];
+    if (activeTab === 'inventory') {
+      const productsForInventory = inventoryProductsData || products;
+      const invMap = new Map((inventoryData || []).map(item => [item.productId || item.product?.id, item]));
+      inv = productsForInventory.map(product => {
+        const existingInv = invMap.get(product.id);
+        if (existingInv) return existingInv;
+        return {
+          id: `synth_${product.id}`,
+          productId: product.id,
+          quantity: product.stock || 0,
+          product: product,
+        };
+      });
+    } else {
+      inv = advancedInventoryData || [];
+    }
     
     return {
-      totalProducts: allProducts.length,
-      inStock: inv.filter(i => i.quantity > 0).length,
-      outOfStock: inv.filter(i => i.quantity === 0).length,
-      lowStock: inv.filter(i => i.quantity > 0 && i.quantity <= 5).length,
-      totalValue: inv.reduce((sum, i) => sum + (i.quantity * (i.product?.price || 0)), 0),
-      totalCostValue: inv.reduce((sum, i) => sum + (i.quantity * (i.product?.cost || 0)), 0),
+      totalProducts: inv.length,
+      inStock: inv.filter(i => (i.quantity || 0) > 0).length,
+      outOfStock: inv.filter(i => (i.quantity || 0) === 0).length,
+      lowStock: inv.filter(i => (i.quantity || 0) > 0 && (i.quantity || 0) <= 5).length,
+      totalValue: inv.reduce((sum, i) => sum + ((i.quantity || 0) * (i.product?.price || 0)), 0),
+      totalCostValue: inv.reduce((sum, i) => sum + ((i.quantity || 0) * (i.product?.cost || 0)), 0),
       totalProfit: inv.reduce((sum, i) => {
-        const qty = i.quantity;
+        const qty = i.quantity || 0;
         const price = i.product?.price || 0;
         const cost = i.product?.cost || 0;
         return sum + (qty * (price - cost));
       }, 0),
     };
-  }, [activeTab, inventoryData, advancedInventoryData]);
+  }, [activeTab, inventoryData, advancedInventoryData, inventoryProductsData, products]);
 
   // Advanced inventory stats
   const advancedStats = useMemo(() => {
@@ -473,37 +577,55 @@ export default function UnifiedProductsInventoryPage() {
     };
   }, [activeTab, advancedInventoryData, alerts, locations]);
 
-  // Filtered products for inventory tab
-  const filteredInventoryProducts = useMemo(() => {
-    if (activeTab !== 'inventory') return [];
-    const inv = inventoryData || [];
-    return inv.filter(item => {
-      const matchesSearch = item.product?.name?.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = categoryFilter === "all" || item.product?.category === categoryFilter;
-      
-      if (stockFilter === "in") return matchesSearch && matchesCategory && item.quantity > 0;
-      if (stockFilter === "out") return matchesSearch && matchesCategory && item.quantity === 0;
-      if (stockFilter === "low") return matchesSearch && matchesCategory && item.quantity > 0 && item.quantity <= 5;
-      return matchesSearch && matchesCategory;
-    });
-  }, [activeTab, inventoryData, search, stockFilter, categoryFilter]);
-
-  // Filtered advanced inventory
+  // Filtered advanced inventory - merge products with advanced inventory entries
   const filteredAdvancedInventory = useMemo(() => {
     if (activeTab !== 'advanced') return [];
-    return advancedInventoryData.filter(item => {
-      const matchesSearch = item.product?.name?.toLowerCase().includes(search.toLowerCase()) ||
-                           item.product?.sku?.toLowerCase().includes(search.toLowerCase());
-      const matchesLocation = locationFilter === 'all' || item.location === locationFilter;
+    
+    // Use products from advancedProductsData when on advanced tab, otherwise fallback to products state
+    const productsForAdvanced = (activeTab === 'advanced' && advancedProductsData) 
+      ? advancedProductsData 
+      : products;
+    
+    // Get all advanced inventory items
+    const adv = advancedInventoryData || [];
+    const advancedMap = new Map(adv.map(item => [item.productId || item.product?.id, item]));
+    
+    // Merge products with their advanced inventory entries (or create synthetic entries)
+    const allAdvancedItems = productsForAdvanced.map(product => {
+      const existingAdv = advancedMap.get(product.id);
+      if (existingAdv) {
+        return existingAdv;
+      }
+      // Create synthetic advanced inventory item for product without advanced entry
+      return {
+        id: `synth_adv_${product.id}`,
+        productId: product.id,
+        quantity: product.stock || 0,
+        product: product,
+        location: "Main Warehouse",
+        minStock: 0,
+        maxStock: 1000,
+        reorderPoint: 10,
+      } as any;
+    });
+    
+    return allAdvancedItems.filter(item => {
+      const product = item.product;
+      if (!product) return false;
+      
+      const matchesSearch = product.name?.toLowerCase().includes(search.toLowerCase()) ||
+                           product.sku?.toLowerCase().includes(search.toLowerCase());
+      const matchesLocation = locationFilter === 'all' || (item.location || 'Main Warehouse') === locationFilter;
 
+      const qty = item.quantity || 0;
       let matchesStock = true;
-      if (stockFilter === 'low') matchesStock = item.quantity <= (item.reorderPoint || 0) && item.quantity > 0;
-      if (stockFilter === 'out') matchesStock = item.quantity === 0;
-      if (stockFilter === 'over') matchesStock = item.quantity > (item.maxStock || 0);
+      if (stockFilter === 'low') matchesStock = qty <= (item.reorderPoint || 0) && qty > 0;
+      if (stockFilter === 'out') matchesStock = qty === 0;
+      if (stockFilter === 'over') matchesStock = qty > (item.maxStock || 1000);
 
       return matchesSearch && matchesLocation && matchesStock;
     });
-  }, [activeTab, advancedInventoryData, search, locationFilter, stockFilter]);
+  }, [activeTab, advancedInventoryData, advancedProductsData, products, search, locationFilter, stockFilter]);
 
   // Sort products
   const sortedProducts = useMemo(() => {
@@ -816,8 +938,8 @@ export default function UnifiedProductsInventoryPage() {
         'SKU': product?.sku || '',
         'Category': product?.category || '',
         'Stock': quantity,
-        'Cost': cost,
-        'Price': price,
+        'Buying Price': cost,
+        'Selling Price': price,
         'Margin %': marginPercent.toFixed(1),
         'Total Value': totalValue.toFixed(2),
         'Total Profit': totalProfit.toFixed(2),
@@ -970,22 +1092,21 @@ export default function UnifiedProductsInventoryPage() {
           )}
 
           {/* Header Section */}
-          <div className="mb-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className="flex-shrink-0 p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                    <FaBox className="w-6 h-6 text-white" />
+          <div className="mb-4">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="flex-shrink-0 p-1.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-sm">
+                    <FaBox className="w-4 h-4 text-white" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Products & Inventory</h1>
-                    <p className="text-sm text-gray-600">Comprehensive management for your product catalog and stock levels</p>
+                    <h1 className="text-lg font-semibold text-gray-900">Products & Inventory</h1>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
-                    <FaStore className="w-4 h-4 text-gray-500" />
-                    <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Branch:</label>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-1 border border-gray-200">
+                    <FaStore className="w-3.5 h-3.5 text-gray-500" />
+                    <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Branch:</label>
                     {branchesLoading ? (
                       <div className="flex items-center gap-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
@@ -1206,7 +1327,7 @@ export default function UnifiedProductsInventoryPage() {
                           </div>
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Price <span className="text-red-500">*</span>
+                              Selling Price <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
                               <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
@@ -1223,7 +1344,7 @@ export default function UnifiedProductsInventoryPage() {
                             </div>
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Cost</label>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Buying Price</label>
                             <div className="relative">
                               <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
                               <input
@@ -1427,12 +1548,12 @@ export default function UnifiedProductsInventoryPage() {
                               {/* Metrics */}
                               <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
                                 <div>
-                                  <p className="text-xs font-medium text-gray-500 mb-1">Price</p>
-                                  <p className="text-lg font-bold text-gray-900">${product.price.toFixed(2)}</p>
+                                  <p className="text-xs font-medium text-gray-500 mb-1">Selling Price</p>
+                                  <p className="text-lg font-bold text-gray-900">Ksh {product.price.toFixed(2)}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs font-medium text-gray-500 mb-1">Cost</p>
-                                  <p className="text-lg font-bold text-gray-700">${(product.cost || 0).toFixed(2)}</p>
+                                  <p className="text-xs font-medium text-gray-500 mb-1">Buying Price</p>
+                                  <p className="text-lg font-bold text-gray-700">Ksh {(product.cost || 0).toFixed(2)}</p>
                                 </div>
                                 <div className="col-span-2 pt-2 border-t border-gray-200">
                                   <div className="flex items-center justify-between">
@@ -1675,83 +1796,96 @@ export default function UnifiedProductsInventoryPage() {
             {/* INVENTORY TAB */}
             {activeTab === 'inventory' && (
               <div>
-                {/* Statistics */}
-                {inventoryStats && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                    <div className="bg-blue-50 rounded-lg p-2 border border-blue-100">
-                      <p className="text-[11px] font-semibold text-gray-500">Total Products</p>
-                      <p className="text-base font-bold text-blue-600">{inventoryStats.totalProducts}</p>
+                {inventoryLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading inventory...</p>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-2 border border-green-100">
-                      <p className="text-[11px] font-semibold text-gray-500">Inventory Value</p>
-                      <p className="text-base font-bold text-green-600">${inventoryStats.totalValue.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-2 border border-green-100">
-                      <p className="text-[11px] font-semibold text-gray-500">In Stock</p>
-                      <p className="text-base font-bold text-green-600">{inventoryStats.inStock}</p>
-                    </div>
-                    <div className="bg-red-50 rounded-lg p-2 border border-red-100">
-                      <p className="text-[11px] font-semibold text-gray-500">Out of Stock</p>
-                      <p className="text-base font-bold text-red-600">{inventoryStats.outOfStock}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Filters */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2">
-                  <div className="flex-1 flex gap-1">
-                    <div className="relative w-full max-w-xs">
-                      <FaSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
-                      <input
-                        type="text"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        placeholder="Search products..."
-                        className="w-full pl-7 pr-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs"
-                      />
-                    </div>
-                    <select
-                      value={stockFilter}
-                      onChange={e => setStockFilter(e.target.value)}
-                      className="px-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs font-semibold"
-                    >
-                      <option value="all">All Stock</option>
-                      <option value="in">In Stock</option>
-                      <option value="out">Out of Stock</option>
-                      <option value="low">Low Stock</option>
-                    </select>
-                    {categories.length > 0 && (
-                      <select
-                        value={categoryFilter}
-                        onChange={e => setCategoryFilter(e.target.value)}
-                        className="px-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs font-semibold"
-                      >
-                        <option value="all">All Categories</option>
-                        {categories.map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={exportInventory}
-                      className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-semibold shadow"
-                    >
-                      <FaDownload className="w-3 h-3" />
-                      Export
-                    </button>
-                  </div>
-                </div>
-
-                {/* Inventory Grid */}
-                {currentInventoryProducts.length === 0 ? (
-                  <div className="text-center py-8">
-                    <FaBox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <h3 className="text-base font-semibold text-gray-900 mb-1">No products found</h3>
-                    <p className="text-xs text-gray-500">Try adjusting your search or filters</p>
                   </div>
                 ) : (
+                  <>
+                    {/* Statistics */}
+                    {inventoryStats && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                        <div className="bg-blue-50 rounded-lg p-2 border border-blue-100">
+                          <p className="text-[11px] font-semibold text-gray-500">Total Products</p>
+                          <p className="text-base font-bold text-blue-600">{inventoryStats.totalProducts}</p>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-2 border border-green-100">
+                          <p className="text-[11px] font-semibold text-gray-500">Inventory Value</p>
+                          <p className="text-base font-bold text-green-600">Ksh {inventoryStats.totalValue.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-2 border border-green-100">
+                          <p className="text-[11px] font-semibold text-gray-500">In Stock</p>
+                          <p className="text-base font-bold text-green-600">{inventoryStats.inStock}</p>
+                        </div>
+                        <div className="bg-red-50 rounded-lg p-2 border border-red-100">
+                          <p className="text-[11px] font-semibold text-gray-500">Out of Stock</p>
+                          <p className="text-base font-bold text-red-600">{inventoryStats.outOfStock}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Filters */}
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2">
+                      <div className="flex-1 flex gap-1">
+                        <div className="relative w-full max-w-xs">
+                          <FaSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
+                          <input
+                            type="text"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder="Search products..."
+                            className="w-full pl-7 pr-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs"
+                          />
+                        </div>
+                        <select
+                          value={stockFilter}
+                          onChange={e => setStockFilter(e.target.value)}
+                          className="px-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs font-semibold"
+                        >
+                          <option value="all">All Stock</option>
+                          <option value="in">In Stock</option>
+                          <option value="out">Out of Stock</option>
+                          <option value="low">Low Stock</option>
+                        </select>
+                        {categories.length > 0 && (
+                          <select
+                            value={categoryFilter}
+                            onChange={e => setCategoryFilter(e.target.value)}
+                            className="px-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs font-semibold"
+                          >
+                            <option value="all">All Categories</option>
+                            {categories.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={exportInventory}
+                          className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-semibold shadow"
+                        >
+                          <FaDownload className="w-3 h-3" />
+                          Export
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Inventory Grid */}
+                    {currentInventoryProducts.length === 0 ? (
+                      <div className="text-center py-8">
+                        <FaBox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                        <h3 className="text-base font-semibold text-gray-900 mb-1">No products found</h3>
+                        <p className="text-xs text-gray-500">
+                          {inventoryData && inventoryData.length === 0
+                            ? "No inventory items found. Products need to have inventory entries to appear here."
+                            : "Try adjusting your search or filters"}
+                        </p>
+                      </div>
+                    ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 mb-3">
                     {currentInventoryProducts.map(item => {
                       const product = item.product;
@@ -1786,11 +1920,11 @@ export default function UnifiedProductsInventoryPage() {
                               <div className="font-bold">{quantity}</div>
                             </div>
                             <div>
-                              <span className="text-gray-400">Price</span>
+                              <span className="text-gray-400">Selling Price</span>
                               <div className="font-bold">${price.toFixed(2)}</div>
                             </div>
                             <div>
-                              <span className="text-gray-400">Cost</span>
+                              <span className="text-gray-400">Buying Price</span>
                               <div className="font-bold">${cost.toFixed(2)}</div>
                             </div>
                             <div>
@@ -1848,496 +1982,386 @@ export default function UnifiedProductsInventoryPage() {
                     </button>
                   </div>
                 )}
+                  </>
+                )}
               </div>
             )}
 
             {/* ADVANCED TAB */}
             {activeTab === 'advanced' && (
               <div>
-                {/* Statistics */}
-                {advancedStats && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                    <div className="bg-white rounded border border-gray-200 p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-medium text-gray-600">Products</p>
-                          <p className="text-lg font-bold text-gray-900">{advancedStats.totalProducts}</p>
-                        </div>
-                        <div className="p-2 bg-blue-50 rounded">
-                          <FaBox className="w-4 h-4 text-blue-600" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white rounded border border-gray-200 p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-medium text-gray-600">Stock</p>
-                          <p className="text-lg font-bold text-gray-900">{advancedStats.totalStock.toLocaleString()}</p>
-                        </div>
-                        <div className="p-2 bg-green-50 rounded">
-                          <FaWarehouse className="w-4 h-4 text-green-600" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white rounded border border-gray-200 p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-medium text-gray-600">Value</p>
-                          <p className="text-lg font-bold text-gray-900">${advancedStats.totalValue.toLocaleString()}</p>
-                        </div>
-                        <div className="p-2 bg-purple-50 rounded">
-                          <FaCalculator className="w-4 h-4 text-purple-600" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white rounded border border-gray-200 p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-medium text-gray-600">Alerts</p>
-                          <p className="text-lg font-bold text-red-600">{advancedStats.activeAlerts}</p>
-                        </div>
-                        <div className="p-2 bg-red-50 rounded">
-                          <FaBell className="w-4 h-4 text-red-600" />
-                        </div>
-                      </div>
+                {advancedInventoryLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading advanced inventory...</p>
                     </div>
                   </div>
-                )}
+                ) : (
+                  <>
+                    {/* Statistics */}
+                    {advancedStats && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 mb-1">Total Products</p>
+                              <p className="text-2xl font-bold text-gray-900">{advancedStats.totalProducts}</p>
+                            </div>
+                            <div className="p-3 bg-blue-50 rounded-lg">
+                              <FaBox className="w-5 h-5 text-blue-600" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 mb-1">Total Stock</p>
+                              <p className="text-2xl font-bold text-gray-900">{advancedStats.totalStock.toLocaleString()}</p>
+                            </div>
+                            <div className="p-3 bg-green-50 rounded-lg">
+                              <FaWarehouse className="w-5 h-5 text-green-600" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 mb-1">Inventory Value</p>
+                              <p className="text-2xl font-bold text-gray-900">Ksh {advancedStats.totalValue.toLocaleString()}</p>
+                            </div>
+                            <div className="p-3 bg-purple-50 rounded-lg">
+                              <FaCalculator className="w-5 h-5 text-purple-600" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                {/* Advanced Sub-tabs */}
-                <div className="bg-white rounded border border-gray-200 mb-3">
-                  <div className="border-b border-gray-200">
-                    <nav className="flex">
-                      {[
-                        { id: 'overview', label: 'Overview', icon: FaBox },
-                        { id: 'movements', label: 'Movements', icon: FaHistory },
-                        { id: 'alerts', label: 'Alerts', icon: FaBell },
-                        { id: 'forecasting', label: 'Forecast', icon: FaChartLine },
-                        { id: 'locations', label: 'Locations', icon: FaMapMarkerAlt }
-                      ].map((tab) => (
-                        <button
-                          key={tab.id}
-                          onClick={() => setAdvancedSubTab(tab.id as AdvancedSubTab)}
-                          className={`flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-                            advancedSubTab === tab.id
-                              ? 'border-blue-500 text-blue-600'
-                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                          }`}
+                {/* Simplified Advanced Inventory View */}
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className="p-4 border-b border-gray-200">
+                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-900">Inventory Overview</h3>
+                      <div className="flex flex-1 sm:flex-initial gap-2 w-full sm:w-auto">
+                        <div className="relative flex-1 sm:flex-initial sm:min-w-[200px]">
+                          <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                          <input
+                            type="text"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder="Search products..."
+                            className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <select
+                          value={stockFilter}
+                          onChange={e => setStockFilter(e.target.value)}
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
-                          <tab.icon className="w-3 h-3" />
-                          {tab.label}
-                        </button>
-                      ))}
-                    </nav>
+                          <option value="all">All Stock</option>
+                          <option value="low">Low Stock</option>
+                          <option value="out">Out of Stock</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="p-3">
-                    {/* Overview Sub-tab */}
-                    {advancedSubTab === 'overview' && (
-                      <div>
-                        <div className="flex flex-col lg:flex-row gap-2 mb-2">
-                          <div className="flex-1">
-                            <div className="relative">
-                              <FaSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
-                              <input
-                                type="text"
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                                placeholder="Search products..."
-                                className="w-full pl-8 pr-2 py-1 border border-gray-300 rounded text-xs"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex gap-1">
-                            <select
-                              value={stockFilter}
-                              onChange={e => setStockFilter(e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-xs"
-                            >
-                              <option value="all">All Stock</option>
-                              <option value="low">Low Stock</option>
-                              <option value="out">Out of Stock</option>
-                              <option value="over">Over Stock</option>
-                            </select>
-                            <select
-                              value={locationFilter}
-                              onChange={e => setLocationFilter(e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-xs"
-                            >
-                              <option value="all">All Locations</option>
-                              {locations.map(location => (
-                                <option key={location.id} value={location.name}>{location.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="bg-white border border-gray-200 rounded overflow-hidden">
-                          <div className="overflow-x-auto">
-                            <table className="min-w-full text-xs">
-                              <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Product</th>
-                                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Location</th>
-                                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Stock</th>
-                                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Min/Max</th>
-                                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Status</th>
-                                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Actions</th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white divide-y divide-gray-100">
-                                {currentAdvancedInventory.length === 0 ? (
-                                  <tr>
-                                    <td colSpan={6} className="px-3 py-8 text-center text-gray-400 text-xs">
-                                      No inventory items found
-                                    </td>
-                                  </tr>
-                                ) : (
-                                  currentAdvancedInventory.map((item) => {
-                                    const status = getAdvancedStockStatus(item);
-                                    return (
-                                      <tr key={item.id} className="hover:bg-gray-50">
-                                        <td className="px-3 py-2 whitespace-nowrap">
-                                          <div>
-                                            <div className="text-xs font-medium text-gray-900">{item.product?.name}</div>
-                                            <div className="text-[11px] text-gray-500">{item.product?.sku}</div>
-                                          </div>
-                                        </td>
-                                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                                          {item.location || 'N/A'}
-                                        </td>
-                                        <td className="px-3 py-2 whitespace-nowrap">
-                                          <span className={`font-semibold ${status.color}`}>{item.quantity}</span>
-                                        </td>
-                                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
-                                          {item.minStock || 0} / {item.maxStock || 0}
-                                        </td>
-                                        <td className="px-3 py-2 whitespace-nowrap">
-                                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${status.bg} ${status.color}`}>
-                                            {status.icon}
-                                            {status.text}
-                                          </span>
-                                        </td>
-                                        <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">
-                                          <div className="flex gap-1">
-                                            <button
-                                              onClick={() => {
-                                                const prod = products.find(p => p.id === item.product?.id);
-                                                if (prod) {
-                                                  setSelectedProduct(prod);
-                                                  setShowMovementModal(true);
-                                                }
-                                              }}
-                                              className="text-blue-600 hover:text-blue-900"
-                                              title="Record Movement"
-                                            >
-                                              <FaHistory className="w-3 h-3" />
-                                            </button>
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-
-                        {advancedTotalPages > 1 && (
-                          <div className="flex justify-center items-center gap-2 mt-3">
-                            <button
-                              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                              disabled={currentPage === 1}
-                              className="px-2 py-1 border border-gray-300 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                            >
-                              Previous
-                            </button>
-                            <span className="mx-2 text-xs text-gray-600">
-                              Page {currentPage} of {advancedTotalPages}
-                            </span>
-                            <button
-                              onClick={() => setCurrentPage(p => Math.min(advancedTotalPages, p + 1))}
-                              disabled={currentPage === advancedTotalPages}
-                              className="px-2 py-1 border border-gray-300 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                            >
-                              Next
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Movements Sub-tab */}
-                    {advancedSubTab === 'movements' && (
-                      <div>
-                        <div className="flex justify-between items-center mb-3">
-                          <h3 className="text-base font-semibold text-gray-900">Stock Movement History</h3>
-                          <button
-                            onClick={() => setShowMovementModal(true)}
-                            className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-                            disabled={!canEditInventory}
-                          >
-                            <FaPlus className="w-3 h-3" />
-                            Record
-                          </button>
-                        </div>
-                        <div className="space-y-2">
-                          {stockMovements.length === 0 ? (
-                            <div className="text-center py-6 text-gray-400 text-xs">
-                              No stock movements recorded yet
-                            </div>
-                          ) : (
-                            stockMovements.slice(0, 20).map((movement) => (
-                              <div key={movement.id} className="bg-gray-50 rounded p-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`p-1 rounded ${
-                                      movement.type === 'in' ? 'bg-green-100 text-green-600' :
-                                      movement.type === 'out' ? 'bg-red-100 text-red-600' :
-                                      movement.type === 'adjustment' ? 'bg-yellow-100 text-yellow-600' :
-                                      'bg-blue-100 text-blue-600'
-                                    }`}>
-                                      {movement.type === 'in' ? <FaArrowUp className="w-3 h-3" /> :
-                                       movement.type === 'out' ? <FaArrowDown className="w-3 h-3" /> :
-                                       movement.type === 'adjustment' ? <FaSync className="w-3 h-3" /> :
-                                       <FaBox className="w-3 h-3" />}
-                                    </div>
-                                    <div>
-                                      <p className="font-medium text-xs text-gray-900">{movement.product?.name}</p>
-                                      <p className="text-[11px] text-gray-600">
-                                        {movement.type.charAt(0).toUpperCase() + movement.type.slice(1)} • {movement.location}
-                                        {movement.reason && ` • ${movement.reason}`}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className={`font-semibold text-xs ${
-                                      movement.type === 'in' ? 'text-green-600' :
-                                      movement.type === 'out' ? 'text-red-600' :
-                                      'text-gray-600'
-                                    }`}>
-                                      {movement.type === 'in' ? '+' : movement.type === 'out' ? '-' : ''}{movement.quantity}
-                                    </p>
-                                    <p className="text-[10px] text-gray-400">
-                                      {new Date(movement.createdAt).toLocaleDateString()}
-                                    </p>
-                                  </div>
-                                </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Product</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Stock</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {currentAdvancedInventory.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-12 text-center">
+                              <div className="flex flex-col items-center">
+                                <FaBox className="w-12 h-12 text-gray-300 mb-3" />
+                                <p className="text-sm font-medium text-gray-900 mb-1">No products found</p>
+                                <p className="text-xs text-gray-500">Try adjusting your search or filters</p>
                               </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Alerts Sub-tab */}
-                    {advancedSubTab === 'alerts' && (
-                      <div>
-                        <div className="flex justify-between items-center mb-3">
-                          <h3 className="text-base font-semibold text-gray-900">Inventory Alerts</h3>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setShowAlertSettings(true)}
-                              className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-xs"
-                            >
-                              <FaCog className="w-3 h-3" />
-                              Settings
-                            </button>
-                            <span className="px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-                              {alerts.filter(a => !a.isRead).length} Active
-                            </span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          {alerts.length === 0 ? (
-                            <div className="text-center py-6 text-gray-400 text-xs">
-                              No alerts at this time
-                            </div>
-                          ) : (
-                            alerts.map((alert) => (
-                              <div key={alert.id} className={`border rounded p-2 ${getAlertSeverityColor(alert.severity)} ${!alert.isRead ? 'border-l-4' : ''}`}>
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <FaBell className="w-4 h-4" />
-                                    <div>
-                                      <p className="font-medium text-xs text-gray-900">{alert.product?.name}</p>
-                                      <p className="text-[11px]">{alert.message}</p>
-                                      <p className="text-[10px] text-gray-400 mt-1">
-                                        {new Date(alert.createdAt).toLocaleDateString()}
-                                      </p>
-                                    </div>
+                            </td>
+                          </tr>
+                        ) : (
+                          currentAdvancedInventory.map((item) => {
+                            const status = getAdvancedStockStatus(item);
+                            return (
+                              <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900">{item.product?.name}</div>
+                                    <div className="text-xs text-gray-500 mt-0.5">{item.product?.sku}</div>
                                   </div>
-                                  {!alert.isRead && (
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className={`text-sm font-semibold ${status.color}`}>{item.quantity || 0}</span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${status.bg} ${status.color}`}>
+                                    {status.icon}
+                                    {status.text}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                  {canEditInventory && (
                                     <button
-                                      onClick={() => markAlertAsRead(alert.id)}
-                                      className="px-2 py-0.5 bg-white text-gray-700 rounded text-xs hover:bg-gray-50"
+                                      onClick={() => {
+                                        const prod = products.find(p => p.id === item.product?.id) || 
+                                                   (advancedProductsData || []).find((p: Product) => p.id === item.product?.id);
+                                        if (prod) {
+                                          setModalProduct(prod);
+                                          setModalQuantity(item.quantity || 0);
+                                          setShowStockModal(true);
+                                        }
+                                      }}
+                                      className="text-blue-600 hover:text-blue-900 font-medium"
+                                      title="Update Stock"
                                     >
-                                      Mark as Read
+                                      <FaEdit className="w-4 h-4" />
                                     </button>
                                   )}
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Forecasting Sub-tab */}
-                    {advancedSubTab === 'forecasting' && (
-                      <div>
-                        <div className="flex justify-between items-center mb-3">
-                          <h3 className="text-base font-semibold text-gray-900">Stock Forecasting</h3>
-                          <div className="flex items-center gap-1 text-xs text-gray-600">
-                            <FaClipboardList className="w-3 h-3" />
-                            Predictive Analytics
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {forecastData.length === 0 ? (
-                            <div className="col-span-full text-center py-6 text-gray-400 text-xs">
-                              Forecasting data not available
-                            </div>
-                          ) : (
-                            forecastData.map((forecast) => (
-                              <div key={forecast.productId} className="bg-white border border-gray-200 rounded p-3">
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="font-semibold text-xs text-gray-900">{forecast.product?.name}</h4>
-                                  <div className={`px-2 py-0.5 rounded text-[11px] font-medium ${
-                                    forecast.confidence > 80 ? 'bg-green-100 text-green-800' :
-                                    forecast.confidence > 60 ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-red-100 text-red-800'
-                                  }`}>
-                                    {forecast.confidence}% confidence
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <div className="flex justify-between">
-                                    <span className="text-[11px] text-gray-600">Current Stock:</span>
-                                    <span className="font-medium">{forecast.currentStock}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-[11px] text-gray-600">Daily Sales Avg:</span>
-                                    <span className="font-medium">{forecast.averageDailySales.toFixed(1)}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-[11px] text-gray-600">Days Until Stockout:</span>
-                                    <span className={`font-medium ${forecast.daysUntilStockout < 7 ? 'text-red-600' : 'text-green-600'}`}>
-                                      {forecast.daysUntilStockout}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-[11px] text-gray-600">Recommended Order:</span>
-                                    <span className="font-medium text-blue-600">{forecast.recommendedOrder}</span>
-                                  </div>
-                                </div>
-                                {forecast.daysUntilStockout < 7 && (
-                                  <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
-                                    <div className="flex items-center gap-1">
-                                      <FaExclamationTriangle className="w-3 h-3 text-red-600" />
-                                      <span className="text-xs text-red-800">Reorder urgently recommended</span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Locations Sub-tab */}
-                    {advancedSubTab === 'locations' && (
-                      <div>
-                        <div className="flex justify-between items-center mb-3">
-                          <h3 className="text-base font-semibold text-gray-900">Inventory Locations</h3>
-                          <button
-                            onClick={() => setShowLocationModal(true)}
-                            className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-                            disabled={!canEditInventory}
-                          >
-                            <FaPlus className="w-3 h-3" />
-                            Add
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {locations.length === 0 ? (
-                            <div className="col-span-full text-center py-6 text-gray-400 text-xs">
-                              No locations configured
-                            </div>
-                          ) : (
-                            locations.map((location) => (
-                              <div key={location.id} className="bg-white border border-gray-200 rounded p-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <div className={`p-1 rounded ${
-                                    location.type === 'warehouse' ? 'bg-blue-100 text-blue-600' :
-                                    location.type === 'store' ? 'bg-green-100 text-green-600' :
-                                    'bg-purple-100 text-purple-600'
-                                  }`}>
-                                    {location.type === 'warehouse' ? <FaWarehouse className="w-4 h-4" /> :
-                                     location.type === 'store' ? <FaStore className="w-4 h-4" /> :
-                                     <FaClipboardList className="w-4 h-4" />}
-                                  </div>
-                                  <div>
-                                    <h4 className="font-semibold text-xs text-gray-900">{location.name}</h4>
-                                    <p className="text-[11px] text-gray-600 capitalize">{location.type}</p>
-                                  </div>
-                                </div>
-                                {location.address && (
-                                  <p className="text-[11px] text-gray-600 mb-2">{location.address}</p>
-                                )}
-                                <div className="text-[11px] text-gray-500">
-                                  {advancedInventoryData.filter(item => item.location === location.name).length} products stored
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
+
+                  {/* Pagination */}
+                  {advancedTotalPages > 1 && (
+                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+                      <div className="text-sm text-gray-600">
+                        Showing {advancedStartIndex + 1} to {Math.min(advancedEndIndex, filteredAdvancedInventory.length)} of {filteredAdvancedInventory.length} products
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white transition-colors"
+                        >
+                          Previous
+                        </button>
+                        <span className="px-3 py-1.5 text-sm text-gray-700 font-medium">
+                          Page {currentPage} of {advancedTotalPages}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(advancedTotalPages, p + 1))}
+                          disabled={currentPage === advancedTotalPages}
+                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
+                  </>
+                )}
               </div>
             )}
 
             {/* ATTRIBUTES TAB */}
             {activeTab === 'attributes' && (
-              <div>
-                <ProductAttributesManager />
+              <div className="space-y-4">
+                {/* Header Section */}
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-gray-100 rounded-lg">
+                      <FaPalette className="w-4 h-4 text-gray-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">Product Attributes</h2>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Attributes Content */}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <ProductAttributesManager />
+                </div>
               </div>
             )}
 
             {/* VARIATIONS TAB */}
             {activeTab === 'variations' && (
-              <div>
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold mb-2">Product Variations</h3>
-                  <p className="text-sm text-gray-600">
-                    Select a product from the Products tab to manage its variations, or create a new product with variations.
-                  </p>
+              <div className="space-y-6">
+                {/* Header Section */}
+                <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-xl p-6 border border-blue-100 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-blue-100 rounded-lg">
+                        <FaLayerGroup className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Product Variations</h2>
+                        <p className="text-sm text-gray-600 mt-1">Manage product variants like sizes, colors, and other attributes</p>
+                      </div>
+                    </div>
+                    {selectedProduct && (
+                      <button
+                        onClick={() => {
+                          setSelectedProduct(null);
+                          setSelectedProductId(null);
+                        }}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                      >
+                        <FaTimes className="w-4 h-4" />
+                        Clear Selection
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Product Selector */}
+                  {!selectedProduct && (
+                    <div className="mt-4">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Select Product to Manage Variations
+                      </label>
+                      <div className="flex gap-3">
+                        <select
+                          value={selectedProductId || ''}
+                          onChange={(e) => {
+                            const productId = e.target.value;
+                            if (productId) {
+                              const allProducts = activeTab === 'variations' && variationsProductsData 
+                                ? variationsProductsData 
+                                : products;
+                              const product = allProducts.find(p => p.id === productId);
+                              if (product) {
+                                setSelectedProduct(product);
+                                setSelectedProductId(product.id);
+                              }
+                            }
+                          }}
+                          className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 font-medium"
+                        >
+                          <option value="">Choose a product...</option>
+                          {(activeTab === 'variations' && variationsProductsData ? variationsProductsData : products).map((product) => (
+                            <option key={product.id} value={product.id}>
+                              {product.name} ({product.sku})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => setActiveTab('products')}
+                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center gap-2 shadow-sm"
+                        >
+                          <FaPlus className="w-4 h-4" />
+                          New Product
+                        </button>
+                      </div>
+                      {((activeTab === 'variations' && variationsProductsData ? variationsProductsData : products).length === 0) && (
+                        <p className="mt-3 text-sm text-gray-500">
+                          No products available. Create a product first to manage variations.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Selected Product Info */}
+                  {selectedProduct && (
+                    <div className="mt-4 bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-bold text-gray-900">{selectedProduct.name}</h3>
+                            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded">
+                              {selectedProduct.sku}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Selling Price</p>
+                              <p className="text-sm font-bold text-gray-900">Ksh {selectedProduct.price.toFixed(2)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Buying Price</p>
+                              <p className="text-sm font-bold text-gray-700">Ksh {(selectedProduct.cost || 0).toFixed(2)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Stock</p>
+                              <p className="text-sm font-bold text-gray-900">{selectedProduct.stock} units</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Margin</p>
+                              <p className={`text-sm font-bold ${
+                                selectedProduct.price > 0 && selectedProduct.cost 
+                                  ? ((selectedProduct.price - selectedProduct.cost) / selectedProduct.price * 100) >= 30 
+                                    ? 'text-green-600' 
+                                    : ((selectedProduct.price - selectedProduct.cost) / selectedProduct.price * 100) >= 20 
+                                      ? 'text-amber-600' 
+                                      : 'text-orange-600'
+                                  : 'text-gray-600'
+                              }`}>
+                                {selectedProduct.price > 0 && selectedProduct.cost
+                                  ? `${((selectedProduct.price - selectedProduct.cost) / selectedProduct.price * 100).toFixed(1)}%`
+                                  : 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setActiveTab('products')}
+                          className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
+                        >
+                          View Product
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Variations Content */}
                 {selectedProduct ? (
-                  <VariationManager
-                    productId={selectedProduct.id}
-                    baseSku={selectedProduct.sku}
-                    basePrice={selectedProduct.price}
-                    baseCost={selectedProduct.cost}
-                    branchId={selectedBranchId}
-                  />
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <VariationManager
+                      productId={selectedProduct.id}
+                      baseSku={selectedProduct.sku}
+                      basePrice={selectedProduct.price}
+                      baseCost={selectedProduct.cost}
+                      branchId={selectedBranchId}
+                    />
+                  </div>
                 ) : (
-                  <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                    <FaLayerGroup className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Product Selected</h3>
-                    <p className="text-gray-600 mb-4">
-                      Go to the Products tab, click on a product, then come back here to manage its variations.
-                    </p>
-                    <button
-                      onClick={() => setActiveTab('products')}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      Go to Products
-                    </button>
+                  <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 overflow-hidden">
+                    <div className="text-center py-16 px-6">
+                      <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full mb-6">
+                        <FaLayerGroup className="w-10 h-10 text-blue-600" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">No Product Selected</h3>
+                      <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                        Select a product from the dropdown above or go to the Products tab to create a new product with variations.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <button
+                          onClick={() => setActiveTab('products')}
+                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          <FaBox className="w-4 h-4" />
+                          Browse Products
+                        </button>
+                        {canCreateProducts && (
+                          <button
+                            onClick={() => {
+                              setShowAddForm(true);
+                              setActiveTab('products');
+                            }}
+                            className="px-6 py-3 bg-white text-blue-600 rounded-lg hover:bg-blue-50 font-medium transition-colors border-2 border-blue-200 flex items-center justify-center gap-2"
+                          >
+                            <FaPlus className="w-4 h-4" />
+                            Create New Product
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2380,7 +2404,7 @@ export default function UnifiedProductsInventoryPage() {
                 </div>
                 <div className="mb-2 grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Price</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Selling Price</label>
                     <input
                       type="number"
                       min={0}
@@ -2391,7 +2415,7 @@ export default function UnifiedProductsInventoryPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Cost</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Buying Price</label>
                     <input
                       type="number"
                       min={0}

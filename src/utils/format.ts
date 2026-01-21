@@ -1,15 +1,19 @@
 /**
  * Format a number as currency
  * @param amount - The amount to format
- * @param currency - The currency code (default: USD)
- * @param locale - The locale for formatting (default: en-US)
+ * @param currency - The currency code (default: KES)
+ * @param locale - The locale for formatting (default: en-KE)
  * @returns Formatted currency string
  */
 export const formatCurrency = (
   amount: number,
-  currency: string = 'USD',
-  locale: string = 'en-US'
+  currency: string = 'KES',
+  locale: string = 'en-KE'
 ): string => {
+  // For KES/Ksh, use custom formatting with Ksh prefix
+  if (currency === 'KES' || currency === 'Ksh') {
+    return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,

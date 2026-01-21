@@ -222,7 +222,7 @@ export default function SuperadminDashboard() {
             />
             <StatCard
               title="Total MRR"
-              value={`$${stats.totalMRR.toFixed(2)}`}
+              value={`Ksh ${stats.totalMRR.toFixed(2)}`}
               subtitle="Monthly recurring revenue"
               icon={FaDollarSign}
               color="green"
@@ -231,7 +231,7 @@ export default function SuperadminDashboard() {
             />
             <StatCard
               title="Total Revenue"
-              value={`$${stats.totalRevenue.toFixed(2)}`}
+              value={`Ksh ${stats.totalRevenue.toFixed(2)}`}
               subtitle="All-time revenue"
               icon={FaChartLine}
               color="purple"

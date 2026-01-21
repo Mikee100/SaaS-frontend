@@ -7,11 +7,12 @@ import AIInsights from '@/components/AIInsights';
 import AdvancedSegments from '@/components/AdvancedSegments';
 import InteractiveChart from '@/components/InteractiveChart';
 import AlertBanner from '@/components/AlertBanner';
-import ReportBuilder from '@/components/ReportBuilder';
-import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaStar, FaArrowUp, FaBrain, FaUsers, FaBox, FaTable, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { FaChartLine, FaChartBar, FaChartPie, FaDownload, FaStar, FaArrowUp, FaBrain, FaUsers, FaBox, FaTable, FaChevronDown, FaChevronUp, FaFileAlt, FaShoppingCart, FaUser, FaWarehouse, FaMoneyBillWave, FaCalendarAlt, FaFilter } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Tooltip from '@/components/Tooltip';
+import { useBranches } from '@/hooks/useBranches';
+import ReportsTab from '@/components/ReportsTab';
 
 interface AnalyticsData {
   totalSales?: number;
@@ -23,6 +24,9 @@ interface AnalyticsData {
   salesByMonth?: Record<string, number>;
   salesByCategory?: Record<string, number>;
   topProducts?: Array<{ name: string; sales: number; revenue: number; growth?: number; margin?: number }>;
+  revenueGrowth?: number;
+  salesGrowth?: number;
+  customerRetention?: number;
   customerSegments?: Array<{ segment: string; count: number; revenue: number; avgOrderValue?: number; retention?: number }>;
   realTimeData?: {
     currentUsers: number;
@@ -74,6 +78,8 @@ export default function AnalyticsPage() {
   const canViewAnalytics = hasPermission(user, 'view_analytics');
 
   // Fetch analytics data using React Query - parallel queries with shared cache
+  const [trendsTimeRange, setTrendsTimeRange] = useState<'7d' | '30d' | '90d' | '6m' | '1y'>('30d');
+
   const { data: basicData, isLoading: basicLoading } = useQuery({
     queryKey: ['analytics', 'basic'],
     queryFn: () => apiGet('/analytics/basic') as Promise<AnalyticsData>,
@@ -95,6 +101,31 @@ export default function AnalyticsPage() {
     staleTime: 2 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: false, // Don't retry if endpoint doesn't exist
+  });
+
+  // Fetch trend-specific data
+  const { data: dailySales } = useQuery({
+    queryKey: ['analytics', 'sales', 'daily'],
+    queryFn: () => apiGet('/analytics/sales/daily') as Promise<Record<string, number>>,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    enabled: activeTab === 'trends',
+  });
+
+  const { data: weeklySales } = useQuery({
+    queryKey: ['analytics', 'sales', 'weekly'],
+    queryFn: () => apiGet('/analytics/sales/weekly') as Promise<Record<string, number>>,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    enabled: activeTab === 'trends',
+  });
+
+  const { data: yearlySales } = useQuery({
+    queryKey: ['analytics', 'sales', 'yearly'],
+    queryFn: () => apiGet('/analytics/sales/yearly') as Promise<Record<string, number>>,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    enabled: activeTab === 'trends',
   });
 
   const loading = basicLoading;
@@ -217,11 +248,19 @@ export default function AnalyticsPage() {
                       </div>
                     </div>
                     <p className="text-xl font-bold text-blue-900 mb-1">{basicData.totalSales?.toLocaleString() || '0'}</p>
-                    <div className="flex items-center text-xs">
-                      <FaArrowUp className="w-3 h-3 text-green-500 mr-1" />
-                      <span className="text-green-600 font-medium">+12.5%</span>
-                      <span className="text-blue-600 ml-1">vs last month</span>
-                    </div>
+                    {basicData.salesGrowth !== undefined && (
+                      <div className="flex items-center text-xs">
+                        {basicData.salesGrowth >= 0 ? (
+                          <FaArrowUp className="w-3 h-3 text-green-500 mr-1" />
+                        ) : (
+                          <FaArrowUp className="w-3 h-3 text-red-500 mr-1 rotate-180" />
+                        )}
+                        <span className={`font-medium ${basicData.salesGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {basicData.salesGrowth >= 0 ? '+' : ''}{basicData.salesGrowth.toFixed(1)}%
+                        </span>
+                        <span className="text-blue-600 ml-1">vs last month</span>
+                      </div>
+                    )}
                   </div>
                   <div className="bg-gradient-to-br from-green-50 to-green-100 rounded border border-green-200 p-3">
                     <div className="flex items-center justify-between mb-2">
@@ -233,12 +272,20 @@ export default function AnalyticsPage() {
                         <FaChartBar className="w-4 h-4 text-white" />
                       </div>
                     </div>
-                    <p className="text-xl font-bold text-green-900 mb-1">${basicData.totalRevenue?.toLocaleString() || '0'}</p>
-                    <div className="flex items-center text-xs">
-                      <FaArrowUp className="w-3 h-3 text-green-500 mr-1" />
-                      <span className="text-green-600 font-medium">+18.2%</span>
-                      <span className="text-green-600 ml-1">vs last month</span>
-                    </div>
+                    <p className="text-xl font-bold text-green-900 mb-1">Ksh {basicData.totalRevenue?.toLocaleString() || '0'}</p>
+                    {basicData.revenueGrowth !== undefined && (
+                      <div className="flex items-center text-xs">
+                        {basicData.revenueGrowth >= 0 ? (
+                          <FaArrowUp className="w-3 h-3 text-green-500 mr-1" />
+                        ) : (
+                          <FaArrowUp className="w-3 h-3 text-red-500 mr-1 rotate-180" />
+                        )}
+                        <span className={`font-medium ${basicData.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {basicData.revenueGrowth >= 0 ? '+' : ''}{basicData.revenueGrowth.toFixed(1)}%
+                        </span>
+                        <span className="text-green-600 ml-1">vs last month</span>
+                      </div>
+                    )}
                   </div>
                   <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded border border-purple-200 p-3">
                     <div className="flex items-center justify-between mb-2">
@@ -252,7 +299,7 @@ export default function AnalyticsPage() {
                     </div>
                     <p className="text-xl font-bold text-purple-900 mb-1">{basicData.totalProducts?.toLocaleString() || '0'}</p>
                     <div className="flex items-center text-xs">
-                      <span className="text-purple-600">+3 new this month</span>
+                      <span className="text-purple-600">Total products</span>
                     </div>
                   </div>
                   <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded border border-indigo-200 p-3">
@@ -266,11 +313,11 @@ export default function AnalyticsPage() {
                       </div>
                     </div>
                     <p className="text-xl font-bold text-indigo-900 mb-1">{basicData.totalCustomers?.toLocaleString() || '0'}</p>
-                    <div className="flex items-center text-xs">
-                      <FaArrowUp className="w-3 h-3 text-green-500 mr-1" />
-                      <span className="text-green-600 font-medium">+8.1%</span>
-                      <span className="text-indigo-600 ml-1">vs last month</span>
-                    </div>
+                    {basicData.customerRetention && (
+                      <div className="flex items-center text-xs">
+                        <span className="text-indigo-600">{basicData.customerRetention.toFixed(1)}% retention</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -281,7 +328,7 @@ export default function AnalyticsPage() {
                       <h3 className="text-base font-semibold text-gray-800">Avg Order Value</h3>
                       <FaBox className="w-4 h-4 text-orange-600" />
                     </div>
-                    <p className="text-xl font-bold text-gray-900 mb-1">${basicData.averageOrderValue?.toFixed(2) || '0'}</p>
+                    <p className="text-xl font-bold text-gray-900 mb-1">Ksh {basicData.averageOrderValue?.toFixed(2) || '0'}</p>
                     <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
                       <div className="bg-orange-500 h-1 rounded-full" style={{ width: '75%' }}></div>
                     </div>
@@ -303,11 +350,27 @@ export default function AnalyticsPage() {
                       <h3 className="text-base font-semibold text-gray-800">Monthly Growth</h3>
                       <FaChartLine className="w-4 h-4 text-green-600" />
                     </div>
-                    <p className="text-xl font-bold text-gray-900 mb-1">+15.2%</p>
-                    <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
-                      <div className="bg-green-500 h-1 rounded-full" style={{ width: '85%' }}></div>
-                    </div>
-                    <p className="text-xs text-gray-600">Strong performance</p>
+                    {basicData.revenueGrowth !== undefined ? (
+                      <>
+                        <p className={`text-xl font-bold mb-1 ${basicData.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {basicData.revenueGrowth >= 0 ? '+' : ''}{basicData.revenueGrowth.toFixed(1)}%
+                        </p>
+                        <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
+                          <div 
+                            className={`h-1 rounded-full ${basicData.revenueGrowth >= 0 ? 'bg-green-500' : 'bg-red-500'}`} 
+                            style={{ width: `${Math.min(Math.abs(basicData.revenueGrowth), 100)}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-gray-600">
+                          {basicData.revenueGrowth >= 0 ? 'Growth' : 'Decline'} this month
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xl font-bold text-gray-900 mb-1">N/A</p>
+                        <p className="text-xs text-gray-600">No data available</p>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -318,61 +381,74 @@ export default function AnalyticsPage() {
                       <FaChartLine className="w-4 h-4 text-blue-600" />
                       Sales Trend (6mo)
                     </h3>
-                    <div className="h-40 flex items-end justify-between space-x-1">
-                      {[
-                        { month: 'Jan', sales: 12000 },
-                        { month: 'Feb', sales: 15000 },
-                        { month: 'Mar', sales: 18000 },
-                        { month: 'Apr', sales: 22000 },
-                        { month: 'May', sales: 25000 },
-                        { month: 'Jun', sales: 28000 },
-                      ].map((data) => (
-                        <div key={data.month} className="flex flex-col items-center flex-1">
-                          <div
-                            className="bg-gradient-to-t from-blue-500 to-blue-600 rounded-t w-full mb-1 transition-all hover:from-blue-600 hover:to-blue-700"
-                            style={{ height: `${(data.sales / 30000) * 120}px` }}
-                          ></div>
-                          <span className="text-[11px] font-medium text-gray-600">{data.month}</span>
-                          <span className="text-[10px] text-gray-500">${(data.sales / 1000).toFixed(0)}k</span>
-                        </div>
-                      ))}
-                    </div>
+                    {basicData.salesByMonth && Object.keys(basicData.salesByMonth).length > 0 ? (
+                      <div className="h-40 flex items-end justify-between space-x-1">
+                        {Object.entries(basicData.salesByMonth)
+                          .slice(-6)
+                          .map(([month, sales]) => {
+                            const salesValue = typeof sales === 'number' ? sales : 0;
+                            const maxSales = Math.max(...Object.values(basicData.salesByMonth || {}).map(v => typeof v === 'number' ? v : 0), 1);
+                            const monthName = new Date(month + '-01').toLocaleDateString('en-US', { month: 'short' });
+                            return (
+                              <div key={month} className="flex flex-col items-center flex-1">
+                                <div
+                                  className="bg-gradient-to-t from-blue-500 to-blue-600 rounded-t w-full mb-1 transition-all hover:from-blue-600 hover:to-blue-700"
+                                  style={{ height: `${(salesValue / maxSales) * 120}px` }}
+                                ></div>
+                                <span className="text-[11px] font-medium text-gray-600">{monthName}</span>
+                                <span className="text-[10px] text-gray-500">Ksh {(salesValue / 1000).toFixed(0)}k</span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      <div className="h-40 flex items-center justify-center text-gray-400 text-sm">
+                        No sales data available
+                      </div>
+                    )}
                   </div>
                   <div className="bg-white rounded border p-3">
                     <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
                       <FaChartPie className="w-4 h-4 text-green-600" />
                       Top Products by Revenue
                     </h3>
-                    <div className="space-y-2">
-                      {[
-                        { name: 'Wireless Headphones', revenue: 2450, percentage: 35 },
-                        { name: 'Smart Watch', revenue: 1890, percentage: 27 },
-                        { name: 'Laptop Stand', revenue: 1230, percentage: 18 },
-                        { name: 'USB Cable', revenue: 890, percentage: 13 },
-                        { name: 'Phone Case', revenue: 450, percentage: 7 },
-                      ].map((product, index) => (
-                        <div key={product.name} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
-                              {index + 1}
-                            </span>
-                            <div>
-                              <p className="font-medium text-xs text-gray-900">{product.name}</p>
-                              <p className="text-[11px] text-gray-600">${product.revenue}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-14 bg-gray-200 rounded-full h-1">
-                              <div
-                                className="bg-green-500 h-1 rounded-full"
-                                style={{ width: `${product.percentage}%` }}
-                              ></div>
-                            </div>
-                            <span className="text-xs font-medium text-gray-600">{product.percentage}%</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    {basicData.topProducts && basicData.topProducts.length > 0 ? (
+                      <div className="space-y-2">
+                        {(() => {
+                          const totalRevenue = basicData.topProducts.reduce((sum: number, p: any) => sum + (p.revenue || 0), 0);
+                          return basicData.topProducts.slice(0, 5).map((product: any, index: number) => {
+                            const revenue = product.revenue || 0;
+                            const percentage = totalRevenue > 0 ? (revenue / totalRevenue) * 100 : 0;
+                            return (
+                              <div key={product.name || index} className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
+                                    {index + 1}
+                                  </span>
+                                  <div>
+                                    <p className="font-medium text-xs text-gray-900">{product.name || 'Unknown Product'}</p>
+                                    <p className="text-[11px] text-gray-600">Ksh {(revenue || 0).toLocaleString()}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-14 bg-gray-200 rounded-full h-1">
+                                    <div
+                                      className="bg-green-500 h-1 rounded-full"
+                                      style={{ width: `${Math.min(percentage, 100)}%` }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-xs font-medium text-gray-600">{percentage.toFixed(0)}%</span>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-gray-400 text-sm">
+                        No product sales data available
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -381,23 +457,25 @@ export default function AnalyticsPage() {
                   <div className="bg-white rounded border p-3">
                     <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
                       <FaUsers className="w-4 h-4 text-purple-600" />
-                      Sales by Region
+                      Customer Insights
                     </h3>
                     <div className="space-y-2">
-                      {[
-                        { region: 'North America', sales: 15420, percentage: 45 },
-                        { region: 'Europe', sales: 12350, percentage: 36 },
-                        { region: 'Asia Pacific', sales: 5680, percentage: 17 },
-                        { region: 'Other', sales: 550, percentage: 2 },
-                      ].map((region) => (
-                        <div key={region.region} className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-gray-700">{region.region}</span>
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-gray-600">${region.sales.toLocaleString()}</span>
-                            <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">{region.percentage}%</span>
-                          </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-700">Total Customers</span>
+                        <span className="text-xs font-bold text-gray-900">{basicData.totalCustomers?.toLocaleString() || '0'}</span>
+                      </div>
+                      {basicData.customerRetention !== undefined && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-700">Retention Rate</span>
+                          <span className="text-xs font-bold text-purple-600">{basicData.customerRetention.toFixed(1)}%</span>
                         </div>
-                      ))}
+                      )}
+                      {basicData.averageOrderValue !== undefined && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-700">Avg Order Value</span>
+                          <span className="text-xs font-bold text-gray-900">Ksh {basicData.averageOrderValue.toFixed(2)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="bg-white rounded border p-3">
@@ -406,35 +484,54 @@ export default function AnalyticsPage() {
                       Performance Score
                     </h3>
                     <div className="text-center">
-                      <div className="relative w-16 h-16 mx-auto mb-2">
-                        <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 24 24">
-                          <circle
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            fill="none"
-                            className="text-gray-200"
-                          />
-                          <circle
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            fill="none"
-                            strokeDasharray={`${2 * Math.PI * 10}`}
-                            strokeDashoffset={`${2 * Math.PI * 10 * (1 - 0.85)}`}
-                            className="text-indigo-500"
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-lg font-bold text-indigo-600">85%</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-600">Overall Performance</p>
-                      <p className="text-[10px] text-green-600 mt-1">+5% from last month</p>
+                      {(() => {
+                        // Calculate performance score based on multiple factors
+                        let score = 50; // Base score
+                        if (basicData.revenueGrowth !== undefined && basicData.revenueGrowth > 0) score += 20;
+                        if (basicData.salesGrowth !== undefined && basicData.salesGrowth > 0) score += 15;
+                        if (basicData.customerRetention !== undefined && basicData.customerRetention > 50) score += 15;
+                        score = Math.min(100, Math.max(0, score));
+                        const percentage = score;
+                        return (
+                          <>
+                            <div className="relative w-16 h-16 mx-auto mb-2">
+                              <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 24 24">
+                                <circle
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  fill="none"
+                                  className="text-gray-200"
+                                />
+                                <circle
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  fill="none"
+                                  strokeDasharray={`${2 * Math.PI * 10}`}
+                                  strokeDashoffset={`${2 * Math.PI * 10 * (1 - percentage / 100)}`}
+                                  className={percentage >= 70 ? 'text-green-500' : percentage >= 50 ? 'text-yellow-500' : 'text-red-500'}
+                                />
+                              </svg>
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className={`text-lg font-bold ${percentage >= 70 ? 'text-green-600' : percentage >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                  {percentage}%
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-600">Overall Performance</p>
+                            {basicData.revenueGrowth !== undefined && (
+                              <p className={`text-[10px] mt-1 ${basicData.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {basicData.revenueGrowth >= 0 ? '+' : ''}{basicData.revenueGrowth.toFixed(1)}% revenue growth
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="bg-white rounded border p-3">
@@ -443,18 +540,26 @@ export default function AnalyticsPage() {
                       Quick Insights
                     </h3>
                     <div className="space-y-2">
-                      <div className="p-2 bg-blue-50 rounded border border-blue-200">
-                        <h4 className="font-medium text-blue-900 text-xs mb-0.5">Top Product</h4>
-                        <p className="text-[10px] text-blue-700">Wireless Headphones - $2,450</p>
-                      </div>
-                      <div className="p-2 bg-green-50 rounded border border-green-200">
-                        <h4 className="font-medium text-green-900 text-xs mb-0.5">Best Day</h4>
-                        <p className="text-[10px] text-green-700">Friday - $850 avg</p>
-                      </div>
-                      <div className="p-2 bg-purple-50 rounded border border-purple-200">
-                        <h4 className="font-medium text-purple-900 text-xs mb-0.5">Retention</h4>
-                        <p className="text-[10px] text-purple-700">78% repeat rate</p>
-                      </div>
+                      {basicData.topProducts && basicData.topProducts.length > 0 && (
+                        <div className="p-2 bg-blue-50 rounded border border-blue-200">
+                          <h4 className="font-medium text-blue-900 text-xs mb-0.5">Top Product</h4>
+                          <p className="text-[10px] text-blue-700">
+                            {basicData.topProducts[0].name} - Ksh {basicData.topProducts[0].revenue?.toLocaleString() || '0'}
+                          </p>
+                        </div>
+                      )}
+                      {basicData.totalRevenue !== undefined && (
+                        <div className="p-2 bg-green-50 rounded border border-green-200">
+                          <h4 className="font-medium text-green-900 text-xs mb-0.5">Total Revenue</h4>
+                          <p className="text-[10px] text-green-700">Ksh {basicData.totalRevenue.toLocaleString()}</p>
+                        </div>
+                      )}
+                      {basicData.customerRetention !== undefined && (
+                        <div className="p-2 bg-purple-50 rounded border border-purple-200">
+                          <h4 className="font-medium text-purple-900 text-xs mb-0.5">Retention</h4>
+                          <p className="text-[10px] text-purple-700">{basicData.customerRetention.toFixed(1)}% repeat rate</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -464,31 +569,547 @@ export default function AnalyticsPage() {
         )}
 
         {activeTab === 'trends' && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Sales Trends</h2>
-            {basicData?.salesByMonth && (
-              <InteractiveChart
-                data={Object.entries(basicData.salesByMonth).map(([month, value]) => ({
-                  month,
-                  sales: value,
-                }))}
-                type="line"
-                title="Monthly Sales Trends"
-                xKey="month"
-                yKey="sales"
-              />
+          <div className="space-y-4">
+            {/* Time Range Selector */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Sales Trends Analysis</h2>
+              <div className="flex gap-2">
+                {(['7d', '30d', '90d', '6m', '1y'] as const).map((range) => (
+                  <button
+                    key={range}
+                    onClick={() => setTrendsTimeRange(range)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                      trendsTimeRange === range
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : range === '90d' ? '90 Days' : range === '6m' ? '6 Months' : '1 Year'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Trend Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              {(() => {
+                const getTrendData = () => {
+                  if (trendsTimeRange === '7d' && dailySales) return dailySales;
+                  if (trendsTimeRange === '30d' && dailySales) return dailySales;
+                  if (trendsTimeRange === '90d' && weeklySales) return weeklySales;
+                  if (trendsTimeRange === '6m' && basicData?.salesByMonth) return basicData.salesByMonth;
+                  if (trendsTimeRange === '1y' && yearlySales) return yearlySales;
+                  return basicData?.salesByMonth || {};
+                };
+                
+                const trendData = getTrendData();
+                const values = Object.values(trendData).filter(v => typeof v === 'number' && !isNaN(v)) as number[];
+                const total = values.length > 0 ? values.reduce((sum, v) => sum + (v || 0), 0) : 0;
+                const avg = values.length > 0 ? total / values.length : 0;
+                const max = values.length > 0 ? Math.max(...values) : 0;
+                const min = values.length > 0 ? Math.min(...values) : 0;
+                
+                // Calculate growth
+                const sortedValues = [...values].sort((a, b) => a - b);
+                const firstHalf = sortedValues.slice(0, Math.floor(sortedValues.length / 2));
+                const secondHalf = sortedValues.slice(Math.floor(sortedValues.length / 2));
+                const firstHalfAvg = firstHalf.length > 0 ? firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length : 0;
+                const secondHalfAvg = secondHalf.length > 0 ? secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length : 0;
+                const growth = firstHalfAvg > 0 ? ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100 : 0;
+
+                return (
+                  <>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xs font-medium text-gray-600">Total Revenue</h3>
+                        <FaChartLine className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <p className="text-xl font-bold text-gray-900">Ksh {(total || 0).toLocaleString()}</p>
+                      <p className="text-xs text-gray-500 mt-1">Over {trendsTimeRange}</p>
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xs font-medium text-gray-600">Average Daily</h3>
+                        <FaChartBar className="w-4 h-4 text-green-600" />
+                      </div>
+                      <p className="text-xl font-bold text-gray-900">Ksh {(avg || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p className="text-xs text-gray-500 mt-1">Per period</p>
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xs font-medium text-gray-600">Peak Period</h3>
+                        <FaArrowUp className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <p className="text-xl font-bold text-gray-900">Ksh {(max || 0).toLocaleString()}</p>
+                      <p className="text-xs text-gray-500 mt-1">Highest value</p>
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xs font-medium text-gray-600">Trend</h3>
+                        {growth >= 0 ? (
+                          <FaArrowUp className="w-4 h-4 text-green-600" />
+                        ) : (
+                          <FaArrowUp className="w-4 h-4 text-red-600 rotate-180" />
+                        )}
+                      </div>
+                      <p className={`text-xl font-bold ${growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {growth >= 0 ? '+' : ''}{growth.toFixed(1)}%
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Growth rate</p>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Main Trend Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Revenue Trend Chart */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <FaChartLine className="w-4 h-4 text-blue-600" />
+                  Revenue Trend
+                </h3>
+                {(() => {
+                  const getChartData = () => {
+                    try {
+                      if (trendsTimeRange === '7d' && dailySales) {
+                        return Object.entries(dailySales).slice(-7).map(([date, value]) => ({
+                          label: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+                          value: (typeof value === 'number' && !isNaN(value)) ? value : 0,
+                        }));
+                      }
+                      if (trendsTimeRange === '30d' && dailySales) {
+                        return Object.entries(dailySales).slice(-30).map(([date, value]) => ({
+                          label: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                          value: (typeof value === 'number' && !isNaN(value)) ? value : 0,
+                        }));
+                      }
+                      if (trendsTimeRange === '90d' && weeklySales) {
+                        return Object.entries(weeklySales).map(([week, value]) => ({
+                          label: week,
+                          value: (typeof value === 'number' && !isNaN(value)) ? value : 0,
+                        }));
+                      }
+                      if (trendsTimeRange === '6m' && basicData?.salesByMonth) {
+                        return Object.entries(basicData.salesByMonth).slice(-6).map(([month, value]) => ({
+                          label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short' }),
+                          value: (typeof value === 'number' && !isNaN(value)) ? value : 0,
+                        }));
+                      }
+                      if (trendsTimeRange === '1y' && yearlySales) {
+                        return Object.entries(yearlySales).map(([year, value]) => ({
+                          label: year,
+                          value: (typeof value === 'number' && !isNaN(value)) ? value : 0,
+                        }));
+                      }
+                    } catch (error) {
+                      console.error('Error processing chart data:', error);
+                    }
+                    return [];
+                  };
+
+                  const chartData = getChartData();
+                  const maxValue = chartData.length > 0 ? Math.max(...chartData.map(d => d.value || 0), 1) : 1;
+
+                  return chartData.length > 0 ? (
+                    <div className="h-64 flex items-end justify-between gap-1">
+                      {chartData.map((data, index) => {
+                        const value = data.value || 0;
+                        return (
+                          <div key={index} className="flex flex-col items-center flex-1 group">
+                            <div
+                              className="w-full bg-gradient-to-t from-blue-500 to-blue-600 rounded-t mb-2 transition-all hover:from-blue-600 hover:to-blue-700 cursor-pointer relative"
+                              style={{ height: `${(value / maxValue) * 240}px` }}
+                              title={`${data.label}: Ksh ${value.toLocaleString()}`}
+                            >
+                              <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                                Ksh {value.toLocaleString()}
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-medium text-gray-600 text-center">{data.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="h-64 flex items-center justify-center text-gray-400 text-sm">
+                      No data available for this period
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Top Products Trend */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <FaChartPie className="w-4 h-4 text-green-600" />
+                  Top Products Performance
+                </h3>
+                {basicData?.topProducts && basicData.topProducts.length > 0 ? (
+                  <div className="space-y-3">
+                    {(() => {
+                      const topProducts = basicData.topProducts!;
+                      const totalRevenue = topProducts.reduce((sum: number, p: any) => sum + (p.revenue || 0), 0);
+                      return topProducts.slice(0, 5).map((product: any, index: number) => {
+                        const revenue = product.revenue || 0;
+                        const percentage = totalRevenue > 0 ? (revenue / totalRevenue) * 100 : 0;
+                      return (
+                        <div key={product.name || index}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-900">{product.name || 'Unknown'}</span>
+                            <span className="text-sm font-bold text-gray-900">Ksh {(revenue || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
+                              style={{ width: `${Math.min(percentage, 100)}%` }}
+                            ></div>
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-xs text-gray-500">{product.sales || 0} sales</span>
+                            <span className="text-xs font-medium text-gray-600">{percentage.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      );
+                    });
+                    })()}
+                  </div>
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-gray-400 text-sm">
+                    No product data available
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Additional Trend Analysis */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Sales Comparison */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <FaChartBar className="w-4 h-4 text-purple-600" />
+                  Period Comparison
+                </h3>
+                {(() => {
+                  const currentData = trendsTimeRange === '7d' ? dailySales : 
+                                     trendsTimeRange === '30d' ? dailySales :
+                                     trendsTimeRange === '90d' ? weeklySales :
+                                     trendsTimeRange === '6m' ? basicData?.salesByMonth : yearlySales;
+                  const currentTotal = currentData ? Object.values(currentData).reduce((sum: number, v: any) => sum + ((typeof v === 'number' && !isNaN(v)) ? v : 0), 0) : 0;
+                  const currentAvg = currentData && Object.keys(currentData).length > 0 
+                    ? currentTotal / Object.keys(currentData).length 
+                    : 0;
+                  
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                        <span className="text-sm font-medium text-gray-700">Current Period</span>
+                        <span className="text-lg font-bold text-blue-600">Ksh {currentTotal.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <span className="text-sm font-medium text-gray-700">Average</span>
+                        <span className="text-lg font-bold text-gray-900">Ksh {currentAvg.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                        <span className="text-sm font-medium text-gray-700">Data Points</span>
+                        <span className="text-lg font-bold text-green-600">{currentData ? Object.keys(currentData).length : 0}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Growth Indicators */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <FaArrowUp className="w-4 h-4 text-orange-600" />
+                  Growth Indicators
+                </h3>
+                {(() => {
+                  const getGrowthData = () => {
+                    const data = trendsTimeRange === '7d' ? dailySales : 
+                                trendsTimeRange === '30d' ? dailySales :
+                                trendsTimeRange === '90d' ? weeklySales :
+                                trendsTimeRange === '6m' ? basicData?.salesByMonth : yearlySales;
+                    if (!data) return null;
+                    const values = Object.values(data).filter(v => typeof v === 'number' && !isNaN(v)) as number[];
+                    if (values.length < 2) return null;
+                    const firstHalf = values.slice(0, Math.floor(values.length / 2));
+                    const secondHalf = values.slice(Math.floor(values.length / 2));
+                    const firstAvg = firstHalf.length > 0 ? firstHalf.reduce((s, v) => s + (v || 0), 0) / firstHalf.length : 0;
+                    const secondAvg = secondHalf.length > 0 ? secondHalf.reduce((s, v) => s + (v || 0), 0) / secondHalf.length : 0;
+                    const growth = firstAvg > 0 ? ((secondAvg - firstAvg) / firstAvg) * 100 : 0;
+                    return { growth, firstAvg: firstAvg || 0, secondAvg: secondAvg || 0 };
+                  };
+                  
+                  const growthData = getGrowthData();
+                  
+                  return growthData ? (
+                    <div className="space-y-3">
+                      <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
+                        <p className="text-3xl font-bold text-green-600">
+                          {growthData.growth >= 0 ? '+' : ''}{growthData.growth.toFixed(1)}%
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">Growth Rate</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="p-2 bg-gray-50 rounded text-center">
+                          <p className="text-xs text-gray-600">Early Avg</p>
+                          <p className="text-sm font-bold text-gray-900">Ksh {growthData.firstAvg.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                        </div>
+                        <div className="p-2 bg-gray-50 rounded text-center">
+                          <p className="text-xs text-gray-600">Recent Avg</p>
+                          <p className="text-sm font-bold text-gray-900">Ksh {growthData.secondAvg.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      Insufficient data for comparison
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Trend Insights */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <FaBrain className="w-4 h-4 text-indigo-600" />
+                  Trend Insights
+                </h3>
+                {(() => {
+                  const getInsights = () => {
+                    const data = trendsTimeRange === '7d' ? dailySales : 
+                                trendsTimeRange === '30d' ? dailySales :
+                                trendsTimeRange === '90d' ? weeklySales :
+                                trendsTimeRange === '6m' ? basicData?.salesByMonth : yearlySales;
+                    if (!data) return [];
+                    const values = Object.values(data).filter(v => typeof v === 'number' && !isNaN(v)) as number[];
+                    if (values.length === 0) return [];
+                    const entries = Object.entries(data);
+                    const maxEntry = entries.reduce((max, [k, v]) => {
+                      const numVal = typeof v === 'number' && !isNaN(v) ? v : 0;
+                      const maxVal = typeof max[1] === 'number' && !isNaN(max[1]) ? max[1] : 0;
+                      return numVal > maxVal ? [k, numVal] : max;
+                    }, ['', 0] as [string, number]);
+                    const minEntry = entries.reduce((min, [k, v]) => {
+                      const numVal = typeof v === 'number' && !isNaN(v) ? v : Infinity;
+                      const minVal = typeof min[1] === 'number' && !isNaN(min[1]) ? min[1] : Infinity;
+                      return numVal < minVal ? [k, numVal] : min;
+                    }, ['', Infinity] as [string, number]);
+                    const avg = values.length > 0 ? values.reduce((s, v) => s + (v || 0), 0) / values.length : 0;
+                    const variance = values.length > 0 ? values.reduce((s, v) => s + Math.pow((v || 0) - avg, 2), 0) / values.length : 0;
+                    const stdDev = Math.sqrt(variance);
+                    const consistency = avg > 0 && stdDev / avg < 0.3 ? 'High' : avg > 0 && stdDev / avg < 0.6 ? 'Medium' : 'Low';
+                    
+                    return [
+                      { label: 'Best Period', value: maxEntry[0] || 'N/A', amount: typeof maxEntry[1] === 'number' ? maxEntry[1] : 0 },
+                      { label: 'Lowest Period', value: minEntry[0] || 'N/A', amount: typeof minEntry[1] === 'number' && minEntry[1] !== Infinity ? minEntry[1] : 0 },
+                      { label: 'Consistency', value: consistency },
+                    ];
+                  };
+                  
+                  const insights = getInsights();
+                  
+                  return insights.length > 0 ? (
+                    <div className="space-y-2">
+                      {insights.map((insight, index) => (
+                        <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                          <p className="text-xs font-medium text-gray-600 mb-1">{insight.label}</p>
+                          <p className="text-sm font-bold text-gray-900">
+                            {insight.value}
+                            {insight.amount !== undefined && insight.amount !== null && ` - Ksh ${(insight.amount || 0).toLocaleString()}`}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      No insights available
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Day of Week Analysis & Additional Charts */}
+            {trendsTimeRange === '30d' && dailySales && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Day of Week Analysis */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <FaChartBar className="w-4 h-4 text-purple-600" />
+                    Sales by Day of Week
+                  </h3>
+                  {(() => {
+                    const dayOfWeekData: Record<string, number> = {};
+                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    
+                    Object.entries(dailySales).forEach(([date, value]) => {
+                      try {
+                        const day = new Date(date).getDay();
+                        const dayName = dayNames[day];
+                        const numValue = (typeof value === 'number' && !isNaN(value)) ? value : 0;
+                        dayOfWeekData[dayName] = (dayOfWeekData[dayName] || 0) + numValue;
+                      } catch (error) {
+                        // Skip invalid dates
+                      }
+                    });
+
+                    const sortedDays = dayNames.map(day => ({
+                      day,
+                      revenue: (dayOfWeekData[day] && typeof dayOfWeekData[day] === 'number') ? dayOfWeekData[day] : 0,
+                    }));
+
+                    const maxRevenue = sortedDays.length > 0 ? Math.max(...sortedDays.map(d => d.revenue || 0), 1) : 1;
+
+                    return (
+                      <div className="space-y-3">
+                        {sortedDays.map(({ day, revenue }) => (
+                          <div key={day}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-gray-700">{day}</span>
+                              <span className="text-sm font-bold text-gray-900">Ksh {(revenue || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-gradient-to-r from-purple-500 to-purple-600 h-2 rounded-full transition-all"
+                                style={{ width: `${(revenue / maxRevenue) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Velocity Metrics */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <FaChartLine className="w-4 h-4 text-blue-600" />
+                    Sales Velocity
+                  </h3>
+                  {(() => {
+                    const timeRange = trendsTimeRange as '7d' | '30d' | '90d' | '6m' | '1y';
+                    const data = timeRange === '7d' ? dailySales : 
+                                timeRange === '30d' ? dailySales :
+                                timeRange === '90d' ? weeklySales :
+                                timeRange === '6m' ? basicData?.salesByMonth : yearlySales;
+                    if (!data) return null;
+                    
+                    const values = Object.values(data).filter(v => typeof v === 'number' && !isNaN(v)) as number[];
+                    if (values.length === 0) return null;
+                    const sortedValues = [...values].sort((a, b) => a - b);
+                    const median = sortedValues.length > 0 ? sortedValues[Math.floor(sortedValues.length / 2)] : 0;
+                    const q1 = sortedValues.length > 0 ? sortedValues[Math.floor(sortedValues.length * 0.25)] : 0;
+                    const q3 = sortedValues.length > 0 ? sortedValues[Math.floor(sortedValues.length * 0.75)] : 0;
+                    const iqr = q3 - q1;
+                    const avg = values.length > 0 ? values.reduce((s, v) => s + (v || 0), 0) / values.length : 0;
+                    const maxValue = values.length > 0 ? Math.max(...values, 1) : 1;
+                    
+                    // Calculate momentum (rate of change)
+                    const recentValues = values.slice(-Math.min(7, values.length));
+                    const olderValues = values.slice(0, Math.max(0, values.length - 7));
+                    const recentAvg = recentValues.reduce((s, v) => s + v, 0) / recentValues.length;
+                    const olderAvg = olderValues.length > 0 ? olderValues.reduce((s, v) => s + v, 0) / olderValues.length : recentAvg;
+                    const momentum = olderAvg > 0 ? ((recentAvg - olderAvg) / olderAvg) * 100 : 0;
+
+                    return (
+                      <div className="space-y-3">
+                        <div className="p-3 bg-blue-50 rounded-lg">
+                          <p className="text-xs font-medium text-gray-600 mb-1">Average Daily</p>
+                          <p className="text-xl font-bold text-blue-600">Ksh {avg.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="p-2 bg-gray-50 rounded">
+                            <p className="text-xs text-gray-600">Median</p>
+                            <p className="text-sm font-bold text-gray-900">Ksh {median.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                          </div>
+                          <div className="p-2 bg-gray-50 rounded">
+                            <p className="text-xs text-gray-600">Momentum</p>
+                            <p className={`text-sm font-bold ${momentum >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {momentum >= 0 ? '+' : ''}{momentum.toFixed(1)}%
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
+                          <p className="text-xs font-medium text-gray-700 mb-2">Distribution Range</p>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-600">Q1: Ksh {q1.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                            <span className="text-gray-600">Q3: Ksh {q3.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                          </div>
+                          <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2 rounded-full"
+                              style={{ width: `${Math.min((iqr / maxValue) * 100, 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
             )}
-            {basicData?.salesByCategory && (
-              <InteractiveChart
-                data={Object.entries(basicData.salesByCategory).map(([category, value]) => ({
-                  category,
-                  sales: value,
-                }))}
-                type="bar"
-                title="Sales by Category"
-                xKey="category"
-                yKey="sales"
-              />
+
+            {/* Comparison Chart */}
+            {basicData?.salesByMonth && Object.keys(basicData.salesByMonth).length >= 2 && (
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <FaChartLine className="w-4 h-4 text-green-600" />
+                  Month-over-Month Comparison
+                </h3>
+                {(() => {
+                  const months = Object.entries(basicData.salesByMonth).slice(-6);
+                  if (months.length < 2) {
+                    return (
+                      <div className="text-center py-8 text-gray-400 text-sm">
+                        Insufficient data for comparison
+                      </div>
+                    );
+                  }
+                  const currentMonth = months[months.length - 1];
+                  const previousMonth = months[months.length - 2];
+                  const currentValue = (typeof currentMonth[1] === 'number' && !isNaN(currentMonth[1])) ? currentMonth[1] : 0;
+                  const previousValue = (typeof previousMonth[1] === 'number' && !isNaN(previousMonth[1])) ? previousMonth[1] : 0;
+                  const change = previousValue > 0 ? ((currentValue - previousValue) / previousValue) * 100 : 0;
+                  
+                  return (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-blue-50 rounded-lg">
+                        <p className="text-xs font-medium text-gray-600 mb-1">Current Month</p>
+                        <p className="text-2xl font-bold text-blue-600">Ksh {currentValue.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500 mt-1">{new Date(currentMonth[0] + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+                      </div>
+                      <div className="p-4 bg-green-50 rounded-lg">
+                        <p className="text-xs font-medium text-gray-600 mb-1">Previous Month</p>
+                        <p className="text-2xl font-bold text-green-600">Ksh {previousValue.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500 mt-1">{new Date(previousMonth[0] + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+                      </div>
+                      <div className="col-span-2 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">Change</span>
+                          <div className="flex items-center gap-2">
+                            {change >= 0 ? (
+                              <FaArrowUp className="w-5 h-5 text-green-600" />
+                            ) : (
+                              <FaArrowUp className="w-5 h-5 text-red-600 rotate-180" />
+                            )}
+                            <span className={`text-2xl font-bold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {change >= 0 ? '+' : ''}{change.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-2">
+                          {change >= 0 ? 'Increase' : 'Decrease'} of Ksh {Math.abs(currentValue - previousValue).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             )}
           </div>
         )}
@@ -539,18 +1160,11 @@ export default function AnalyticsPage() {
         )}
 
         {activeTab === 'reports' && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Custom Reports</h2>
-            <ReportBuilder
-              availableElements={[
-                { id: 'sales', type: 'metric', title: 'Total Sales', data: basicData?.totalSales },
-                { id: 'revenue', type: 'metric', title: 'Total Revenue', data: basicData?.totalRevenue },
-                { id: 'customers', type: 'metric', title: 'Customer Count', data: basicData?.totalCustomers },
-                { id: 'trends', type: 'chart', title: 'Sales Trends', data: basicData?.salesByMonth },
-                { id: 'segments', type: 'table', title: 'Customer Segments', data: advancedData?.customerSegments },
-              ]}
-            />
-          </div>
+          <ReportsTab 
+            basicData={basicData}
+            advancedData={advancedData}
+            user={user}
+          />
         )}
       </div>
     </AuthGuard>

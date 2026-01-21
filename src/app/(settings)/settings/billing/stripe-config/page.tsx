@@ -357,7 +357,7 @@ export default function StripeConfigPage() {
                   {/* Basic Plan */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Basic Plan Price ($)
+                      Basic Plan Price (Ksh)
                     </label>
                     <input
                       type="number"
@@ -374,7 +374,7 @@ export default function StripeConfigPage() {
                   {/* Pro Plan */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Pro Plan Price ($)
+                      Pro Plan Price (Ksh)
                     </label>
                     <input
                       type="number"
@@ -391,7 +391,7 @@ export default function StripeConfigPage() {
                   {/* Enterprise Plan */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Enterprise Plan Price ($)
+                      Enterprise Plan Price (Ksh)
                     </label>
                     <input
                       type="number"

@@ -382,7 +382,7 @@ export default function SalesPage() {
       : product.stock;
 
     let primaryPrice = product.price;
-    let priceLabel = `$${product.price.toFixed(2)}`;
+    let priceLabel = `Ksh ${product.price.toFixed(2)}`;
     if (hasVariations) {
       const prices = activeVars.map((v) => v.price ?? product.price);
       const min = Math.min(...prices);
@@ -609,7 +609,7 @@ export default function SalesPage() {
                               {item.name}
                             </div>
                             <div className="text-xs text-gray-600">
-                              ${item.price.toFixed(2)} each
+                              Ksh {item.price.toFixed(2)} each
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
                               Subtotal: $

@@ -18,14 +18,14 @@ export default function PerformanceMetrics({ metrics }: PerformanceMetricsProps)
     {
       icon: <FaUsers className="w-5 h-5 text-blue-600" />,
       label: "Customer Lifetime Value",
-      value: `$${metrics.customerLifetimeValue?.toLocaleString() || '0'}`,
+      value: `Ksh ${metrics.customerLifetimeValue?.toLocaleString() || '0'}`,
       description: "Average revenue per customer",
       color: "text-blue-600"
     },
     {
       icon: <FaDollarSign className="w-5 h-5 text-green-600" />,
       label: "Customer Acquisition Cost",
-      value: `$${metrics.customerAcquisitionCost?.toLocaleString() || '0'}`,
+      value: `Ksh ${metrics.customerAcquisitionCost?.toLocaleString() || '0'}`,
       description: "Cost to acquire new customer",
       color: "text-green-600"
     },
@@ -53,7 +53,7 @@ export default function PerformanceMetrics({ metrics }: PerformanceMetricsProps)
     {
       icon: <FaRocket className="w-5 h-5 text-indigo-600" />,
       label: "Average Order Value",
-      value: `$${metrics.averageOrderValue?.toFixed(2) || '0'}`,
+      value: `Ksh ${metrics.averageOrderValue?.toFixed(2) || '0'}`,
       description: "Per transaction value",
       color: "text-indigo-600"
     }

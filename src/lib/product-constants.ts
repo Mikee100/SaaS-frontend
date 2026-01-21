@@ -167,7 +167,7 @@ export const FIELD_METADATA: Record<string, FormField> = {
   price: {
     id: 'price',
     type: 'number',
-    label: 'Price',
+    label: 'Selling Price',
     description: 'Regular selling price',
     required: true,
     visible: true,
@@ -177,8 +177,8 @@ export const FIELD_METADATA: Record<string, FormField> = {
   cost: {
     id: 'cost',
     type: 'number',
-    label: 'Cost',
-    description: 'Your cost per item (not visible to customers)',
+    label: 'Buying Price',
+    description: 'Your buying price per item (not visible to customers)',
     required: false,
     visible: true,
     min: 0,

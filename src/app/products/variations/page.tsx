@@ -459,7 +459,7 @@ export default function ProductVariationsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Price (optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (optional)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -472,7 +472,7 @@ export default function ProductVariationsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost (optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Buying Price (optional)</label>
                   <input
                     type="number"
                     step="0.01"

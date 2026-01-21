@@ -84,11 +84,16 @@ export default function TenantBillingPage() {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
+  const formatCurrency = (amount: number, currency: string = 'KES') => {
+    const actualAmount = amount / 100; // Convert from cents if needed
+    // For KES/Ksh, use custom formatting
+    if (currency.toUpperCase() === 'KES' || currency.toUpperCase() === 'KSH') {
+      return `Ksh ${actualAmount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
-    }).format(amount / 100);
+    }).format(actualAmount);
   };
 
   const getStatusBadge = (status: string) => {
@@ -237,7 +242,7 @@ export default function TenantBillingPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       {typeof tenant.plan === 'object' && tenant.plan?.price !== undefined
-                        ? formatCurrency(tenant.plan.price, tenant.plan?.currency || 'USD')
+                        ? formatCurrency(tenant.plan.price, tenant.plan?.currency || 'KES')
                         : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

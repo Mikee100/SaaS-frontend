@@ -217,7 +217,7 @@ export default function SupplierProductsPage() {
                       <p className="text-blue-100">SKU: {product.sku}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-blue-100">Base Price</p>
+                      <p className="text-sm text-blue-100">Base Selling Price</p>
                       <p className="text-lg font-bold text-white">${product.price.toFixed(2)}</p>
                     </div>
                   </div>
@@ -246,10 +246,10 @@ export default function SupplierProductsPage() {
                               Stock
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Price
+                              Selling Price
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Cost
+                              Buying Price
                             </th>
                           </tr>
                         </thead>

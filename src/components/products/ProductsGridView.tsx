@@ -45,11 +45,11 @@ export default function ProductsGridView({
 
           <div className="space-y-2 mb-4">
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Price:</span>
+              <span className="text-gray-600">Selling Price:</span>
               <span className="font-semibold text-gray-800">${product.price.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Cost:</span>
+              <span className="text-gray-600">Buying Price:</span>
               <span className="font-semibold text-gray-800">${product.cost.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center">

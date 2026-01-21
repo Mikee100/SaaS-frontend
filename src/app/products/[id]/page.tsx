@@ -338,11 +338,11 @@ export default function ProductDetailPage() {
                           <p className="text-gray-900 font-mono">{product.sku}</p>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Base Price</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Base Selling Price</label>
                           <p className="text-gray-900">${product.price.toFixed(2)}</p>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Base Cost</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Base Buying Price</label>
                           <p className="text-gray-900">${product.cost.toFixed(2)}</p>
                         </div>
                         <div>
@@ -418,8 +418,8 @@ export default function ProductDetailPage() {
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attributes</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Buying Price</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>

@@ -276,8 +276,8 @@ export default function VariationManager({
                       {attr.displayName || attr.name}
                     </th>
                   ))}
-                <th className="px-4 py-2 text-left border-b">Price</th>
-                <th className="px-4 py-2 text-left border-b">Cost</th>
+                <th className="px-4 py-2 text-left border-b">Selling Price</th>
+                <th className="px-4 py-2 text-left border-b">Buying Price</th>
                 <th className="px-4 py-2 text-left border-b">Stock</th>
                 <th className="px-4 py-2 text-left border-b">Actions</th>
               </tr>
@@ -307,7 +307,7 @@ export default function VariationManager({
                         }
                       />
                     ) : (
-                      `$${(variation.price || basePrice).toFixed(2)}`
+                      `Ksh ${(variation.price || basePrice).toFixed(2)}`
                     )}
                   </td>
                   <td className="px-4 py-2 border-b">
@@ -324,7 +324,7 @@ export default function VariationManager({
                         }
                       />
                     ) : (
-                      `$${(variation.cost || baseCost).toFixed(2)}`
+                      `Ksh ${(variation.cost || baseCost).toFixed(2)}`
                     )}
                   </td>
                   <td className="px-4 py-2 border-b">
@@ -521,8 +521,8 @@ export default function VariationManager({
                               {attributes.find(a => a.name === attr.attributeName)?.displayName || attr.attributeName}
                             </th>
                           ))}
-                          <th className="px-3 py-2 text-left font-semibold border-b">Price</th>
-                          <th className="px-3 py-2 text-left font-semibold border-b">Cost</th>
+                          <th className="px-3 py-2 text-left font-semibold border-b">Selling Price</th>
+                          <th className="px-3 py-2 text-left font-semibold border-b">Buying Price</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -534,8 +534,8 @@ export default function VariationManager({
                                 {row.attributes[attr.attributeName]}
                               </td>
                             ))}
-                            <td className="px-3 py-2 border-b">${row.price.toFixed(2)}</td>
-                            <td className="px-3 py-2 border-b">${row.cost.toFixed(2)}</td>
+                            <td className="px-3 py-2 border-b">Ksh {row.price.toFixed(2)}</td>
+                            <td className="px-3 py-2 border-b">Ksh {row.cost.toFixed(2)}</td>
                           </tr>
                         ))}
                         {variationMatrix.length > 20 && (

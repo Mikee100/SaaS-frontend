@@ -172,10 +172,8 @@ export default function PlanManagementPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount / 100);
+    const actualAmount = amount / 100; // Convert from cents if needed
+    return `Ksh ${actualAmount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   if (loading) {

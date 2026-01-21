@@ -97,7 +97,11 @@ export default function BillingDashboard({  }: BillingDashboardProps) {
     fetchBillingData();
   }, [fetchBillingData]);
 
-  const formatCurrency = (amount: number, currency: string = 'usd') => {
+  const formatCurrency = (amount: number, currency: string = 'kes') => {
+    // For KES/Ksh, use custom formatting
+    if (currency.toLowerCase() === 'kes' || currency.toLowerCase() === 'ksh') {
+      return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency.toUpperCase(),

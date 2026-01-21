@@ -131,12 +131,10 @@ const SalesTrendsAnalysis: React.FC<SalesTrendsAnalysisProps> = ({
 
   // Format currency
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return `Ksh ${value.toLocaleString('en-KE', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(value);
+    })}`;
   };
 
   // Format period for display

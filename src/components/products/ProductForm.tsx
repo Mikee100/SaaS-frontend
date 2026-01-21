@@ -71,7 +71,7 @@ export default function ProductForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Price *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price *</label>
             <input
               type="number"
               name="price"
@@ -83,7 +83,7 @@ export default function ProductForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Buying Price</label>
             <input
               type="number"
               name="cost"

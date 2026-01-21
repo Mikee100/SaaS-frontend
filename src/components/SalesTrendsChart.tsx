@@ -49,12 +49,10 @@ const SalesTrendsChart: React.FC<SalesTrendsChartProps> = ({ data }) => {
   // Format currency
   const formatCurrency = React.useMemo(() => {
     return (value: number) => {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
+      return `Ksh ${value.toLocaleString('en-KE', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
-      }).format(value);
+      })}`;
     };
   }, []);
 

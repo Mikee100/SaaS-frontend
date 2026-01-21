@@ -176,7 +176,7 @@ export default function SubscriptionDetailsModal({
                 <div>
                   <label className="text-sm font-medium">Current Plan</label>
                   <p className="text-lg">{subscription.Plan.name}</p>
-                  <p className="text-sm text-muted-foreground">${subscription.Plan.price}/month</p>
+                  <p className="text-sm text-muted-foreground">Ksh {subscription.Plan.price}/month</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium">Current Period</label>
@@ -249,7 +249,7 @@ export default function SubscriptionDetailsModal({
                 {subscription.Invoice.slice(0, 3).map((invoice) => (
                   <div key={invoice.id} className="flex items-center justify-between py-2 border-b last:border-b-0">
                     <div>
-                      <p className="font-medium">${invoice.amount}</p>
+                      <p className="font-medium">Ksh {invoice.amount}</p>
                       <p className="text-sm text-muted-foreground">
                         {format(new Date(invoice.createdAt), 'MMM dd, yyyy')}
                       </p>
