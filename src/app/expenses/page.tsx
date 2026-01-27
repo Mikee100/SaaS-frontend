@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
-import { FaDollarSign, FaCalendarAlt, /* FaBuilding, */ FaSave, FaTimesCircle, FaExclamationTriangle, FaPlus, FaEye, FaEdit, FaTrash, /* FaCheckCircle, FaClock, */ FaRedo, FaFileDownload, FaChartBar, FaHistory, FaSync } from 'react-icons/fa';
+import { FaCalendarAlt, /* FaBuilding, */ FaSave, FaTimesCircle, FaExclamationTriangle, FaPlus, FaEye, FaEdit, FaTrash, /* FaCheckCircle, FaClock, */ FaRedo, FaFileDownload, FaChartBar, FaHistory, FaSync } from 'react-icons/fa';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { hasPermission } from '@/utils/permissions';
@@ -676,7 +676,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
   };
 
   const getExpenseTypeIcon = (type: string) => {
-    return type === 'recurring' ? <FaRedo className="w-4 h-4" /> : <FaDollarSign className="w-4 h-4" />;
+    return type === 'recurring' ? <FaRedo className="w-4 h-4" /> : <FaCalendarAlt className="w-4 h-4" />;
   };
 
   // Calculate summary totals
@@ -775,7 +775,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             <div className="bg-white border border-gray-100 rounded-lg shadow p-3">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <FaDollarSign className="w-5 h-5 text-blue-500" />
+                  <FaChartBar className="w-5 h-5 text-blue-500" />
                   <h1 className="text-xl font-bold text-gray-900">Expenses</h1>
                   <span className="text-xs text-gray-500 font-medium">Track and manage your business expenses</span>
                 </div>
@@ -877,7 +877,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            <FaDollarSign className="w-3 h-3 inline mr-1" />
+            <FaRedo className="w-3 h-3 inline mr-1" />
             Salaries
           </button>
           <button
@@ -917,14 +917,14 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
 
    
         {/* Salary Summary - compact */}
-        <div className="mb-4">
+            <div className="mb-4">
           <div className="bg-white rounded p-2 shadow-sm flex items-center justify-between border border-gray-100">
             <div>
               <h1 className="text-xs font-semibold text-gray-700 mb-0.5">Total Salary Expenses</h1>
               <p className="text-[11px] text-gray-500">Employee salaries as business expenses</p>
             </div>
             <div className="flex items-center gap-1">
-              <FaDollarSign className="w-4 h-4 text-gray-400" />
+              <FaChartBar className="w-4 h-4 text-gray-400" />
               <span className="text-base font-bold">Ksh {salaryTotal.toFixed(2)}</span>
             </div>
           </div>
@@ -1035,7 +1035,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             {/* Expenses Table (desktop) / Cards (mobile) */}
             {filteredExpenses.length === 0 ? (
               <div className="text-center py-10">
-                <FaDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <FaHistory className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                 <h3 className="text-base font-semibold text-gray-900 mb-1">No expenses found</h3>
                 <p className="text-gray-400 text-xs mb-2">Start by adding your first expense or adjust your filters</p>
                 {canCreateExpenses && (
@@ -1227,7 +1227,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               </div>
             ) : salarySchemes.length === 0 ? (
               <div className="text-center py-10">
-                <FaDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <FaHistory className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                 <h3 className="text-base font-semibold text-gray-900 mb-1">No salary schemes found</h3>
                 <p className="text-gray-400 text-xs mb-2">Assign a salary to get started</p>
               </div>
@@ -1499,7 +1499,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
 
               return filteredRecords.length === 0 ? (
                 <div className="text-center py-10">
-                  <FaDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                  <FaHistory className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                   <h3 className="text-base font-semibold text-gray-900 mb-1">No expense records found</h3>
                   <p className="text-gray-400 text-xs mb-2">Start by adding your first expense</p>
                   {canCreateExpenses && (

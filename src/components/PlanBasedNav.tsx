@@ -141,7 +141,7 @@ export default function PlanBasedNav() {
       ]
     },
     { name: 'Credit', href: '/credit', icon: FaCreditCard, requiredPlan: null, requiredPermission: 'view_users' },
-    { name: 'Expenses', href: '/expenses', icon: FaMoneyBillWave, requiredPlan: null, requiredPermission: 'view_users' },
+    { name: 'Expenses', href: '/expenses', icon: FaHistory, requiredPlan: null, requiredPermission: 'view_users' },
     { name: 'Settings', href: '/settings', icon: MdOutlineSettings, requiredPlan: null, requiredPermission: null },
     { name: 'Billing & Subscription', href: '/account/billing', icon: FaFileInvoiceDollar, requiredPlan: null, requiredPermission: null },
   ], []);
