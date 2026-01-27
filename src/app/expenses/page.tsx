@@ -146,7 +146,7 @@ export default function ExpensesPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page] = useState(1);
   const [limit] = useState(10);
-  const [branchComparison] = useState<BranchComparisonData | null>(null);
+  const [branchComparison, setBranchComparison] = useState<BranchComparisonData | null>(null);
   const [pastMonthsData] = useState<PastMonthsData | null>(null);
   const [resetting, setResetting] = useState(false);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
@@ -188,8 +188,34 @@ export default function ExpensesPage() {
   const [fetchingExpenseMonthlyTotal, /* setFetchingExpenseMonthlyTotal */] = useState(false);
   const [expenseTotalForSelectedMonth, /* setExpenseTotalForSelectedMonth */] = useState<{ monthName: string; totalAmount: number; expenseCount: number } | null>(null);
 
+  // Derive branch comparison data from loaded expenses
+  useEffect(() => {
+    if (!expenses || expenses.length === 0) {
+      setBranchComparison(null);
+      return;
+    }
 
-  
+    const branchMap: Record<string, { branchName: string; totalAmount: number; expenseCount: number }> = {};
+
+    expenses.forEach((exp) => {
+      const branchName = exp.branch?.name || 'Unassigned';
+
+      if (!branchMap[branchName]) {
+        branchMap[branchName] = {
+          branchName,
+          totalAmount: 0,
+          expenseCount: 0,
+        };
+      }
+
+      branchMap[branchName].totalAmount += exp.amount;
+      branchMap[branchName].expenseCount += 1;
+    });
+
+    setBranchComparison({
+      branches: Object.values(branchMap),
+    });
+  }, [expenses]);
   const fetchCurrentMonthSalaryTotal = useCallback(async () => {
     try {
       setSalarySummaryLoading(true);
@@ -1332,12 +1358,22 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
         {activeTab === 'comparison' && (
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Branch Comparison</h3>
-              {branchComparison && (
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Branch Comparison</h3>
+              <p className="text-xs text-gray-500 mb-4">
+                Compare total expense amount and count across your branches.
+              </p>
+              {!branchComparison || !branchComparison.branches || branchComparison.branches.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 text-sm">
+                  No branch expense data available yet. Add expenses with branches to see comparisons here.
+                </div>
+              ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {branchComparison.branches?.map((branch: { branchName: string; totalAmount: number; expenseCount: number }) => (
-                      <div key={branch.branchName} className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                    {branchComparison.branches.map((branch: { branchName: string; totalAmount: number; expenseCount: number }) => (
+                      <div
+                        key={branch.branchName}
+                        className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200"
+                      >
                         <h4 className="font-semibold text-blue-900 mb-2">{branch.branchName}</h4>
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
@@ -1350,14 +1386,16 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                           </div>
                           <div className="flex justify-between">
                             <span className="text-blue-700">Avg per Expense:</span>
-                            <span className="font-bold">Ksh {(branch.totalAmount / branch.expenseCount).toFixed(2)}</span>
+                            <span className="font-bold">
+                              Ksh {branch.expenseCount ? (branch.totalAmount / branch.expenseCount).toFixed(2) : '0.00'}
+                            </span>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
                   <div className="mt-6">
-                    <h4 className="font-semibold text-gray-900 mb-3">Expense Distribution by Category</h4>
+                    <h4 className="font-semibold text-gray-900 mb-3">Expense Distribution by Branch</h4>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={branchComparison.branches}>
                         <CartesianGrid strokeDasharray="3 3" />
@@ -1808,7 +1846,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-white/90 z-50 shadow-2xl border-l border-gray-100 flex flex-col rounded-l-xl"
+              className="fixed top-0 right-0 h-full w-full sm:w-[440px] bg-white/95 z-50 shadow-2xl border-l border-gray-100 flex flex-col rounded-l-xl"
               style={{ maxHeight: '100vh' }}
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white/90 z-10 rounded-t-xl">
@@ -2129,86 +2167,153 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               className="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-white/90 z-50 shadow-2xl border-l border-gray-100 flex flex-col rounded-l-xl"
               style={{ maxHeight: '100vh' }}
             >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white/90 z-10 rounded-t-xl">
-                <h3 className="text-lg font-bold text-gray-900">Salary Scheme Details</h3>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white/95 z-10 rounded-t-xl">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Salary Scheme Details</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Overview of this employee&apos;s recurring salary arrangement
+                  </p>
+                </div>
                 <button
                   onClick={() => {
                     setSalaryDrawerType(null);
                     setSelectedSalaryScheme(null);
                   }}
-                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition"
+                  className="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition"
                 >
                   <FaTimesCircle className="w-5 h-5" />
                 </button>
               </div>
               <div className="overflow-y-auto px-6 py-6 flex-1 space-y-6">
                 {/* Amount and Employee Section */}
-                <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl font-bold text-gray-900">Ksh {selectedSalaryScheme.salaryAmount.toFixed(2)}</div>
-                    <div className="text-sm text-gray-600">{selectedSalaryScheme.user?.name || selectedSalaryScheme.employeeName}</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 text-emerald-800">
-                      Salary
-                    </span>
-                    <div className="mt-2 flex items-center gap-1">
-                      <FaRedo className="w-4 h-4 text-emerald-500" />
-                      <span className="text-sm text-gray-600 capitalize">
-                        {selectedSalaryScheme.frequency}
+                <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-2xl p-5 shadow-sm border border-emerald-100">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 mb-1">
+                        Monthly salary
+                      </p>
+                      <div className="text-2xl font-bold text-gray-900">
+                        Ksh {selectedSalaryScheme.salaryAmount.toFixed(2)}
+                      </div>
+                      <div className="mt-2 text-sm font-medium text-gray-700">
+                        {selectedSalaryScheme.user?.name || selectedSalaryScheme.employeeName}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                        Salary scheme
                       </span>
+                      <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/80 border border-emerald-100">
+                        <FaRedo className="w-3.5 h-3.5 text-emerald-500" />
+                        <span className="text-xs text-gray-700 capitalize">
+                          {selectedSalaryScheme.frequency}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
                 {/* Details Grid Section */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white/80 rounded-xl p-5 border border-gray-100 shadow-sm">
-                    <h4 className="font-medium text-gray-900 mb-3">Basic Information</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Employee ID:</span>
-                        <span>{selectedSalaryScheme.userId}</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="bg-white/90 rounded-xl p-5 border border-gray-100 shadow-sm">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3">Basic Information</h4>
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                          Employee ID
+                        </p>
+                        <p className="font-medium text-gray-800 break-all">
+                          {selectedSalaryScheme.userId}
+                        </p>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Employee Name:</span>
-                        <span>{selectedSalaryScheme.user?.name || selectedSalaryScheme.employeeName}</span>
+                      <div>
+                        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                          Employee Name
+                        </p>
+                        <p className="font-medium text-gray-800">
+                          {selectedSalaryScheme.user?.name || selectedSalaryScheme.employeeName}
+                        </p>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Start Date:</span>
-                        <span>{new Date(selectedSalaryScheme.startDate).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Created:</span>
-                        <span>{new Date(selectedSalaryScheme.createdAt).toLocaleDateString()}</span>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                            Start Date
+                          </p>
+                          <p className="font-medium text-gray-800">
+                            {new Date(selectedSalaryScheme.startDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                            Created
+                          </p>
+                          <p className="font-medium text-gray-800">
+                            {new Date(selectedSalaryScheme.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
                       </div>
                       {selectedSalaryScheme.branch && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Branch:</span>
-                          <span>{selectedSalaryScheme.branch.name}</span>
+                        <div>
+                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                            Branch
+                          </p>
+                          <p className="font-medium text-gray-800">
+                            {selectedSalaryScheme.branch.name}
+                          </p>
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="bg-white/80 rounded-xl p-5 border border-gray-100 shadow-sm">
-                    <h4 className="font-medium text-gray-900 mb-3">Payment Details</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Status:</span>
-                        <span className={selectedSalaryScheme.isActive ? 'text-green-600' : 'text-red-600'}>
+                  <div className="bg-white/90 rounded-xl p-5 border border-gray-100 shadow-sm">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3">Payment Details</h4>
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                          Status
+                        </p>
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                            selectedSalaryScheme.isActive
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              : 'bg-red-50 text-red-700 border border-red-100'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                              selectedSalaryScheme.isActive ? 'bg-emerald-500' : 'bg-red-500'
+                            }`}
+                          />
                           {selectedSalaryScheme.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Next Due Date:</span>
-                        <span>{selectedSalaryScheme.nextDueDate ? new Date(selectedSalaryScheme.nextDueDate).toLocaleDateString() : '-'}</span>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                            Next Due Date
+                          </p>
+                          <p className="font-medium text-gray-800">
+                            {selectedSalaryScheme.nextDueDate
+                              ? new Date(selectedSalaryScheme.nextDueDate).toLocaleDateString()
+                              : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                            Last Paid Date
+                          </p>
+                          <p className="font-medium text-gray-800">
+                            {selectedSalaryScheme.lastPaidDate
+                              ? new Date(selectedSalaryScheme.lastPaidDate).toLocaleDateString()
+                              : '-'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Last Paid Date:</span>
-                        <span>{selectedSalaryScheme.lastPaidDate ? new Date(selectedSalaryScheme.lastPaidDate).toLocaleDateString() : '-'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Frequency:</span>
-                        <span className="capitalize">{selectedSalaryScheme.frequency}</span>
+                      <div>
+                        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                          Frequency
+                        </p>
+                        <p className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-gray-50 text-gray-800 text-xs font-medium capitalize">
+                          {selectedSalaryScheme.frequency}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -2216,20 +2321,20 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 {/* Notes Section */}
                 {selectedSalaryScheme.notes && (
                   <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-2xl p-4 shadow-sm border border-gray-100">
-                    <h4 className="font-medium text-gray-900 mb-3">Notes</h4>
-                    <div className="text-sm text-gray-700">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Notes</h4>
+                    <div className="text-sm text-gray-700 leading-relaxed">
                       {selectedSalaryScheme.notes}
                     </div>
                   </div>
                 )}
-                {/* Action Buttons - For now, just close; add edit/delete if needed later */}
-                <div className="flex justify-end gap-3 mt-2">
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 mt-1">
                   <button
                     onClick={() => {
                       setSalaryDrawerType(null);
                       setSelectedSalaryScheme(null);
                     }}
-                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold text-sm"
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold text-sm transition"
                   >
                     Close
                   </button>
