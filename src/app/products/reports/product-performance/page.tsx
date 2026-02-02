@@ -43,7 +43,7 @@ type Metrics = {
 };
 
 export default function ProductPerformanceReportPage() {
-
+  const { data: tenantData } = useTenant();
   const [metrics, setMetrics] = useState<Metrics>({ topProducts: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

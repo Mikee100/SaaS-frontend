@@ -103,22 +103,6 @@ type Metrics = {
 
 type Branch = { id: string; name: string };
 
-type PdfTemplate = {
-  businessName?: boolean;
-  businessAddress?: boolean;
-  businessPhone?: boolean;
-  businessEmail?: boolean;
-  branchInfo?: boolean;
-  primaryColor?: string;
-  secondaryColor?: string;
-  fontSize?: string;
-  footerText?: string;
-  paperSize?: string;
-  orientation?: string;
-  margins?: string;
-  currency?: string;
-};
-
 type BranchComparisonData = {
   timeRange: string;
   branches: Array<{

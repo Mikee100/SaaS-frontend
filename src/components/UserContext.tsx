@@ -266,8 +266,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         roles: Array.isArray(roles) ? roles : [],
         permissions: Array.isArray(permissions) ? permissions : [],
         isSuperadmin: loginUser.isSuperadmin || (Array.isArray(roles) && (roles.includes('superadmin') || roles.includes('admin'))),
-        tenantId: loginUser.tenantId,
-        branchId: loginUser.branchId,
+        tenantId: loginUser.tenantId ?? undefined,
+        branchId: loginUser.branchId ?? undefined,
         receiptLogo: (loginUser as User).receiptLogo
       };
 

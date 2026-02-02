@@ -52,6 +52,7 @@ type Supplier = {
 export default function SupplierPerformanceReportPage() {
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
+  const { data: tenantData } = useTenant();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
 const [error] = useState<string | null>(null);

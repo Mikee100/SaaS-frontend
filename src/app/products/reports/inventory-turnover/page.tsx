@@ -50,6 +50,7 @@ type TurnoverData = {
 export default function InventoryTurnoverReportPage() {
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
+  const { data: tenantData } = useTenant();
   const [turnoverData, setTurnoverData] = useState<TurnoverData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
