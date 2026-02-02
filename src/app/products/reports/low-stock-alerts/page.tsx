@@ -2,8 +2,19 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
 import { Bar } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -30,6 +41,7 @@ type Product = { id: string; name: string; stock: number; minStock?: number; pri
 export default function LowStockAlertsReportPage() {
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
+  const { data: tenantData } = useTenant();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,36 +69,63 @@ export default function LowStockAlertsReportPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text('Low Stock Alerts Report', 20, yPosition);
-    yPosition += 20;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Low Stock Items: ${lowStockProducts.length}`, 20, yPosition);
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Low Stock Alerts Report', margin, yPosition + 8);
+    yPosition += 18;
+
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 8;
+    doc.text(`Low Stock Items: ${lowStockProducts.length}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Out of Stock Items: ${outOfStockProducts.length}`, margin, yPosition);
+    yPosition += 14;
+
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Low Stock Products', margin, yPosition);
     yPosition += 10;
-    doc.text(`Out of Stock Items: ${outOfStockProducts.length}`, 20, yPosition);
-    yPosition += 20;
-
-    doc.text('Low Stock Products:', 20, yPosition);
+    const lowRows = lowStockProducts.map((p, i) => [i + 1, p.name, p.stock || 0]);
+    if (lowRows.length) {
+      autoTable(doc, {
+        head: [['#', 'Product', 'Stock']],
+        body: lowRows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+      yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    }
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Out of Stock Products', margin, yPosition);
     yPosition += 10;
-    lowStockProducts.forEach((product, index) => {
-      doc.setFontSize(10);
-      doc.text(`${index + 1}. ${product.name} - Stock: ${product.stock}`, 30, yPosition);
-      yPosition += 8;
-    });
+    const outRows = outOfStockProducts.map((p, i) => [i + 1, p.name, '0']);
+    if (outRows.length) {
+      autoTable(doc, {
+        head: [['#', 'Product', 'Stock']],
+        body: outRows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+    }
 
-    yPosition += 10;
-    doc.text('Out of Stock Products:', 20, yPosition);
-    yPosition += 10;
-    outOfStockProducts.forEach((product, index) => {
-      doc.setFontSize(10);
-      doc.text(`${index + 1}. ${product.name} - Stock: 0`, 30, yPosition);
-      yPosition += 8;
-    });
-
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Low Stock');
     doc.save('low_stock_alerts_report.pdf');
   };
 

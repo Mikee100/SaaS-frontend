@@ -2,8 +2,20 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { apiGet } from "@/utils/api";
 import { Line, Bar, Pie } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  getPdfCurrency,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -48,7 +60,7 @@ type Metrics = {
 type TabType = 'overview' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'performance';
 
 export default function ProductSalesReportPage() {
- 
+  const { data: tenantData } = useTenant();
   const [metrics, setMetrics] = useState<Metrics>({
     totalSales: 0,
     totalRevenue: 0,
@@ -168,47 +180,87 @@ export default function ProductSalesReportPage() {
   }, [metrics]);
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const currency = getPdfCurrency(tenantData, pdfTemplate);
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text(`${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Sales Report`, 20, yPosition);
-    yPosition += 20;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Total Sales: ${metrics.totalSales}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Total Revenue: Ksh ${metrics.totalRevenue?.toLocaleString()}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Average Sale Value: Ksh ${metrics.avgSaleValue?.toLocaleString()}`, 20, yPosition);
-    yPosition += 20;
+    const reportTitle = `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Sales Report`;
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text(reportTitle, margin, yPosition + 8);
+    yPosition += 18;
+
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 8;
+    doc.text(`Total Sales: ${metrics.totalSales}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Total Revenue: ${currency} ${(metrics.totalRevenue ?? 0).toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Average Sale Value: ${currency} ${(metrics.avgSaleValue ?? 0).toLocaleString()}`, margin, yPosition);
+    yPosition += 14;
 
     if (activeTab === 'performance') {
-      doc.text('Best Performing Products:', 20, yPosition);
+      doc.setFontSize(fontSize);
+      doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+      doc.text('Best Performing Products', margin, yPosition);
       yPosition += 10;
-      bestProducts.forEach((product, index) => {
-        doc.setFontSize(10);
-        doc.text(`${index + 1}. ${product.name} - ${product.unitsSold} units`, 30, yPosition);
-        yPosition += 8;
-      });
+      const bestRows = bestProducts.map((p, i) => [i + 1, p.name, p.unitsSold, (p.revenue ?? 0).toLocaleString()]);
+      if (bestRows.length) {
+        autoTable(doc, {
+          head: [['#', 'Product', 'Units Sold', `Revenue (${currency})`]],
+          body: bestRows,
+          startY: yPosition,
+          styles: { fontSize: fontSize - 2, cellPadding: 3 },
+          headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: secondaryRgb },
+          margin: { left: margin, right: margin },
+        });
+        yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+      }
+      doc.setFontSize(fontSize);
+      doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+      doc.text('Worst Performing Products', margin, yPosition);
       yPosition += 10;
-      doc.text('Worst Performing Products:', 20, yPosition);
-      yPosition += 10;
-      worstProducts.forEach((product, index) => {
-        doc.setFontSize(10);
-        doc.text(`${index + 1}. ${product.name} - ${product.unitsSold} units`, 30, yPosition);
-        yPosition += 8;
-      });
+      const worstRows = worstProducts.map((p, i) => [i + 1, p.name, p.unitsSold, (p.revenue ?? 0).toLocaleString()]);
+      if (worstRows.length) {
+        autoTable(doc, {
+          head: [['#', 'Product', 'Units Sold', `Revenue (${currency})`]],
+          body: worstRows,
+          startY: yPosition,
+          styles: { fontSize: fontSize - 2, cellPadding: 3 },
+          headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: secondaryRgb },
+          margin: { left: margin, right: margin },
+        });
+        yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+      }
     } else {
-      doc.text('Top Products:', 20, yPosition);
+      doc.setFontSize(fontSize);
+      doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+      doc.text('Top Products', margin, yPosition);
       yPosition += 10;
-      metrics.topProducts?.slice(0, 5).forEach((product, index) => {
-        doc.setFontSize(10);
-        doc.text(`${index + 1}. ${product.name} - Ksh ${product.revenue.toLocaleString()}`, 30, yPosition);
-        yPosition += 8;
-      });
+      const topRows = (metrics.topProducts?.slice(0, 15) || []).map((p, i) => [i + 1, p.name, p.unitsSold, (p.revenue ?? 0).toLocaleString()]);
+      if (topRows.length) {
+        autoTable(doc, {
+          head: [['#', 'Product', 'Units Sold', `Revenue (${currency})`]],
+          body: topRows,
+          startY: yPosition,
+          styles: { fontSize: fontSize - 2, cellPadding: 3 },
+          headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: secondaryRgb },
+          margin: { left: margin, right: margin },
+        });
+      }
     }
 
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Product Sales');
     doc.save(`${activeTab}_sales_report.pdf`);
   };
 

@@ -1,10 +1,28 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ReactNode, useEffect, useState, useCallback } from "react";
+import { ReactNode, useMemo } from "react";
 import ClientLayout from "@/app/ClientLayout";
 import { UserProvider } from "@/components/UserContext";
 import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
+
+const AUTH_PATHS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/api/auth',
+  '/_next',
+  '/favicon.ico',
+  '/api/',
+  '/_next/'
+];
+
+function isAuthPath(pathname: string | null): boolean {
+  if (!pathname) return false;
+  if (AUTH_PATHS.includes(pathname)) return true;
+  return AUTH_PATHS.some(path => pathname.startsWith(path));
+}
 
 interface AuthPageWrapperProps {
   children: ReactNode;
@@ -12,64 +30,22 @@ interface AuthPageWrapperProps {
 
 export default function AuthPageWrapper({ children }: AuthPageWrapperProps) {
   const pathname = usePathname();
-  const [isAuthPage, setIsAuthPage] = useState(false);
+  // Derive from pathname so it's never stale after navigation (no useState + useEffect lag)
+  const isAuthPage = useMemo(() => isAuthPath(pathname ?? ''), [pathname]);
 
-  // Memoize the auth path check to prevent unnecessary re-renders
-  const checkIfAuthPath = useCallback((currentPathname: string) => {
-    if (!currentPathname) {
-      return false;
-    }
-    
-    const authPaths = [
-      '/login',
-      '/register',
-      '/forgot-password',
-      '/reset-password',
-      '/api/auth',
-      '/_next',
-      '/favicon.ico',
-      '/api/',
-      '/_next/'
-    ];
-    
-    // Check direct matches first
-    if (authPaths.includes(currentPathname)) {
-      return true;
-    }
-    
-    // Check if path starts with any auth path
-    const isAuthPath = authPaths.some(path => currentPathname.startsWith(path));
-    
-    return isAuthPath;
-  }, []);
-
-  useEffect(() => {
-    if (!pathname) return;
-    const isAuth = checkIfAuthPath(pathname);
-    setIsAuthPage(isAuth);
-  }, [pathname, checkIfAuthPath]);
-
-  // Always wrap with ReactQueryProvider to ensure it's available for all pages
-  // For auth pages, use a minimal layout without the full app shell
-  if (isAuthPage) {
-    return (
-      <ReactQueryProvider>
-        <UserProvider skipUserFetch={true}>
+  // Single UserProvider for the whole app so login state persists when navigating from /login to /
+  return (
+    <ReactQueryProvider>
+      <UserProvider skipUserFetch={isAuthPage}>
+        {isAuthPage ? (
           <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
             {children}
           </div>
-        </UserProvider>
-      </ReactQueryProvider>
-    );
-  }
-
-  // For non-auth pages, use the full app layout with all providers
-  return (
-    <ReactQueryProvider>
-      <UserProvider>
-        <ClientLayout>
-          {children}
-        </ClientLayout>
+        ) : (
+          <ClientLayout>
+            {children}
+          </ClientLayout>
+        )}
       </UserProvider>
     </ReactQueryProvider>
   );

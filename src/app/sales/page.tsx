@@ -59,7 +59,8 @@ type CartItem = Product & {
   variationAttributes?: Record<string, string>;
 };
 
-export default function SalesPage() {
+// Sales page temporarily disabled – uncomment the export below and comment out the default export to restore.
+function SalesPageOriginal() {
   const router = useRouter();
   const { user } = useUser();
   const { selectedBranchId, setSelectedBranchId } = useBranch();
@@ -1087,4 +1088,14 @@ export default function SalesPage() {
   );
 }
 
-
+// Default: show unavailable so sales page is inaccessible. To restore: export SalesPageOriginal as default and remove this.
+export default function SalesPage() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="text-center max-w-md">
+        <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Sales page temporarily unavailable</h1>
+        <p className="text-gray-600 dark:text-gray-400 text-sm">This section has been disabled. Use the navigation to access other areas.</p>
+      </div>
+    </div>
+  );
+}

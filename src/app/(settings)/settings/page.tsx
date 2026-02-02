@@ -10,6 +10,7 @@ import {
   FaKey, 
   FaShieldAlt,
   FaImage,
+  FaFileAlt,
   FaPlug,
   FaUserShield,
   FaChartLine,
@@ -102,6 +103,13 @@ export default function SettingsPage() {
           description: 'Customize your branding',
           color: 'teal'
         },
+        { 
+          href: '/settings/pdf-templates', 
+          label: 'Report / PDF Design', 
+          icon: FaFileAlt, 
+          description: 'Design how your reports, invoices, and receipts look',
+          color: 'teal'
+        },
       ]
     },
     {
@@ -149,8 +157,8 @@ export default function SettingsPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div>
-          <p className="text-gray-600 text-lg">Loading settings...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent dark:border-blue-400 mb-4"></div>
+          <p className="text-gray-600 dark:text-slate-400 text-lg">Loading settings...</p>
         </div>
       </div>
     );
@@ -161,8 +169,8 @@ export default function SettingsPage() {
       {/* Header Section */}
       <div className="mb-8">
         <div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Settings</h1>
-          <p className="text-gray-600 text-lg">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-slate-100 mb-2">Settings</h1>
+          <p className="text-gray-600 dark:text-slate-400 text-lg">
             {tenant?.name 
               ? `Manage settings for ${tenant.name}` 
               : 'Manage your account, preferences, and organization settings'
@@ -180,7 +188,7 @@ export default function SettingsPage() {
       <div className="space-y-8">
         {settingsCategories.map((category) => (
           <div key={category.title}>
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">{category.title}</h2>
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-slate-200 mb-4">{category.title}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {category.items.map((item) => {
                 const Icon = item.icon;
@@ -188,18 +196,18 @@ export default function SettingsPage() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="group bg-white rounded-xl border border-gray-200 p-6 hover:border-blue-300 hover:shadow-lg transition-all duration-200 flex flex-col"
+                    className="group bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 p-6 hover:border-blue-300 dark:hover:border-slate-500 hover:shadow-lg transition-all duration-200 flex flex-col"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className={`p-3 rounded-xl ${colorClasses[item.color as keyof typeof colorClasses]}`}>
                         <Icon className="w-6 h-6" />
                       </div>
-                      <FaArrowRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                      <FaArrowRight className="w-5 h-5 text-gray-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                       {item.label}
                     </h3>
-                    <p className="text-sm text-gray-600 flex-1">
+                    <p className="text-sm text-gray-600 dark:text-slate-400 flex-1">
                       {item.description}
                     </p>
                   </Link>
@@ -211,37 +219,37 @@ export default function SettingsPage() {
       </div>
 
       {/* Quick Links */}
-      <div className="mt-12 pt-8 border-t border-gray-200">
+      <div className="mt-12 pt-8 border-t border-gray-200 dark:border-slate-700">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Link
             href="/settings/audit-logs"
-            className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md transition-all group"
+            className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl hover:border-blue-300 dark:hover:border-slate-500 hover:shadow-md transition-all group"
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-blue-100 transition-colors">
-                <FaChartLine className="w-5 h-5 text-gray-600 group-hover:text-blue-600" />
+              <div className="p-2 bg-gray-100 dark:bg-slate-700 rounded-lg group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors">
+                <FaChartLine className="w-5 h-5 text-gray-600 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-blue-600">Audit Logs</h3>
-                <p className="text-sm text-gray-500">View activity history</p>
+                <h3 className="font-semibold text-gray-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">Audit Logs</h3>
+                <p className="text-sm text-gray-500 dark:text-slate-400">View activity history</p>
               </div>
             </div>
-            <FaArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+            <FaArrowRight className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
           </Link>
           <Link
             href="/settings/contact"
-            className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md transition-all group"
+            className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl hover:border-blue-300 dark:hover:border-slate-500 hover:shadow-md transition-all group"
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-blue-100 transition-colors">
-                <FaBuilding className="w-5 h-5 text-gray-600 group-hover:text-blue-600" />
+              <div className="p-2 bg-gray-100 dark:bg-slate-700 rounded-lg group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors">
+                <FaBuilding className="w-5 h-5 text-gray-600 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-blue-600">Contact Admin</h3>
-                <p className="text-sm text-gray-500">Get help and support</p>
+                <h3 className="font-semibold text-gray-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">Contact Admin</h3>
+                <p className="text-sm text-gray-500 dark:text-slate-400">Get help and support</p>
               </div>
             </div>
-            <FaArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+            <FaArrowRight className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
           </Link>
         </div>
       </div>

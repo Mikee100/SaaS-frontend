@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, Dispatch, SetStateAction, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { apiGet } from "@/utils/api";
+import { login as authLogin, logout as authLogout } from "@/lib/auth-client";
 
 export interface User {
   id: string;
@@ -22,7 +23,7 @@ interface UserContextType {
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => void | Promise<void>;
   refreshUser: () => Promise<void>;
   clearError: () => void;
 }
@@ -97,22 +98,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
-  
+
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
+
   // Refs to prevent concurrent requests and track initialization
   const fetchingRef = useRef(false);
   const initializedRef = useRef(false);
   
-  // Helper to fetch user with caching and request deduplication
+  // Cookie-based auth: fetch user via /user/me (cookies sent with credentials: 'include')
   const fetchUser = useCallback(async (forceRefresh: boolean = false) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) {
-      setUser(null);
-      clearUserCache();
-      setLoading(false);
-      return;
-    }
-
-    // Check cache first (unless force refresh)
     if (!forceRefresh) {
       const cached = getCachedUser();
       if (cached.isValid && cached.user) {
@@ -123,26 +118,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       }
     }
 
-    // Prevent concurrent requests
-    if (fetchingRef.current) {
-      return;
-    }
-
+    if (fetchingRef.current) return;
     fetchingRef.current = true;
     setLoading(true);
-    
+
     try {
       const userData = await apiGet('/user/me') as User;
+      if (!userData) throw new Error('No user data received');
 
-      if (!userData) {
-        throw new Error('No user data received');
-      }
-
-      // Ensure roles and permissions are always arrays
       const roles = Array.isArray(userData.roles) ? userData.roles : [];
       const permissions = Array.isArray(userData.permissions) ? userData.permissions : [];
-
-      // Create normalized user object with all required fields
       const normalizedUser: User = {
         id: userData.id,
         email: userData.email || '',
@@ -155,21 +140,25 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         receiptLogo: userData.receiptLogo
       };
 
-      // Sync branch context from backend/JWT
-      if (userData.branchId) {
+      if (userData.branchId && typeof window !== 'undefined') {
         localStorage.setItem('selectedBranchId', userData.branchId);
       }
 
-      // Update cache and state
       setCachedUser(normalizedUser);
       setUser(normalizedUser);
       setError(null);
     } catch (err) {
-      console.error('Error fetching user:', err);
-      setUser(null);
-      clearUserCache();
-      setError('Authentication failed. Please log in again.');
-      localStorage.removeItem('token');
+      const isUnauthorized = err instanceof Error && (err.message === 'Unauthorized' || err.message.includes('401'));
+      if (!isUnauthorized) {
+        console.error('Error fetching user:', err);
+      }
+      // Don't clear user on 401 when we already have one (e.g. cross-origin cookies not sent after login)
+      if (!userRef.current) {
+        setUser(null);
+        clearUserCache();
+        setError('Authentication failed. Please log in again.');
+        if (typeof window !== 'undefined') localStorage.removeItem('token');
+      }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
@@ -194,16 +183,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
 
   // Initialize user data only once on mount (not on every route change)
   useEffect(() => {
-    // CRITICAL: If skipUserFetch is true, completely skip all authentication logic
+    // When skipUserFetch is true (auth pages), only skip fetch and set loading false - do NOT clear user
+    // so that after login, when we navigate to /, we don't clear user (pathname updates before skipUserFetch in some trees)
     if (skipUserFetch) {
-      setUser(null);
       setLoading(false);
       setError(null);
       initializedRef.current = true;
       return;
     }
 
-    // CRITICAL: Never fetch user data on auth pages to prevent redirect loops
+    // On auth pages (by pathname), clear user so login form shows
     if (isAuthPath()) {
       setUser(null);
       setLoading(false);
@@ -262,118 +251,61 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     }
   }, [pathname, skipUserFetch, isAuthPath]);
 
-  // 2. Wrap 'login', 'logout', and 'refreshUser' in useCallback
-  // Login function
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     setError(null);
-
     try {
-      const apiUrl = (process.env.NEXT_PUBLIC_API_URL  || 'http://localhost:9000'   ||  'https://saas-business.duckdns.org').replace(/\/+$/, '');
-      const loginUrl = `${apiUrl}/auth/login`;
+      const { user: loginUser } = await authLogin(email, password);
+      if (!loginUser) throw new Error('No user in response');
 
-      const response = await fetch(loginUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'include',
-        mode: 'cors',
-        body: JSON.stringify({ email, password })
-      });
+      const { roles = [], permissions = [] } = loginUser;
+      const normalizedUser: User = {
+        id: loginUser.id,
+        email: loginUser.email || '',
+        name: loginUser.name || '',
+        roles: Array.isArray(roles) ? roles : [],
+        permissions: Array.isArray(permissions) ? permissions : [],
+        isSuperadmin: loginUser.isSuperadmin || (Array.isArray(roles) && (roles.includes('superadmin') || roles.includes('admin'))),
+        tenantId: loginUser.tenantId,
+        branchId: loginUser.branchId,
+        receiptLogo: (loginUser as User).receiptLogo
+      };
 
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-          console.error('Login error response:', errorData);
-          throw new Error(errorData.message || `Login failed with status ${response.status}`);
-        } catch (e) {
-          console.error('Failed to parse error response:', e);
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+      if (loginUser.branchId && typeof window !== 'undefined') {
+        localStorage.setItem('selectedBranchId', loginUser.branchId);
       }
 
-      const loginResponse = await response.json();
-      const { access_token, user } = loginResponse;
+      setCachedUser(normalizedUser);
+      setUser(normalizedUser);
+      setLoading(false);
+      setError(null);
+      // Keep initialized so we don't refetch on redirect (avoids 401/hang when cookies aren't sent cross-origin)
+      initializedRef.current = true;
+      await new Promise((r) => setTimeout(r, 100));
 
-      if (access_token) {
-        localStorage.setItem('token', access_token);
+      const isSuperAdmin = normalizedUser.isSuperadmin || normalizedUser.roles?.includes('superadmin');
+      const isAdmin = normalizedUser.roles?.includes('admin');
+      if (isSuperAdmin) router.push('/superadmin');
+      else if (isAdmin) router.push('/admin');
+      else router.push('/');
 
-        // Update user state with the user data from the response
-        if (user) {
-          const { roles = [], permissions = [] } = user;
-          const normalizedUser: User = {
-            id: user.id,
-            email: user.email,
-            name: user.name || '',
-            roles: Array.isArray(roles) ? roles : [],
-            permissions: Array.isArray(permissions) ? permissions : [],
-            isSuperadmin: user.isSuperadmin || roles.includes('superadmin') || roles.includes('admin'),
-            tenantId: user.tenantId,
-            branchId: user.branchId,
-            receiptLogo: user.receiptLogo
-          };
-          
-          // Store branch ID if available
-          if (user.branchId) {
-            localStorage.setItem('selectedBranchId', user.branchId);
-          }
-
-          // Cache the user from login response immediately
-          setCachedUser(normalizedUser);
-          
-          // Set user state immediately so components can use it
-          setUser(normalizedUser);
-          setLoading(false);
-          setError(null);
-          
-          // Refresh user data from the server in the background (force refresh to ensure latest data)
-          fetchUser(true).catch(() => {
-            // If refresh fails, we still have the user from login response
-          });
-
-          // Reset initialization flag so components on the new page can fetch if needed
-          initializedRef.current = false;
-
-          // Small delay to ensure state is set before redirect
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-          // Redirect based on user role
-          const isSuperAdmin = normalizedUser.isSuperadmin || normalizedUser.roles?.includes('superadmin');
-          const isAdmin = normalizedUser.roles?.includes('admin');
-
-          if (isSuperAdmin) {
-            router.push('/superadmin');
-          } else if (isAdmin) {
-            router.push('/admin');
-          } else {
-            router.push('/');
-          }
-        }
-      } else {
-        throw new Error('No access token received in response');
-      }
-   } catch (err) {
-  setUser(null);
-  // Fix: Specify error type
-  setError((err instanceof Error ? err.message : 'Login failed'));
-  localStorage.removeItem('token');
-}finally {
+      // Don't refetch here: cross-origin cookies often aren't sent, so /user/me would 401 and we'd clear user and redirect back to login
+    } catch (err) {
+      setUser(null);
+      setError(err instanceof Error ? err.message : 'Login failed');
+      if (typeof window !== 'undefined') localStorage.removeItem('token');
+    } finally {
       setLoading(false);
     }
   }, [router, fetchUser]);
 
-  // 2. Wrap 'logout' in useCallback
-  // Logout function
-  const logout = useCallback(() => {
-    localStorage.removeItem('token');
+  const logout = useCallback(async () => {
+    await authLogout();
+    if (typeof window !== 'undefined') localStorage.removeItem('token');
     clearUserCache();
     setUser(null);
     setError(null);
-    initializedRef.current = false; // Reset initialization flag
+    initializedRef.current = false;
     router.push('/login');
   }, [router]);
 

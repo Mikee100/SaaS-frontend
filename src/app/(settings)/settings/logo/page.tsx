@@ -1,9 +1,32 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { apiGet, apiPut } from "@/utils/api";
+import API_BASE_URL from "@/config/apiConfig";
 import { FaImage, FaUpload, FaTrash, FaExclamationTriangle, FaInfoCircle } from 'react-icons/fa';
 import Link from "next/link";
 import Image from 'next/image';
+
+/** Backend field names for each logo type (for PUT /tenant/me when removing). */
+const LOGO_TYPE_TO_BACKEND_FIELD: Record<keyof LogoConfig, string> = {
+  mainLogo: 'logoUrl',
+  favicon: 'favicon',
+  receiptLogo: 'receiptLogo',
+  etimsQrCode: 'etimsQrUrl',
+  watermark: 'watermark',
+};
+
+/** Backend type for POST /tenant/logo (mainLogo -> 'main'). */
+function logoTypeToBackendType(type: keyof LogoConfig): string {
+  return type === 'mainLogo' ? 'main' : type;
+}
+
+/** Full URL for an API-relative logo path (e.g. /uploads/logos/xxx). */
+function logoFullUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  const base = API_BASE_URL.replace(/\/+$/, '');
+  return path.startsWith('/') ? `${base}${path}` : `${base}/${path}`;
+}
 
 interface LogoConfig {
   mainLogo?: string | null;
@@ -176,7 +199,7 @@ export default function LogoSettings() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    const filesToUpload = Object.entries(file).filter(([f]) => f !== null);
+    const filesToUpload = Object.entries(file).filter(([, f]) => f != null) as [keyof LogoConfig, File][];
     
     if (filesToUpload.length === 0) return;
     
@@ -190,13 +213,15 @@ export default function LogoSettings() {
 
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("type", type);
+        formData.append("type", logoTypeToBackendType(type as keyof LogoConfig));
 
-        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/tenant/logo`, {
+        const base = API_BASE_URL.replace(/\/+$/, '');
+        const res = await fetch(`${base}/tenant/logo`, {
           method: "POST",
+          credentials: 'include',
           headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(typeof window !== 'undefined' && localStorage.getItem('token')
+              ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {}),
           },
           body: formData,
         });
@@ -207,7 +232,7 @@ export default function LogoSettings() {
         }
 
         const data = await res.json();
-        setLogoConfig(prev => ({ ...prev, [type as keyof LogoConfig]: data.logoUrl }));
+        setLogoConfig(prev => ({ ...prev, [type]: data.logoUrl }));
       }
 
       setSuccess(true);
@@ -228,10 +253,13 @@ export default function LogoSettings() {
   };
 
   const handleRemoveLogo = async (type: keyof LogoConfig) => {
+    const backendField = LOGO_TYPE_TO_BACKEND_FIELD[type];
+    if (!backendField) return;
     try {
-      await apiPut("/tenant/me", { [type]: null });
+      await apiPut("/tenant/me", { [backendField]: null });
       setLogoConfig(prev => ({ ...prev, [type]: null }));
       setSuccess(true);
+      setError(null);
     } catch (err: unknown) {
       const error = err as { message?: string };
       setError(error.message || "Failed to remove logo");
@@ -353,12 +381,10 @@ export default function LogoSettings() {
                     ) : logoConfig[key as keyof LogoConfig] ? (
                       <div className="text-center">
                         <div className="relative w-full h-32">
-                          <Image
-                            src={logoConfig[key as keyof LogoConfig] || ''}
+                          <img
+                            src={logoFullUrl(logoConfig[key as keyof LogoConfig])}
                             alt={`Current ${config.label}`}
-                            fill
-                            style={{ objectFit: 'contain' }}
-                            sizes="(max-width: 768px) 100vw, 50vw"
+                            className="w-full h-full object-contain"
                           />
                         </div>
                         <button

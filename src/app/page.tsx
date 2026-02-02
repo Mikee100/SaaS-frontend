@@ -213,11 +213,11 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false, 
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 h-full">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-gray-200 dark:border-slate-600 p-4 h-full">
         <div className="animate-pulse space-y-2">
-          <div className="h-5 w-5 bg-gray-200 rounded-full"></div>
-          <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-          <div className="h-6 bg-gray-200 rounded w-1/3"></div>
+          <div className="h-5 w-5 bg-gray-200 dark:bg-slate-600 rounded-full"></div>
+          <div className="h-3 bg-gray-200 dark:bg-slate-600 rounded w-2/3"></div>
+          <div className="h-6 bg-gray-200 dark:bg-slate-600 rounded w-1/3"></div>
         </div>
       </div>
     );
@@ -236,7 +236,7 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false, 
     <motion.div
       whileHover={{ y: -2, scale: 1.02 }}
       transition={{ duration: 0.2 }}
-      className={`${gradientClasses[color]} rounded-lg shadow-md border p-4 h-full hover:shadow-lg transition-shadow duration-200`}
+      className={`${gradientClasses[color]} dark:!bg-slate-800 dark:border-slate-600 rounded-lg shadow-md border p-4 h-full hover:shadow-lg transition-shadow duration-200`}
     >
       <div className="flex items-center justify-between mb-3">
         <div className={`p-2 rounded-lg ${colors.bg} ${colors.icon} shadow-sm`}>
@@ -254,7 +254,7 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false, 
         )}
       </div>
       <div>
-        <span className="text-gray-600 text-xs font-medium uppercase tracking-wide">{label}</span>
+        <span className="text-gray-600 dark:text-slate-400 text-xs font-medium uppercase tracking-wide">{label}</span>
         <div className={`text-xl font-bold ${colors.value} mt-1`}>{value}</div>
       </div>
     </motion.div>
@@ -286,16 +286,16 @@ function QuickActions() {
   ];
 
   return (
-    <div className="bg-white rounded-md shadow-sm p-3 border border-gray-200">
-      <h2 className="text-base font-semibold text-gray-800 mb-2">Quick Actions</h2>
+    <div className="bg-white dark:bg-slate-800 rounded-md shadow-sm p-3 border border-gray-200 dark:border-slate-600">
+      <h2 className="text-base font-semibold text-gray-800 dark:text-slate-200 mb-2">Quick Actions</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {actions.map((action, i) => (
           <a
             key={i}
             href={action.href}
-            className="bg-gray-50 text-gray-700 p-2 rounded-md flex flex-col items-center gap-2 transition-all duration-300 hover:bg-indigo-50 hover:text-indigo-700"
+            className="bg-gray-50 dark:bg-slate-700 text-gray-700 dark:text-slate-300 p-2 rounded-md flex flex-col items-center gap-2 transition-all duration-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 hover:text-indigo-700 dark:hover:text-indigo-300"
           >
-            <div className="p-1 bg-white rounded-md shadow-sm">
+            <div className="p-1 bg-white dark:bg-slate-600 rounded-md shadow-sm">
               {action.icon}
             </div>
             <span className="text-xs font-medium text-center">{action.label}</span>
@@ -336,11 +336,11 @@ function MetricCard({ title, value, unit, trend }: { title: string; value: numbe
   return (
     <motion.div 
       whileHover={{ scale: 1.05 }}
-      className="bg-gradient-to-br from-gray-50 to-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow duration-200"
+      className="bg-gradient-to-br from-gray-50 to-white dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow duration-200"
     >
-      <p className="text-xs text-gray-600 mb-2 font-medium uppercase tracking-wide">{title}</p>
+      <p className="text-xs text-gray-600 dark:text-slate-400 mb-2 font-medium uppercase tracking-wide">{title}</p>
       <div className="flex items-end justify-between">
-        <p className="text-lg font-bold text-gray-900">
+        <p className="text-lg font-bold text-gray-900 dark:text-slate-100">
           {unit && unit === '$' ? unit : ''}{value.toLocaleString()}{unit && unit !== '$' ? ` ${unit}` : ''}
         </p>
         {trend !== undefined && (
@@ -430,7 +430,7 @@ export default function DashboardPage() {
 
   if (loading || limitsLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-4 px-2 sm:px-3 lg:px-4">
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-4 px-2 sm:px-3 lg:px-4">
         <div className="max-w-5xl mx-auto">
           <div className="mb-4">
             <div className="h-6 bg-gray-200 rounded w-40 mb-1"></div>
@@ -443,13 +443,13 @@ export default function DashboardPage() {
   }
 
   return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:bg-slate-900 dark:from-slate-900 dark:to-slate-900">
         <div className="max-w-5xl mx-auto px-2 sm:px-3 lg:px-4 py-4">
           {/* Header */}
           <div className="mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{tenant?.name || 'Business'} Dashboard</h1>
-              <p className="text-gray-600 mt-1 text-base">
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent dark:text-indigo-300">{tenant?.name || 'Business'} Dashboard</h1>
+              <p className="text-gray-600 dark:text-slate-400 mt-1 text-base">
                 Welcome back! Here&apos;s what&apos;s happening with your business.
               </p>
             </div>
@@ -543,16 +543,16 @@ export default function DashboardPage() {
             {analyticsData?.branches && analyticsData.branches.length > 0 ? (
               analyticsData.branches.map((branch) => (
                 <div key={branch.id} className="mb-8">
-                  <h3 className="text-md font-semibold text-gray-700 mb-3">{branch.name}</h3>
+                  <h3 className="text-md font-semibold text-gray-700 dark:text-slate-300 mb-3">{branch.name}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {/* Daily Sales Chart */}
                     <motion.div 
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex flex-col bg-gradient-to-br from-white to-indigo-50 rounded-xl border border-indigo-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                      className="flex flex-col bg-gradient-to-br from-white to-indigo-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-indigo-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-bold text-indigo-700 flex items-center gap-2">
+                        <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
                           <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
                           Daily Sales
                         </span>
@@ -567,7 +567,7 @@ export default function DashboardPage() {
                           type="line"
                         />
                       ) : (
-                        <div className="flex-1 flex items-center justify-center text-xs text-gray-400 bg-gray-50 rounded-lg">
+                        <div className="flex-1 flex items-center justify-center text-xs text-gray-400 dark:text-slate-500 bg-gray-50 dark:bg-slate-700 rounded-lg">
                           No daily sales data available
                         </div>
                       )}
@@ -577,7 +577,7 @@ export default function DashboardPage() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.1 }}
-                      className="flex flex-col bg-gradient-to-br from-white to-emerald-50 rounded-xl border border-emerald-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                      className="flex flex-col bg-gradient-to-br from-white to-emerald-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-emerald-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-bold text-emerald-700 flex items-center gap-2">
@@ -595,7 +595,7 @@ export default function DashboardPage() {
                           type="line"
                         />
                       ) : (
-                        <div className="flex-1 flex items-center justify-center text-xs text-gray-400 bg-gray-50 rounded-lg">
+                        <div className="flex-1 flex items-center justify-center text-xs text-gray-400 dark:text-slate-500 bg-gray-50 dark:bg-slate-700 rounded-lg">
                           No weekly sales data available
                         </div>
                       )}
@@ -605,10 +605,10 @@ export default function DashboardPage() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.2 }}
-                      className="flex flex-col bg-gradient-to-br from-white to-purple-50 rounded-xl border border-purple-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                      className="flex flex-col bg-gradient-to-br from-white to-purple-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-purple-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-bold text-purple-700 flex items-center gap-2">
+                        <span className="text-sm font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2">
                           <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
                           Monthly Sales
                         </span>
@@ -623,7 +623,7 @@ export default function DashboardPage() {
                           type="line"
                         />
                       ) : (
-                        <div className="flex-1 flex items-center justify-center text-xs text-gray-400 bg-gray-50 rounded-lg">
+                        <div className="flex-1 flex items-center justify-center text-xs text-gray-400 dark:text-slate-500 bg-gray-50 dark:bg-slate-700 rounded-lg">
                           No monthly sales data available
                         </div>
                       )}
@@ -634,16 +634,16 @@ export default function DashboardPage() {
             ) : (
               // Fallback to overall sales if no branches
               <div className="mb-8">
-                <h3 className="text-lg font-bold text-gray-800 mb-4">Overall Sales</h3>
+                <h3 className="text-lg font-bold text-gray-800 dark:text-slate-100 mb-4">Overall Sales</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* Daily Sales Chart */}
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col bg-gradient-to-br from-white to-indigo-50 rounded-xl border border-indigo-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                    className="flex flex-col bg-gradient-to-br from-white to-indigo-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-indigo-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-bold text-indigo-700 flex items-center gap-2">
+                      <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
                         <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
                         Daily Sales
                       </span>
@@ -658,7 +658,7 @@ export default function DashboardPage() {
                         type="line"
                       />
                     ) : (
-                      <div className="flex-1 flex items-center justify-center text-xs text-gray-400 bg-gray-50 rounded-lg">
+                      <div className="flex-1 flex items-center justify-center text-xs text-gray-400 dark:text-slate-500 bg-gray-50 dark:bg-slate-700 rounded-lg">
                         No daily sales data available
                       </div>
                     )}
@@ -668,7 +668,7 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="flex flex-col bg-gradient-to-br from-white to-emerald-50 rounded-xl border border-emerald-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                    className="flex flex-col bg-gradient-to-br from-white to-emerald-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-emerald-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-bold text-emerald-700 flex items-center gap-2">
@@ -686,7 +686,7 @@ export default function DashboardPage() {
                         type="line"
                       />
                     ) : (
-                      <div className="flex-1 flex items-center justify-center text-xs text-gray-400 bg-gray-50 rounded-lg">
+                      <div className="flex-1 flex items-center justify-center text-xs text-gray-400 dark:text-slate-500 bg-gray-50 dark:bg-slate-700 rounded-lg">
                         No weekly sales data available
                       </div>
                     )}
@@ -696,10 +696,10 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="flex flex-col bg-gradient-to-br from-white to-purple-50 rounded-xl border border-purple-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                    className="flex flex-col bg-gradient-to-br from-white to-purple-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-purple-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-bold text-purple-700 flex items-center gap-2">
+                      <span className="text-sm font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2">
                         <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
                         Monthly Sales
                       </span>
@@ -714,7 +714,7 @@ export default function DashboardPage() {
                         type="line"
                       />
                     ) : (
-                      <div className="flex-1 flex items-center justify-center text-xs text-gray-400 bg-gray-50 rounded-lg">
+                      <div className="flex-1 flex items-center justify-center text-xs text-gray-400 dark:text-slate-500 bg-gray-50 dark:bg-slate-700 rounded-lg">
                         No monthly sales data available
                       </div>
                     )}

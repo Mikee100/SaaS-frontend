@@ -45,11 +45,7 @@ export interface ProductsPageProps {
   showAddForm: boolean;
   editProduct: Product | null;
   saving: boolean;
-  uploading: boolean;
-  uploadResult: { length: number } | null;
-  uploadError: string;
   clearMsg: string;
-  uploadProgress: number | null;
   qrCodeProductId: string | null;
 
   // Callbacks
@@ -74,7 +70,6 @@ export interface ProductsPageProps {
   handleEditProduct: (e: React.FormEvent) => Promise<void>;
   openEditModal: (product: Product) => void;
   handleDelete: (id: string) => Promise<void>;
-  handleBulkUpload: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
   downloadTemplate: () => void;
   handleClearAll: () => Promise<void>;
   toggleColumnVisibility: (column: string) => void;

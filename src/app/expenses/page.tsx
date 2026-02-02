@@ -8,6 +8,16 @@ import autoTable from 'jspdf-autotable';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  getPdfCurrency,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import Spinner from '@/components/Spinner';
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -147,7 +157,7 @@ export default function ExpensesPage() {
   const [page] = useState(1);
   const [limit] = useState(10);
   const [branchComparison, setBranchComparison] = useState<BranchComparisonData | null>(null);
-  const [pastMonthsData] = useState<PastMonthsData | null>(null);
+  const [pastMonthsData, setPastMonthsData] = useState<PastMonthsData | null>(null);
   const [resetting, setResetting] = useState(false);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [salaryForm, setSalaryForm] = useState<SalarySchemeFormData>({
@@ -216,6 +226,46 @@ export default function ExpensesPage() {
       branches: Object.values(branchMap),
     });
   }, [expenses]);
+
+  // Derive past months data from loaded expenses
+  useEffect(() => {
+    if (!expenses || expenses.length === 0) {
+      setPastMonthsData(null);
+      return;
+    }
+
+    const monthMap: Record<string, { month: string; monthName: string; totalAmount: number; expenseCount: number }> = {};
+
+    expenses.forEach((exp) => {
+      const date = new Date(exp.createdAt);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+      if (!monthMap[monthKey]) {
+        monthMap[monthKey] = {
+          month: monthKey,
+          monthName,
+          totalAmount: 0,
+          expenseCount: 0,
+        };
+      }
+
+      monthMap[monthKey].totalAmount += exp.amount;
+      monthMap[monthKey].expenseCount += 1;
+    });
+
+    // Sort by month (most recent first)
+    const sortedRecords = Object.values(monthMap).sort((a, b) => {
+      return b.month.localeCompare(a.month);
+    });
+
+    setPastMonthsData({
+      records: sortedRecords,
+    });
+  }, [expenses]);
+
   const fetchCurrentMonthSalaryTotal = useCallback(async () => {
     try {
       setSalarySummaryLoading(true);
@@ -360,48 +410,51 @@ export default function ExpensesPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } else if (exportType === 'pdf') {
-      const doc = new jsPDF();
+      const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+      const currency = getPdfCurrency(tenantData, pdfTemplate);
+      const margin = getPdfMargin(pdfTemplate);
+      const fontSize = getPdfFontSize(pdfTemplate);
+      const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-      // Company Header
-      doc.setFontSize(20);
-      doc.setFont('helvetica', 'bold');
-      doc.text('SaaS Platform', 20, 25);
-      doc.setFontSize(16);
-      doc.text('Expenses Report', 20, 35);
+      const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+      let yPos = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-      // Report metadata
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Generated on: ${reportDate} at ${reportTime}`, 20, 50);
-      doc.text(`Total Expenses: ${filteredExpenses.length}`, 20, 58);
-      doc.text(`Total Amount: Ksh ${totalAmount.toFixed(2)}`, 20, 66);
+      doc.setFontSize(fontSize + 4);
+      doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+      doc.text('Expenses Report', margin, yPos + 8);
+      yPos += 16;
 
-      // Filters applied
-      let yPos = 74;
-      const filtersText = `Filters: ${branchFilter ? `Branch: ${branches.find(b => b.id === branchFilter)?.name || 'Unknown'}` : 'All Branches'}, Type: ${expenseTypeFilter === 'all' ? 'All Types' : expenseTypeFilter === 'one_time' ? 'One-time' : 'Recurring'}${search ? `, Search: "${search}"` : ''}`;
-      const splitFilters = doc.splitTextToSize(filtersText, 170);
-      doc.text(splitFilters, 20, yPos);
-
-      // Summary section
-      yPos += splitFilters.length * 6 + 10;
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Summary', 20, yPos);
+      doc.setFontSize(fontSize - 2);
+      doc.setTextColor('666666');
+      doc.text(`Generated: ${reportDate} at ${reportTime}`, margin, yPos);
+      yPos += 6;
+      doc.text(`Total Expenses: ${filteredExpenses.length}`, margin, yPos);
+      yPos += 6;
+      doc.text(`Total Amount: ${currency} ${totalAmount.toFixed(2)}`, margin, yPos);
       yPos += 10;
 
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Categories: ${Object.keys(categoryTotals).length}`, 30, yPos);
-      doc.text(`Branches: ${Object.keys(branchTotals).length}`, 100, yPos);
-      yPos += 8;
-      doc.text(`Average Expense: Ksh ${expenses.length > 0 ? (totalAmount / expenses.length).toFixed(2) : '0.00'}`, 30, yPos);
+      const filtersText = `Filters: ${branchFilter ? `Branch: ${branches.find(b => b.id === branchFilter)?.name || 'Unknown'}` : 'All Branches'}, Type: ${expenseTypeFilter === 'all' ? 'All Types' : expenseTypeFilter === 'one_time' ? 'One-time' : 'Recurring'}${search ? `, Search: "${search}"` : ''}`;
+      const splitFilters = doc.splitTextToSize(filtersText, doc.internal.pageSize.width - margin * 2);
+      doc.text(splitFilters, margin, yPos);
+      yPos += splitFilters.length * 6 + 10;
 
-      // Table
+      doc.setFontSize(fontSize);
+      doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+      doc.text('Summary', margin, yPos);
+      yPos += 10;
+
+      doc.setFontSize(fontSize - 2);
+      doc.setTextColor('333333');
+      doc.text(`Categories: ${Object.keys(categoryTotals).length}`, margin + 10, yPos);
+      doc.text(`Branches: ${Object.keys(branchTotals).length}`, margin + 80, yPos);
+      yPos += 8;
+      doc.text(`Average Expense: ${currency} ${expenses.length > 0 ? (totalAmount / expenses.length).toFixed(2) : '0.00'}`, margin + 10, yPos);
       yPos += 20;
+
       const headers = [['ID', 'Amount', 'Description', 'Category', 'Type', 'Created Date', 'Branch', 'Status']];
       const data = filteredExpenses.map(expense => [
-        expense.id.substring(0, 8) + '...', // Truncate ID for PDF
-        `Ksh ${expense.amount.toFixed(2)}`,
+        expense.id.substring(0, 8) + '...',
+        `${currency} ${expense.amount.toFixed(2)}`,
         expense.description.length > 30 ? expense.description.substring(0, 27) + '...' : expense.description,
         getCategoryName(expense).replace('_', ' '),
         expense.expenseType === 'recurring' ? 'Recurring' : 'One-time',
@@ -414,41 +467,23 @@ export default function ExpensesPage() {
         head: headers,
         body: data,
         startY: yPos,
-        styles: {
-          fontSize: 8,
-          cellPadding: 3,
-        },
-        headStyles: {
-          fillColor: [59, 130, 246], // Blue header
-          textColor: 255,
-          fontStyle: 'bold'
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252] // Light gray alternate rows
-        },
-        margin: { top: 20, left: 20, right: 20 },
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
         columnStyles: {
-          0: { cellWidth: 25 }, // ID
-          1: { cellWidth: 20, halign: 'right' }, // Amount
-          2: { cellWidth: 40 }, // Description
-          3: { cellWidth: 25 }, // Category
-          4: { cellWidth: 20 }, // Type
-          5: { cellWidth: 25 }, // Date
-          6: { cellWidth: 25 }, // Branch
-          7: { cellWidth: 20 } // Status
+          0: { cellWidth: 25 },
+          1: { cellWidth: 22, halign: 'right' },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 20 },
+          5: { cellWidth: 25 },
+          6: { cellWidth: 25 },
+          7: { cellWidth: 20 }
         }
       });
 
-      // Footer
-      const pageCount = doc.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
-        doc.text('SaaS Platform - Confidential', 20, doc.internal.pageSize.height - 10);
-      }
-
+      applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Expenses');
       doc.save(`expenses-report-${new Date().toISOString().split('T')[0]}.pdf`);
     }
 
@@ -796,392 +831,479 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
     <AuthGuard>
       <div className="min-h-screen bg-white">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
-          {/* Compact Header */}
-          <div className="mb-4">
-            <div className="bg-white border border-gray-100 rounded-lg shadow p-3">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <FaChartBar className="w-5 h-5 text-blue-500" />
-                  <h1 className="text-xl font-bold text-gray-900">Expenses</h1>
-                  <span className="text-xs text-gray-500 font-medium">Track and manage your business expenses</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={exportType}
-                    onChange={(e) => setExportType(e.target.value as 'csv' | 'pdf')}
-                    className="px-2 py-1 bg-white border border-gray-200 rounded text-xs"
-                  >
-                    <option value="csv">CSV Export</option>
-                    <option value="pdf">PDF Export</option>
-                  </select>
-                  <button
-                    onClick={handleDownloadReport}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs flex items-center gap-1"
-                  >
-                    <FaFileDownload className="w-3 h-3" />
-                    Export
-                  </button>
-                  {canCreateExpenses && (
-                    <button
-                      onClick={() => setDrawerType('create')}
-                      className="px-3 py-1.5 bg-emerald-500 text-white rounded hover:bg-emerald-600 text-xs flex items-center gap-1"
-                    >
-                      <FaPlus className="w-3 h-3" />
-                      Add
-                    </button>
-                  )}
-                </div>
+          {/* Header */}
+          <div className="mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <FaChartBar className="w-6 h-6 text-blue-500" />
+                  Expenses
+                </h1>
+                <p className="text-sm text-gray-500 mt-1">Track and manage your business expenses</p>
               </div>
-            </div>
-          </div>
-
-        {/* Filters Row - compact */}
-        <div className="flex flex-wrap items-center gap-2 mb-2 px-1">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="flex-1 min-w-[100px] px-2 py-1 border border-gray-200 rounded bg-white text-xs"
-          />
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="px-2 py-1 border border-gray-200 rounded bg-white text-xs"
-          >
-            <option value="createdAt">Date</option>
-            <option value="amount">Amount</option>
-            <option value="category">Category</option>
-          </select>
-          <select
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-            className="px-2 py-1 border border-gray-200 rounded bg-white text-xs"
-          >
-            <option value="desc">Desc</option>
-            <option value="asc">Asc</option>
-          </select>
-          <select
-            value={branchFilter || ''}
-            onChange={e => setBranchFilter(e.target.value || null)}
-            className="px-2 py-1 border border-gray-200 rounded bg-white text-xs"
-          >
-            <option value="">All Branches</option>
-            {branches.map(branch => (
-              <option key={branch.id} value={branch.id}>{branch.name}</option>
-            ))}
-          </select>
-          <select
-            value={expenseTypeFilter}
-            onChange={e => setExpenseTypeFilter(e.target.value as 'all' | 'one_time' | 'recurring')}
-            className="px-2 py-1 border border-gray-200 rounded bg-white text-xs"
-          >
-            <option value="all">All Types</option>
-            <option value="one_time">One-time</option>
-            <option value="recurring">Recurring</option>
-          </select>
-        </div>
-
-        {/* Tabs - smaller */}
-        <div className="flex items-center gap-1 mb-3 border-b border-gray-100 pb-1">
-          <button
-            onClick={() => setActiveTab('current')}
-            className={`px-2 py-1 rounded text-xs font-medium ${
-              activeTab === 'current'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <FaHistory className="w-3 h-3 inline mr-1" />
-            Current
-          </button>
-          <button
-            onClick={() => setActiveTab('salaries')}
-            className={`px-2 py-1 rounded text-xs font-medium ${
-              activeTab === 'salaries'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <FaRedo className="w-3 h-3 inline mr-1" />
-            Salaries
-          </button>
-          <button
-            onClick={() => setActiveTab('comparison')}
-            className={`px-2 py-1 rounded text-xs font-medium ${
-              activeTab === 'comparison'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <FaChartBar className="w-3 h-3 inline mr-1" />
-            Branch Comparison
-          </button>
-          <button
-            onClick={() => setActiveTab('past')}
-            className={`px-2 py-1 rounded text-xs font-medium ${
-              activeTab === 'past'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <FaCalendarAlt className="w-3 h-3 inline mr-1" />
-            Past Months
-          </button>
-          <button
-            onClick={() => setActiveTab('records')}
-            className={`px-2 py-1 rounded text-xs font-medium ${
-              activeTab === 'records'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <FaEye className="w-3 h-3 inline mr-1" />
-            Records
-          </button>
-        </div>
-
-   
-        {/* Salary Summary - compact */}
-            <div className="mb-4">
-          <div className="bg-white rounded p-2 shadow-sm flex items-center justify-between border border-gray-100">
-            <div>
-              <h1 className="text-xs font-semibold text-gray-700 mb-0.5">Total Salary Expenses</h1>
-              <p className="text-[11px] text-gray-500">Employee salaries as business expenses</p>
-            </div>
-            <div className="flex items-center gap-1">
-              <FaChartBar className="w-4 h-4 text-gray-400" />
-              <span className="text-base font-bold">Ksh {salaryTotal.toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="border-t border-gray-100 my-3" />
-
-        {/* Tab Content */}
-        {activeTab === 'current' && (
-          <>
-            {/* Current Month Expenses Summary */}
-            <div className="mb-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Month Expenses Summary</h3>
-                {fetchingCurrentMonthExpenses ? (
-                  <div className="flex justify-center items-center py-4">
-                    <Spinner />
-                  </div>
-                ) : currentMonthExpensesTotal ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
-                      <h4 className="font-semibold text-red-900 mb-2">{currentMonthExpensesTotal.monthName}</h4>
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-red-700">Total Expenses:</span>
-                          <span className="font-bold">Ksh {currentMonthExpensesTotal.totalAmount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-red-700">Expense Count:</span>
-                          <span className="font-bold">{currentMonthExpensesTotal.expenseCount}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    No expense data available for current month.
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Monthly Expenses Total Section */}
-            <div className="mb-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Expenses Total</h3>
-                <div className="flex flex-wrap items-center gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
-                    <select
-                      value={expenseSelectedMonth}
-                      onChange={(e) => setExpenseSelectedMonth(parseInt(e.target.value))}
-                      className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm bg-white"
-                    >
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <option key={i + 1} value={i + 1}>
-                          {new Date(0, i).toLocaleString('default', { month: 'long' })}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
-                    <select
-                      value={expenseSelectedYear}
-                      onChange={(e) => setExpenseSelectedYear(parseInt(e.target.value))}
-                      className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm bg-white"
-                    >
-                      {Array.from({ length: 5 }, (_, i) => {
-                        const year = new Date().getFullYear() - 2 + i;
-                        return (
-                          <option key={year} value={year}>
-                            {year}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                </div>
-                {fetchingExpenseMonthlyTotal ? (
-                  <div className="flex justify-center items-center py-4">
-                    <Spinner />
-                  </div>
-                ) : expenseTotalForSelectedMonth ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
-                      <h4 className="font-semibold text-red-900 mb-2">{expenseTotalForSelectedMonth.monthName}</h4>
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-red-700">Total Expenses:</span>
-                          <span className="font-bold">Ksh {expenseTotalForSelectedMonth.totalAmount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-red-700">Expense Count:</span>
-                          <span className="font-bold">{expenseTotalForSelectedMonth.expenseCount}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    No expense data available for the selected month.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Expenses Table (desktop) / Cards (mobile) */}
-            {filteredExpenses.length === 0 ? (
-              <div className="text-center py-10">
-                <FaHistory className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                <h3 className="text-base font-semibold text-gray-900 mb-1">No expenses found</h3>
-                <p className="text-gray-400 text-xs mb-2">Start by adding your first expense or adjust your filters</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={exportType}
+                  onChange={(e) => setExportType(e.target.value as 'csv' | 'pdf')}
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="csv">CSV Export</option>
+                  <option value="pdf">PDF Export</option>
+                </select>
+                <button
+                  onClick={handleDownloadReport}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium flex items-center gap-2 transition"
+                >
+                  <FaFileDownload className="w-4 h-4" />
+                  Export
+                </button>
                 {canCreateExpenses && (
                   <button
                     onClick={() => setDrawerType('create')}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded shadow hover:bg-blue-700 font-semibold flex items-center gap-1 text-xs"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium flex items-center gap-2 shadow-sm transition"
                   >
-                    <FaPlus className="w-3 h-3" />
+                    <FaPlus className="w-4 h-4" />
                     Add Expense
                   </button>
                 )}
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white rounded-lg shadow-sm">
-                  <thead>
-                    <tr className="text-xs text-gray-500 border-b">
-                      <th className="py-2 px-3 text-left">Amount</th>
-                      <th className="py-2 px-3 text-left">Description</th>
-                      <th className="py-2 px-3 text-left">Category</th>
-                      <th className="py-2 px-3 text-left">Type</th>
-                      <th className="py-2 px-3 text-left">Date</th>
-                      <th className="py-2 px-3 text-left">Branch</th>
-                      <th className="py-2 px-3 text-left">Status</th>
-                      <th className="py-2 px-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredExpenses.map(expense => (
-                      <tr
-                        key={expense.id}
-                        className="border-b hover:bg-blue-50 cursor-pointer"
-                        onClick={() => {
-                          setSelectedExpense(expense);
-                          setDrawerType('details');
-                        }}
-                      >
-                        <td className="py-2 px-3 font-bold text-gray-900">Ksh {expense.amount.toFixed(2)}</td>
-                        <td className="py-2 px-3 text-xs">{expense.description}</td>
-                        <td className="py-2 px-3 text-xs capitalize">{getCategoryName(expense).replace('_', ' ')}</td>
-                        <td className="py-2 px-3 text-xs">
-                          {expense.expenseType === 'recurring' ? (
-                            <span className="text-orange-700">Recurring</span>
-                          ) : (
-                            <span className="text-gray-700">One-time</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-xs">{new Date(expense.createdAt).toLocaleDateString()}</td>
-                        <td className="py-2 px-3 text-xs">{expense.branch?.name || ''}</td>
-                        <td className="py-2 px-3 text-xs">
-                          <span className={expense.isActive ? 'text-green-600' : 'text-red-600'}>
-                            {expense.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3">
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              setSelectedExpense(expense);
-                              setDrawerType('details');
-                            }}
-                            className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
-                          >
-                            <FaEye className="w-3 h-3" />
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            </div>
+          </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mb-6 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('current')}
+            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              activeTab === 'current'
+                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <FaHistory className="w-4 h-4" />
+            Current
+          </button>
+          <button
+            onClick={() => setActiveTab('salaries')}
+            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              activeTab === 'salaries'
+                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <FaRedo className="w-4 h-4" />
+            Salaries
+          </button>
+          <button
+            onClick={() => setActiveTab('comparison')}
+            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              activeTab === 'comparison'
+                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <FaChartBar className="w-4 h-4" />
+            Comparison
+          </button>
+          <button
+            onClick={() => setActiveTab('past')}
+            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              activeTab === 'past'
+                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <FaCalendarAlt className="w-4 h-4" />
+            Past Months
+          </button>
+          <button
+            onClick={() => setActiveTab('records')}
+            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+              activeTab === 'records'
+                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <FaEye className="w-4 h-4" />
+            Records
+          </button>
+        </div>
+
+        {/* Filters - Only show in Current tab */}
+        {activeTab === 'current' && (
+          <div className="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="lg:col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Search</label>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search expenses..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
               </div>
-            )}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="createdAt">Date</option>
+                  <option value="amount">Amount</option>
+                  <option value="category">Category</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Order</label>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Branch</label>
+                <select
+                  value={branchFilter || ''}
+                  onChange={e => setBranchFilter(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Branches</option>
+                  {branches.map(branch => (
+                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <label className="block text-xs font-medium text-gray-700">Type:</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setExpenseTypeFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    expenseTypeFilter === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setExpenseTypeFilter('one_time')}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    expenseTypeFilter === 'one_time'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  One-time
+                </button>
+                <button
+                  onClick={() => setExpenseTypeFilter('recurring')}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    expenseTypeFilter === 'recurring'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  Recurring
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab Content */}
+        {activeTab === 'current' && (
+          <>
+            {/* Summary Cards - Key Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              {/* Total Expenses */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">Total Expenses</span>
+                  <FaChartBar className="w-4 h-4 text-blue-500" />
+                </div>
+                <p className="text-2xl font-bold text-blue-900">
+                  Ksh {totalAmount.toFixed(2)}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">{expenses.length} {expenses.length === 1 ? 'expense' : 'expenses'}</p>
+              </div>
+
+              {/* Salary Expenses */}
+              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 border border-emerald-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-emerald-700 uppercase tracking-wide">Salary Expenses</span>
+                  <FaRedo className="w-4 h-4 text-emerald-500" />
+                </div>
+                <p className="text-2xl font-bold text-emerald-900">
+                  Ksh {salaryTotal.toFixed(2)}
+                </p>
+                <p className="text-xs text-emerald-600 mt-1">Recurring salaries</p>
+              </div>
+
+              {/* Current Month */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-purple-700 uppercase tracking-wide">This Month</span>
+                  <FaCalendarAlt className="w-4 h-4 text-purple-500" />
+                </div>
+                {(() => {
+                  const currentMonth = new Date().getMonth();
+                  const currentYear = new Date().getFullYear();
+                  const monthExpenses = expenses.filter(exp => {
+                    const expDate = new Date(exp.createdAt);
+                    return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
+                  });
+                  const monthTotal = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+                  return (
+                    <>
+                      <p className="text-2xl font-bold text-purple-900">
+                        Ksh {monthTotal.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-purple-600 mt-1">{monthExpenses.length} {monthExpenses.length === 1 ? 'expense' : 'expenses'}</p>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Average Expense */}
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-orange-700 uppercase tracking-wide">Avg Expense</span>
+                  <FaChartBar className="w-4 h-4 text-orange-500" />
+                </div>
+                <p className="text-2xl font-bold text-orange-900">
+                  Ksh {expenses.length > 0 ? (totalAmount / expenses.length).toFixed(2) : '0.00'}
+                </p>
+                <p className="text-xs text-orange-600 mt-1">Per transaction</p>
+              </div>
+            </div>
+
+            {/* Expenses Table */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">All Expenses</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Showing {filteredExpenses.length} of {expenses.length} expenses
+                    </p>
+                  </div>
+                  {canCreateExpenses && (
+                    <button
+                      onClick={() => setDrawerType('create')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2 text-sm shadow-sm transition"
+                    >
+                      <FaPlus className="w-4 h-4" />
+                      Add Expense
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {filteredExpenses.length === 0 ? (
+                <div className="text-center py-16">
+                  <FaHistory className="w-16 h-16 text-gray-200 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">No expenses found</h3>
+                  <p className="text-gray-500 text-sm mb-4">Start by adding your first expense or adjust your filters</p>
+                  {canCreateExpenses && (
+                    <button
+                      onClick={() => setDrawerType('create')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 font-semibold flex items-center gap-2 text-sm mx-auto"
+                    >
+                      <FaPlus className="w-4 h-4" />
+                      Add Expense
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Description</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Branch</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredExpenses.map(expense => (
+                        <tr
+                          key={expense.id}
+                          className="hover:bg-blue-50/50 transition-colors cursor-pointer"
+                          onClick={() => {
+                            setSelectedExpense(expense);
+                            setDrawerType('details');
+                          }}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm font-bold text-gray-900">Ksh {expense.amount.toFixed(2)}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900 font-medium">{expense.description}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700 capitalize">
+                              {getCategoryName(expense).replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {expense.expenseType === 'recurring' ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                                <FaRedo className="w-3 h-3 mr-1" />
+                                Recurring
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                One-time
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {new Date(expense.createdAt).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            })}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {expense.branch?.name || <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              expense.isActive 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                                expense.isActive ? 'bg-green-500' : 'bg-red-500'
+                              }`} />
+                              {expense.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                setSelectedExpense(expense);
+                                setDrawerType('details');
+                              }}
+                              className="text-blue-600 hover:text-blue-900 inline-flex items-center gap-1"
+                            >
+                              <FaEye className="w-4 h-4" />
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </>
         )}
 
         {activeTab === 'salaries' && (
           <>
-            {/* Current Month Salary Summary */}
-            <div className="mb-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Month Salary Summary</h3>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              {/* Current Month Total */}
+              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 border border-emerald-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-emerald-700 uppercase tracking-wide">This Month</span>
+                  <FaCalendarAlt className="w-4 h-4 text-emerald-500" />
+                </div>
                 {salarySummaryLoading ? (
-                  <div className="flex justify-center items-center py-4">
-                    <Spinner />
-                  </div>
+                  <Spinner />
                 ) : currentMonthSalaryTotal ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg p-4 border border-emerald-200">
-                      <h4 className="font-semibold text-emerald-900 mb-2">{currentMonthSalaryTotal.monthName}</h4>
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-emerald-700">Total Salary:</span>
-                          <span className="font-bold">Ksh {currentMonthSalaryTotal.totalAmount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-emerald-700">Active Schemes:</span>
-                          <span className="font-bold">{currentMonthSalaryTotal.salarySchemeCount}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <>
+                    <p className="text-2xl font-bold text-emerald-900">
+                      Ksh {currentMonthSalaryTotal.totalAmount.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-emerald-600 mt-1">{currentMonthSalaryTotal.salarySchemeCount} active {currentMonthSalaryTotal.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
+                  </>
                 ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    No salary data available for current month.
-                  </div>
+                  <>
+                    <p className="text-2xl font-bold text-emerald-900">Ksh 0.00</p>
+                    <p className="text-xs text-emerald-600 mt-1">No data</p>
+                  </>
                 )}
               </div>
+
+              {/* Selected Month Total */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">Selected Month</span>
+                  <FaCalendarAlt className="w-4 h-4 text-blue-500" />
+                </div>
+                {fetchingMonthlyTotal ? (
+                  <Spinner />
+                ) : salaryTotalForMonth ? (
+                  <>
+                    <p className="text-2xl font-bold text-blue-900">
+                      Ksh {salaryTotalForMonth.totalAmount.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">{salaryTotalForMonth.salarySchemeCount} active {salaryTotalForMonth.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-2xl font-bold text-blue-900">Ksh 0.00</p>
+                    <p className="text-xs text-blue-600 mt-1">No data</p>
+                  </>
+                )}
+              </div>
+
+              {/* Total Schemes */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-purple-700 uppercase tracking-wide">Total Schemes</span>
+                  <FaRedo className="w-4 h-4 text-purple-500" />
+                </div>
+                <p className="text-2xl font-bold text-purple-900">
+                  {salarySchemes.length}
+                </p>
+                <p className="text-xs text-purple-600 mt-1">
+                  {salarySchemes.filter(s => s.isActive).length} active
+                </p>
+              </div>
+
+              {/* Average Salary */}
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-orange-700 uppercase tracking-wide">Avg Salary</span>
+                  <FaChartBar className="w-4 h-4 text-orange-500" />
+                </div>
+                <p className="text-2xl font-bold text-orange-900">
+                  Ksh {salarySchemes.length > 0 
+                    ? (salarySchemes.reduce((sum, s) => sum + s.salaryAmount, 0) / salarySchemes.length).toFixed(2)
+                    : '0.00'}
+                </p>
+                <p className="text-xs text-orange-600 mt-1">Per employee</p>
+              </div>
             </div>
-            {/* Monthly Salary Total Section */}
-            <div className="mb-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Salary Total</h3>
-                <div className="flex flex-wrap items-center gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+
+            {/* Month/Year Selector */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Select Month & Year</label>
+                  <div className="flex gap-2">
                     <select
                       value={selectedMonth}
                       onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                      className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm bg-white"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     >
                       {Array.from({ length: 12 }, (_, i) => (
                         <option key={i + 1} value={i + 1}>
@@ -1189,13 +1311,10 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                         </option>
                       ))}
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                     <select
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                      className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm bg-white"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     >
                       {Array.from({ length: 5 }, (_, i) => {
                         const year = new Date().getFullYear() - 2 + i;
@@ -1208,150 +1327,190 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     </select>
                   </div>
                 </div>
-                {fetchingMonthlyTotal ? (
-                  <div className="flex justify-center items-center py-4">
-                    <Spinner />
-                  </div>
-                ) : salaryTotalForMonth ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg p-4 border border-emerald-200">
-                      <h4 className="font-semibold text-emerald-900 mb-2">{salaryTotalForMonth.monthName}</h4>
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-emerald-700">Total Salary:</span>
-                          <span className="font-bold">Ksh {salaryTotalForMonth.totalAmount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-emerald-700">Active Schemes:</span>
-                          <span className="font-bold">{salaryTotalForMonth.salarySchemeCount}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    No salary data available for the selected month.
-                  </div>
-                )}
+                <button
+                  onClick={() => setSalaryDrawerType('create')}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium flex items-center gap-2 shadow-sm transition"
+                >
+                  <FaPlus className="w-4 h-4" />
+                  Add Salary Scheme
+                </button>
               </div>
             </div>
 
-            {/* Add New Salary Scheme Button */}
-            <div className="mb-8">
-              <button
-                onClick={() => setSalaryDrawerType('create')}
-                className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
-              >
-                <FaPlus className="w-4 h-4" />
-                Add New Salary Scheme
-              </button>
-            </div>
             {/* Salary Schemes Table */}
-            {loadingSchemes ? (
-              <div className="flex justify-center items-center min-h-[200px]">
-                <Spinner />
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Salary Schemes</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {loadingSchemes ? 'Loading...' : `${salarySchemes.length} ${salarySchemes.length === 1 ? 'scheme' : 'schemes'} total`}
+                    </p>
+                  </div>
+                </div>
               </div>
-            ) : salarySchemes.length === 0 ? (
-              <div className="text-center py-10">
-                <FaHistory className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                <h3 className="text-base font-semibold text-gray-900 mb-1">No salary schemes found</h3>
-                <p className="text-gray-400 text-xs mb-2">Assign a salary to get started</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white rounded-lg shadow-sm">
-                  <thead>
-                    <tr className="text-xs text-gray-500 border-b">
-                      <th className="py-2 px-3 text-left">Amount</th>
-                      <th className="py-2 px-3 text-left">Employee</th>
-                      <th className="py-2 px-3 text-left">Frequency</th>
-                      <th className="py-2 px-3 text-left">Start Date</th>
-                      <th className="py-2 px-3 text-left">Next Due Date</th>
-                      <th className="py-2 px-3 text-left">Last Paid Date</th>
-                      <th className="py-2 px-3 text-left">Branch</th>
-                      <th className="py-2 px-3 text-left">Notes</th>
-                      <th className="py-2 px-3 text-left">Status</th>
-                      <th className="py-2 px-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {salarySchemes.map(scheme => (
-                      <tr
-                        key={scheme.id}
-                        className="border-b hover:bg-blue-50 cursor-pointer"
-                        onClick={() => {
-                          setSelectedSalaryScheme(scheme);
-                          setSalaryDrawerType('details');
-                        }}
-                      >
-                        <td className="py-2 px-3 font-bold text-gray-900">Ksh {scheme.salaryAmount.toFixed(2)}</td>
-                        <td className="py-2 px-3 text-xs">{scheme.user?.name || scheme.employeeName}</td>
-                        <td className="py-2 px-3 text-xs capitalize">{scheme.frequency}</td>
-                        <td className="py-2 px-3 text-xs">{new Date(scheme.startDate).toLocaleDateString()}</td>
-                        <td className="py-2 px-3 text-xs">{scheme.nextDueDate ? new Date(scheme.nextDueDate).toLocaleDateString() : '-'}</td>
-                        <td className="py-2 px-3 text-xs">{scheme.lastPaidDate ? new Date(scheme.lastPaidDate).toLocaleDateString() : '-'}</td>
-                        <td className="py-2 px-3 text-xs">{scheme.branch?.name || ''}</td>
-                        <td className="py-2 px-3 text-xs max-w-[120px] truncate" title={scheme.notes || ''}>{scheme.notes || '-'}</td>
-                        <td className="py-2 px-3 text-xs">
-                          <span className={scheme.isActive ? 'text-green-600' : 'text-red-600'}>
-                            {scheme.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 flex gap-1">
-                          <button
-                            onClick={() => {
-                              setSelectedSalaryScheme(scheme);
-                              setSalaryDrawerType('details');
-                            }}
-                            className="text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
-                          >
-                            <FaEye className="w-3 h-3" />
-                            View
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedSalarySchemeForEdit(scheme);
-                              setSalaryForm({
-                                employeeName: scheme.employeeName,
-                                salaryAmount: scheme.salaryAmount,
-                                frequency: scheme.frequency,
-                                startDate: scheme.startDate.split('T')[0], // Format for date input
-                                userId: scheme.userId,
-                                branchId: scheme.branchId || '',
-                                notes: scheme.notes || '',
-                              });
-                              setIsEditingSalary(true);
-                              setSalaryDrawerType('create'); // Reuse the form drawer
-                            }}
-                            className="text-yellow-600 hover:text-yellow-800 text-xs flex items-center gap-1"
-                          >
-                            <FaEdit className="w-3 h-3" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              console.log('Delete button clicked for scheme', scheme.id);
-                              if (confirm('Are you sure you want to delete this salary scheme?')) {
-                                console.log('Confirmed delete');
-                                handleDeleteSalaryScheme(scheme);
-                              } else {
-                                console.log('Delete cancelled');
-                              }
-                            }}
-                            className="text-red-600 hover:text-red-800 text-xs flex items-center gap-1"
-                          >
-                            <FaTrash className="w-3 h-3" />
-                            Delete
-                          </button>
-                        </td>
+
+              {loadingSchemes ? (
+                <div className="flex justify-center items-center min-h-[200px]">
+                  <Spinner />
+                </div>
+              ) : salarySchemes.length === 0 ? (
+                <div className="text-center py-16">
+                  <FaRedo className="w-16 h-16 text-gray-200 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">No salary schemes found</h3>
+                  <p className="text-gray-500 text-sm mb-4">Create your first salary scheme to get started</p>
+                  <button
+                    onClick={() => setSalaryDrawerType('create')}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow hover:bg-emerald-700 font-semibold flex items-center gap-2 text-sm mx-auto"
+                  >
+                    <FaPlus className="w-4 h-4" />
+                    Add Salary Scheme
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Employee</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Frequency</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Start Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Next Due</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Last Paid</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Branch</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {salarySchemes.map(scheme => (
+                        <tr
+                          key={scheme.id}
+                          className="hover:bg-emerald-50/50 transition-colors cursor-pointer"
+                          onClick={() => {
+                            setSelectedSalaryScheme(scheme);
+                            setSalaryDrawerType('details');
+                          }}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {scheme.user?.name || scheme.employeeName}
+                            </div>
+                            {scheme.notes && (
+                              <div className="text-xs text-gray-500 mt-0.5 truncate max-w-[200px]" title={scheme.notes}>
+                                {scheme.notes}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm font-bold text-gray-900">Ksh {scheme.salaryAmount.toFixed(2)}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 capitalize">
+                              <FaRedo className="w-3 h-3 mr-1" />
+                              {scheme.frequency}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {new Date(scheme.startDate).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            })}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {scheme.nextDueDate ? (
+                              new Date(scheme.nextDueDate).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {scheme.lastPaidDate ? (
+                              new Date(scheme.lastPaidDate).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })
+                            ) : (
+                              <span className="text-gray-400">Never</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            {scheme.branch?.name || <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              scheme.isActive 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                                scheme.isActive ? 'bg-green-500' : 'bg-red-500'
+                              }`} />
+                              {scheme.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setSelectedSalaryScheme(scheme);
+                                  setSalaryDrawerType('details');
+                                }}
+                                className="text-emerald-600 hover:text-emerald-900 inline-flex items-center gap-1"
+                                title="View"
+                              >
+                                <FaEye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setSelectedSalarySchemeForEdit(scheme);
+                                  setSalaryForm({
+                                    employeeName: scheme.employeeName,
+                                    salaryAmount: scheme.salaryAmount,
+                                    frequency: scheme.frequency,
+                                    startDate: scheme.startDate.split('T')[0],
+                                    userId: scheme.userId,
+                                    branchId: scheme.branchId || '',
+                                    notes: scheme.notes || '',
+                                  });
+                                  setIsEditingSalary(true);
+                                  setSalaryDrawerType('create');
+                                }}
+                                className="text-yellow-600 hover:text-yellow-900 inline-flex items-center gap-1"
+                                title="Edit"
+                              >
+                                <FaEdit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  if (confirm('Are you sure you want to delete this salary scheme?')) {
+                                    handleDeleteSalaryScheme(scheme);
+                                  }
+                                }}
+                                className="text-red-600 hover:text-red-900 inline-flex items-center gap-1"
+                                title="Delete"
+                              >
+                                <FaTrash className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -1429,10 +1588,16 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   </button>
                 )}
               </div>
-              {pastMonthsData && (
+              {!pastMonthsData || !pastMonthsData.records || pastMonthsData.records.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 text-sm">
+                  <FaCalendarAlt className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                  <p>No past months expense data available yet.</p>
+                  <p className="text-xs mt-1">Expenses will be grouped by month as you add them.</p>
+                </div>
+              ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {pastMonthsData.records?.map((record: { month: string; monthName: string; totalAmount: number; expenseCount: number }) => (
+                    {pastMonthsData.records.map((record: { month: string; monthName: string; totalAmount: number; expenseCount: number }) => (
                       <div key={record.month} className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
                         <h4 className="font-semibold text-green-900 mb-2">{record.monthName}</h4>
                         <div className="space-y-1 text-sm">
@@ -1446,7 +1611,9 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                           </div>
                           <div className="flex justify-between">
                             <span className="text-green-700">Avg per Expense:</span>
-                            <span className="font-bold">Ksh {(record.totalAmount / record.expenseCount).toFixed(2)}</span>
+                            <span className="font-bold">
+                              Ksh {record.expenseCount ? (record.totalAmount / record.expenseCount).toFixed(2) : '0.00'}
+                            </span>
                           </div>
                         </div>
                       </div>

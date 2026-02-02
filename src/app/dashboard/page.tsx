@@ -91,12 +91,12 @@ const QuickActions = () => {
           key={index}
           whileHover={{ y: -1 }}
           whileTap={{ scale: 0.98 }}
-          className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-white p-3 text-center transition-colors hover:bg-gray-50"
+          className="flex flex-col items-center justify-center rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-3 text-center transition-colors hover:bg-gray-50 dark:hover:bg-slate-700"
         >
-          <div className="mb-1.5 rounded-md bg-indigo-50 p-1.5 text-indigo-600">
+          <div className="mb-1.5 rounded-md bg-indigo-50 dark:bg-indigo-900/50 p-1.5 text-indigo-600 dark:text-indigo-300">
             {action.icon}
           </div>
-          <span className="text-xs font-medium text-gray-700">{action.label}</span>
+          <span className="text-xs font-medium text-gray-700 dark:text-slate-300">{action.label}</span>
         </motion.button>
       ))}
     </div>
@@ -184,7 +184,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <AuthGuard>
-        <div className="min-h-screen bg-gray-50 p-8">
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-8">
           <div className="mx-auto max-w-7xl">
             <div className="h-8 w-64 animate-pulse rounded-md bg-gray-200"></div>
             <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -201,21 +201,21 @@ export default function DashboardPage() {
   return (
     <AuthGuard>
       <PlanGuard requiredFeature="advanced_analytics">
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:bg-slate-900 dark:from-slate-900 dark:to-slate-900">
           <LogoEnforcement />
           <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
             {/* Header */}
             <div className="mb-6 flex flex-col justify-between sm:flex-row sm:items-center">
               <div className="mb-3 sm:mb-0">
                 <div className="flex items-center">
-                  <h1 className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-2xl font-bold text-transparent">
+                  <h1 className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-2xl font-bold text-transparent dark:text-indigo-300">
                     Dashboard
                   </h1>
-                  <span className="ml-2 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">
+                  <span className="ml-2 rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-2.5 py-0.5 text-xs font-medium text-indigo-800 dark:text-indigo-300">
                     {dateRange === '7d' ? '7D' : dateRange === '30d' ? '30D' : dateRange === '90d' ? '90D' : '12M'}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
                   Welcome back! Here&apos;s what&apos;s happening with your business today.
                 </p>
               </div>
@@ -224,7 +224,7 @@ export default function DashboardPage() {
                   <select
                     value={dateRange}
                     onChange={(e) => setDateRange(e.target.value)}
-                    className="block w-full rounded-lg border-0 bg-white py-2.5 pl-4 pr-10 text-sm shadow-sm ring-1 ring-gray-200 transition-all hover:ring-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="block w-full rounded-lg border-0 bg-white dark:bg-slate-800 py-2.5 pl-4 pr-10 text-sm shadow-sm ring-1 ring-gray-200 dark:ring-slate-600 text-gray-900 dark:text-slate-100 transition-all hover:ring-gray-300 dark:hover:ring-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
                   >
                     <option value="7d">Last 7 days</option>
                     <option value="30d">Last 30 days</option>
@@ -240,7 +240,7 @@ export default function DashboardPage() {
                     fetchAnalyticsData();
                   }}
                   disabled={isRefreshing}
-                  className={`inline-flex w-full items-center justify-center rounded-lg border-0 bg-white px-4 py-2.5 text-sm font-medium shadow-sm transition-all hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto ${
+                  className={`inline-flex w-full items-center justify-center rounded-lg border-0 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-medium shadow-sm text-gray-900 dark:text-slate-100 transition-all hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 sm:w-auto ${
                     isRefreshing ? 'cursor-not-allowed opacity-70' : ''
                   }`}
                 >
@@ -254,7 +254,7 @@ export default function DashboardPage() {
 
             {/* Quick Actions */}
             <div className="mb-6">
-              <h2 className="mb-3 text-base font-semibold text-gray-900">Quick Actions</h2>
+              <h2 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Quick Actions</h2>
               <QuickActions />
             </div>
 
@@ -268,9 +268,9 @@ export default function DashboardPage() {
 
             {/* Customer Segmentation Section */}
             <div className="mb-6">
-              <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
+<div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Customer Segmentation</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Customer Segmentation</h2>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div className="lg:col-span-2">
@@ -321,9 +321,9 @@ export default function DashboardPage() {
             <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* Sales Chart */}
               <div className="lg:col-span-2">
-                <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
+                <div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-gray-900">Sales Overview</h3>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Sales Overview</h3>
                     <div className="flex items-center space-x-2">
                       <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
                         <FiTrendingUp className="mr-1 h-3 w-3" />
@@ -340,17 +340,17 @@ export default function DashboardPage() {
               {/* Right Sidebar */}
               <div className="space-y-4">
                 {/* Customer Growth */}
-                <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
-                  <h3 className="mb-3 text-base font-semibold text-gray-900">Customer Growth</h3>
+                <div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
+                  <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Customer Growth</h3>
                   <div className="h-56">
                     <ChartComponents.CustomerGrowthChart growthData={analyticsData?.customerGrowth || {}} />
                   </div>
                 </div>
 
                 {/* Recent Activities */}
-                <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
+                <div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-gray-900">Recent Activities</h3>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Recent Activities</h3>
                     <button className="text-primary-600 hover:text-primary-800 text-sm font-medium">
                       View All
                     </button>
@@ -376,8 +376,8 @@ export default function DashboardPage() {
 
             {/* Sales Trends Analysis */}
             <div className="mb-6">
-              <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
-                <h3 className="mb-3 text-base font-semibold text-gray-900">Sales Trends Analysis</h3>
+              <div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
+                <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Sales Trends Analysis</h3>
                 <div className="grid grid-cols-1 gap-4">
                   <ChartComponents.MonthlySalesTrends />
                 </div>

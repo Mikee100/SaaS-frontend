@@ -2,12 +2,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiGet } from "@/utils/api";
+import { getReceiptLogoUrl } from "@/utils/logoUrl";
 import Barcode from "react-barcode";
 import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { Download, Printer, Share2 } from "lucide-react";
-import Image from "next/image";
 
 interface ReceiptItem {
   name: string;
@@ -37,6 +37,7 @@ interface Receipt {
 
 interface BusinessInfo {
   logoUrl?: string;
+  receiptLogo?: string;
   name?: string;
   businessType?: string;
   address?: string;
@@ -44,7 +45,6 @@ interface BusinessInfo {
   contactEmail?: string;
   kraPin?: string;
   vatNumber?: string;
-  // ...other fields
 }
 
 export default function DigitalReceiptPage() {
@@ -292,15 +292,11 @@ const handleShare = async () => {
         >
           {/* Receipt Header */}
           <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-4 text-center">
-            {businessInfo?.logoUrl && (
-              <Image
-                src={businessInfo.logoUrl}
+            {(businessInfo?.receiptLogo || businessInfo?.logoUrl) && (
+              <img
+                src={getReceiptLogoUrl(businessInfo.receiptLogo, businessInfo.logoUrl)}
                 alt="Business Logo"
-                width={128}
-                height={64}
-                className="mx-auto mb-2 max-h-16 w-auto max-w-full"
-                style={{ objectFit: 'contain' }}
-                priority
+                className="mx-auto mb-2 max-h-16 w-auto max-w-full object-contain"
               />
             )}
             <h1 className="text-xl font-bold tracking-wide">{businessInfo?.name || 'Business Name'}</h1>

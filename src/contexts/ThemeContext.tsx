@@ -15,6 +15,8 @@ type ThemeContextType = {
   setTheme: (theme: Partial<Theme>) => void;
   loading: boolean;
   error: string | null;
+  /** True when the UI is currently in dark mode (either explicit or from system). */
+  isDark: boolean;
 };
 
 const defaultTheme: Theme = {
@@ -30,17 +32,25 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<Theme>(defaultTheme);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDark, setIsDark] = useState(false);
 
   const applyTheme = useCallback((themeToApply: Theme) => {
-    if (themeToApply.colorScheme === 'dark' || 
-        (themeToApply.colorScheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+    const effectiveDark =
+      themeToApply.colorScheme === 'dark' ||
+      (themeToApply.colorScheme === 'system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    setIsDark(effectiveDark);
+    if (typeof document !== 'undefined') {
+      if (effectiveDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+      document.documentElement.style.setProperty('--color-primary', themeToApply.accentColor);
+      document.documentElement.setAttribute('data-density', themeToApply.density);
+      document.documentElement.style.fontSize = `${themeToApply.fontSize}px`;
     }
-    document.documentElement.style.setProperty('--color-primary', themeToApply.accentColor);
-    document.documentElement.setAttribute('data-density', themeToApply.density);
-    document.documentElement.style.fontSize = `${themeToApply.fontSize}px`;
   }, []);
 
   useEffect(() => {
@@ -70,9 +80,10 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
       try {
         setLoading(true);
-        const response = await apiClient.get('/user/me') as { data?: { themePreferences?: Partial<Theme> } };
-        if (response.data?.themePreferences) {
-          const fetchedTheme = { ...defaultTheme, ...response.data.themePreferences };
+        const response = await apiClient.get('/user/me') as { themePreferences?: Partial<Theme>; data?: { themePreferences?: Partial<Theme> } };
+        const themePrefs = response.themePreferences ?? response.data?.themePreferences;
+        if (themePrefs) {
+          const fetchedTheme = { ...defaultTheme, ...themePrefs };
           setThemeState(fetchedTheme);
           applyTheme(fetchedTheme);
         } else {
@@ -91,6 +102,15 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     };
     fetchTheme();
   }, [applyTheme]);
+
+  // When colorScheme is 'system', re-apply theme when OS preference changes
+  useEffect(() => {
+    if (theme.colorScheme !== 'system' || typeof window === 'undefined') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const listener = () => applyTheme(theme);
+    mq.addEventListener('change', listener);
+    return () => mq.removeEventListener('change', listener);
+  }, [theme, theme.colorScheme, applyTheme]);
 
   const setTheme = async (newTheme: Partial<Theme>) => {
     const updatedTheme = { ...theme, ...newTheme };
@@ -117,7 +137,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, loading, error }}>
+    <ThemeContext.Provider value={{ theme, setTheme, loading, error, isDark }}>
       {children}
     </ThemeContext.Provider>
   );

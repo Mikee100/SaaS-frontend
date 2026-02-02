@@ -2,8 +2,20 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
 import { Bar } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  getPdfCurrency,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -37,6 +49,7 @@ type InventoryItem = {
 export default function InventoryAgingReportPage() {
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
+  const { data: tenantData } = useTenant();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,40 +90,54 @@ export default function InventoryAgingReportPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const currency = getPdfCurrency(tenantData, pdfTemplate);
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text('Inventory Aging Report', 20, yPosition);
-    yPosition += 20;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Filter: ${filterType === 'all' ? 'All' : filterType + ' Days'}`, 20, yPosition);
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Inventory Aging Report', margin, yPosition + 8);
+    yPosition += 18;
+
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Filter: ${filterType === 'all' ? 'All' : filterType + ' Days'}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Total Items: ${filteredItems.length}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Total Value: ${currency} ${totalValue.toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Slow Moving (>90 days): ${slowMovingItems.length}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Potentially Obsolete (>180 days): ${obsoleteItems.length}`, margin, yPosition);
+    yPosition += 14;
+
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Inventory Aging Details', margin, yPosition);
     yPosition += 10;
-    doc.text(`Total Items: ${filteredItems.length}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Total Value: Ksh ${totalValue.toLocaleString()}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Slow Moving (>90 days): ${slowMovingItems.length}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Potentially Obsolete (>180 days): ${obsoleteItems.length}`, 20, yPosition);
-    yPosition += 20;
 
-    doc.text('Inventory Aging Details:', 20, yPosition);
-    yPosition += 10;
+    const rows = filteredItems.map((item, i) => [i + 1, item.productName, item.stock, item.daysInStock, item.ageBucket]);
+    if (rows.length) {
+      autoTable(doc, {
+        head: [['#', 'Product', 'Stock', 'Days in Stock', 'Age Bucket']],
+        body: rows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+    }
 
-    filteredItems.forEach((item, index) => {
-      if (yPosition > 270) {
-        doc.addPage();
-        yPosition = 20;
-      }
-
-      doc.setFontSize(10);
-      doc.text(`${index + 1}. ${item.productName}`, 20, yPosition);
-      doc.text(`Stock: ${item.stock} | Days in Stock: ${item.daysInStock} | Age Bucket: ${item.ageBucket}`, 30, yPosition + 5);
-      yPosition += 15;
-    });
-
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Inventory Aging');
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
     const link = document.createElement('a');

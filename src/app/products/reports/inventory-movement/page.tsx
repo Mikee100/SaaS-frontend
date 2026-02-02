@@ -2,8 +2,19 @@
 import { useEffect, useState } from "react";
 
 import { Line, Bar } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -40,6 +51,7 @@ type MovementData = {
 export default function InventoryMovementReportPage() {
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
+  const { data: tenantData } = useTenant();
   const [movements, setMovements] = useState<MovementData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error] = useState<string | null>(null);
@@ -101,25 +113,45 @@ export default function InventoryMovementReportPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text('Inventory Movement Report', 20, yPosition);
-    yPosition += 20;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Total Days: ${movements.length}`, 20, yPosition);
-    yPosition += 20;
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Inventory Movement Report', margin, yPosition + 8);
+    yPosition += 18;
 
-    doc.text('Movement Details:', 20, yPosition);
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 8;
+    doc.text(`Total Days: ${movements.length}`, margin, yPosition);
+    yPosition += 14;
+
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Movement Details', margin, yPosition);
     yPosition += 10;
-    movements.forEach((movement) => {
-      doc.setFontSize(10);
-      doc.text(`${new Date(movement.date).toLocaleDateString()}: Receipts: ${movement.receipts}, Issues: ${movement.issues}, Adjustments: ${movement.adjustments}, Net: ${movement.netMovement}`, 30, yPosition);
-      yPosition += 8;
-    });
 
+    const rows = movements.map(m => [new Date(m.date).toLocaleDateString(), m.receipts, m.issues, m.adjustments, m.netMovement]);
+    if (rows.length) {
+      autoTable(doc, {
+        head: [['Date', 'Receipts', 'Issues', 'Adjustments', 'Net']],
+        body: rows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+    }
+
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Inventory Movement');
     doc.save('inventory_movement_report.pdf');
   };
 

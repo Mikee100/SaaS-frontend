@@ -2,12 +2,24 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { apiGet, apiPost } from "@/utils/api";
 import AuthGuard from '@/components/AuthGuard';
-import { FaCreditCard, FaMoneyBillWave, FaCalendarAlt, FaUser, FaPhone, FaExclamationTriangle, FaCheckCircle, FaClock, FaPlus, FaEye, FaDollarSign, FaTimesCircle, FaUsers, FaFilePdf, FaFileExcel, FaBuilding } from 'react-icons/fa';
+import { FaCreditCard, FaMoneyBillWave, FaCalendarAlt, FaUser, FaPhone, FaExclamationTriangle, FaCheckCircle, FaClock, FaPlus, FaEye, FaTimesCircle, FaUsers, FaFilePdf, FaFileExcel, FaBuilding } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  getPdfCurrency,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import Spinner from '@/components/Spinner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 interface Credit {
@@ -50,27 +62,6 @@ interface Credit {
   }>;
 }
 
-interface CreditScore {
-  score: number;
-  riskLevel: 'low' | 'medium' | 'high';
-  factors: {
-    totalCredits: number;
-    paidCredits: number;
-    overdueCredits: number;
-    averagePaymentDays: number;
-    totalCreditAmount: number;
-  };
-}
-
-interface CreditEligibility {
-  isEligible: boolean;
-  availableCredit: number;
-  requestedAmount: number;
-  currentOutstanding: number;
-  creditScore: number;
-  riskLevel: string;
-  reasons: string[];
-}
 
 
 // Remove unused Tenant interface
@@ -105,26 +96,25 @@ type CustomerHistory = {
   }>;
 };
 
+/** Format amount for display: no trailing zeros (e.g. 1784 not 1784.00, 1784.5 not 1784.50) */
+function formatAmount(n: number): string {
+  return parseFloat(n.toFixed(2)).toString();
+}
+
 export default function CreditManagementPage() {
   const { user } = useUser();
+  const { data: tenantData } = useTenant();
   const [credits, setCredits] = useState<Credit[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCredit, setSelectedCredit] = useState<Credit | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentAmount, setPaymentAmount] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [paymentNotes, setPaymentNotes] = useState<string>('');
   const [processingPayment, setProcessingPayment] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [showCreditScoreModal, setShowCreditScoreModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<{name: string, phone?: string} | null>(null);
-  const [creditScore, setCreditScore] = useState<CreditScore | null>(null);
-  const [loadingScore, setLoadingScore] = useState(false);
-  const [showEligibilityModal, setShowEligibilityModal] = useState(false);
-  const [requestedAmount, setRequestedAmount] = useState<number>(0);
-  const [eligibility, setEligibility] = useState<CreditEligibility | null>(null);
-  const [loadingEligibility, setLoadingEligibility] = useState(false);
+  const [showCustomerHistoryModal, setShowCustomerHistoryModal] = useState(false);
 
   // Dashboard states
   const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'reports' | 'completed'>('overview');
@@ -218,31 +208,58 @@ export default function CreditManagementPage() {
     return Object.entries(trends).map(([month, count]) => ({ month, count })).sort((a, b) => new Date(a.month + ' 1').getTime() - new Date(b.month + ' 1').getTime());
   }, [credits]);
 
-  // Export functions
+  // Export functions — use tenant PDF template
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    doc.text('Credit Report', 20, 20);
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const currency = getPdfCurrency(tenantData, pdfTemplate);
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let y = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    // Add aging analysis
-    doc.text('Aging Analysis:', 20, 40);
-    let y = 50;
-    Object.entries(agingAnalysis).forEach(([key, value]) => {
-      doc.text(`${key}: $${(value as number).toFixed(2)}`, 20, y);
-      y += 10;
-    });
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Credit Report', margin, y + 8);
+    y += 18;
 
-    // Add credits summary
-    y += 20;
-    doc.text('Credit Summary:', 20, y);
+    doc.setFontSize(fontSize);
+    doc.setTextColor('333333');
+    doc.text('Aging Analysis', margin, y);
     y += 10;
-    doc.text(`Total Credits: ${credits.length}`, 20, y);
-    y += 10;
-    doc.text(`Outstanding: $${credits.reduce((sum, credit) => sum + credit.balance, 0).toFixed(2)}`, 20, y);
-    y += 10;
-    doc.text(`Paid Credits: ${credits.filter(credit => credit.status === 'paid').length}`, 20, y);
-    y += 10;
-    doc.text(`Overdue: ${credits.filter(credit => credit.status === 'overdue').length}`, 20, y);
+    const agingRows = Object.entries(agingAnalysis).map(([key, value]) => [key, `${currency} ${formatAmount(value as number)}`]);
+    if (agingRows.length) {
+      autoTable(doc, {
+        head: [['Bucket', 'Amount']],
+        body: agingRows,
+        startY: y,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 14;
+    } else {
+      doc.setFontSize(fontSize - 2);
+      doc.text('No aging data', margin, y);
+      y += 14;
+    }
 
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Credit Summary', margin, y);
+    y += 10;
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('333333');
+    doc.text(`Total Credits: ${credits.length}`, margin, y);
+    y += 8;
+    doc.text(`Outstanding: ${currency} ${formatAmount(credits.reduce((sum, credit) => sum + credit.balance, 0))}`, margin, y);
+    y += 8;
+    doc.text(`Paid Credits: ${credits.filter(credit => credit.status === 'paid').length}`, margin, y);
+    y += 8;
+    doc.text(`Overdue: ${credits.filter(credit => credit.status === 'overdue').length}`, margin, y);
+
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Credit');
     doc.save('credit-report.pdf');
   };
 
@@ -266,6 +283,7 @@ export default function CreditManagementPage() {
   const fetchCredits = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await apiGet('/sales/credits/all');
       setCredits(data as Credit[]);
     } catch (error) {
@@ -277,10 +295,10 @@ export default function CreditManagementPage() {
   };
 
   const handleMakePayment = async () => {
-    if (!selectedCredit || paymentAmount <= 0) return;
+    const amount = parseFloat(paymentAmount);
+    if (!selectedCredit || paymentAmount.trim() === '' || isNaN(amount) || amount <= 0) return;
 
-    // Use Number() for robust comparison
-    if (Math.round(Number(paymentAmount) * 100) > Math.round(Number(selectedCredit.balance) * 100)) {
+    if (Math.round(amount * 100) > Math.round(Number(selectedCredit.balance) * 100)) {
       setError('Payment amount cannot exceed remaining balance');
       return;
     }
@@ -290,7 +308,7 @@ export default function CreditManagementPage() {
 
     try {
       await apiPost(`/sales/credits/${selectedCredit.id}/payment`, {
-        amount: paymentAmount,
+        amount,
         paymentMethod,
         notes: paymentNotes || undefined,
       });
@@ -301,7 +319,7 @@ export default function CreditManagementPage() {
       // Close modal and reset form
       setShowPaymentModal(false);
       setSelectedCredit(null);
-      setPaymentAmount(0);
+      setPaymentAmount('');
       setPaymentMethod('cash');
       setPaymentNotes('');
     } catch (error: unknown) {
@@ -326,40 +344,24 @@ export default function CreditManagementPage() {
     }
   };
 
-  const handleViewCreditScore = async (customerName: string, customerPhone?: string) => {
-    setSelectedCustomer({ name: customerName, phone: customerPhone });
-    setLoadingScore(true);
-    setShowCreditScoreModal(true);
+  const handleViewCustomerHistory = async (customerName: string, customerPhone?: string) => {
+    const customer = { name: customerName, phone: customerPhone };
+    setSelectedCustomer(customer);
+    setShowCustomerHistoryModal(true);
+    setError(null);
+    
+    // Fetch history with the customer info directly
+    setLoadingCustomerHistory(true);
+    setCustomerHistory(null);
 
     try {
-      const score = await apiGet(`/sales/credits/score?customerName=${encodeURIComponent(customerName)}${customerPhone ? `&customerPhone=${encodeURIComponent(customerPhone)}` : ''}`);
-      setCreditScore(score as CreditScore);
+      const result = await apiGet(`/sales/credits/customer-history?customerName=${encodeURIComponent(customerName)}${customerPhone ? `&customerPhone=${encodeURIComponent(customerPhone)}` : ''}`);
+      setCustomerHistory(result as CustomerHistory);
     } catch (error) {
-      console.error('Error fetching credit score:', error);
-      setError('Failed to load credit score');
+      console.error('Error fetching customer history:', error);
+      setError('Failed to load customer history');
     } finally {
-      setLoadingScore(false);
-    }
-  };
-
-  const handleCheckEligibility = async () => {
-    if (!selectedCustomer || requestedAmount <= 0) return;
-
-    setLoadingEligibility(true);
-    setEligibility(null);
-
-    try {
-      const result = await apiPost('/sales/credits/eligibility', {
-        customerName: selectedCustomer.name,
-        customerPhone: selectedCustomer.phone,
-        requestedAmount,
-      });
-      setEligibility(result as CreditEligibility);
-    } catch (error) {
-      console.error('Error checking eligibility:', error);
-      setError('Failed to check credit eligibility');
-    } finally {
-      setLoadingEligibility(false);
+      setLoadingCustomerHistory(false);
     }
   };
 
@@ -368,6 +370,7 @@ export default function CreditManagementPage() {
 
     setLoadingCustomerHistory(true);
     setCustomerHistory(null);
+    setError(null);
 
     try {
       const result = await apiGet(`/sales/credits/customer-history?customerName=${encodeURIComponent(selectedCustomer.name)}${selectedCustomer.phone ? `&customerPhone=${encodeURIComponent(selectedCustomer.phone)}` : ''}`);
@@ -439,7 +442,10 @@ export default function CreditManagementPage() {
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
               <button
-                onClick={() => setActiveTab('overview')}
+                onClick={() => {
+                  setActiveTab('overview');
+                  setError(null);
+                }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'overview'
                     ? 'border-blue-500 text-blue-600'
@@ -449,7 +455,10 @@ export default function CreditManagementPage() {
                 Overview
               </button>
               <button
-                onClick={() => setActiveTab('customers')}
+                onClick={() => {
+                  setActiveTab('customers');
+                  setError(null);
+                }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'customers'
                     ? 'border-blue-500 text-blue-600'
@@ -459,7 +468,10 @@ export default function CreditManagementPage() {
                 Customers
               </button>
               <button
-                onClick={() => setActiveTab('reports')}
+                onClick={() => {
+                  setActiveTab('reports');
+                  setError(null);
+                }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'reports'
                     ? 'border-blue-500 text-blue-600'
@@ -469,7 +481,10 @@ export default function CreditManagementPage() {
                 Reports
               </button>
               <button
-                onClick={() => setActiveTab('completed')}
+                onClick={() => {
+                  setActiveTab('completed');
+                  setError(null);
+                }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'completed'
                     ? 'border-blue-500 text-blue-600'
@@ -501,11 +516,11 @@ export default function CreditManagementPage() {
                 </div>
               </div>
               <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
-                <FaDollarSign className="w-5 h-5 text-yellow-600" />
+                <FaMoneyBillWave className="w-5 h-5 text-yellow-600" />
                 <div>
                   <div className="text-xs text-gray-500">Outstanding</div>
                   <div className="text-base font-bold text-gray-900">
-                    ${credits.reduce((sum, credit) => sum + credit.balance, 0).toFixed(2)}
+                    {formatAmount(credits.reduce((sum, credit) => sum + credit.balance, 0))}
                   </div>
                 </div>
               </div>
@@ -529,82 +544,103 @@ export default function CreditManagementPage() {
               </div>
             </div>
 
-            {/* Credits List */}
-            <div className="bg-white rounded shadow-sm border border-gray-100">
-              <div className="p-3 border-b border-gray-100">
+            {/* Credits List - Table */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50">
                 <h2 className="text-base font-semibold text-gray-900">Credit Records</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{credits.length} record{credits.length !== 1 ? 's' : ''}</p>
               </div>
-              <div className="divide-y divide-gray-100">
-                {credits.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">
-                    <FaCreditCard className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-base font-medium">No credit records found</p>
-                    <p className="text-xs">Credit sales will appear here</p>
-                  </div>
-                ) : (
-                  credits.map((credit) => (
-                    <div key={credit.id} className="p-3 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-sm font-medium text-gray-900">{credit.customerName}</h3>
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(credit.status)}`}>
+              {credits.length === 0 ? (
+                <div className="p-12 text-center text-gray-500">
+                  <FaCreditCard className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                  <p className="text-base font-medium text-gray-700">No credit records found</p>
+                  <p className="text-xs mt-1">Credit sales will appear here</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px]">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                        <th className="py-3 px-4">Customer</th>
+                        <th className="py-3 px-4">Contact</th>
+                        <th className="py-3 px-4 w-24">Status</th>
+                        <th className="py-3 px-4 text-right">Balance</th>
+                        <th className="py-3 px-4">Due Date</th>
+                        <th className="py-3 px-4 text-right w-32">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {credits.map((credit) => (
+                        <tr
+                          key={credit.id}
+                          className="hover:bg-gray-50/80 transition-colors group"
+                        >
+                          <td className="py-3 px-4">
+                            <div className="font-medium text-gray-900">{credit.customerName}</div>
+                            {credit.notes && (
+                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1" title={credit.notes}>{credit.notes}</p>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1.5 text-gray-600 text-sm">
+                              <FaPhone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              {credit.customerPhone || '—'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(credit.status)}`}>
                               {getStatusIcon(credit.status)}
                               {credit.status.charAt(0).toUpperCase() + credit.status.slice(1)}
                             </span>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-gray-600">
-                            <div className="flex items-center gap-1">
-                              <FaPhone className="w-3 h-3" />
-                              <span>{credit.customerPhone}</span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className={`font-semibold tabular-nums ${credit.balance > 0 ? 'text-gray-900' : 'text-green-600'}`}>
+                              {formatAmount(credit.balance)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1.5 text-gray-600 text-sm">
+                              <FaCalendarAlt className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              {credit.dueDate ? new Date(credit.dueDate).toLocaleDateString() : 'No due date'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => setSelectedCredit(credit)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                title="View details"
+                              >
+                                <FaEye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleViewCustomerHistory(credit.customerName, credit.customerPhone)}
+                                className="p-2 text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
+                                title="Customer history"
+                              >
+                                <FaUsers className="w-3.5 h-3.5" />
+                              </button>
+                              {credit.balance > 0 && canCreateSales && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedCredit(credit);
+                                    setShowPaymentModal(true);
+                                    setPaymentAmount('');
+                                  }}
+                                  className="p-2 text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                                  title="Record payment"
+                                >
+                                  <FaPlus className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
-                            <div className="flex items-center gap-1">
-                              <FaDollarSign className="w-3 h-3" />
-                              <span>Balance: ${credit.balance.toFixed(2)}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <FaCalendarAlt className="w-3 h-3" />
-                              <span>Due: {credit.dueDate ? new Date(credit.dueDate).toLocaleDateString() : 'No due date'}</span>
-                            </div>
-                          </div>
-                          {credit.notes && (
-                            <p className="text-xs text-gray-500 mt-1">{credit.notes}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setSelectedCredit(credit)}
-                            className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-                          >
-                            <FaEye className="w-3 h-3 inline mr-1" />
-                            View
-                          </button>
-                          <button
-                            onClick={() => handleViewCreditScore(credit.customerName, credit.customerPhone)}
-                            className="px-3 py-1 text-xs font-medium text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded transition-colors"
-                          >
-                            <FaCreditCard className="w-3 h-3 inline mr-1" />
-                            Score
-                          </button>
-                          {credit.balance > 0 && canCreateSales && (
-                            <button
-                              onClick={() => {
-                                setSelectedCredit(credit);
-                                setShowPaymentModal(true);
-                                setPaymentAmount(0);
-                              }}
-                              className="px-3 py-1 text-xs font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors"
-                            >
-                              <FaPlus className="w-3 h-3 inline mr-1" />
-                              Pay
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -674,24 +710,24 @@ export default function CreditManagementPage() {
                     </div>
                   </div>
                   <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
-                    <FaDollarSign className="w-5 h-5 text-green-600" />
+                    <FaMoneyBillWave className="w-5 h-5 text-green-600" />
                     <div>
                       <div className="text-xs text-gray-500">Total Credit Amount</div>
-                      <div className="text-base font-bold text-gray-900">${(customerHistory as { summary: { totalCreditAmount: number } }).summary.totalCreditAmount.toFixed(2)}</div>
+                      <div className="text-base font-bold text-gray-900">{formatAmount((customerHistory as { summary: { totalCreditAmount: number } }).summary.totalCreditAmount)}</div>
                     </div>
                   </div>
                   <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
                     <FaMoneyBillWave className="w-5 h-5 text-purple-600" />
                     <div>
                       <div className="text-xs text-gray-500">Total Paid</div>
-                      <div className="text-base font-bold text-gray-900">${(customerHistory as { summary: { totalPaid: number } }).summary.totalPaid.toFixed(2)}</div>
+                      <div className="text-base font-bold text-gray-900">{formatAmount((customerHistory as { summary: { totalPaid: number } }).summary.totalPaid)}</div>
                     </div>
                   </div>
                   <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
                     <FaExclamationTriangle className="w-5 h-5 text-red-600" />
                     <div>
                       <div className="text-xs text-gray-500">Outstanding</div>
-                      <div className="text-base font-bold text-gray-900">${(customerHistory as { summary: { totalOutstanding: number } }).summary.totalOutstanding.toFixed(2)}</div>
+                      <div className="text-base font-bold text-gray-900">{formatAmount((customerHistory as { summary: { totalOutstanding: number } }).summary.totalOutstanding)}</div>
                     </div>
                   </div>
                 </div>
@@ -758,7 +794,7 @@ export default function CreditManagementPage() {
                               </div>
                               <div className="text-right">
                                 <div className="text-sm font-medium text-gray-900">
-                                  ${c.totalAmount.toFixed(2)}
+                                  {formatAmount(c.totalAmount)}
                                 </div>
                                 <div className={`text-xs ${c.status === 'paid' ? 'text-green-600' : c.status === 'overdue' ? 'text-red-600' : 'text-yellow-600'}`}>
                                   {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
@@ -767,21 +803,23 @@ export default function CreditManagementPage() {
                             </div>
 
                             {/* Sale Items */}
-                            {c.sale && (
+                            {c.sale && c.sale.items && Array.isArray(c.sale.items) && c.sale.items.length > 0 && (
                               <div className="mb-3">
                                 <h5 className="text-xs font-medium text-gray-700 mb-2">Items Purchased:</h5>
                                 <div className="bg-gray-50 rounded p-2">
                                   <div className="space-y-1">
                                     {c.sale.items.map((item, index) => (
                                       <div key={index} className="flex justify-between text-xs">
-                                        <span>{item.productName}</span>
-                                        <span>{item.quantity} × ${item.price.toFixed(2)} = ${(item.quantity * item.price).toFixed(2)}</span>
+                                        <span>{item.productName || 'Unknown Product'}</span>
+                                        <span>{item.quantity} × {formatAmount(item.price)} = {formatAmount(item.quantity * item.price)}</span>
                                       </div>
                                     ))}
-                                    <div className="border-t border-gray-200 pt-1 mt-2 flex justify-between font-medium">
-                                      <span>Total:</span>
-                                      <span>${c.sale.total.toFixed(2)}</span>
-                                    </div>
+                                    {c.sale.total && (
+                                      <div className="border-t border-gray-200 pt-1 mt-2 flex justify-between font-medium">
+                                        <span>Total:</span>
+                                        <span>{formatAmount(c.sale.total)}</span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -795,7 +833,7 @@ export default function CreditManagementPage() {
                                   {c.payments.map((payment) => (
                                     <div key={payment.id} className="flex justify-between items-center p-2 bg-gray-50 rounded text-xs">
                                       <div>
-                                        <span className="font-medium">${payment.amount.toFixed(2)}</span>
+                                        <span className="font-medium">{formatAmount(payment.amount)}</span>
                                         <span className="text-gray-500 ml-2">({payment.paymentMethod})</span>
                                         {payment.notes && <p className="text-gray-600 mt-1">{payment.notes}</p>}
                                       </div>
@@ -811,7 +849,7 @@ export default function CreditManagementPage() {
                               <div className="mt-3 pt-3 border-t border-gray-200">
                                 <div className="flex justify-between items-center">
                                   <span className="text-xs text-gray-600">Outstanding Balance:</span>
-                                  <span className="text-sm font-medium text-red-600">${c.balance.toFixed(2)}</span>
+                                  <span className="text-sm font-medium text-red-600">{formatAmount(c.balance)}</span>
                                 </div>
                                 {c.dueDate && (
                                   <div className="flex justify-between items-center mt-1">
@@ -858,23 +896,23 @@ export default function CreditManagementPage() {
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="bg-blue-50 p-3 rounded border border-blue-200">
                   <div className="text-xs text-blue-700 font-medium">Current</div>
-                  <div className="text-lg font-bold text-blue-900">${agingAnalysis.current.toFixed(2)}</div>
+                  <div className="text-lg font-bold text-blue-900">{formatAmount(agingAnalysis.current)}</div>
                 </div>
                 <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
                   <div className="text-xs text-yellow-700 font-medium">1-30 Days</div>
-                  <div className="text-lg font-bold text-yellow-900">${agingAnalysis['1-30'].toFixed(2)}</div>
+                  <div className="text-lg font-bold text-yellow-900">{formatAmount(agingAnalysis['1-30'])}</div>
                 </div>
                 <div className="bg-orange-50 p-3 rounded border border-orange-200">
                   <div className="text-xs text-orange-700 font-medium">31-60 Days</div>
-                  <div className="text-lg font-bold text-orange-900">${agingAnalysis['31-60'].toFixed(2)}</div>
+                  <div className="text-lg font-bold text-orange-900">{formatAmount(agingAnalysis['31-60'])}</div>
                 </div>
                 <div className="bg-red-50 p-3 rounded border border-red-200">
                   <div className="text-xs text-red-700 font-medium">61-90 Days</div>
-                  <div className="text-lg font-bold text-red-900">${agingAnalysis['61-90'].toFixed(2)}</div>
+                  <div className="text-lg font-bold text-red-900">{formatAmount(agingAnalysis['61-90'])}</div>
                 </div>
                 <div className="bg-gray-50 p-3 rounded border border-gray-200">
                   <div className="text-xs text-gray-700 font-medium">90+ Days</div>
-                  <div className="text-lg font-bold text-gray-900">${agingAnalysis['90+'].toFixed(2)}</div>
+                  <div className="text-lg font-bold text-gray-900">{formatAmount(agingAnalysis['90+'])}</div>
                 </div>
               </div>
             </div>
@@ -888,7 +926,7 @@ export default function CreditManagementPage() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
-                    <Tooltip formatter={(value) => [`$${value}`, 'Amount']} />
+                    <Tooltip formatter={(value) => [value, 'Amount']} />
                     <Line type="monotone" dataKey="amount" stroke="#3b82f6" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -909,7 +947,7 @@ export default function CreditManagementPage() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
                     <YAxis />
-                    <Tooltip formatter={(value) => [`$${(value as number).toFixed(2)}`, 'Total Credit']} />
+                    <Tooltip formatter={(value) => [formatAmount(value as number), 'Total Credit']} />
                     <Bar dataKey="total" fill="#3b82f6" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -930,7 +968,7 @@ export default function CreditManagementPage() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
                     <YAxis />
-                  <Tooltip formatter={(value) => [`$${(value as number).toFixed(2)}`, 'Total Credit']} />
+                  <Tooltip formatter={(value) => [formatAmount(value as number), 'Total Credit']} />
                     <Bar dataKey="total" fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -963,13 +1001,13 @@ export default function CreditManagementPage() {
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-600">
-                    ${credits.reduce((sum, credit) => sum + credit.paidAmount, 0).toFixed(2)}
+                    {formatAmount(credits.reduce((sum, credit) => sum + credit.paidAmount, 0))}
                   </div>
                   <div className="text-xs text-gray-500">Total Paid</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-red-600">
-                    ${credits.reduce((sum, credit) => sum + credit.balance, 0).toFixed(2)}
+                    {formatAmount(credits.reduce((sum, credit) => sum + credit.balance, 0))}
                   </div>
                   <div className="text-xs text-gray-500">Outstanding</div>
                 </div>
@@ -1005,11 +1043,11 @@ export default function CreditManagementPage() {
                 </div>
               </div>
               <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
-                <FaDollarSign className="w-5 h-5 text-green-600" />
+                <FaMoneyBillWave className="w-5 h-5 text-green-600" />
                 <div>
                   <div className="text-xs text-gray-500">Total Paid</div>
                   <div className="text-base font-bold text-gray-900">
-                    ${credits.filter(credit => credit.status === 'paid').reduce((sum, credit) => sum + credit.paidAmount, 0).toFixed(2)}
+                    {formatAmount(credits.filter(credit => credit.status === 'paid').reduce((sum, credit) => sum + credit.paidAmount, 0))}
                   </div>
                 </div>
               </div>
@@ -1042,71 +1080,90 @@ export default function CreditManagementPage() {
               </div>
             </div>
 
-            {/* Completed Credits List */}
-            <div className="bg-white rounded shadow-sm border border-gray-100">
-              <div className="p-3 border-b border-gray-100">
+            {/* Completed Credits List - Table */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50">
                 <h2 className="text-base font-semibold text-gray-900">Completed Credit Records</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{credits.filter(credit => credit.status === 'paid').length} record{credits.filter(credit => credit.status === 'paid').length !== 1 ? 's' : ''}</p>
               </div>
-              <div className="divide-y divide-gray-100">
-                {credits.filter(credit => credit.status === 'paid').length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">
-                    <FaCheckCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-base font-medium">No completed credits found</p>
-                    <p className="text-xs">Completed credits will appear here</p>
-                  </div>
-                ) : (
-                  credits.filter(credit => credit.status === 'paid').map((credit) => (
-                    <div key={credit.id} className="p-3 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-sm font-medium text-gray-900">{credit.customerName}</h3>
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              {credits.filter(credit => credit.status === 'paid').length === 0 ? (
+                <div className="p-12 text-center text-gray-500">
+                  <FaCheckCircle className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                  <p className="text-base font-medium text-gray-700">No completed credits found</p>
+                  <p className="text-xs mt-1">Completed credits will appear here</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px]">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50/80 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                        <th className="py-3 px-4">Customer</th>
+                        <th className="py-3 px-4">Contact</th>
+                        <th className="py-3 px-4 w-20">Status</th>
+                        <th className="py-3 px-4 text-right">Total</th>
+                        <th className="py-3 px-4">Completed</th>
+                        <th className="py-3 px-4 text-right w-24">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {credits.filter(credit => credit.status === 'paid').map((credit) => (
+                        <tr key={credit.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="font-medium text-gray-900">{credit.customerName}</div>
+                            {credit.notes && (
+                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1" title={credit.notes}>{credit.notes}</p>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1.5 text-gray-600 text-sm">
+                              <FaPhone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              {credit.customerPhone || '—'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                               <FaCheckCircle className="w-3 h-3" />
                               Paid
                             </span>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-gray-600">
-                            <div className="flex items-center gap-1">
-                              <FaPhone className="w-3 h-3" />
-                              <span>{credit.customerPhone}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <FaDollarSign className="w-3 h-3" />
-                              <span>Total: ${credit.totalAmount.toFixed(2)}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <FaCalendarAlt className="w-3 h-3" />
-                              <span>Completed: {new Date(credit.updatedAt).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                          {credit.notes && (
-                            <p className="text-xs text-gray-500 mt-1">{credit.notes}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setSelectedCredit(credit)}
-                            className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-                          >
-                            <FaEye className="w-3 h-3 inline mr-1" />
-                            View
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="font-semibold tabular-nums text-gray-900">{formatAmount(credit.totalAmount)}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1.5 text-gray-600 text-sm">
+                              <FaCalendarAlt className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              {new Date(credit.updatedAt).toLocaleDateString()}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              onClick={() => setSelectedCredit(credit)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              title="View details"
+                            >
+                              <FaEye className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </>
         )}
 
         {/* Credit Details Modal */}
         {selectedCredit && !showPaymentModal && (
-          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-            <div className="w-full max-w-lg mx-auto pointer-events-auto">
-              <div className="bg-white rounded-lg shadow-lg border border-gray-100 p-5">
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50"
+            onClick={() => setSelectedCredit(null)}
+          >
+            <div 
+              className="w-full max-w-lg mx-auto bg-white rounded-lg shadow-lg border border-gray-100 p-5"
+              onClick={(e) => e.stopPropagation()}
+            >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-base font-semibold text-gray-900">Credit Details</h3>
                   <button
@@ -1135,15 +1192,15 @@ export default function CreditManagementPage() {
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between">
                         <span>Total:</span>
-                        <span className="font-medium">${selectedCredit.totalAmount.toFixed(2)}</span>
+                        <span className="font-medium">{formatAmount(selectedCredit.totalAmount)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Paid:</span>
-                        <span className="font-medium text-green-600">${selectedCredit.paidAmount.toFixed(2)}</span>
+                        <span className="font-medium text-green-600">{formatAmount(selectedCredit.paidAmount)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Balance:</span>
-                        <span className="font-medium text-red-600">${selectedCredit.balance.toFixed(2)}</span>
+                        <span className="font-medium text-red-600">{formatAmount(selectedCredit.balance)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Due:</span>
@@ -1166,12 +1223,12 @@ export default function CreditManagementPage() {
                       {selectedCredit.sale.SaleItem.map((item, index) => (
                         <div key={index} className="flex justify-between items-center">
                           <span>{item.product.name}</span>
-                          <span>{item.quantity} × ${item.price.toFixed(2)} = ${(item.quantity * item.price).toFixed(2)}</span>
+                          <span>{item.quantity} × {formatAmount(item.price)} = {formatAmount(item.quantity * item.price)}</span>
                         </div>
                       ))}
                       <div className="border-t border-gray-200 pt-1 mt-2 flex justify-between font-medium">
                         <span>Total:</span>
-                        <span>${selectedCredit.sale.total.toFixed(2)}</span>
+                        <span>{formatAmount(selectedCredit.sale.total)}</span>
                       </div>
                     </div>
                   </div>
@@ -1186,7 +1243,7 @@ export default function CreditManagementPage() {
                       {selectedCredit.payments.map((payment) => (
                         <div key={payment.id} className="flex justify-between items-center p-2 bg-gray-50 rounded text-xs">
                           <div>
-                            <span className="font-medium">${payment.amount.toFixed(2)}</span>
+                            <span className="font-medium">{formatAmount(payment.amount)}</span>
                             <span className="text-gray-500 ml-2">({payment.paymentMethod})</span>
                             {payment.notes && <p className="text-gray-600 mt-1">{payment.notes}</p>}
                           </div>
@@ -1196,16 +1253,38 @@ export default function CreditManagementPage() {
                     </div>
                   )}
                 </div>
-              </div>
+                {/* Action Buttons */}
+                {selectedCredit.balance > 0 && canCreateSales && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        setShowPaymentModal(true);
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-semibold flex items-center gap-2"
+                    >
+                      <FaMoneyBillWave className="w-3 h-3" />
+                      Make Payment
+                    </button>
+                  </div>
+                )}
             </div>
           </div>
         )}
 
         {/* Payment Modal */}
         {showPaymentModal && selectedCredit && (
-          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-            <div className="w-full max-w-sm mx-auto pointer-events-auto">
-              <div className="bg-white rounded-lg shadow-lg border border-gray-100 p-5">
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50"
+            onClick={() => {
+              setShowPaymentModal(false);
+              setSelectedCredit(null);
+              setError(null);
+            }}
+          >
+            <div 
+              className="w-full max-w-sm mx-auto bg-white rounded-lg shadow-lg border border-gray-100 p-5"
+              onClick={(e) => e.stopPropagation()}
+            >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-base font-semibold text-gray-900">Record Payment</h3>
                   <button
@@ -1226,16 +1305,16 @@ export default function CreditManagementPage() {
                       type="number"
                       value={paymentAmount}
                       onChange={(e) => {
-                        setPaymentAmount(parseFloat(e.target.value) || 0);
-                        setError(null); // Reset error on amount change
+                        setPaymentAmount(e.target.value);
+                        setError(null);
                       }}
                       className="w-full px-2 py-1 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="0.00"
-                      min="0"
+                      placeholder="Enter amount"
+                      min={0}
                       max={selectedCredit.balance}
                       step="0.01"
                     />
-                    <p className="text-xs text-gray-400 mt-1">Max: ${selectedCredit.balance.toFixed(2)}</p>
+                    <p className="text-xs text-gray-400 mt-1">Max: {formatAmount(selectedCredit.balance)}</p>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Payment Method</label>
@@ -1280,7 +1359,7 @@ export default function CreditManagementPage() {
                   </button>
                   <button
                     onClick={handleMakePayment}
-                    disabled={processingPayment || paymentAmount <= 0 || Math.round(paymentAmount * 100) > Math.round(selectedCredit.balance * 100)}
+                    disabled={processingPayment || !paymentAmount.trim() || isNaN(parseFloat(paymentAmount)) || parseFloat(paymentAmount) <= 0 || Math.round(parseFloat(paymentAmount) * 100) > Math.round(selectedCredit.balance * 100)}
                     className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                   >
                     {processingPayment ? (
@@ -1296,222 +1375,226 @@ export default function CreditManagementPage() {
                     )}
                   </button>
                 </div>
-              </div>
             </div>
           </div>
         )}
 
-        {/* Add Credit Line Modal */}
-        {showModal && (
-          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-            <div className="w-full max-w-sm mx-auto pointer-events-auto">
-              <div className="bg-white rounded-lg shadow-lg p-5 border border-gray-100">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-base font-bold text-gray-900">Add Credit Line</h2>
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
-                  >
-                    <FaTimesCircle className="w-4 h-4" />
-                  </button>
-                </div>
-                <form>
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Credit Name</label>
-                    <input
-                      type="text"
-                      className="w-full px-2 py-1 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="Enter credit name"
-                    />
-                  </div>
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
-                    <input
-                      type="number"
-                      className="w-full px-2 py-1 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="Enter amount"
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                    <select className="w-full px-2 py-1 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 text-xs">
-                      <option value="Active">Active</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      className="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-xs font-semibold"
-                      onClick={() => setShowModal(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-semibold"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Credit Score Modal */}
-        {showCreditScoreModal && selectedCustomer && (
-          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-            <div className="w-full max-w-md mx-auto pointer-events-auto">
-              <div className="bg-white rounded-lg shadow-lg border border-gray-100 p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base font-semibold text-gray-900">Credit Score</h3>
-                  <button
-                    onClick={() => {
-                      setShowCreditScoreModal(false);
-                      setSelectedCustomer(null);
-                      setCreditScore(null);
-                    }}
-                    className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
-                  >
-                    <FaTimesCircle className="w-4 h-4" />
-                  </button>
+        {/* Customer History Modal */}
+        {showCustomerHistoryModal && selectedCustomer && (
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50 overflow-y-auto"
+            onClick={() => {
+              setShowCustomerHistoryModal(false);
+              setSelectedCustomer(null);
+              setCustomerHistory(null);
+            }}
+          >
+            <div 
+              className="w-full max-w-4xl mx-auto bg-white rounded-lg shadow-lg border border-gray-100 p-5 my-8 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Customer Credit History</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {selectedCustomer.name} {selectedCustomer.phone && `• ${selectedCustomer.phone}`}
+                  </p>
                 </div>
-                {loadingScore ? (
-                  <div className="flex justify-center items-center py-8">
-                    <Spinner />
-                  </div>
-                ) : creditScore ? (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900">{creditScore.score}</div>
-                      <div className={`text-sm font-medium ${creditScore.riskLevel === 'low' ? 'text-green-600' : creditScore.riskLevel === 'medium' ? 'text-yellow-600' : 'text-red-600'}`}>
-                        {creditScore.riskLevel.charAt(0).toUpperCase() + creditScore.riskLevel.slice(1)} Risk
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div>
-                        <div className="font-medium text-gray-700">Total Credits</div>
-                        <div className="text-gray-900">{creditScore.factors.totalCredits}</div>
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-700">Paid Credits</div>
-                        <div className="text-gray-900">{creditScore.factors.paidCredits}</div>
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-700">Overdue Credits</div>
-                        <div className="text-gray-900">{creditScore.factors.overdueCredits}</div>
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-700">Avg Payment Days</div>
-                        <div className="text-gray-900">{creditScore.factors.averagePaymentDays}</div>
-                      </div>
-                    </div>
-                    <div className="pt-3 border-t border-gray-200">
-                      <button
-                        onClick={() => {
-                          setShowCreditScoreModal(false);
-                          setShowEligibilityModal(true);
-                        }}
-                        className="w-full px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-semibold"
-                      >
-                        Check Eligibility
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <FaExclamationTriangle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">Failed to load credit score</p>
-                  </div>
-                )}
+                <button
+                  onClick={() => {
+                    setShowCustomerHistoryModal(false);
+                    setSelectedCustomer(null);
+                    setCustomerHistory(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
+                >
+                  <FaTimesCircle className="w-5 h-5" />
+                </button>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* Eligibility Modal */}
-        {showEligibilityModal && selectedCustomer && (
-          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-            <div className="w-full max-w-md mx-auto pointer-events-auto">
-              <div className="bg-white rounded-lg shadow-lg border border-gray-100 p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base font-semibold text-gray-900">Credit Eligibility</h3>
-                  <button
-                    onClick={() => {
-                      setShowEligibilityModal(false);
-                      setSelectedCustomer(null);
-                      setEligibility(null);
-                      setRequestedAmount(0);
-                    }}
-                    className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
-                  >
-                    <FaTimesCircle className="w-4 h-4" />
-                  </button>
+              {loadingCustomerHistory ? (
+                <div className="flex justify-center items-center py-12">
+                  <Spinner />
                 </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Requested Amount</label>
-                    <input
-                      type="number"
-                      value={requestedAmount}
-                      onChange={(e) => setRequestedAmount(parseFloat(e.target.value) || 0)}
-                      className="w-full px-2 py-1 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 text-xs"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                    />
+              ) : error ? (
+                <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-xs flex items-center gap-2">
+                  <FaExclamationTriangle className="w-4 h-4" />
+                  <span>{error}</span>
+                </div>
+              ) : customerHistory ? (
+                <>
+                  {/* Customer Summary Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
+                    <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+                      <FaCreditCard className="w-5 h-5 text-blue-600" />
+                      <div>
+                        <div className="text-xs text-gray-500">Total Credits</div>
+                        <div className="text-base font-bold text-gray-900">{customerHistory.summary.totalCredits}</div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+                      <FaMoneyBillWave className="w-5 h-5 text-green-600" />
+                      <div>
+                        <div className="text-xs text-gray-500">Total Credit Amount</div>
+                        <div className="text-base font-bold text-gray-900">{formatAmount(customerHistory.summary.totalCreditAmount)}</div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+                      <FaMoneyBillWave className="w-5 h-5 text-purple-600" />
+                      <div>
+                        <div className="text-xs text-gray-500">Total Paid</div>
+                        <div className="text-base font-bold text-gray-900">{formatAmount(customerHistory.summary.totalPaid)}</div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+                      <FaExclamationTriangle className="w-5 h-5 text-red-600" />
+                      <div>
+                        <div className="text-xs text-gray-500">Outstanding</div>
+                        <div className="text-base font-bold text-gray-900">{formatAmount(customerHistory.summary.totalOutstanding)}</div>
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    onClick={handleCheckEligibility}
-                    disabled={loadingEligibility || requestedAmount <= 0}
-                    className="w-full px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {loadingEligibility ? (
-                      <>
-                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Checking...
-                      </>
-                    ) : (
-                      'Check Eligibility'
-                    )}
-                  </button>
-                  {eligibility && (
-                    <div className="pt-3 border-t border-gray-200">
-                      <div className={`p-3 rounded text-xs ${eligibility.isEligible ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          {eligibility.isEligible ? (
-                            <FaCheckCircle className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <FaTimesCircle className="w-4 h-4 text-red-600" />
-                          )}
-                          <span className={`font-medium ${eligibility.isEligible ? 'text-green-800' : 'text-red-800'}`}>
-                            {eligibility.isEligible ? 'Eligible' : 'Not Eligible'}
-                          </span>
+
+                  {/* Payment Performance */}
+                  <div className="bg-white rounded shadow-sm border border-gray-100 p-4 mb-6">
+                    <h3 className="text-base font-semibold text-gray-900 mb-4">Payment Performance</h3>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
+                          <div
+                            className="bg-green-500 h-4 rounded-full transition-all duration-300"
+                            style={{ width: `${customerHistory.summary.paymentRatio}%` }}
+                          ></div>
                         </div>
-                        <div className="space-y-1 text-gray-700">
-                          <div>Available Credit: ${eligibility.availableCredit.toFixed(2)}</div>
-                          <div>Current Outstanding: ${eligibility.currentOutstanding.toFixed(2)}</div>
-                          <div>Credit Score: {eligibility.creditScore}</div>
-                          <div>Risk Level: {eligibility.riskLevel}</div>
-                          {eligibility.reasons.length > 0 && (
-                            <div>
-                              <div className="font-medium">Reasons:</div>
-                              <ul className="list-disc list-inside ml-2">
-                                {eligibility.reasons.map((reason, index) => (
-                                  <li key={index}>{reason}</li>
-                                ))}
-                              </ul>
+                        <div className="flex justify-between text-xs text-gray-600">
+                          <span>Payment Ratio: {customerHistory.summary.paymentRatio.toFixed(1)}%</span>
+                          <span>{customerHistory.summary.paidCredits} of {customerHistory.summary.totalCredits} credits paid</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Credit History Timeline */}
+                  <div className="bg-white rounded shadow-sm border border-gray-100">
+                    <div className="p-4 border-b border-gray-100">
+                      <h3 className="text-base font-semibold text-gray-900">Credit History</h3>
+                    </div>
+                    <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                      {Array.isArray(customerHistory.creditHistory) && customerHistory.creditHistory.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500">
+                          <FaCreditCard className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                          <p className="text-sm">No credit history found for this customer</p>
+                        </div>
+                      ) : (
+                        customerHistory.creditHistory.map((credit) => {
+                          const c = credit as {
+                            id: string;
+                            status: string;
+                            createdAt: string;
+                            totalAmount: number;
+                            sale?: {
+                              items: Array<{ productName: string; quantity: number; price: number }>;
+                              total: number;
+                            };
+                            payments: Array<{ id: string; amount: number; paymentMethod: string; notes?: string; createdAt: string }>;
+                            balance: number;
+                            dueDate?: string;
+                          };
+                          return (
+                            <div key={c.id} className="p-4 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-3 h-3 rounded-full ${c.status === 'paid' ? 'bg-green-500' : c.status === 'overdue' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+                                  <div>
+                                    <h4 className="text-sm font-medium text-gray-900">
+                                      Credit #{c.id.slice(-8)}
+                                    </h4>
+                                    <p className="text-xs text-gray-500">
+                                      {new Date(c.createdAt).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {formatAmount(c.totalAmount)}
+                                  </div>
+                                  <div className={`text-xs ${c.status === 'paid' ? 'text-green-600' : c.status === 'overdue' ? 'text-red-600' : 'text-yellow-600'}`}>
+                                    {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Sale Items */}
+                              {c.sale && c.sale.items && Array.isArray(c.sale.items) && c.sale.items.length > 0 && (
+                                <div className="mb-3">
+                                  <h5 className="text-xs font-medium text-gray-700 mb-2">Items Purchased:</h5>
+                                  <div className="bg-gray-50 rounded p-2">
+                                    <div className="space-y-1">
+                                      {c.sale.items.map((item, index) => (
+                                        <div key={index} className="flex justify-between text-xs">
+                                          <span>{item.productName || 'Unknown Product'}</span>
+                                          <span>{item.quantity} × {formatAmount(item.price)} = {formatAmount(item.quantity * item.price)}</span>
+                                        </div>
+                                      ))}
+                                      {c.sale.total && (
+                                        <div className="border-t border-gray-200 pt-1 mt-2 flex justify-between font-medium">
+                                          <span>Total:</span>
+                                          <span>{formatAmount(c.sale.total)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Payment History */}
+                              {c.payments.length > 0 && (
+                                <div>
+                                  <h5 className="text-xs font-medium text-gray-700 mb-2">Payment History:</h5>
+                                  <div className="space-y-1">
+                                    {c.payments.map((payment) => (
+                                      <div key={payment.id} className="flex justify-between items-center p-2 bg-gray-50 rounded text-xs">
+                                        <div>
+                                          <span className="font-medium">{formatAmount(payment.amount)}</span>
+                                          <span className="text-gray-500 ml-2">({payment.paymentMethod})</span>
+                                          {payment.notes && <p className="text-gray-600 mt-1">{payment.notes}</p>}
+                                        </div>
+                                        <span className="text-gray-500">{new Date(payment.createdAt).toLocaleDateString()}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Outstanding Balance */}
+                              {c.balance > 0 && (
+                                <div className="mt-3 pt-3 border-t border-gray-200">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-600">Outstanding Balance:</span>
+                                    <span className="text-sm font-medium text-red-600">{formatAmount(c.balance)}</span>
+                                  </div>
+                                  {c.dueDate && (
+                                    <div className="flex justify-between items-center mt-1">
+                                      <span className="text-xs text-gray-600">Due Date:</span>
+                                      <span className="text-xs text-gray-900">{new Date(c.dueDate).toLocaleDateString()}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </div>
+                          );
+                        })
+                      )}
                     </div>
-                  )}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <FaExclamationTriangle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No customer selected</p>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}

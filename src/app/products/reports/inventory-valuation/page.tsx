@@ -2,8 +2,20 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
 import { Bar } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  getPdfCurrency,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -39,6 +51,7 @@ type ValuationItem = {
 export default function InventoryValuationReportPage() {
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
+  const { data: tenantData } = useTenant();
   const [valuationItems, setValuationItems] = useState<ValuationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,40 +88,52 @@ export default function InventoryValuationReportPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const currency = getPdfCurrency(tenantData, pdfTemplate);
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text('Inventory Valuation Report', 20, yPosition);
-    yPosition += 20;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Filter: ${filterType === 'all' ? 'All' : filterType.replace('-', ' ').toUpperCase()}`, 20, yPosition);
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Inventory Valuation Report', margin, yPosition + 8);
+    yPosition += 18;
+
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Filter: ${filterType === 'all' ? 'All' : filterType.replace('-', ' ').toUpperCase()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Total Items: ${filteredItems.length}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Total Stock Value: ${currency} ${totalStockValue.toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Average Profit Margin: ${averageProfitMargin.toFixed(1)}%`, margin, yPosition);
+    yPosition += 14;
+
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Inventory Valuation Details', margin, yPosition);
     yPosition += 10;
-    doc.text(`Total Items: ${filteredItems.length}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Total Stock Value: Ksh ${totalStockValue.toLocaleString()}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Total Potential Revenue: Ksh ${totalPotentialRevenue.toLocaleString()}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Average Profit Margin: ${averageProfitMargin.toFixed(1)}%`, 20, yPosition);
-    yPosition += 20;
 
-    doc.text('Inventory Valuation Details:', 20, yPosition);
-    yPosition += 10;
+    const rows = filteredItems.map((item, i) => [i + 1, item.productName, item.stock, `${currency} ${item.stockValue.toLocaleString()}`, `${item.profitMargin.toFixed(1)}%`]);
+    if (rows.length) {
+      autoTable(doc, {
+        head: [['#', 'Product', 'Stock', `Value (${currency})`, 'Margin %']],
+        body: rows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+    }
 
-    filteredItems.forEach((item, index) => {
-      if (yPosition > 270) {
-        doc.addPage();
-        yPosition = 20;
-      }
-
-      doc.setFontSize(10);
-      doc.text(`${index + 1}. ${item.productName}`, 20, yPosition);
-      doc.text(`Stock: ${item.stock} | Cost: Ksh ${item.costPrice.toLocaleString()} | Selling: Ksh ${item.sellingPrice.toLocaleString()} | Value: Ksh ${item.stockValue.toLocaleString()} | Margin: ${item.profitMargin.toFixed(1)}%`, 30, yPosition + 5);
-      yPosition += 15;
-    });
-
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Inventory Valuation');
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
     const link = document.createElement('a');

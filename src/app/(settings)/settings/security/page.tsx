@@ -1,22 +1,25 @@
 "use client";
-import { useEffect, useState } from "react";
-import { apiGet, apiPut } from "@/utils/api";
+import { useEffect, useState, useCallback } from "react";
+import { apiGet, apiPut, apiDelete, apiPost } from "@/utils/api";
 import { FaShieldAlt, FaLock, FaMobileAlt, FaKey, FaSignOutAlt, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import Link from 'next/link';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import Image from 'next/image';
+
+interface SessionItem {
+  id: string;
+  ip: string | null;
+  userAgent: string | null;
+  lastActive: string;
+  deviceName?: string;
+}
+
 interface SecuritySettings {
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;
   recoveryCodes: string[];
-  activeSessions: {
-    id: string;
-    ip: string;
-    userAgent: string;
-    lastActive: string;
-    location?: string;
-  }[];
+  activeSessions: SessionItem[];
   passwordLastChanged: string;
   suspiciousActivity: boolean;
 }
@@ -36,24 +39,56 @@ export default function SecuritySettings() {
   const [success, setSuccess] = useState<string | null>(null);
   const [showRecoveryCodes, setShowRecoveryCodes] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [revokingAll, setRevokingAll] = useState(false);
 
-
-useEffect(() => {
-  const fetchSecuritySettings = async () => {
+  const fetchSessions = useCallback(async () => {
     try {
-      const data = await apiGet<SecuritySettings>("/tenant/security");
-      setSettings(s => data || s); // functional update
-      if (data?.twoFactorSecret) {
-        setQrCode(`data:image/svg+xml;base64,${btoa(data.twoFactorSecret)}`); // Mock QR
-      }
+      setSessionsLoading(true);
+      const res = await apiGet<{ sessions: SessionItem[]; currentSessionId: string | null }>("/auth/sessions");
+      setSettings(prev => ({ ...prev, activeSessions: res?.sessions ?? [] }));
+      setCurrentSessionId(res?.currentSessionId ?? null);
     } catch (err) {
-      console.error('Failed to load security settings:', err);
+      console.error('Failed to load sessions:', err);
+      setSettings(prev => ({ ...prev, activeSessions: [] }));
     } finally {
-      setLoading(false);
+      setSessionsLoading(false);
     }
-  };
-  fetchSecuritySettings();
-}, []);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setSessionsLoading(true);
+      try {
+        const [tenantData, sessionsRes] = await Promise.all([
+          apiGet<SecuritySettings>("/tenant/security").catch(() => null),
+          apiGet<{ sessions: SessionItem[]; currentSessionId: string | null }>("/auth/sessions").catch(() => ({ sessions: [], currentSessionId: null })),
+        ]);
+        if (cancelled) return;
+        if (tenantData) {
+          setSettings(s => ({ ...s, ...tenantData }));
+          if (tenantData.twoFactorSecret) {
+            setQrCode(`data:image/svg+xml;base64,${btoa(tenantData.twoFactorSecret)}`);
+          }
+        }
+        if (sessionsRes) {
+          setSettings(prev => ({ ...prev, activeSessions: sessionsRes.sessions ?? [] }));
+          setCurrentSessionId(sessionsRes.currentSessionId ?? null);
+        }
+      } catch (err) {
+        if (!cancelled) console.error('Failed to load security settings:', err);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setSessionsLoading(false);
+        }
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
 
   const handleEnable2FA = async () => {
@@ -91,16 +126,33 @@ useEffect(() => {
 
   const handleLogoutSession = async (sessionId: string) => {
     if (!confirm('Logout this session?')) return;
+    setError(null);
     try {
-      await apiPut(`/tenant/security/sessions/${sessionId}/logout`, {});
+      await apiDelete(`/auth/sessions/${sessionId}`);
       setSettings(prev => ({
         ...prev,
-        activeSessions: prev.activeSessions.filter(s => s.id !== sessionId)
+        activeSessions: prev.activeSessions.filter(s => s.id !== sessionId),
       }));
       setSuccess('Session logged out.');
     } catch (err: unknown) {
       const error = err as { message?: string };
       setError(error.message || "Failed to logout session");
+    }
+  };
+
+  const handleLogoutAllOtherSessions = async () => {
+    if (!confirm('Log out all other devices? You will stay logged in on this device.')) return;
+    setError(null);
+    setRevokingAll(true);
+    try {
+      const res = await apiPost<{ success: boolean; revoked: number }>("/auth/sessions/revoke-others", {});
+      await fetchSessions();
+      setSuccess(res?.revoked != null ? `Logged out ${res.revoked} other session(s).` : 'All other sessions logged out.');
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || "Failed to logout other sessions");
+    } finally {
+      setRevokingAll(false);
     }
   };
 
@@ -132,8 +184,21 @@ useEffect(() => {
     );
   }
 
+  /** Derive a short device/browser label from user agent for display. */
+  const sessionDeviceLabel = (session: SessionItem) => {
+    if (session.deviceName) return session.deviceName;
+    const ua = session.userAgent || "";
+    if (ua.includes("Electron")) return "Electron (Desktop app)";
+    if (ua.includes("Edg/")) return "Microsoft Edge";
+    if (ua.includes("Chrome/") && !ua.includes("Edg")) return "Google Chrome";
+    if (ua.includes("Firefox")) return "Firefox";
+    if (ua.includes("Safari") && !ua.includes("Chrome")) return "Safari";
+    if (ua.includes("axios")) return "API / Script";
+    return ua.length > 40 ? ua.slice(0, 40) + "…" : ua || "Unknown device";
+  };
+
   return (
-    <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
+    <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh] w-full overflow-x-hidden box-border">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <FaShieldAlt className="text-blue-600 text-2xl" />
@@ -243,30 +308,46 @@ useEffect(() => {
       </div>
 
       {/* Active Sessions */}
-      <div className="mt-8 bg-white rounded-xl shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+      <div className="mt-8 w-full max-w-full bg-white dark:bg-slate-800 rounded-xl shadow p-6 border border-gray-200 dark:border-slate-600 overflow-hidden box-border">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100 mb-4 flex items-center gap-2">
           <FaKey />
           Active Sessions
         </h3>
-        <p className="text-gray-600 mb-6">Manage your active login sessions across devices.</p>
-        
-        {settings.activeSessions.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No active sessions found.
+        <p className="text-gray-600 dark:text-slate-400 mb-6">Manage your active login sessions across devices.</p>
+
+        {sessionsLoading ? (
+          <div className="text-center py-8 text-gray-500 dark:text-slate-400">
+            <span className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mr-2 align-middle" />
+            Loading sessions...
+          </div>
+        ) : settings.activeSessions.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 dark:text-slate-400">
+            No active sessions found. Sessions are created when you log in with cookies (browser).
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3 overflow-hidden">
             {settings.activeSessions.map((session) => (
-              <div key={session.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="flex-1">
-                  <p className="font-medium">{session.userAgent || 'Unknown Device'}</p>
-                  <p className="text-sm text-gray-600">IP: {session.ip} • Last active: {new Date(session.lastActive).toLocaleString()}</p>
-                  {session.location && <p className="text-sm text-gray-500">Location: {session.location}</p>}
+              <div
+                key={session.id}
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 min-w-0 overflow-hidden"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900 dark:text-slate-100 truncate" title={session.userAgent || undefined}>
+                    {sessionDeviceLabel(session)}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-slate-400 truncate">
+                    {session.ip ? `IP: ${session.ip} • ` : ""}
+                    Last active: {new Date(session.lastActive).toLocaleString()}
+                  </p>
+                  {currentSessionId === session.id && (
+                    <span className="inline-block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">This device</span>
+                  )}
                 </div>
-                {session.id !== 'current' && (
+                {currentSessionId !== session.id && (
                   <button
+                    type="button"
                     onClick={() => handleLogoutSession(session.id)}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                    className="sm:ml-4 flex-shrink-0 w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
                   >
                     <FaSignOutAlt className="inline mr-1" />
                     Logout
@@ -277,18 +358,24 @@ useEffect(() => {
           </div>
         )}
 
-        <div className="mt-6 pt-6 border-t border-gray-200 flex justify-between items-center">
-          <span className="text-sm text-gray-600">{settings.activeSessions.length} active sessions</span>
+        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-600 flex flex-col sm:flex-row sm:flex-wrap justify-between items-stretch sm:items-center gap-4">
+          <span className="text-sm text-gray-600 dark:text-slate-400 order-2 sm:order-1">
+            {settings.activeSessions.length} active session{settings.activeSessions.length !== 1 ? "s" : ""}
+          </span>
           <button
-            onClick={() => {
-              if (confirm('Logout all other sessions?')) {
-                // Implement logout all
-                setSuccess('All other sessions logged out.');
-              }
-            }}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+            type="button"
+            onClick={handleLogoutAllOtherSessions}
+            disabled={revokingAll || settings.activeSessions.length <= 1}
+            className="order-1 sm:order-2 w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex-shrink-0"
           >
-            Logout All Other Sessions
+            {revokingAll ? (
+              <>
+                <span className="inline-block animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent mr-1.5 align-middle" />
+                Logging out...
+              </>
+            ) : (
+              "Logout All Other Sessions"
+            )}
           </button>
         </div>
       </div>

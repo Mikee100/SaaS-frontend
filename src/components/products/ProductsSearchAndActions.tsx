@@ -1,4 +1,4 @@
-import { FaSearch, FaLayerGroup, FaDownload, FaUpload, FaTrash } from 'react-icons/fa';
+import { FaSearch, FaLayerGroup, FaDownload, FaTrash } from 'react-icons/fa';
 import { ProductsPageProps } from './types';
 
 interface ProductsSearchAndActionsProps {
@@ -9,11 +9,6 @@ interface ProductsSearchAndActionsProps {
   stockMin: ProductsPageProps['stockMin'];
   stockMax: ProductsPageProps['stockMax'];
   categoryFilter: ProductsPageProps['categoryFilter'];
-  uploading: ProductsPageProps['uploading'];
-  uploadResult: ProductsPageProps['uploadResult'];
-  uploadError: ProductsPageProps['uploadError'];
-  clearMsg: ProductsPageProps['clearMsg'];
-  uploadProgress: ProductsPageProps['uploadProgress'];
   filteredProducts: ProductsPageProps['filteredProducts'];
   products: ProductsPageProps['products'];
   setSearch: ProductsPageProps['setSearch'];
@@ -23,7 +18,7 @@ interface ProductsSearchAndActionsProps {
   setStockMin: ProductsPageProps['setStockMin'];
   setStockMax: ProductsPageProps['setStockMax'];
   setCategoryFilter: ProductsPageProps['setCategoryFilter'];
-  handleBulkUpload: ProductsPageProps['handleBulkUpload'];
+  clearMsg: ProductsPageProps['clearMsg'];
   downloadTemplate: ProductsPageProps['downloadTemplate'];
   handleClearAll: ProductsPageProps['handleClearAll'];
 }
@@ -36,11 +31,6 @@ export default function ProductsSearchAndActions({
   stockMin,
   stockMax,
   categoryFilter,
-  uploading,
-  uploadResult,
-  uploadError,
-  clearMsg,
-  uploadProgress,
   filteredProducts,
   products,
   setSearch,
@@ -50,7 +40,7 @@ export default function ProductsSearchAndActions({
   setStockMin,
   setStockMax,
   setCategoryFilter,
-  handleBulkUpload,
+  clearMsg,
   downloadTemplate,
   handleClearAll,
 }: ProductsSearchAndActionsProps) {
@@ -88,23 +78,6 @@ export default function ProductsSearchAndActions({
             <FaDownload className="w-4 h-4" />
             Template
           </button>
-
-          <form onSubmit={handleBulkUpload} className="flex items-center gap-2">
-            <input
-              type="file"
-              name="file"
-              accept=".xlsx,.xls,.csv"
-              className="text-xs border border-gray-300 rounded p-1"
-            />
-            <button
-              type="submit"
-              disabled={uploading}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-100 border border-blue-200 hover:bg-blue-200 font-medium text-sm text-blue-700 transition disabled:opacity-50"
-            >
-              <FaUpload className="w-4 h-4" />
-              Bulk Upload
-            </button>
-          </form>
 
           <button onClick={handleClearAll} className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200 hover:bg-red-100 font-medium text-sm text-red-700 transition">
             <FaTrash className="w-3 h-3" />
@@ -193,35 +166,6 @@ export default function ProductsSearchAndActions({
               {filteredProducts.length} of {products.length} products match filters
             </span>
           </div>
-        </div>
-      )}
-
-      {/* Upload Progress */}
-      {uploadProgress !== null && (
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
-            <span>Uploading...</span>
-            <span>{uploadProgress}%</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${uploadProgress}%` }}
-            ></div>
-          </div>
-        </div>
-      )}
-
-      {/* Upload Results */}
-      {uploadResult && (
-        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-sm text-green-800">Upload completed: {uploadResult.length} products processed</p>
-        </div>
-      )}
-
-      {uploadError && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-800">{uploadError}</p>
         </div>
       )}
 

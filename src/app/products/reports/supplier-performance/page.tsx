@@ -2,8 +2,19 @@
 import { useEffect, useState } from "react";
 
 import { Bar, Line } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -81,25 +92,45 @@ const [error] = useState<string | null>(null);
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text('Supplier Performance Report', 20, yPosition);
-    yPosition += 20;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Total Suppliers: ${suppliers.length}`, 20, yPosition);
-    yPosition += 20;
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Supplier Performance Report', margin, yPosition + 8);
+    yPosition += 18;
 
-    doc.text('Supplier Performance Details:', 20, yPosition);
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 8;
+    doc.text(`Total Suppliers: ${suppliers.length}`, margin, yPosition);
+    yPosition += 14;
+
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Supplier Performance Details', margin, yPosition);
     yPosition += 10;
-    suppliers.forEach((supplier, index) => {
-      doc.setFontSize(10);
-      doc.text(`${index + 1}. ${supplier.name} - Delivery: ${supplier.deliveryTime} days, Quality: ${supplier.qualityScore}%, On-Time: ${supplier.onTimeDelivery}%`, 30, yPosition);
-      yPosition += 8;
-    });
 
+    const rows = suppliers.map((s, i) => [i + 1, s.name, `${s.deliveryTime} days`, `${s.qualityScore}%`, `${s.onTimeDelivery}%`, s.totalOrders]);
+    if (rows.length) {
+      autoTable(doc, {
+        head: [['#', 'Supplier', 'Delivery', 'Quality', 'On-Time %', 'Orders']],
+        body: rows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+    }
+
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Suppliers');
     doc.save('supplier_performance_report.pdf');
   };
 

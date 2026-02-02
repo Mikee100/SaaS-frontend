@@ -68,29 +68,30 @@ export default function PreferencesSettings() {
   });
 
   useEffect(() => {
-    // General preferences are fetched here, theme/dashboard are handled by their contexts
+    // Load user preferences from /user/me and stock threshold from tenant config
     Promise.all([
       apiGet("/user/me"),
-      apiGet("/tenant/configurations/stockThreshold")
+      apiGet("/tenant/configurations/stockThreshold").catch(() => ({ value: undefined })),
     ]).then(([user, config]) => {
-      const userPrefs = user as UserPreferences;
+      const u = user as Record<string, unknown>;
       const stockConfig = config as StockConfig;
+      const stored = (u.preferences as Record<string, unknown>) || {};
       setPrefs({
         notificationPreferences: {
-          email: userPrefs.notificationPreferences?.email ?? true,
-          sms: userPrefs.notificationPreferences?.sms ?? false,
+          email: (u.notificationPreferences as { email?: boolean })?.email ?? true,
+          sms: (u.notificationPreferences as { sms?: boolean })?.sms ?? false,
         },
-        language: userPrefs.language || "en",
-        region: userPrefs.region || "ke",
+        language: (u.language as string) || "en",
+        region: (u.region as string) || "ke",
         stockThreshold: stockConfig?.value ? Number(stockConfig.value) : 15,
-        dashboardDefaultDateRange: "last_30_days",
-        dashboardAutoRefresh: false,
-        posDefaultPaymentMethod: "cash",
-        posAutoPrintReceipt: true,
-        inventoryLowStockAlertEmail: "",
-        inventoryAllowNegativeStock: false,
-        reportingDefaultExportFormat: "pdf",
-        securitySessionTimeout: 30,
+        dashboardDefaultDateRange: (stored.dashboardDefaultDateRange as string) || "last_30_days",
+        dashboardAutoRefresh: Boolean(stored.dashboardAutoRefresh),
+        posDefaultPaymentMethod: (stored.posDefaultPaymentMethod as string) || "cash",
+        posAutoPrintReceipt: stored.posAutoPrintReceipt !== false,
+        inventoryLowStockAlertEmail: (stored.inventoryLowStockAlertEmail as string) || "",
+        inventoryAllowNegativeStock: Boolean(stored.inventoryAllowNegativeStock),
+        reportingDefaultExportFormat: (stored.reportingDefaultExportFormat as string) || "pdf",
+        securitySessionTimeout: Number(stored.securitySessionTimeout) || 30,
       });
     }).catch((err: unknown) => {
       console.error(err);
@@ -105,13 +106,27 @@ export default function PreferencesSettings() {
     setError("");
     setSuccess(false);
     try {
-      const {
-        ...userPrefs
-      } = prefs;
+      const userPrefsPayload = {
+        notificationPreferences: prefs.notificationPreferences,
+        language: prefs.language,
+        region: prefs.region,
+        preferences: {
+          dashboardDefaultDateRange: prefs.dashboardDefaultDateRange,
+          dashboardAutoRefresh: prefs.dashboardAutoRefresh,
+          posDefaultPaymentMethod: prefs.posDefaultPaymentMethod,
+          posAutoPrintReceipt: prefs.posAutoPrintReceipt,
+          inventoryLowStockAlertEmail: prefs.inventoryLowStockAlertEmail,
+          inventoryAllowNegativeStock: prefs.inventoryAllowNegativeStock,
+          reportingDefaultExportFormat: prefs.reportingDefaultExportFormat,
+          securitySessionTimeout: prefs.securitySessionTimeout,
+        },
+      };
       await Promise.all([
-        apiPut("/user/me/preferences", userPrefs),
-        apiPut("/tenant/configurations/stockThreshold", { value: String(prefs.stockThreshold), category: "general" })
-        // TODO: Add API calls for new preferences later
+        apiPut("/user/me/preferences", userPrefsPayload),
+        apiPut("/tenant/configurations/stockThreshold", {
+          value: String(prefs.stockThreshold),
+          category: "general",
+        }),
       ]);
       setSuccess(true);
     } catch (err: unknown) {

@@ -17,7 +17,18 @@ import {
   FaFileCsv
 } from 'react-icons/fa';
 import { useBranches } from '@/hooks/useBranches';
-import { jsPDF } from 'jspdf';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 interface ReportsTabProps {
@@ -37,6 +48,7 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
   const [customEndDate, setCustomEndDate] = useState<string>('');
 
   const { data: branches = [] } = useBranches();
+  const { data: tenantData } = useTenant();
 
   // Calculate date range
   const getDateRange = () => {
@@ -160,38 +172,58 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
 
   const isLoading = salesLoading || productsLoading || customersLoading || inventoryLoading || financialLoading;
 
-  // Export functions
+  // Export functions — use tenant PDF template
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text(`${selectedReportType.charAt(0).toUpperCase() + selectedReportType.slice(1)} Report`, 20, yPosition);
-    yPosition += 15;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(12);
-    doc.text(`Date Range: ${dateRange}`, 20, yPosition);
-    yPosition += 10;
+    const reportTitle = `${selectedReportType.charAt(0).toUpperCase() + selectedReportType.slice(1)} Report`;
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text(reportTitle, margin, yPosition + 8);
+    yPosition += 16;
+
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Date Range: ${dateRange}`, margin, yPosition);
+    yPosition += 6;
     if (selectedBranchId !== 'all') {
-      const branch = branches.find(b => b.id === selectedBranchId);
-      doc.text(`Branch: ${branch?.name || 'N/A'}`, 20, yPosition);
-      yPosition += 10;
+      const branch = branches.find((b: { id: string; name: string }) => b.id === selectedBranchId);
+      doc.text(`Branch: ${branch?.name || 'N/A'}`, margin, yPosition);
+      yPosition += 6;
     }
+    yPosition += 10;
 
-    // Add report-specific data
     const reportData = getCurrentReportData();
-    if (reportData) {
-      doc.setFontSize(10);
-      Object.entries(reportData).forEach(([key, value]) => {
-        if (yPosition > 270) {
-          doc.addPage();
-          yPosition = 20;
-        }
-        doc.text(`${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`, 20, yPosition);
-        yPosition += 7;
+    if (reportData && typeof reportData === 'object' && !Array.isArray(reportData)) {
+      const rows = Object.entries(reportData).map(([key, value]) => [
+        key,
+        typeof value === 'object' ? JSON.stringify(value) : String(value),
+      ]);
+      autoTable(doc, {
+        head: [['Metric', 'Value']],
+        body: rows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
       });
+      yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    } else if (reportData) {
+      doc.setFontSize(fontSize - 2);
+      doc.setTextColor('333333');
+      doc.text(String(reportData), margin, yPosition);
     }
 
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Reports');
     doc.save(`${selectedReportType}-report-${Date.now()}.pdf`);
   };
 

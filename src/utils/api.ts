@@ -1,5 +1,6 @@
 
 import API_BASE_URL from '../config/apiConfig';
+import { refreshAuth } from '../lib/auth-client';
 
 // Request deduplication: prevent concurrent identical requests
 interface PendingRequest {
@@ -12,19 +13,12 @@ class EnhancedAPI {
   private pendingRequests = new Map<string, PendingRequest>();
   private readonly REQUEST_DEDUP_TIMEOUT = 5000; // 5 seconds
 
-  private getAuthHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
+  /** Cookie-based auth: no Authorization header; cookies sent via credentials: 'include'. */
+  private getAuthHeaders(extra?: Record<string, string>): Record<string, string> {
+    return {
       'Content-Type': 'application/json',
+      ...extra,
     };
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      } else {
-        console.warn('[API] No token found in localStorage');
-      }
-    }
-    return headers;
   }
 
   /**
@@ -74,15 +68,21 @@ class EnhancedAPI {
     const maxRetries = 5;
     let attempt = 0;
 
+    const REQUEST_TIMEOUT_MS = 15000;
+
     // Create the request promise
     const requestPromise = (async (): Promise<T> => {
       while (attempt <= maxRetries) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
         const response = await fetch(url, {
           ...options,
           headers,
           credentials: 'include',
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         const responseText = await response.text();
         let responseData;
@@ -99,17 +99,31 @@ class EnhancedAPI {
                               response.statusText ||
                               `HTTP error! status: ${response.status}`;
 
-          // Handle 401 Unauthorized - DO NOT RETRY
+          // Handle 401: try silent refresh once, then retry this request
+          if (response.status === 401 && attempt === 0) {
+            const refreshed = await refreshAuth();
+            if (refreshed) {
+              attempt++;
+              continue;
+            }
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('token');
+            }
+            // Don't log 401 as error for auth endpoints – "not logged in" is expected
+            const isAuthEndpoint = url.includes('/user/me') || url.includes('/auth/refresh') || url.includes('/auth/me');
+            if (!isAuthEndpoint) {
+              console.error(`[API] Request failed with status ${response.status}`, {
+                status: response.status,
+                url,
+                response: responseData || responseText,
+              });
+            }
+            throw new Error(errorMessage);
+          }
           if (response.status === 401) {
-            // Clear invalid token
-            localStorage.removeItem('token');
-            console.error(`[API] Request failed with status ${response.status}`, {
-              status: response.status,
-              statusText: response.statusText,
-              url,
-              response: responseData || responseText,
-              requestHeaders: headers,
-            });
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('token');
+            }
             throw new Error(errorMessage);
           }
 

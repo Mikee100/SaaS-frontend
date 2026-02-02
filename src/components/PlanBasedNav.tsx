@@ -8,13 +8,15 @@ import Tooltip from './Tooltip';
 import {
   FaBoxOpen, FaShoppingBasket, FaChartBar, FaCreditCard, /* FaCog, */ FaSignOutAlt, FaBars, FaTimes,
   FaChevronLeft, FaChevronRight, FaChevronDown, FaChevronUp, /* FaMapMarkerAlt, */ FaRobot, FaTachometerAlt,
-  FaLayerGroup, FaUpload, FaHistory, FaUsers, FaMoneyBillWave, FaFileInvoiceDollar, /* FaBuilding, */ FaBullseye
+  FaLayerGroup, FaUpload, FaHistory, FaUsers, FaMoneyBillWave, FaFileInvoiceDollar, /* FaBuilding, */ FaBullseye,
+  FaSun, FaMoon
 } from 'react-icons/fa';
 import { MdOutlineInventory2, MdOutlineAnalytics, MdOutlineReport, MdOutlineSettings } from 'react-icons/md';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { hasPermission } from '@/utils/permissions';
 import Image from 'next/image';
+import { useTheme } from '@/contexts/ThemeContext';
 
 
 export default function PlanBasedNav() {
@@ -22,6 +24,7 @@ export default function PlanBasedNav() {
   const { data: limits, loading: limitsLoading } = usePlanLimits();
   const { data: tenantData, isLoading: tenantLoading } = useTenant();
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
+  const { theme, setTheme, isDark } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(false);
@@ -92,8 +95,6 @@ export default function PlanBasedNav() {
       requiredPermission: 'view_products',
       subItems: [
         { name: 'Unified Management', href: '/products/unified', requiredPermission: 'view_products', icon: FaLayerGroup },
-        { name: 'Bulk Upload', href: '/products/bulk-add', requiredPermission: 'create_products', icon: FaUpload },
-        { name: 'Bulk Upload Records', href: '/products/bulk-upload-records', requiredPermission: 'view_products', icon: FaHistory },
         { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory', icon: FaUsers },
         {
           name: 'Reports',
@@ -118,12 +119,12 @@ export default function PlanBasedNav() {
     },
     {
       name: 'Transactions',
-      href: '/sales',
+      href: '/sales/history',
       icon: FaShoppingBasket,
       requiredPlan: null,
       requiredPermission: 'view_sales',
       subItems: [
-        { name: 'Sales', href: '/sales', requiredPermission: 'view_sales', icon: FaShoppingBasket },
+        // { name: 'Sales', href: '/sales', requiredPermission: 'view_sales', icon: FaShoppingBasket }, // Sales page commented out
         { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales', icon: FaHistory },
         { name: 'M-Pesa Transactions', href: '/mpesa-transactions', requiredPermission: 'view_sales', icon: FaMoneyBillWave },
         { name: 'Sales Target', href: '/sales/targets', requiredPermission: 'view_sales', icon: FaBullseye },
@@ -636,19 +637,43 @@ export default function PlanBasedNav() {
           {/* Fixed Logout Section at Bottom */}
           <div className="absolute bottom-0 left-0 w-full border-t border-gray-200 bg-white">
             {sidebarCollapsed ? (
-              <Tooltip content="Log out" position="right">
-                <div className="w-full block">
+              <>
+                <Tooltip content={isDark ? 'Light mode' : 'Dark mode'} position="right">
                   <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center justify-center py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-95"
-                    title="Log out"
+                    type="button"
+                    onClick={() => setTheme({ colorScheme: isDark ? 'light' : 'dark' })}
+                    className="w-full flex items-center justify-center py-2.5 text-gray-600 hover:text-blue-600 hover:bg-gray-50 border-b border-gray-200 transition-colors"
+                    aria-label="Toggle theme"
                   >
-                    <FaSignOutAlt className="w-4 h-4 flex-shrink-0" />
+                    {isDark ? <FaSun className="w-4 h-4" /> : <FaMoon className="w-4 h-4" />}
                   </button>
-                </div>
-              </Tooltip>
+                </Tooltip>
+                <Tooltip content="Log out" position="right">
+                  <div className="w-full block">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center justify-center py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-95"
+                      title="Log out"
+                    >
+                      <FaSignOutAlt className="w-4 h-4 flex-shrink-0" />
+                    </button>
+                  </div>
+                </Tooltip>
+              </>
             ) : (
               <div className="p-2 space-y-2">
+                {/* Theme toggle */}
+                <div className="flex items-center justify-between gap-2 px-2 py-1">
+                  <span className="text-xs font-medium text-gray-600">Theme</span>
+                  <button
+                    type="button"
+                    onClick={() => setTheme({ colorScheme: isDark ? 'light' : 'dark' })}
+                    className="p-1.5 rounded-lg text-gray-600 hover:text-blue-600 hover:bg-gray-100 transition-colors"
+                    aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                  >
+                    {isDark ? <FaSun className="w-4 h-4" /> : <FaMoon className="w-4 h-4" />}
+                  </button>
+                </div>
                 {/* User Info */}
                 {userContext?.user && (
                   <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50">

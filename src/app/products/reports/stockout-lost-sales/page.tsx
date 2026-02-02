@@ -2,8 +2,20 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
 import { Bar } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  getPdfCurrency,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -38,6 +50,7 @@ type StockoutItem = {
 export default function StockoutLostSalesReportPage() {
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
+  const { data: tenantData } = useTenant();
   const [stockoutItems, setStockoutItems] = useState<StockoutItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,38 +86,52 @@ export default function StockoutLostSalesReportPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const currency = getPdfCurrency(tenantData, pdfTemplate);
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text('Stockout & Lost Sales Report', 20, yPosition);
-    yPosition += 20;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Filter: ${filterType === 'all' ? 'All' : filterType === 'recent' ? 'Recent (≤7 days)' : 'Critical (>14 days)'}`, 20, yPosition);
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Stockout & Lost Sales Report', margin, yPosition + 8);
+    yPosition += 18;
+
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Filter: ${filterType === 'all' ? 'All' : filterType === 'recent' ? 'Recent (≤7 days)' : 'Critical (>14 days)'}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Total Stockouts: ${filteredItems.length}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Total Estimated Lost Sales: ${currency} ${totalLostSales.toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Average Days Out of Stock: ${averageDaysOutOfStock.toFixed(1)}`, margin, yPosition);
+    yPosition += 14;
+
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Stockout Details', margin, yPosition);
     yPosition += 10;
-    doc.text(`Total Stockouts: ${filteredItems.length}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Total Estimated Lost Sales: Ksh ${totalLostSales.toLocaleString()}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Average Days Out of Stock: ${averageDaysOutOfStock.toFixed(1)}`, 20, yPosition);
-    yPosition += 20;
 
-    doc.text('Stockout Details:', 20, yPosition);
-    yPosition += 10;
+    const rows = filteredItems.map((item, i) => [i + 1, item.productName, item.daysOutOfStock, `${currency} ${item.estimatedLostSales.toLocaleString()}`, `${currency} ${item.lastSalePrice.toLocaleString()}`]);
+    if (rows.length) {
+      autoTable(doc, {
+        head: [['#', 'Product', 'Days Out', `Lost Sales (${currency})`, `Last Price (${currency})`]],
+        body: rows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+    }
 
-    filteredItems.forEach((item, index) => {
-      if (yPosition > 270) {
-        doc.addPage();
-        yPosition = 20;
-      }
-
-      doc.setFontSize(10);
-      doc.text(`${index + 1}. ${item.productName}`, 20, yPosition);
-      doc.text(`Days Out: ${item.daysOutOfStock} | Lost Sales: Ksh ${item.estimatedLostSales.toLocaleString()} | Last Price: Ksh ${item.lastSalePrice.toLocaleString()}`, 30, yPosition + 5);
-      yPosition += 15;
-    });
-
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Stockout');
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
     const link = document.createElement('a');

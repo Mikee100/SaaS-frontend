@@ -2,8 +2,20 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
 import { Bar } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  getPdfCurrency,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -30,6 +42,7 @@ type Product = { id: string; name: string; stock: number; minStock?: number; pri
 export default function InventoryLevelsReportPage() {
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
+  const { data: tenantData } = useTenant();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,44 +86,57 @@ export default function InventoryLevelsReportPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const currency = getPdfCurrency(tenantData, pdfTemplate);
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text('Inventory Stock Levels Report', 20, yPosition);
-    yPosition += 20;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Filter: ${filterType.replace('-', ' ').toUpperCase()}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Total Products: ${filteredProducts.length}`, 20, yPosition);
-    yPosition += 10;
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Inventory Stock Levels Report', margin, yPosition + 8);
+    yPosition += 18;
+
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Filter: ${filterType.replace('-', ' ').toUpperCase()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Total Products: ${filteredProducts.length}`, margin, yPosition);
+    yPosition += 6;
     const filteredStockValue = filteredProducts.reduce((sum, p) => sum + ((p.stock || 0) * (p.price || 0)), 0);
-    doc.text(`Total Stock Value: Ksh ${filteredStockValue.toLocaleString()}`, 20, yPosition);
-    yPosition += 20;
+    doc.text(`Total Stock Value: ${currency} ${filteredStockValue.toLocaleString()}`, margin, yPosition);
+    yPosition += 14;
 
-    doc.text('Inventory Details:', 20, yPosition);
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Inventory Details', margin, yPosition);
     yPosition += 10;
 
-    filteredProducts.forEach((product, index) => {
-      if (yPosition > 270) { // Check if we need a new page
-        doc.addPage();
-        yPosition = 20;
-      }
-
-      const stock = product.stock || 0;
-      const minStock = product.minStock || 10;
-      const price = product.price || 0;
-      const stockValue = stock * price;
+    const tableRows = filteredProducts.map((p, i) => {
+      const stock = p.stock || 0;
+      const minStock = p.minStock || 10;
+      const price = p.price || 0;
       const status = stock === 0 ? 'Out of Stock' : stock <= minStock ? 'Low Stock' : 'In Stock';
-
-      doc.setFontSize(10);
-      doc.text(`${index + 1}. ${product.name}`, 20, yPosition);
-      doc.text(`Stock: ${stock} | Min: ${minStock} | Price: Ksh ${price.toLocaleString()} | Value: Ksh ${stockValue.toLocaleString()} | Status: ${status}`, 30, yPosition + 5);
-      yPosition += 15;
+      return [i + 1, p.name, stock, minStock, `${currency} ${price.toLocaleString()}`, status];
     });
+    if (tableRows.length) {
+      autoTable(doc, {
+        head: [['#', 'Product', 'Stock', 'Min', `Price (${currency})`, 'Status']],
+        body: tableRows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+    }
 
-    // Create blob and download link for reliable download
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Inventory');
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
     const link = document.createElement('a');

@@ -2,8 +2,20 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/utils/api";
 import { Bar } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  getPdfCurrency,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -62,30 +74,49 @@ export default function ProductPerformanceReportPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const currency = getPdfCurrency(tenantData, pdfTemplate);
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text('Product Performance Analysis Report', 20, yPosition);
-    yPosition += 20;
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Total Products Analyzed: ${(metrics.topProducts || []).length}`, 20, yPosition);
-    yPosition += 20;
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Product Performance Analysis Report', margin, yPosition + 8);
+    yPosition += 18;
 
-    doc.text('Product Performance Details:', 20, yPosition);
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 8;
+    doc.text(`Total Products Analyzed: ${(metrics.topProducts || []).length}`, margin, yPosition);
+    yPosition += 14;
+
+    doc.setFontSize(fontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Product Performance Details', margin, yPosition);
     yPosition += 10;
-    (metrics.topProducts || []).slice(0, 10).forEach((product, index) => {
-      const margin = typeof product.margin === 'number' && !isNaN(product.margin) ? product.margin :
-                     (typeof product.revenue === 'number' && typeof product.cost === 'number' && product.revenue > 0) ?
-                     ((product.revenue - product.cost) / product.revenue) : 0;
-      doc.setFontSize(10);
-      doc.text(`${index + 1}. ${product.name}`, 30, yPosition);
-      yPosition += 6;
-      doc.text(`   Units Sold: ${product.unitsSold}, Revenue: Ksh ${product.revenue.toLocaleString()}, Margin: ${(margin * 100).toFixed(2)}%`, 30, yPosition);
-      yPosition += 8;
-    });
 
+    const rows = (metrics.topProducts || []).slice(0, 15).map((p, i) => {
+      const marginPct = typeof p.margin === 'number' && !isNaN(p.margin) ? p.margin : (typeof p.revenue === 'number' && typeof p.cost === 'number' && p.revenue > 0) ? (p.revenue - p.cost) / p.revenue : 0;
+      return [i + 1, p.name, p.unitsSold, `${currency} ${(p.revenue ?? 0).toLocaleString()}`, `${(marginPct * 100).toFixed(2)}%`];
+    });
+    if (rows.length) {
+      autoTable(doc, {
+        head: [['#', 'Product', 'Units Sold', `Revenue (${currency})`, 'Margin %']],
+        body: rows,
+        startY: yPosition,
+        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+    }
+
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Product Performance');
     doc.save('product_performance_report.pdf');
   };
 

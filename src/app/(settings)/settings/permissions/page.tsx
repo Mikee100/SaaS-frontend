@@ -1,16 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiGet, apiPut } from "@/utils/api";
-import { FaListAlt, FaShieldAlt, FaCog, FaLock, FaPlus, FaEdit } from 'react-icons/fa';
+import { apiGet, apiPut, apiPost, apiDelete } from "@/utils/api";
+import { FaListAlt, FaShieldAlt, FaCog, FaLock, FaPlus, FaEdit, FaTrash, FaUserTag } from "react-icons/fa";
 import Link from "next/link";
 import { useUser } from "@/components/UserContext";
-import { hasPermission } from '@/utils/permissions';
+import { hasPermission } from "@/utils/permissions";
 
 interface Role {
   id: string;
   name: string;
   description?: string;
-  rolePermissions: Array<{ permission: { key: string; description?: string } }>;
+  rolePermissions?: Array<{ permission: { key?: string; name?: string; description?: string } }>;
+  permissions?: Array<{ permission: { key?: string; name?: string; description?: string } }>;
 }
 
 interface Permission {
@@ -52,10 +53,19 @@ export default function PermissionsSettings() {
   const defaultRoles = ["Admin", "Manager", "Staff"];
   const [selectedDefaultRole, setSelectedDefaultRole] = useState<string>("");
   const [showRolesManagement, setShowRolesManagement] = useState(true);
+  const [showEditRole, setShowEditRole] = useState<Role | null>(null);
+  const [editRoleForm, setEditRoleForm] = useState({ name: "", description: "" });
+  const [editRolePermissions, setEditRolePermissions] = useState<string[]>([]);
+  const [showAssignRole, setShowAssignRole] = useState<User | null>(null);
+  const [assignRoleName, setAssignRoleName] = useState("");
+  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
 
   // Permission checks
-  const canEditUsers = hasPermission(user, 'edit_users');
-  console.log("canEditUsers:", canEditUsers);
+  const canEditUsers = hasPermission(user, "edit_users");
+  const canEditRoles = hasPermission(user, "edit_roles");
+
+  const permKey = (rp: { permission: { key?: string; name?: string } }) =>
+    rp.permission?.key ?? rp.permission?.name ?? "";
 
   useEffect(() => {
     if (user) {
@@ -64,34 +74,23 @@ export default function PermissionsSettings() {
   }, [user]);
 
   const loadData = async () => {
-    console.log("loadData called"); // <--- Add this
     setLoading(true);
     setError("");
     try {
-      // LOG: JWT token if available
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      console.log("JWT token being sent:", token);
-
       const [rolesData, permissionsData, usersData, branchesData] = await Promise.all([
         apiGet("/roles"),
         apiGet("/permissions"),
         apiGet("/user"),
         apiGet("/branches"),
       ]);
-      // LOG: API responses
-      console.log("rolesData:", rolesData);
-      console.log("permissionsData:", permissionsData);
-      console.log("usersData:", usersData);
-      console.log("branchesData:", branchesData);
-
       setRoles(rolesData as Role[]);
       const mappedPermissions = Array.isArray(permissionsData)
         ? permissionsData.map((p: unknown) => {
             const obj = p as { id?: string; key?: string; name?: string; description?: string };
             return {
-              id: obj.id || '',
-              key: obj.key || obj.name || '',
-              description: obj.description
+              id: obj.id || "",
+              key: obj.key || obj.name || "",
+              description: obj.description,
             };
           })
         : [];
@@ -99,8 +98,6 @@ export default function PermissionsSettings() {
       setUsers(usersData as User[]);
       setBranches(branchesData as Branch[]);
     } catch (err: unknown) {
-      // LOG: Error details
-      console.error("Failed to load data:", err);
       const message = err instanceof Error ? err.message : "Failed to load data";
       setError(message);
     } finally {
@@ -108,8 +105,6 @@ export default function PermissionsSettings() {
     }
   };
 
-
-  console.log("User in TenantID:", user?.tenantId);
   const handleCreateRole = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -133,44 +128,96 @@ export default function PermissionsSettings() {
         throw new Error("A role with this name already exists. Please choose a different name.");
       }
 
-      console.log('Sending role creation request with:', {
+      await apiPost("/roles", {
         name: trimmedName,
-        description: newRole.description,
-        tenantId: user.tenantId
+        description: newRole.description || undefined,
+        tenantId: user.tenantId,
       });
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000'}/roles`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: trimmedName,
-          description: newRole.description,
-          tenantId: user.tenantId
-        })
-      });
-
-      const responseData = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        console.error('Role creation failed with status:', response.status, 'Response:', responseData);
-        if (response.status === 400 && responseData.message?.includes('already exists')) {
-          throw new Error("A role with this name already exists for your organization. Please choose a different name.");
-        }
-        throw new Error(responseData.message || `Failed to create role: ${response.statusText}`);
-      }
-
       setNewRole({ name: "", description: "" });
       setShowCreateRole(false);
       await loadData();
       setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
     } catch (err: unknown) {
-      console.error("Failed to create role:", err);
-      const message = err instanceof Error ? err.message : "Failed to create role. Please check the console for more details.";
+      const message =
+        err instanceof Error ? err.message : "Failed to create role.";
       setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rolePerms = (role: Role) => role.rolePermissions ?? role.permissions ?? [];
+
+  const openEditRole = (role: Role) => {
+    setShowEditRole(role);
+    setEditRoleForm({ name: role.name, description: role.description || "" });
+    setEditRolePermissions(
+      rolePerms(role).map((rp) => permKey(rp)).filter(Boolean),
+    );
+  };
+
+  const handleSaveEditRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showEditRole) return;
+    setLoading(true);
+    setError("");
+    try {
+      const name = editRoleForm.name.trim();
+      if (!name) throw new Error("Role name is required.");
+      await apiPut(`/roles/${showEditRole.id}`, {
+        name,
+        description: editRoleForm.description || undefined,
+      });
+      await apiPut(`/roles/${showEditRole.id}/permissions`, {
+        permissions: editRolePermissions,
+      });
+      setShowEditRole(null);
+      await loadData();
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update role.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAssignRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showAssignRole || !assignRoleName.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      await apiPut(`/user/${showAssignRole.id}`, { role: assignRoleName.trim() });
+      setShowAssignRole(null);
+      setAssignRoleName("");
+      await loadData();
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to assign role to user.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteRole = async () => {
+    if (!roleToDelete) return;
+    setLoading(true);
+    setError("");
+    try {
+      await apiDelete(`/roles/${roleToDelete.id}`);
+      setRoleToDelete(null);
+      await loadData();
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete role.",
+      );
     } finally {
       setLoading(false);
     }
@@ -195,15 +242,14 @@ export default function PermissionsSettings() {
     );
   }
 
-  // Check if user has permission to manage permissions
   if (!canEditUsers) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center py-12">
-          <FaLock className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don&apos;t have permission to manage permissions.</p>
-          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
+          <FaLock className="w-16 h-16 text-red-500 mx-auto mb-4 dark:text-red-400" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Access Denied</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">You don&apos;t have permission to manage permissions.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Contact your administrator to request access.</p>
         </div>
       </div>
     );
@@ -221,42 +267,41 @@ export default function PermissionsSettings() {
     <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <FaShieldAlt className="text-blue-600 text-2xl" />
-          <h2 className="text-2xl font-bold text-gray-800">Roles & Permissions</h2>
+          <FaShieldAlt className="text-blue-600 dark:text-blue-400 text-2xl" />
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Roles & Permissions</h2>
         </div>
-        <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
+        <Link href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">← All Settings</Link>
       </div>
 
       {success && (
-        <div className="mb-4 px-4 py-2 rounded bg-green-50 text-green-700 border border-green-200">
+        <div className="mb-4 px-4 py-2 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700">
           Operation completed successfully!
         </div>
       )}
       {error && (
-        <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 border border-red-200">
+        <div className="mb-4 px-4 py-2 rounded bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
           {error}
         </div>
       )}
 
 
-           {/* Manage Permissions Modal */}
-           {showManagePermissions && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">Manage Permissions for {showManagePermissions.name}</h3>
+      {/* Manage Permissions Modal */}
+      {showManagePermissions && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[9999]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 shadow-xl border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Manage Permissions for {showManagePermissions.name}</h3>
             <form
-              onSubmit={async e => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 setLoading(true);
                 try {
-                  // Use selected keys as permission names (backend expects 'name' to match 'key')
                   await apiPut(`/user/${showManagePermissions.id}/permissions`, { permissions: userPermissionsEdit });
                   setShowManagePermissions(null);
                   await loadData();
                   setSuccess(true);
+                  setTimeout(() => setSuccess(false), 4000);
                 } catch (err: unknown) {
-                  const message = err instanceof Error ? err.message : "Failed to update user permissions";
-                  setError(message);
+                  setError(err instanceof Error ? err.message : "Failed to update user permissions");
                 } finally {
                   setLoading(false);
                 }
@@ -264,30 +309,26 @@ export default function PermissionsSettings() {
             >
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Assign Permissions</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {permissions.map(p => (
-                      <label key={p.key} className="flex items-center gap-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assign Permissions</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                    {permissions.map((p) => (
+                      <label key={p.key} className="flex items-center gap-2 text-gray-800 dark:text-gray-200">
                         <input
                           type="checkbox"
                           checked={userPermissionsEdit.includes(p.key)}
-                          disabled={false}
-                          onChange={e => {
-                            console.log('Checkbox clicked:', { key: p.key, checked: e.target.checked });
-                            setUserPermissionsEdit(prev => {
-                              if (e.target.checked) {
-                                // Only add valid, non-null, non-empty keys
-                                return p.key && typeof p.key === 'string' && p.key.length > 0 && !prev.includes(p.key)
+                          onChange={(e) => {
+                            setUserPermissionsEdit((prev) =>
+                              e.target.checked
+                                ? p.key && !prev.includes(p.key)
                                   ? [...prev, p.key]
-                                  : prev;
-                              } else {
-                                return prev.filter(pk => pk !== p.key);
-                              }
-                            });
+                                  : prev
+                                : prev.filter((pk) => pk !== p.key),
+                            );
                           }}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
                         />
                         <span className="text-sm">{p.key}</span>
-                        {p.description && <span className="text-xs text-gray-500">({p.description})</span>}
+                        {p.description && <span className="text-xs text-gray-500 dark:text-gray-400">({p.description})</span>}
                       </label>
                     ))}
                   </div>
@@ -296,7 +337,7 @@ export default function PermissionsSettings() {
               <div className="flex gap-3 mt-6">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition"
                   disabled={loading}
                 >
                   Save
@@ -304,7 +345,7 @@ export default function PermissionsSettings() {
                 <button
                   type="button"
                   onClick={() => setShowManagePermissions(null)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
                   disabled={loading}
                 >
                   Cancel
@@ -315,216 +356,253 @@ export default function PermissionsSettings() {
         </div>
       )}
 
- {/* Users grouped by branch */}
-      {branches.map(branch => (
-  <div key={branch.id} className="mb-10">
-    <h3 className="text-xl font-bold text-blue-700 mb-1">{branch.name}</h3>
-    <div className="border-b-2 border-blue-200 mb-4"></div>
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-gray-200">
-            <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
-            <th className="text-left py-3 px-4 font-medium text-gray-700">Roles</th>
-            <th className="text-left py-3 px-4 font-medium text-gray-700">Permissions</th>
-            <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(usersByBranch[branch.id] || []).map(user => (
-            <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="py-3 px-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600 font-medium text-sm">
-                      {user.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-900">{user.name}</div>
-                    <div className="text-sm text-gray-500">{user.email}</div>
-                  </div>
-                </div>
-              </td>
-              <td className="py-3 px-4">
-                <div className="flex flex-wrap gap-1">
-                  {(Array.isArray(user.userRoles) ? user.userRoles : []).map((ur, index) => (
-                    <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {ur.role.name}
-                    </span>
-                  ))}
-                </div>
-              </td>
-              <td className="py-3 px-4">
-                <div className="flex flex-wrap gap-1">
-                  {Array.isArray(user.permissions) && user.permissions.length > 0 ? (
-                    user.permissions.map((perm, idx) => (
-                      <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {perm}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-gray-400">No permissions</span>
-                  )}
-                </div>
-              </td>
-              <td className="py-3 px-4">
-                <button
-                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
-                  onClick={() => {
-                    setShowManagePermissions(user);
-                    setUserPermissionsEdit(
-                      Array.isArray(user.permissions) && user.permissions.length > 0
-                        ? user.permissions.filter(pk => typeof pk === 'string' && pk.length > 0)
-                        : []
-                    );
-                  }}
-                >
-                  Manage Permissions
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {(usersByBranch[branch.id] || []).length === 0 && (
-        <div className="text-gray-500 text-sm py-4">No users in this branch.</div>
-      )}
-    </div>
-  </div>
-))}
+      {/* Users grouped by branch */}
+      {branches.map((branch) => (
+        <div key={branch.id} className="mb-10">
+          <h3 className="text-xl font-bold text-blue-700 dark:text-blue-400 mb-1">{branch.name}</h3>
+          <div className="border-b-2 border-blue-200 dark:border-blue-800 mb-4" />
+          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">User</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Roles</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Permissions</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(usersByBranch[branch.id] || []).map((u) => (
+                  <tr key={u.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
+                          <span className="text-blue-600 dark:text-blue-300 font-medium text-sm">{u.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{u.name}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{u.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1">
+                        {(Array.isArray(u.userRoles) ? u.userRoles : []).map((ur, index) => (
+                          <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200">
+                            {ur.role.name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1">
+                        {Array.isArray(u.permissions) && u.permissions.length > 0 ? (
+                          u.permissions.map((perm, idx) => (
+                            <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200">
+                              {perm}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">No permissions</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-500 text-xs flex items-center gap-1"
+                          onClick={() => {
+                            setShowAssignRole(u);
+                            setAssignRoleName((Array.isArray(u.userRoles) && u.userRoles[0]) ? u.userRoles[0].role.name : "");
+                          }}
+                        >
+                          <FaUserTag className="w-3 h-3" /> Assign Role
+                        </button>
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 bg-gray-600 dark:bg-gray-500 text-white rounded hover:bg-gray-700 dark:hover:bg-gray-600 text-xs"
+                          onClick={() => {
+                            setShowManagePermissions(u);
+                            setUserPermissionsEdit(
+                              Array.isArray(u.permissions) && u.permissions.length > 0
+                                ? u.permissions.filter((pk) => typeof pk === "string" && pk.length > 0)
+                                : [],
+                            );
+                          }}
+                        >
+                          Manage Permissions
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {(usersByBranch[branch.id] || []).length === 0 && (
+              <div className="text-gray-500 dark:text-gray-400 text-sm py-4 px-4">No users in this branch.</div>
+            )}
+          </div>
+        </div>
+      ))}
 
-{/* Unassigned users */}
-{usersByBranch["unassigned"] && (
-  <div className="mb-10">
-    <h3 className="text-xl font-bold text-red-700 mb-1">Unassigned</h3>
-    <div className="border-b-2 border-red-200 mb-4"></div>
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-gray-200">
-            <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
-            <th className="text-left py-3 px-4 font-medium text-gray-700">Roles</th>
-            <th className="text-left py-3 px-4 font-medium text-gray-700">Permissions</th>
-            <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {usersByBranch["unassigned"].map(user => (
-            <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="py-3 px-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600 font-medium text-sm">
-                      {user.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-900">{user.name}</div>
-                    <div className="text-sm text-gray-500">{user.email}</div>
-                  </div>
-                </div>
-              </td>
-              <td className="py-3 px-4">
-                <div className="flex flex-wrap gap-1">
-                  {(Array.isArray(user.userRoles) ? user.userRoles : []).map((ur, index) => (
-                    <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {ur.role.name}
-                    </span>
-                  ))}
-                </div>
-              </td>
-              <td className="py-3 px-4">
-                <div className="flex flex-wrap gap-1">
-                  {Array.isArray(user.permissions) && user.permissions.length > 0 ? (
-                    user.permissions.map((perm, idx) => (
-                      <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {perm}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-gray-400">No permissions</span>
-                  )}
-                </div>
-              </td>
-              <td className="py-3 px-4">
-                <button
-                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
-                  onClick={() => {
-                    setShowManagePermissions(user);
-                    setUserPermissionsEdit(
-                      Array.isArray(user.permissions) && user.permissions.length > 0
-                        ? user.permissions.filter(pk => typeof pk === 'string' && pk.length > 0)
-                        : []
-                    );
-                  }}
-                >
-                  Manage Permissions
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-)}
+      {/* Unassigned users */}
+      {usersByBranch["unassigned"] && (
+        <div className="mb-10">
+          <h3 className="text-xl font-bold text-red-700 dark:text-red-400 mb-1">Unassigned</h3>
+          <div className="border-b-2 border-red-200 dark:border-red-800 mb-4" />
+          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">User</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Roles</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Permissions</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usersByBranch["unassigned"].map((u) => (
+                  <tr key={u.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
+                          <span className="text-blue-600 dark:text-blue-300 font-medium text-sm">{u.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{u.name}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{u.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1">
+                        {(Array.isArray(u.userRoles) ? u.userRoles : []).map((ur, index) => (
+                          <span key={index} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200">
+                            {ur.role.name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1">
+                        {Array.isArray(u.permissions) && u.permissions.length > 0 ? (
+                          u.permissions.map((perm, idx) => (
+                            <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200">
+                              {perm}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">No permissions</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-500 text-xs flex items-center gap-1"
+                          onClick={() => {
+                            setShowAssignRole(u);
+                            setAssignRoleName((Array.isArray(u.userRoles) && u.userRoles[0]) ? u.userRoles[0].role.name : "");
+                          }}
+                        >
+                          <FaUserTag className="w-3 h-3" /> Assign Role
+                        </button>
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 bg-gray-600 dark:bg-gray-500 text-white rounded hover:bg-gray-700 dark:hover:bg-gray-600 text-xs"
+                          onClick={() => {
+                            setShowManagePermissions(u);
+                            setUserPermissionsEdit(
+                              Array.isArray(u.permissions) && u.permissions.length > 0
+                                ? u.permissions.filter((pk) => typeof pk === "string" && pk.length > 0)
+                                : [],
+                            );
+                          }}
+                        >
+                          Manage Permissions
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
 
       {/* Roles Management */}
-      <div className="bg-white rounded-xl shadow p-6 w-full mb-8">
+      <div className="bg-white dark:bg-gray-800/50 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6 w-full mb-8">
         <div className="flex items-center justify-between mb-4">
           <button
+            type="button"
             onClick={() => setShowRolesManagement(!showRolesManagement)}
             className="flex items-center gap-2 text-left focus:outline-none"
           >
-            <FaCog className="text-blue-600" />
-            <h3 className="text-lg font-semibold text-gray-800">Roles Management</h3>
-            <span className="text-blue-600 text-sm ml-2">
-              {showRolesManagement ? '▲' : '▼'}
+            <FaCog className="text-blue-600 dark:text-blue-400" />
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Roles Management</h3>
+            <span className="text-blue-600 dark:text-blue-400 text-sm ml-2">
+              {showRolesManagement ? "▲" : "▼"}
             </span>
           </button>
-          <button
-            onClick={() => setShowCreateRole(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
-          >
-            <FaPlus className="w-4 h-4" />
-            Create Role
-          </button>
+          {canEditRoles && (
+            <button
+              type="button"
+              onClick={() => setShowCreateRole(true)}
+              className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition flex items-center gap-2"
+            >
+              <FaPlus className="w-4 h-4" />
+              Create Role
+            </button>
+          )}
         </div>
-        
+
         {showRolesManagement && (
-          <div className="mt-4 border-t pt-4">
+          <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
             <div className="space-y-4">
               {roles.map((role) => (
-                <div key={role.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition">
+                <div key={role.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-medium text-gray-900">{role.name}</h4>
+                      <h4 className="font-medium text-gray-900 dark:text-gray-100">{role.name}</h4>
                       {role.description && (
-                        <p className="text-sm text-gray-500 mt-1">{role.description}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{role.description}</p>
                       )}
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        disabled
-                        className="p-2 text-gray-400 cursor-not-allowed rounded-full"
-                        title="Edit Role (Coming Soon)"
-                      >
-                        <FaEdit />
-                      </button>
-                    </div>
+                    {canEditRoles && (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition"
+                          title="Edit Role"
+                          onClick={() => openEditRole(role)}
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition"
+                          title="Delete Role"
+                          onClick={() => setRoleToDelete(role)}
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-3">
-                    <h5 className="font-medium text-gray-700 text-sm">Permissions:</h5>
+                  <div className="space-y-3 mt-3">
+                    <h5 className="font-medium text-gray-700 dark:text-gray-300 text-sm">Permissions:</h5>
                     <div className="space-y-2">
-                      {(Array.isArray(role.rolePermissions) && role.rolePermissions.length === 0) ? (
-                        <p className="text-gray-500 text-sm">No permissions assigned</p>
+                      {rolePerms(role).length === 0 ? (
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">No permissions assigned</p>
                       ) : (
-                        (Array.isArray(role.rolePermissions) ? role.rolePermissions : []).map((rp, index) => (
+                        rolePerms(role).map((rp, index) => (
                           <div key={index} className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <span className="text-sm text-gray-600">{rp.permission.key}</span>
+                            <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full" />
+                            <span className="text-sm text-gray-600 dark:text-gray-300">{permKey(rp)}</span>
                           </div>
                         ))
                       )}
@@ -537,36 +615,35 @@ export default function PermissionsSettings() {
         )}
       </div>
 
- 
-
       {/* Available Permissions Section */}
-      <div className="bg-white rounded-xl shadow p-6 mb-8">
+      <div className="bg-white dark:bg-gray-800/50 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6 mb-8">
         <button
+          type="button"
           onClick={() => setShowAvailablePermissions(!showAvailablePermissions)}
           className="flex items-center justify-between w-full text-left mb-4 focus:outline-none"
         >
           <div className="flex items-center gap-2">
-            <FaListAlt className="text-blue-600" />
-            <h3 className="text-lg font-semibold text-gray-800">Available Permissions</h3>
+            <FaListAlt className="text-blue-600 dark:text-blue-400" />
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Available Permissions</h3>
           </div>
-          <span className="text-blue-600">
-            {showAvailablePermissions ? 'Hide' : 'Show'} Permissions
+          <span className="text-blue-600 dark:text-blue-400">
+            {showAvailablePermissions ? "Hide" : "Show"} Permissions
           </span>
         </button>
-        
+
         {showAvailablePermissions && (
-          <div className="mt-4 border-t pt-4">
+          <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
             {Object.entries(permissionCategories).map(([category, perms]) => (
               <div key={category} className="mb-6">
-                <h4 className="font-medium text-gray-700 mb-2">{category}</h4>
+                <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">{category}</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {perms.map((key) => {
-                    const permission = permissions.find(p => p.key === key);
+                    const permission = permissions.find((p) => p.key === key);
                     return permission ? (
-                      <div key={key} className="bg-gray-50 p-3 rounded-lg border">
-                        <div className="font-mono text-sm text-gray-700">{permission.key}</div>
+                      <div key={key} className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <div className="font-mono text-sm text-gray-700 dark:text-gray-300">{permission.key}</div>
                         {permission.description && (
-                          <div className="text-xs text-gray-500 mt-1">{permission.description}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{permission.description}</div>
                         )}
                       </div>
                     ) : null;
@@ -580,45 +657,45 @@ export default function PermissionsSettings() {
 
       {/* Create Role Modal */}
       {showCreateRole && (
-        <div className="fixed inset-0 bg-gray-100 bg-opacity-90 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg mx-4">
-            <h3 className="text-xl font-semibold mb-6 text-gray-900">Create New Role</h3>
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 w-full max-w-lg mx-4">
+            <h3 className="text-xl font-semibold mb-6 text-gray-900 dark:text-gray-100">Create New Role</h3>
             <form onSubmit={handleCreateRole}>
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-800 mb-2">Select Default Role</label>
+                  <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Select Default Role</label>
                   <select
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-600 focus:border-blue-600 mb-3"
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-600 focus:border-blue-600 dark:bg-gray-700 dark:text-gray-100 mb-3"
                     value={selectedDefaultRole}
-                    onChange={e => {
+                    onChange={(e) => {
                       setSelectedDefaultRole(e.target.value);
                       setNewRole({ ...newRole, name: e.target.value });
                     }}
                   >
                     <option value="">-- Choose default role (or enter custom below) --</option>
-                    {defaultRoles.map(role => (
+                    {defaultRoles.map((role) => (
                       <option key={role} value={role}>{role}</option>
                     ))}
                   </select>
-                  <label className="block text-sm font-semibold text-gray-800 mb-2">Or Enter Custom Role Name</label>
+                  <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Or Enter Custom Role Name</label>
                   <input
                     type="text"
                     value={newRole.name}
-                    onChange={e => {
+                    onChange={(e) => {
                       setNewRole({ ...newRole, name: e.target.value });
                       setSelectedDefaultRole("");
                     }}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-600 focus:border-blue-600"
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-600 focus:border-blue-600 dark:bg-gray-700 dark:text-gray-100"
                     placeholder="Custom role name"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-800 mb-2">Description</label>
+                  <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Description</label>
                   <textarea
                     value={newRole.description}
                     onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-600 focus:border-blue-600"
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-600 focus:border-blue-600 dark:bg-gray-700 dark:text-gray-100"
                     rows={4}
                   />
                 </div>
@@ -626,14 +703,15 @@ export default function PermissionsSettings() {
               <div className="flex gap-4 mt-8">
                 <button
                   type="submit"
-                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  className="flex-1 px-6 py-3 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition"
+                  disabled={loading}
                 >
                   Create Role
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowCreateRole(false)}
-                  className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition"
+                  className="flex-1 px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                 >
                   Cancel
                 </button>
@@ -643,7 +721,145 @@ export default function PermissionsSettings() {
         </div>
       )}
 
-     
+      {/* Edit Role Modal */}
+      {showEditRole && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-semibold mb-6 text-gray-900 dark:text-gray-100">Edit Role: {showEditRole.name}</h3>
+            <form onSubmit={handleSaveEditRole}>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Role Name</label>
+                  <input
+                    type="text"
+                    value={editRoleForm.name}
+                    onChange={(e) => setEditRoleForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-600 focus:border-blue-600 dark:bg-gray-700 dark:text-gray-100"
+                    placeholder="Role name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Description</label>
+                  <textarea
+                    value={editRoleForm.description}
+                    onChange={(e) => setEditRoleForm((prev) => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-600 focus:border-blue-600 dark:bg-gray-700 dark:text-gray-100"
+                    rows={3}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Permissions</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
+                    {permissions.map((p) => (
+                      <label key={p.key} className="flex items-center gap-2 text-gray-800 dark:text-gray-200 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={editRolePermissions.includes(p.key)}
+                          onChange={(e) => {
+                            setEditRolePermissions((prev) =>
+                              e.target.checked ? [...prev, p.key] : prev.filter((k) => k !== p.key),
+                            );
+                          }}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:bg-gray-700"
+                        />
+                        {p.key}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-4 mt-8">
+                <button
+                  type="submit"
+                  className="flex-1 px-6 py-3 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition"
+                  disabled={loading}
+                >
+                  Save Changes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditRole(null)}
+                  className="flex-1 px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Role Modal */}
+      {showAssignRole && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 w-full max-w-sm mx-4">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Assign Role to {showAssignRole.name}</h3>
+            <form onSubmit={handleAssignRole}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Role</label>
+                <select
+                  value={assignRoleName}
+                  onChange={(e) => setAssignRoleName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-600 focus:border-blue-600 dark:bg-gray-700 dark:text-gray-100"
+                  required
+                >
+                  <option value="">-- Select role --</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.name}>{role.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition"
+                  disabled={loading}
+                >
+                  Assign
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowAssignRole(null); setAssignRoleName(""); }}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Role Confirmation */}
+      {roleToDelete && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 w-full max-w-sm mx-4">
+            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Delete Role</h3>
+            <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+              Delete the role &quot;{roleToDelete.name}&quot;? This cannot be undone. The role must not be assigned to any user.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleDeleteRole}
+                className="flex-1 px-4 py-2 bg-red-600 dark:bg-red-500 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition"
+                disabled={loading}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoleToDelete(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

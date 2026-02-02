@@ -18,9 +18,9 @@ function ClientContent({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Redirect to login if no user, not loading, and no token
+  // Cookie-based auth: redirect to login if no user and not loading
   useEffect(() => {
-    if (!loading && !user && !localStorage.getItem('token')) {
+    if (!loading && !user) {
       router.push('/login');
     }
   }, [user, loading, router]);

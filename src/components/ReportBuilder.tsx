@@ -20,7 +20,16 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { FaGripVertical, FaTrash, FaPlus, FaDownload } from 'react-icons/fa';
-import { jsPDF } from 'jspdf';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
+import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 
 interface ReportElement {
@@ -74,6 +83,7 @@ function SortableItem({ element, onRemove }: { element: ReportElement; onRemove:
 }
 
 export default function ReportBuilder({ availableElements, onSave }: ReportBuilderProps) {
+  const { data: tenantData } = useTenant();
   const [reportElements, setReportElements] = useState<ReportElement[]>([]);
   const [reportTitle, setReportTitle] = useState('Custom Report');
 
@@ -106,28 +116,38 @@ export default function ReportBuilder({ availableElements, onSave }: ReportBuild
   };
 
   const exportAsPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
 
-    doc.setFontSize(20);
-    doc.text(reportTitle, 20, yPosition);
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
+
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text(reportTitle, margin, yPosition + 8);
     yPosition += 20;
+
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 14;
 
     reportElements.forEach((element, index) => {
       if (yPosition > 250) {
         doc.addPage();
-        yPosition = 20;
+        yPosition = margin;
       }
-
-      doc.setFontSize(14);
-      doc.text(`${index + 1}. ${element.title}`, 20, yPosition);
-      yPosition += 10;
-
-      doc.setFontSize(10);
-      doc.text(`Type: ${element.type}`, 30, yPosition);
-      yPosition += 15;
+      doc.setFontSize(fontSize);
+      doc.setTextColor('333333');
+      doc.text(`${index + 1}. ${element.title}`, margin, yPosition);
+      yPosition += 8;
+      doc.setFontSize(fontSize - 2);
+      doc.text(`Type: ${element.type}`, margin + 10, yPosition);
+      yPosition += 14;
     });
 
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Custom Report');
     doc.save(`${reportTitle.replace(/\s+/g, '_')}.pdf`);
   };
 

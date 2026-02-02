@@ -1,5 +1,6 @@
 "use client";
 import { apiGet } from "@/utils/api";
+import { getReceiptLogoUrl } from "@/utils/logoUrl";
 import { DocumentTextIcon, DocumentChartBarIcon, CalendarDaysIcon, UserIcon, CreditCardIcon, XMarkIcon, FunnelIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -434,6 +435,7 @@ export default function SalesHistoryPage() {
       }
 
       const receiptUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com') + `/receipt/${sale.saleId}`;
+      const receiptLogoUrl = getReceiptLogoUrl((tenantData as { receiptLogo?: string; logoUrl?: string })?.receiptLogo, (tenantData as { receiptLogo?: string; logoUrl?: string })?.logoUrl);
 
       // Create print HTML
       const printHTML = `
@@ -555,6 +557,7 @@ export default function SalesHistoryPage() {
             <div class="receipt">
               <!-- Header -->
               <div class="text-center mb-4">
+                ${receiptLogoUrl ? `<img src="${receiptLogoUrl}" alt="Logo" style="max-height: 48px; width: auto; margin: 0 auto 8px; display: block;" />` : ''}
                 <div class="font-bold text-lg mb-2">${businessInfo.name}</div>
                 <div class="text-sm mb-1">${businessInfo.businessType}</div>
                 <div class="text-xs mb-1">${businessInfo.address}</div>

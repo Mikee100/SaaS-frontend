@@ -2,7 +2,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { apiGet } from "@/utils/api";
 import { Line, Pie, Bar } from "react-chartjs-2";
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import InteractiveChart from '@/components/InteractiveChart';
 import AlertBanner from '@/components/AlertBanner';
@@ -20,12 +21,23 @@ import {
   Filler,
 } from "chart.js";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
+import { useTenant } from '@/hooks/useTenant';
 import { useBranches } from '@/hooks/useBranches';
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FaCrown,  FaChartBar, FaExchangeAlt, FaFilter } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import { useBranch } from "@/contexts/BranchContext";
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfTitleFontSize,
+  getPdfBodyFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 
 
 ChartJS.register(
@@ -91,6 +103,22 @@ type Metrics = {
 
 type Branch = { id: string; name: string };
 
+type PdfTemplate = {
+  businessName?: boolean;
+  businessAddress?: boolean;
+  businessPhone?: boolean;
+  businessEmail?: boolean;
+  branchInfo?: boolean;
+  primaryColor?: string;
+  secondaryColor?: string;
+  fontSize?: string;
+  footerText?: string;
+  paperSize?: string;
+  orientation?: string;
+  margins?: string;
+  currency?: string;
+};
+
 type BranchComparisonData = {
   timeRange: string;
   branches: Array<{
@@ -144,7 +172,9 @@ export default function ReportsPage() {
   // Low stock notification state
   const [showLowStockAlert, setShowLowStockAlert] = useState(true);
   const { user } = useUser();
- const { data: limits } = usePlanLimits();
+  const queryClient = useQueryClient();
+  const { data: tenantData } = useTenant();
+  const { data: limits } = usePlanLimits();
   const branchContext = useBranch();
   const selectedBranchId = branchContext?.selectedBranchId;
   const [metrics, setMetrics] = useState<Metrics>({
@@ -393,102 +423,274 @@ export default function ReportsPage() {
     return { salesTrendData, revenueBreakdownData, paymentMethodData };
   }, [metrics, dateFrom, dateTo, grouping]);
 
-  // Export functions
-  const exportToPDF = () => {
-    const doc = new jsPDF();
-    let yPosition = 20;
+  // Export functions — use tenant template and professional layout (aligned with Sales History / Expenses)
+  const currency = (tenantData as { currency?: string })?.currency || (tenantData?.pdfTemplate as PdfTemplate | undefined)?.currency || 'KES';
 
-    // Determine title and filename based on selection
+  const exportToPDF = async () => {
+    // Ensure we have the latest tenant (including pdfTemplate) when exporting
+    const tenant = user?.tenantId
+      ? await queryClient.fetchQuery({
+          queryKey: ['tenant', user.tenantId],
+          queryFn: () => apiGet('/tenant/me'),
+          staleTime: 0,
+        })
+      : tenantData;
+    const dataForPdf = (tenant ?? tenantData) as { name?: string; address?: string; contactPhone?: string; contactEmail?: string; pdfTemplate?: PdfTemplate; currency?: string } | undefined;
+    const pdfTemplate = (dataForPdf?.pdfTemplate || {}) as PdfTemplate;
+    const margin = getPdfMargin(pdfTemplate);
+    const titleFontSize = getPdfTitleFontSize(pdfTemplate);
+    const bodyFontSize = getPdfBodyFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
+
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+
     let title = 'Business Reports';
     let filename = 'business_reports.pdf';
     if (comparisonMode) {
       title = 'Business Reports - Branch Comparison';
       filename = 'business_reports_comparison.pdf';
-    } else if (selectedReportBranch !== "all") {
+    } else if (selectedReportBranch !== 'all') {
       const branchName = branches.find(b => b.id === selectedReportBranch)?.name || 'Selected Branch';
       title = `Business Reports - ${branchName}`;
       filename = `business_reports_${branchName.replace(/\s+/g, '_')}.pdf`;
     }
 
-    doc.setFontSize(20);
-    doc.text(title, 20, yPosition);
-    yPosition += 20;
+    let yPosition = applyPdfBusinessHeader(doc, dataForPdf, pdfTemplate, margin);
 
-    doc.setFontSize(14);
-    doc.text(`Total Sales: ${metrics.totalSales}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Total Revenue: Ksh ${metrics.totalRevenue?.toLocaleString()}`, 20, yPosition);
-    yPosition += 10;
-    doc.text(`Average Sale Value: Ksh ${metrics.avgSaleValue?.toLocaleString()}`, 20, yPosition);
-    yPosition += 20;
+    doc.setFontSize(titleFontSize);
+    doc.setTextColor(pdfTemplate.primaryColor?.replace('#', '') || '000000');
+    doc.text(title, margin, yPosition + 6);
+    yPosition += 14;
 
-    // Add AI Summary to PDF
+    const dateRangeStr = [dateFrom, dateTo].filter(Boolean).length
+      ? `Period: ${dateFrom || '—'} to ${dateTo || '—'}`
+      : 'Period: All time';
+    const branchStr = selectedReportBranch === 'all' ? 'Branch: All' : `Branch: ${branches.find(b => b.id === selectedReportBranch)?.name || 'N/A'}`;
+    doc.setFontSize(bodyFontSize - 2);
+    doc.setTextColor('666666');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(dateRangeStr, margin, yPosition);
+    yPosition += 6;
+    doc.text(branchStr, margin, yPosition);
+    yPosition += 14;
+
+    // Summary table
+    autoTable(doc, {
+      head: [['Metric', 'Value']],
+      body: [
+        ['Total Sales', String(metrics.totalSales)],
+        [`Total Revenue (${currency})`, (metrics.totalRevenue ?? 0).toLocaleString()],
+        [`Average Sale Value (${currency})`, (metrics.avgSaleValue ?? 0).toLocaleString()],
+      ],
+      startY: yPosition,
+      styles: { fontSize: bodyFontSize - 2, cellPadding: 4 },
+      headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: secondaryRgb },
+      margin: { left: margin, right: margin },
+    });
+    yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+
+    const pageHeight = doc.internal.pageSize.height;
+    const addPageIfNeeded = (need: number) => {
+      if (yPosition + need > pageHeight - margin - 20) {
+        doc.addPage();
+        yPosition = margin;
+      }
+    };
+
+    // Top Products table
+    if (metrics.topProducts?.length) {
+      addPageIfNeeded(40);
+      doc.setFontSize(titleFontSize);
+      doc.setTextColor(pdfTemplate.primaryColor?.replace('#', '') || '000000');
+      doc.text('Top Products', margin, yPosition);
+      yPosition += 8;
+      autoTable(doc, {
+        head: [['#', 'Product', 'Units Sold', `Revenue (${currency})`]],
+        body: (metrics.topProducts.slice(0, 15) || []).map((p, i) => [i + 1, p.name, p.unitsSold, (p.revenue ?? 0).toLocaleString()]),
+        startY: yPosition,
+        styles: { fontSize: bodyFontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+      yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    }
+
+    // Top Customers table
+    if (metrics.topCustomers?.length) {
+      addPageIfNeeded(40);
+      doc.setFontSize(titleFontSize);
+      doc.setTextColor(pdfTemplate.primaryColor?.replace('#', '') || '000000');
+      doc.text('Top Customers', margin, yPosition);
+      yPosition += 8;
+      autoTable(doc, {
+        head: [['Customer', 'Purchases', `Total (${currency})`]],
+        body: (metrics.topCustomers.slice(0, 15) || []).map(c => [c.name, c.count, (c.total ?? 0).toLocaleString()]),
+        startY: yPosition,
+        styles: { fontSize: bodyFontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+      yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    }
+
+    // Payment breakdown table
+    const paymentEntries = metrics.paymentBreakdown ? Object.entries(metrics.paymentBreakdown) : [];
+    if (paymentEntries.length) {
+      addPageIfNeeded(35);
+      doc.setFontSize(titleFontSize);
+      doc.setTextColor(pdfTemplate.primaryColor?.replace('#', '') || '000000');
+      doc.text('Payment Methods', margin, yPosition);
+      yPosition += 8;
+      autoTable(doc, {
+        head: [['Method', `Amount (${currency})`]],
+        body: paymentEntries.map(([method, amount]) => [method, (amount ?? 0).toLocaleString()]),
+        startY: yPosition,
+        styles: { fontSize: bodyFontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+      yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    }
+
+    // Branch comparison (when in comparison mode)
+    if (comparisonMode && branchComparisonData?.totals?.length) {
+      addPageIfNeeded(50);
+      doc.setFontSize(titleFontSize);
+      doc.setTextColor(pdfTemplate.primaryColor?.replace('#', '') || '000000');
+      doc.text('Branch Comparison', margin, yPosition);
+      yPosition += 8;
+      autoTable(doc, {
+        head: [['Branch', 'Orders', `Sales (${currency})`]],
+        body: branchComparisonData.totals.map(t => [t.branchName, t.totalOrders, (t.totalSales ?? 0).toLocaleString()]),
+        startY: yPosition,
+        styles: { fontSize: bodyFontSize - 2, cellPadding: 3 },
+        headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: secondaryRgb },
+        margin: { left: margin, right: margin },
+      });
+      yPosition = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    }
+
+    // AI Insights
     if (metrics.aiSummary) {
-      doc.text('AI-Generated Insights:', 20, yPosition);
-      yPosition += 10;
-      const summaryLines = doc.splitTextToSize(metrics.aiSummary, 170);
-      doc.text(summaryLines, 20, yPosition);
+      addPageIfNeeded(60);
+      doc.setFontSize(titleFontSize);
+      doc.setTextColor(pdfTemplate.primaryColor?.replace('#', '') || '000000');
+      doc.text('AI-Generated Insights', margin, yPosition);
+      yPosition += 8;
+      doc.setFontSize(bodyFontSize - 2);
+      doc.setTextColor('333333');
+      const summaryLines = doc.splitTextToSize(metrics.aiSummary, doc.internal.pageSize.width - margin * 2);
+      doc.text(summaryLines, margin, yPosition);
       yPosition += summaryLines.length * 5 + 10;
     }
 
-    // Add top products
-    doc.text('Top Products:', 20, yPosition);
-    yPosition += 10;
-    metrics.topProducts?.slice(0, 5).forEach((product, index) => {
-      doc.setFontSize(10);
-      doc.text(`${index + 1}. ${product.name} - Ksh ${product.revenue.toLocaleString()}`, 30, yPosition);
-      yPosition += 8;
-    });
-
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Business Reports');
     doc.save(filename);
   };
 
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new();
-
-    // Determine filename based on selection
     let filename = 'business_reports.xlsx';
-    if (comparisonMode) {
-      filename = 'business_reports_comparison.xlsx';
-    } else if (selectedReportBranch !== "all") {
+    if (comparisonMode) filename = 'business_reports_comparison.xlsx';
+    else if (selectedReportBranch !== 'all') {
       const branchName = branches.find(b => b.id === selectedReportBranch)?.name || 'Selected Branch';
       filename = `business_reports_${branchName.replace(/\s+/g, '_')}.xlsx`;
     }
 
-    // AI Summary sheet
-    if (metrics.aiSummary) {
-      const summaryData = [['AI-Generated Insights'], [metrics.aiSummary]];
-      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(workbook, summarySheet, 'AI Insights');
-    }
+    const reportTitle = comparisonMode ? 'Business Reports - Branch Comparison' : selectedReportBranch === 'all' ? 'Business Reports' : `Business Reports - ${branches.find(b => b.id === selectedReportBranch)?.name || 'Branch'}`;
+    const dateRangeText = [dateFrom, dateTo].filter(Boolean).length ? `${dateFrom || '—'} to ${dateTo || '—'}` : 'All time';
+    const branchText = selectedReportBranch === 'all' ? 'All Branches' : branches.find(b => b.id === selectedReportBranch)?.name || 'N/A';
 
-    // Sales data
-    const salesData = [
-      ['Metric', 'Value'],
+    // Report Info sheet (metadata — like rest of system)
+    const infoData = [
+      ['Report', reportTitle],
+      ['Generated', new Date().toLocaleString()],
+      ['Date Range', dateRangeText],
+      ['Branch', branchText],
+      [''],
+      ['Summary Metrics', ''],
       ['Total Sales', metrics.totalSales],
-      ['Total Revenue', metrics.totalRevenue],
-      ['Average Sale Value', metrics.avgSaleValue],
+      [`Total Revenue (${currency})`, metrics.totalRevenue ?? 0],
+      [`Average Sale Value (${currency})`, metrics.avgSaleValue ?? 0],
     ];
-    const salesSheet = XLSX.utils.aoa_to_sheet(salesData);
-    XLSX.utils.book_append_sheet(workbook, salesSheet, 'Summary');
+    const infoSheet = XLSX.utils.aoa_to_sheet(infoData);
+    XLSX.utils.book_append_sheet(workbook, infoSheet, 'Report Info');
 
-    // Top products
-    const productsData = [
-      ['Product', 'Units Sold', 'Revenue'],
-      ...metrics.topProducts?.map(p => [p.name, p.unitsSold, p.revenue]) || []
-    ];
+    // Summary
+    const summaryData = [['Metric', 'Value'], ['Total Sales', metrics.totalSales], ['Total Revenue', metrics.totalRevenue], ['Average Sale Value', metrics.avgSaleValue]];
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+    // Top Products
+    const productsData = [['Product', 'Units Sold', `Revenue (${currency})`], ...(metrics.topProducts?.map(p => [p.name, p.unitsSold, p.revenue ?? 0]) || [])];
     const productsSheet = XLSX.utils.aoa_to_sheet(productsData);
     XLSX.utils.book_append_sheet(workbook, productsSheet, 'Top Products');
 
-    // Top customers
-    const customersData = [
-      ['Customer', 'Purchases', 'Total Spent'],
-      ...metrics.topCustomers?.map(c => [c.name, c.count, c.total]) || []
-    ];
+    // Top Customers
+    const customersData = [['Customer', 'Purchases', `Total (${currency})`], ...(metrics.topCustomers?.map(c => [c.name, c.count, c.total ?? 0]) || [])];
     const customersSheet = XLSX.utils.aoa_to_sheet(customersData);
     XLSX.utils.book_append_sheet(workbook, customersSheet, 'Top Customers');
 
+    // Payment breakdown
+    const paymentData = [['Method', `Amount (${currency})`], ...(metrics.paymentBreakdown ? Object.entries(metrics.paymentBreakdown).map(([k, v]) => [k, v]) : [])];
+    const paymentSheet = XLSX.utils.aoa_to_sheet(paymentData);
+    XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Payment Methods');
+
+    // Sales by period (from salesByMonth)
+    const salesByMonth = metrics.salesByMonth || {};
+    const periodData = [['Period', `Sales (${currency})`], ...Object.entries(salesByMonth).map(([k, v]) => [k, v])];
+    const periodSheet = XLSX.utils.aoa_to_sheet(periodData);
+    XLSX.utils.book_append_sheet(workbook, periodSheet, 'Sales by Period');
+
+    if (metrics.aiSummary) {
+      const aiData = [['AI-Generated Insights'], [metrics.aiSummary]];
+      const aiSheet = XLSX.utils.aoa_to_sheet(aiData);
+      XLSX.utils.book_append_sheet(workbook, aiSheet, 'AI Insights');
+    }
+
+    if (comparisonMode && branchComparisonData?.totals?.length) {
+      const compData = [['Branch', 'Orders', `Sales (${currency})`], ...branchComparisonData.totals.map(t => [t.branchName, t.totalOrders, t.totalSales ?? 0])];
+      const compSheet = XLSX.utils.aoa_to_sheet(compData);
+      XLSX.utils.book_append_sheet(workbook, compSheet, 'Branch Comparison');
+    }
+
     XLSX.writeFile(workbook, filename);
+  };
+
+  const exportToCSV = () => {
+    const reportTitle = comparisonMode ? 'Business Reports - Branch Comparison' : selectedReportBranch === 'all' ? 'Business Reports' : `Business Reports - ${branches.find(b => b.id === selectedReportBranch)?.name || 'Branch'}`;
+    const dateRangeText = [dateFrom, dateTo].filter(Boolean).length ? `${dateFrom || '—'} to ${dateTo || '—'}` : 'All time';
+    const branchText = selectedReportBranch === 'all' ? 'All Branches' : branches.find(b => b.id === selectedReportBranch)?.name || 'N/A';
+    const meta = [
+      'SaaS Platform - Business Reports',
+      `Report: ${reportTitle}`,
+      `Generated: ${new Date().toLocaleString()}`,
+      `Date Range: ${dateRangeText}`,
+      `Branch: ${branchText}`,
+      `Total Sales: ${metrics.totalSales}`,
+      `Total Revenue (${currency}): ${(metrics.totalRevenue ?? 0).toLocaleString()}`,
+      `Average Sale Value (${currency}): ${(metrics.avgSaleValue ?? 0).toLocaleString()}`,
+      '',
+    ].join('\n');
+    const escape = (v: unknown) => `"${String(v).replace(/"/g, '""')}"`;
+    const rows: string[][] = [
+      ['Product', 'Units Sold', `Revenue (${currency})`],
+      ...(metrics.topProducts?.map(p => [p.name, String(p.unitsSold), String(p.revenue ?? 0)]) || []),
+    ];
+    const csvContent = meta + rows.map(row => row.map(escape).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `business_reports_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
     // Find low stock products (stock <= 10)
@@ -600,6 +802,12 @@ export default function ReportsPage() {
                 className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
               >
                 Export Excel
+              </button>
+              <button
+                onClick={exportToCSV}
+                className="px-3 py-1.5 bg-slate-600 text-white rounded hover:bg-slate-700 text-xs"
+              >
+                Export CSV
               </button>
             </div>
           </div>

@@ -1,4 +1,5 @@
 "use client";
+import { getReceiptLogoUrl } from '@/utils/logoUrl';
 import { EtimsQrCode } from './LogoUsage';
 import { FaPrint, FaDownload, FaShare } from 'react-icons/fa';
 
@@ -34,6 +35,8 @@ interface ReceiptProps {
     email?: string;
     kraPin?: string;
     vatNumber?: string;
+    receiptLogo?: string | null;
+    logoUrl?: string | null;
   };
 }
 
@@ -52,10 +55,19 @@ export default function ReceiptTemplate({ sale, tenant }: ReceiptProps) {
     hour12: true
   });
 
+  const logoUrl = getReceiptLogoUrl(tenant.receiptLogo, tenant.logoUrl);
+
   return (
     <div className="max-w-md mx-auto bg-white border border-gray-200 rounded-lg shadow-sm">
       {/* Business Header */}
       <div className="bg-blue-700 text-white p-4 text-center">
+        {logoUrl && (
+          <img
+            src={logoUrl}
+            alt="Business Logo"
+            className="mx-auto mb-2 max-h-16 w-auto max-w-full object-contain"
+          />
+        )}
         <h1 className="text-xl font-bold">{tenant.name}</h1>
         <p className="text-sm text-blue-100">{tenant.address}</p>
         <div className="flex flex-wrap justify-center gap-x-4 mt-1 text-xs text-blue-100">
