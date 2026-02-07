@@ -20,11 +20,31 @@ type ThemeContextType = {
 };
 
 const defaultTheme: Theme = {
-  colorScheme: 'system',
+  colorScheme: 'light',
   accentColor: '#3b82f6',
   density: 'normal',
   fontSize: 16,
 };
+
+const THEME_STORAGE_KEY = 'saas-theme-preferences';
+
+function getStoredTheme(): Theme | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(THEME_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Theme>;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      colorScheme: parsed.colorScheme && ['light', 'dark', 'system'].includes(parsed.colorScheme) ? parsed.colorScheme : defaultTheme.colorScheme,
+      accentColor: typeof parsed.accentColor === 'string' ? parsed.accentColor : defaultTheme.accentColor,
+      density: parsed.density && ['compact', 'normal', 'comfortable'].includes(parsed.density) ? parsed.density : defaultTheme.density,
+      fontSize: typeof parsed.fontSize === 'number' && parsed.fontSize >= 12 && parsed.fontSize <= 24 ? parsed.fontSize : defaultTheme.fontSize,
+    };
+  } catch {
+    return null;
+  }
+}
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
@@ -58,8 +78,11 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       // Check if we have a token before making authenticated requests
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       if (!token) {
-        // No token, use default theme
-        applyTheme(defaultTheme);
+        // No token: use last saved theme from localStorage so it doesn't reset to system
+        const stored = getStoredTheme();
+        const themeToUse = stored ?? defaultTheme;
+        setThemeState(themeToUse);
+        applyTheme(themeToUse);
         setLoading(false);
         return;
       }
@@ -72,14 +95,23 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
                         pathname === '/reset-password';
       
       if (isAuthPath) {
-        // On auth page, use default theme
-        applyTheme(defaultTheme);
+        // On auth page: use last saved theme from localStorage so theme doesn't flip when navigating
+        const stored = getStoredTheme();
+        const themeToUse = stored ?? defaultTheme;
+        setThemeState(themeToUse);
+        applyTheme(themeToUse);
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
+        // Apply stored theme immediately so we don't flash system while loading
+        const stored = getStoredTheme();
+        if (stored) {
+          setThemeState(stored);
+          applyTheme(stored);
+        }
         const response = await apiClient.get('/user/me') as { themePreferences?: Partial<Theme>; data?: { themePreferences?: Partial<Theme> } };
         const themePrefs = response.themePreferences ?? response.data?.themePreferences;
         if (themePrefs) {
@@ -87,7 +119,10 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
           setThemeState(fetchedTheme);
           applyTheme(fetchedTheme);
         } else {
-          applyTheme(defaultTheme);
+          const stored = getStoredTheme();
+          const themeToUse = stored ?? defaultTheme;
+          setThemeState(themeToUse);
+          applyTheme(themeToUse);
         }
       } catch (err: any) {
         // Only log non-401 errors (401 is expected when not authenticated)
@@ -95,7 +130,10 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
           setError('Failed to load theme.');
           console.error(err);
         }
-        applyTheme(defaultTheme); // Apply default theme on error
+        const stored = getStoredTheme();
+        const themeToUse = stored ?? defaultTheme;
+        setThemeState(themeToUse);
+        applyTheme(themeToUse);
       } finally {
         setLoading(false);
       }
@@ -117,10 +155,18 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     setThemeState(updatedTheme);
     applyTheme(updatedTheme);
 
-    // Check if we have a token before saving
+    // Always persist to localStorage so theme doesn't reset on auth pages or when provider remounts
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(updatedTheme));
+      } catch {
+        // ignore storage errors
+      }
+    }
+
+    // Check if we have a token before saving to server
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) {
-      // No token, theme is saved locally only
       return;
     }
 

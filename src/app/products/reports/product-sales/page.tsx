@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { apiGet } from "@/utils/api";
-import { Line, Bar, Pie } from "react-chartjs-2";
+import { Line, Bar, Pie, Doughnut } from "react-chartjs-2";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -29,7 +29,7 @@ import {
   BarElement,
   Filler,
 } from "chart.js";
-import { FaDownload, FaFilePdf, FaFileExcel } from "react-icons/fa";
+import { FaDownload, FaFilePdf, FaFileExcel, FaSyncAlt, FaChartPie } from "react-icons/fa";
 
 ChartJS.register(
   CategoryScale,
@@ -46,6 +46,8 @@ ChartJS.register(
 
 type TopProduct = { id: string; name: string; unitsSold: number; revenue: number; margin?: number; cost?: number };
 
+type Forecast = { forecast_months?: string[]; forecast_sales?: number[] } | null;
+
 type Metrics = {
   totalSales: number;
   totalRevenue: number;
@@ -55,12 +57,19 @@ type Metrics = {
   salesByDay?: Record<string, number>;
   salesByWeek?: Record<string, number>;
   salesByYear?: Record<string, number>;
+  forecast?: Forecast;
 };
 
 type TabType = 'overview' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'performance';
 
+function getUnitsSold(p: TopProduct & { sales?: number }): number {
+  return (p as { unitsSold?: number }).unitsSold ?? p.sales ?? 0;
+}
+
 export default function ProductSalesReportPage() {
   const { data: tenantData } = useTenant();
+  const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+  const currency = getPdfCurrency(tenantData, pdfTemplate);
   const [metrics, setMetrics] = useState<Metrics>({
     totalSales: 0,
     totalRevenue: 0,
@@ -73,33 +82,38 @@ export default function ProductSalesReportPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     setLoading(true);
     setError(null);
     Promise.all([
       apiGet(`/analytics/dashboard`),
-      apiGet(`/analytics/sales/daily`).catch(() => ({} as Record<string, number>)), // Fallback to empty object if endpoint doesn't exist
-      apiGet(`/analytics/sales/weekly`).catch(() => ({} as Record<string, number>)), // Fallback to empty object if endpoint doesn't exist
-      apiGet(`/analytics/sales/yearly`).catch(() => ({} as Record<string, number>)), // Fallback to empty object if endpoint doesn't exist
+      apiGet(`/analytics/sales/daily`).catch(() => ({} as Record<string, number>)),
+      apiGet(`/analytics/sales/weekly`).catch(() => ({} as Record<string, number>)),
+      apiGet(`/analytics/sales/yearly`).catch(() => ({} as Record<string, number>)),
     ])
       .then(([dashboardData, dailyData, weeklyData, yearlyData]) => {
-        const dashboard = dashboardData as Metrics;
-        const metrics: Metrics = {
+        const dashboard = dashboardData as Metrics & { forecast?: Forecast };
+        setMetrics({
           totalSales: dashboard.totalSales,
           totalRevenue: dashboard.totalRevenue,
           avgSaleValue: dashboard.avgSaleValue,
-          topProducts: dashboard.topProducts,
-          salesByMonth: dashboard.salesByMonth,
+          topProducts: dashboard.topProducts ?? [],
+          salesByMonth: dashboard.salesByMonth ?? {},
           salesByDay: dailyData as Record<string, number>,
           salesByWeek: weeklyData as Record<string, number>,
           salesByYear: yearlyData as Record<string, number>,
-        };
-        setMetrics(metrics);
+          forecast: dashboard.forecast ?? null,
+        });
       })
       .catch((err: unknown) => setError((err as Error).message || "An error occurred while fetching data."))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData, refreshKey]);
 
   const getCurrentSalesData = useCallback(() => {
     switch (activeTab) {
@@ -123,6 +137,12 @@ export default function ProductSalesReportPage() {
         const [monStr, yearStr] = label.split(' ');
         const monthNum = new Date(Date.parse(monStr + ' 1, 2000')).getMonth();
         date = new Date(parseInt(yearStr, 10), monthNum, 1);
+      } else if (/^\d{1,2} [A-Za-z]{3} - \d{1,2} [A-Za-z]{3} \d{4}$/.test(label)) {
+        const parts = label.split(' ');
+        const day = parseInt(parts[0], 10);
+        const monthNum = new Date(Date.parse(parts[1] + ' 1, 2000')).getMonth();
+        const year = parseInt(parts[5], 10);
+        date = new Date(year, monthNum, day);
       } else {
         date = new Date(label);
       }
@@ -139,23 +159,47 @@ export default function ProductSalesReportPage() {
     return filtered;
   }, [dateFrom, dateTo, getCurrentSalesData]);
 
-  const salesTrendData = useMemo(() => {
-    const finalLabels = filteredSalesData.map(f => f.label);
-    const finalValues = filteredSalesData.map(f => f.value);
+  const salesTrendWithMovingAvg = useMemo(() => {
+    const window = activeTab === 'daily' ? 3 : activeTab === 'weekly' ? 2 : 2;
+    const values = filteredSalesData.map(f => f.value);
+    const ma: number[] = [];
+    for (let i = 0; i < values.length; i++) {
+      const start = Math.max(0, i - window + 1);
+      const slice = values.slice(start, i + 1);
+      ma.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+    }
     return {
-      labels: finalLabels,
+      labels: filteredSalesData.map(f => f.label),
+      values,
+      movingAvg: ma,
+    };
+  }, [filteredSalesData, activeTab]);
+
+  const salesTrendData = useMemo(() => {
+    const { labels, values, movingAvg } = salesTrendWithMovingAvg;
+    return {
+      labels,
       datasets: [
         {
-          label: 'Sales',
-          data: finalValues,
+          label: 'Revenue',
+          data: values,
           borderColor: '#4f46e5',
           backgroundColor: 'rgba(79, 70, 229, 0.1)',
           fill: true,
           tension: 0.4,
-        }
+        },
+        ...(movingAvg.some(v => !Number.isNaN(v)) ? [{
+          label: 'Moving avg',
+          data: movingAvg,
+          borderColor: '#f59e0b',
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.4,
+          borderDash: [5, 5],
+        }] : []),
       ],
     };
-  }, [filteredSalesData]);
+  }, [salesTrendWithMovingAvg]);
 
   const revenueBreakdownData = useMemo(() => {
     const revenueLabels = (metrics.topProducts || []).map(p => p.name);
@@ -172,12 +216,26 @@ export default function ProductSalesReportPage() {
   }, [metrics]);
 
   const bestProducts = useMemo(() => {
-    return (metrics.topProducts || []).sort((a, b) => b.unitsSold - a.unitsSold).slice(0, 5);
+    return [...(metrics.topProducts || [])].sort((a, b) => getUnitsSold(b) - getUnitsSold(a)).slice(0, 5);
   }, [metrics]);
 
   const worstProducts = useMemo(() => {
-    return (metrics.topProducts || []).sort((a, b) => a.unitsSold - b.unitsSold).slice(0, 5);
+    return [...(metrics.topProducts || [])].sort((a, b) => getUnitsSold(a) - getUnitsSold(b)).slice(0, 5);
   }, [metrics]);
+
+  const { periodComparison, peakPeriod } = useMemo(() => {
+    const arr = filteredSalesData;
+    const total = arr.reduce((s, x) => s + x.value, 0);
+    const half = Math.floor(arr.length / 2);
+    const currentSum = arr.slice(-half).reduce((s, x) => s + x.value, 0);
+    const previousSum = arr.slice(0, half).reduce((s, x) => s + x.value, 0);
+    const change = previousSum > 0 ? ((currentSum - previousSum) / previousSum) * 100 : 0;
+    const peak = arr.length ? arr.reduce((best, x) => (x.value > best.value ? x : best), arr[0]) : null;
+    return {
+      periodComparison: { currentSum, previousSum, change, total },
+      peakPeriod: peak,
+    };
+  }, [filteredSalesData]);
 
   const exportToPDF = () => {
     const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
@@ -211,7 +269,7 @@ export default function ProductSalesReportPage() {
       doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
       doc.text('Best Performing Products', margin, yPosition);
       yPosition += 10;
-      const bestRows = bestProducts.map((p, i) => [i + 1, p.name, p.unitsSold, (p.revenue ?? 0).toLocaleString()]);
+      const bestRows = bestProducts.map((p, i) => [i + 1, p.name, getUnitsSold(p), (p.revenue ?? 0).toLocaleString()]);
       if (bestRows.length) {
         autoTable(doc, {
           head: [['#', 'Product', 'Units Sold', `Revenue (${currency})`]],
@@ -228,7 +286,7 @@ export default function ProductSalesReportPage() {
       doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
       doc.text('Worst Performing Products', margin, yPosition);
       yPosition += 10;
-      const worstRows = worstProducts.map((p, i) => [i + 1, p.name, p.unitsSold, (p.revenue ?? 0).toLocaleString()]);
+      const worstRows = worstProducts.map((p, i) => [i + 1, p.name, getUnitsSold(p), (p.revenue ?? 0).toLocaleString()]);
       if (worstRows.length) {
         autoTable(doc, {
           head: [['#', 'Product', 'Units Sold', `Revenue (${currency})`]],
@@ -246,7 +304,7 @@ export default function ProductSalesReportPage() {
       doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
       doc.text('Top Products', margin, yPosition);
       yPosition += 10;
-      const topRows = (metrics.topProducts?.slice(0, 15) || []).map((p, i) => [i + 1, p.name, p.unitsSold, (p.revenue ?? 0).toLocaleString()]);
+      const topRows = (metrics.topProducts?.slice(0, 15) || []).map((p, i) => [i + 1, p.name, getUnitsSold(p), (p.revenue ?? 0).toLocaleString()]);
       if (topRows.length) {
         autoTable(doc, {
           head: [['#', 'Product', 'Units Sold', `Revenue (${currency})`]],
@@ -278,13 +336,16 @@ export default function ProductSalesReportPage() {
 
     const productsData = [
       ['Product', 'Units Sold', 'Revenue', 'Avg Price', 'Performance'],
-      ...(metrics.topProducts || []).map(p => [
-        p.name,
-        p.unitsSold,
-        p.revenue,
-        p.unitsSold > 0 ? (p.revenue / p.unitsSold).toFixed(2) : '0.00',
-        p.unitsSold > 100 ? 'High' : p.unitsSold > 50 ? 'Medium' : 'Low'
-      ])
+      ...(metrics.topProducts || []).map(p => {
+        const u = getUnitsSold(p);
+        return [
+          p.name,
+          u,
+          p.revenue,
+          u > 0 ? (p.revenue / u).toFixed(2) : '0.00',
+          u > 100 ? 'High' : u > 50 ? 'Medium' : 'Low'
+        ];
+      })
     ];
     const productsSheet = XLSX.utils.aoa_to_sheet(productsData);
     XLSX.utils.book_append_sheet(workbook, productsSheet, 'Top Products');
@@ -292,14 +353,14 @@ export default function ProductSalesReportPage() {
     if (activeTab === 'performance') {
       const bestData = [
         ['Best Products', 'Units Sold'],
-        ...bestProducts.map(p => [p.name, p.unitsSold])
+        ...bestProducts.map(p => [p.name, getUnitsSold(p)])
       ];
       const bestSheet = XLSX.utils.aoa_to_sheet(bestData);
       XLSX.utils.book_append_sheet(workbook, bestSheet, 'Best Products');
 
       const worstData = [
         ['Worst Products', 'Units Sold'],
-        ...worstProducts.map(p => [p.name, p.unitsSold])
+        ...worstProducts.map(p => [p.name, getUnitsSold(p)])
       ];
       const worstSheet = XLSX.utils.aoa_to_sheet(worstData);
       XLSX.utils.book_append_sheet(workbook, worstSheet, 'Worst Products');
@@ -317,6 +378,12 @@ export default function ProductSalesReportPage() {
         const [monStr, yearStr] = label.split(' ');
         const monthNum = new Date(Date.parse(monStr + ' 1, 2000')).getMonth();
         date = new Date(parseInt(yearStr, 10), monthNum, 1);
+      } else if (/^\d{1,2} [A-Za-z]{3} - \d{1,2} [A-Za-z]{3} \d{4}$/.test(label)) {
+        const parts = label.split(' ');
+        const day = parseInt(parts[0], 10);
+        const monthNum = new Date(Date.parse(parts[1] + ' 1, 2000')).getMonth();
+        const year = parseInt(parts[5], 10);
+        date = new Date(year, monthNum, day);
       } else {
         date = new Date(label);
       }
@@ -346,8 +413,8 @@ export default function ProductSalesReportPage() {
     const data = [
       ['Metric', 'Value'],
       ['Total Sales', metrics.totalSales],
-      ['Total Revenue', `Ksh ${metrics.totalRevenue?.toLocaleString()}`],
-      ['Avg. Sale Value', `Ksh ${metrics.avgSaleValue?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+      ['Total Revenue', `${currency} ${metrics.totalRevenue?.toLocaleString()}`],
+      ['Avg. Sale Value', `${currency} ${metrics.avgSaleValue?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
       ['Top Products Count', (metrics.topProducts || []).length],
     ];
     const sheet = XLSX.utils.aoa_to_sheet(data);
@@ -401,12 +468,20 @@ export default function ProductSalesReportPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <header className="mb-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Product Sales Report</h1>
               <p className="mt-1 text-sm text-gray-500">Comprehensive sales analytics with multiple time periods and performance insights.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              <button
+                onClick={() => setRefreshKey(k => k + 1)}
+                className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors flex items-center gap-2 text-xs"
+                title="Refresh data"
+              >
+                <FaSyncAlt className={loading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
               <button
                 onClick={exportToPDF}
                 className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center gap-2 text-xs"
@@ -444,15 +519,35 @@ export default function ProductSalesReportPage() {
           </nav>
           {activeTab !== 'performance' && (
             <div className="bg-white rounded-md shadow-sm p-3 flex flex-wrap gap-3 items-end">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">From Date</label>
-                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1" />
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs font-medium text-gray-600">Quick range:</span>
+                {[
+                  { label: 'Last 7 days', from: () => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); }, to: () => new Date().toISOString().slice(0, 10) },
+                  { label: 'Last 30 days', from: () => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); }, to: () => new Date().toISOString().slice(0, 10) },
+                  { label: 'This month', from: () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; }, to: () => new Date().toISOString().slice(0, 10) },
+                  { label: 'Last month', from: () => { const d = new Date(); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; }, to: () => { const d = new Date(); d.setDate(0); return d.toISOString().slice(0, 10); } },
+                  { label: 'YTD', from: () => `${new Date().getFullYear()}-01-01`, to: () => new Date().toISOString().slice(0, 10) },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    onClick={() => { setDateFrom(preset.from()); setDateTo(preset.to()); }}
+                    className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-indigo-100 hover:text-indigo-800 transition-colors text-xs"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">To Date</label>
-                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1" />
+              <div className="flex flex-wrap gap-3 items-end border-l border-gray-200 pl-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">From Date</label>
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border-gray-300 rounded focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">To Date</label>
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border-gray-300 rounded focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1" />
+                </div>
+                <button className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear</button>
               </div>
-              <button className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs" onClick={() => { setDateFrom(""); setDateTo(""); }}>Clear</button>
             </div>
           )}
         </div>
@@ -479,17 +574,35 @@ export default function ProductSalesReportPage() {
               </div>
               <div className="bg-green-50 rounded shadow-sm p-3 flex flex-col items-center border border-green-100 hover:bg-green-100 transition-colors">
                 <span className="text-green-600 text-xs mb-1 font-medium">Total Revenue</span>
-                <span className="text-xl font-bold text-green-700">Ksh {(metrics.totalRevenue ?? 0).toLocaleString()}</span>
+                <span className="text-xl font-bold text-green-700">{currency} {(metrics.totalRevenue ?? 0).toLocaleString()}</span>
               </div>
               <div className="bg-purple-50 rounded shadow-sm p-3 flex flex-col items-center border border-purple-100 hover:bg-purple-100 transition-colors">
                 <span className="text-purple-600 text-xs mb-1 font-medium">Avg. Sale Value</span>
-                <span className="text-xl font-bold text-purple-700">Ksh {(metrics.avgSaleValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="text-xl font-bold text-purple-700">{currency} {(metrics.avgSaleValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="bg-red-50 rounded shadow-sm p-3 flex flex-col items-center border border-red-100 hover:bg-red-100 transition-colors">
                 <span className="text-red-600 text-xs mb-1 font-medium">Top Products</span>
                 <span className="text-xl font-bold text-red-600">{(metrics.topProducts || []).length}</span>
               </div>
             </div>
+            {activeTab !== 'performance' && filteredSalesData.length >= 2 && (
+              <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-600">Period vs previous:</span>
+                  <span className={periodComparison.change >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                    {periodComparison.change >= 0 ? '+' : ''}{periodComparison.change.toFixed(1)}%
+                  </span>
+                  <span className="text-gray-500 text-xs">({currency} {periodComparison.currentSum.toLocaleString()} vs {currency} {periodComparison.previousSum.toLocaleString()})</span>
+                </div>
+                {peakPeriod && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-600">Peak period:</span>
+                    <span className="font-semibold text-indigo-600">{peakPeriod.label}</span>
+                    <span className="text-gray-700">{currency} {peakPeriod.value.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
@@ -528,7 +641,7 @@ export default function ProductSalesReportPage() {
                             borderWidth: 1,
                             callbacks: {
                               label: function(context) {
-                                return `Sales: ${context.parsed.y}`;
+                                return `Revenue: ${currency} ${context.parsed.y.toLocaleString()}`;
                               }
                             }
                           }
@@ -578,7 +691,7 @@ export default function ProductSalesReportPage() {
                           borderWidth: 1,
                           callbacks: {
                             label: function(context) {
-                              return `Revenue: Ksh ${context.parsed.x || context.parsed.y}`;
+                              return `Revenue: ${currency} ${(context.parsed.x ?? context.parsed.y ?? 0).toLocaleString()}`;
                             }
                           }
                         }
@@ -601,43 +714,119 @@ export default function ProductSalesReportPage() {
           </section>
         )}
 
-        {/* Top Products Pie Chart */}
+        {/* Top Products Pie + Revenue Share Donut */}
         {activeTab === 'overview' && (
           <section className="mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-md shadow p-3 flex flex-col">
+                <h2 className="text-base font-bold text-gray-800 mb-2">Units Sold by Product</h2>
+                <div className="h-56 bg-gray-50 rounded p-2">
+                  <Pie
+                    data={{
+                      labels: (metrics.topProducts || []).map(p => p.name),
+                      datasets: [{
+                        label: 'Units Sold',
+                        data: (metrics.topProducts || []).map(p => getUnitsSold(p)),
+                        backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#06b6d4'],
+                        borderRadius: 4,
+                      }],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'bottom',
+                          labels: { font: { size: 11 }, color: '#374151' }
+                        },
+                        tooltip: {
+                          backgroundColor: '#22c55e',
+                          titleColor: '#fff',
+                          bodyColor: '#fff',
+                          borderColor: '#fff',
+                          borderWidth: 1,
+                          callbacks: {
+                            label: function(context) {
+                              return `${context.label}: ${context.parsed}`;
+                            }
+                          }
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="bg-white rounded-md shadow p-3 flex flex-col">
+                <h2 className="text-base font-bold text-gray-800 mb-2 flex items-center gap-2">
+                  <FaChartPie /> Revenue Share (Donut)
+                </h2>
+                <div className="h-56 bg-gray-50 rounded p-2">
+                  <Doughnut
+                    data={revenueBreakdownData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      cutout: '55%',
+                      plugins: {
+                        legend: {
+                          position: 'bottom',
+                          labels: { font: { size: 11 }, color: '#374151' }
+                        },
+                        tooltip: {
+                          backgroundColor: '#6366f1',
+                          titleColor: '#fff',
+                          bodyColor: '#fff',
+                          callbacks: {
+                            label: function(context) {
+                              const total = (context.dataset.data as number[]).reduce((a, b) => a + b, 0);
+                              const pct = total > 0 ? ((context.parsed as number) / total * 100).toFixed(1) : '0';
+                              return `${context.label}: ${currency} ${(context.parsed as number).toLocaleString()} (${pct}%)`;
+                            }
+                          }
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Sales Forecast (Overview) */}
+        {activeTab === 'overview' && metrics.forecast?.forecast_months?.length && metrics.forecast?.forecast_sales?.length && (
+          <section className="mb-4">
             <div className="bg-white rounded-md shadow p-3 flex flex-col">
-              <h2 className="text-base font-bold text-gray-800 mb-2">Units Sold by Product</h2>
-              <div className="h-56 bg-gray-50 rounded p-2">
-                <Pie
+              <h2 className="text-base font-bold text-gray-800 mb-2">Sales Forecast (Next 6 Months)</h2>
+              <p className="text-xs text-gray-500 mb-2">Predicted transaction count based on recent trend.</p>
+              <div className="h-48 bg-gray-50 rounded p-2">
+                <Line
                   data={{
-                    labels: (metrics.topProducts || []).map(p => p.name),
+                    labels: metrics.forecast.forecast_months,
                     datasets: [{
-                      label: 'Units Sold',
-                      data: (metrics.topProducts || []).map(p => p.unitsSold),
-                      backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#22c55e', '#f59e0b', '#06b6d4'],
-                      borderRadius: 4,
+                      label: 'Forecast (transactions)',
+                      data: metrics.forecast.forecast_sales,
+                      borderColor: '#059669',
+                      backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                      fill: true,
+                      tension: 0.4,
                     }],
                   }}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                      legend: {
-                        position: 'bottom',
-                        labels: { font: { size: 11 }, color: '#374151' }
-                      },
+                      legend: { display: false },
                       tooltip: {
-                        backgroundColor: '#22c55e',
-                        titleColor: '#fff',
-                        bodyColor: '#fff',
-                        borderColor: '#fff',
-                        borderWidth: 1,
                         callbacks: {
-                          label: function(context) {
-                            return `${context.label}: ${context.parsed}`;
-                          }
+                          label: (ctx) => `Forecast: ${ctx.parsed.y} transactions`,
                         }
                       }
-                    }
+                    },
+                    scales: {
+                      y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' } },
+                      x: { grid: { color: 'rgba(0,0,0,0.06)' } },
+                    },
                   }}
                 />
               </div>
@@ -657,21 +846,25 @@ export default function ProductSalesReportPage() {
                       <th className="py-2 px-4 text-left font-semibold text-gray-600">Product</th>
                       <th className="py-2 px-4 text-left font-semibold text-gray-600">Units Sold</th>
                       <th className="py-2 px-4 text-left font-semibold text-gray-600">Revenue</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Share %</th>
                       <th className="py-2 px-4 text-left font-semibold text-gray-600">Avg. Price</th>
                       <th className="py-2 px-4 text-left font-semibold text-gray-600">Performance</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(metrics.topProducts || []).map((product) => {
-                      const avgPrice = product.unitsSold > 0 ? product.revenue / product.unitsSold : 0;
-                      const performance = product.unitsSold > 100 ? 'High' : product.unitsSold > 50 ? 'Medium' : 'Low';
-                      const className = product.unitsSold > 100 ? 'bg-green-100 text-green-800' : product.unitsSold > 50 ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
+                      const units = getUnitsSold(product);
+                      const avgPrice = units > 0 ? product.revenue / units : 0;
+                      const sharePct = (metrics.totalRevenue ?? 0) > 0 ? (product.revenue / (metrics.totalRevenue ?? 1)) * 100 : 0;
+                      const performance = units > 100 ? 'High' : units > 50 ? 'Medium' : 'Low';
+                      const className = units > 100 ? 'bg-green-100 text-green-800' : units > 50 ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
                       return (
                         <tr key={product.id} className="border-b">
                           <td className="py-2 px-4">{product.name}</td>
-                          <td className="py-2 px-4">{product.unitsSold}</td>
-                          <td className="py-2 px-4">Ksh {product.revenue.toLocaleString()}</td>
-                          <td className="py-2 px-4">Ksh {avgPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-4">{units}</td>
+                          <td className="py-2 px-4">{currency} {product.revenue.toLocaleString()}</td>
+                          <td className="py-2 px-4 font-medium text-indigo-600">{sharePct.toFixed(1)}%</td>
+                          <td className="py-2 px-4">{currency} {avgPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="py-2 px-4">
                             <span className={`px-2 py-1 rounded-full text-sm font-medium ${className}`}>
                               {performance}
@@ -707,7 +900,7 @@ export default function ProductSalesReportPage() {
                           bodyColor: '#ffffff',
                           callbacks: {
                             label: function(context) {
-                              return `Sales: Ksh ${context.parsed.y.toLocaleString()}`;
+                              return `Revenue: ${currency} ${context.parsed.y.toLocaleString()}`;
                             }
                           }
                           }
@@ -741,7 +934,7 @@ export default function ProductSalesReportPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="py-2 px-4 text-left font-semibold text-gray-600">Period</th>
-                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Sales (Ksh)</th>
+                      <th className="py-2 px-4 text-left font-semibold text-gray-600">Revenue ({currency})</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -749,7 +942,7 @@ export default function ProductSalesReportPage() {
                       filteredSalesData.map((item, index) => (
                         <tr key={index} className="border-b">
                           <td className="py-2 px-4">{item.label}</td>
-                          <td className="py-2 px-4 font-medium">Ksh {item.value.toLocaleString()}</td>
+                          <td className="py-2 px-4 font-medium">{currency} {item.value.toLocaleString()}</td>
                         </tr>
                       ))
                     ) : (
@@ -777,7 +970,7 @@ export default function ProductSalesReportPage() {
                     labels: bestProducts.map(p => p.name),
                     datasets: [{
                       label: 'Units Sold',
-                      data: bestProducts.map(p => p.unitsSold),
+                      data: bestProducts.map(p => getUnitsSold(p)),
                       backgroundColor: '#22c55e',
                       borderRadius: 4,
                     }],
@@ -798,8 +991,8 @@ export default function ProductSalesReportPage() {
                     {bestProducts.map((product) => (
                       <tr key={product.id} className="border-b">
                         <td className="py-2 px-4">{product.name}</td>
-                        <td className="py-2 px-4">{product.unitsSold}</td>
-                        <td className="py-2 px-4">Ksh {product.revenue.toLocaleString()}</td>
+                        <td className="py-2 px-4">{getUnitsSold(product)}</td>
+                        <td className="py-2 px-4">{currency} {product.revenue.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -814,7 +1007,7 @@ export default function ProductSalesReportPage() {
                     labels: worstProducts.map(p => p.name),
                     datasets: [{
                       label: 'Units Sold',
-                      data: worstProducts.map(p => p.unitsSold),
+                      data: worstProducts.map(p => getUnitsSold(p)),
                       backgroundColor: '#ef4444',
                       borderRadius: 4,
                     }],
@@ -835,8 +1028,8 @@ export default function ProductSalesReportPage() {
                     {worstProducts.map((product) => (
                       <tr key={product.id} className="border-b">
                         <td className="py-2 px-4">{product.name}</td>
-                        <td className="py-2 px-4">{product.unitsSold}</td>
-                        <td className="py-2 px-4">Ksh {product.revenue.toLocaleString()}</td>
+                        <td className="py-2 px-4">{getUnitsSold(product)}</td>
+                        <td className="py-2 px-4">{currency} {product.revenue.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -857,7 +1050,7 @@ export default function ProductSalesReportPage() {
                   {(metrics.topProducts || []).length > 0 ? (metrics.topProducts || [])[0].name : 'N/A'}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {(metrics.topProducts || []).length > 0 ? `${(metrics.topProducts || [])[0].unitsSold} units` : ''}
+                  {(metrics.topProducts || []).length > 0 ? `${getUnitsSold((metrics.topProducts || [])[0])} units` : ''}
                 </p>
               </div>
               <div className="text-center">
@@ -866,7 +1059,7 @@ export default function ProductSalesReportPage() {
                   {(metrics.topProducts || []).length > 0 ? (metrics.topProducts || []).sort((a, b) => b.revenue - a.revenue)[0].name : 'N/A'}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {(metrics.topProducts || []).length > 0 ? `Ksh ${(metrics.topProducts || []).sort((a, b) => b.revenue - a.revenue)[0].revenue.toLocaleString()}` : ''}
+                  {(metrics.topProducts || []).length > 0 ? `${currency} ${(metrics.topProducts || []).sort((a, b) => b.revenue - a.revenue)[0].revenue.toLocaleString()}` : ''}
                 </p>
               </div>
               <div className="text-center">

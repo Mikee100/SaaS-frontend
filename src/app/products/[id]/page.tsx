@@ -13,6 +13,8 @@ import Tooltip from '@/components/Tooltip';
 import FeatureGuard from '@/components/FeatureGuard';
 import Image from 'next/image';
 import API_BASE_URL from '../../../config/apiConfig';
+import { productAttributesApi } from '@/lib/api/product-variations';
+import type { ProductAttribute } from '@/types/product-variations';
 
 interface Product {
   id: string;
@@ -57,36 +59,29 @@ export default function ProductDetailPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'variations'>('overview');
   const [qrCodeProductId, setQrCodeProductId] = useState<string | null>(null);
 
-  // Variations management state
+  // Variations management state (attribute-driven: any attribute names from Attributes tab)
+  const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
   const [editingVariation, setEditingVariation] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{[key: string]: {stock: number, price: number, cost: number}}>({});
   const [saving, setSaving] = useState(false);
-  const [newVariation, setNewVariation] = useState<{color: string, size: string, stock: number} | null>(null);
-
-  // Available colors and sizes
-  const availableColors = [
-    'Black', 'White', 'Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Pink', 'Gray', 'Brown', 'Navy', 'Maroon'
-  ];
-
-  const availableSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+  const [newVariation, setNewVariation] = useState<{ attributes: Record<string, string>; stock: number; sku?: string } | null>(null);
 
   // Permission checks
   const canEditProducts = hasPermission(user, 'edit_products');
   const canDeleteProducts = hasPermission(user, 'delete_products');
 
   useEffect(() => {
-    // Inline function to avoid missing dependency warning
     const fetchAll = async () => {
       try {
         setLoading(true);
-
-        // Fetch product details
-        const productData = await apiGet(`/products/${productId}`, { 'x-branch-id': selectedBranchId || '' });
+        const [productData, variationsData, attrsData] = await Promise.all([
+          apiGet(`/products/${productId}`, { 'x-branch-id': selectedBranchId || '' }),
+          apiGet(`/products/${productId}/variations`, { 'x-branch-id': selectedBranchId || '' }),
+          productAttributesApi.getAll(true).catch(() => []),
+        ]);
         setProduct(productData as Product);
-
-        // Fetch variations
-        const variationsData = await apiGet(`/products/${productId}/variations`, { 'x-branch-id': selectedBranchId || '' });
-        setVariations(variationsData as ProductVariation[] || []);
+        setVariations((variationsData as ProductVariation[]) || []);
+        setAttributes(Array.isArray(attrsData) ? attrsData : []);
       } catch (err: unknown) {
         setError((err as { message?: string })?.message || 'Failed to load product');
       } finally {
@@ -149,22 +144,31 @@ export default function ProductDetailPage() {
   };
 
   const handleAddVariation = async () => {
-    if (!newVariation) return;
+    if (!newVariation || !product) return;
+    const attrs = Object.fromEntries(
+      Object.entries(newVariation.attributes).filter(([, v]) => v != null && v !== '')
+    );
+    if (Object.keys(attrs).length === 0) {
+      setError('Select at least one attribute (e.g. Color, Size, Material) for this variation.');
+      return;
+    }
 
     try {
       setSaving(true);
+      setError('');
+      const skuSuffix = Object.values(attrs).join('-').toLowerCase().replace(/\s+/g, '-');
+      const sku = newVariation.sku?.trim() || `${product.sku}-${skuSuffix}`;
       const variationData = {
-        attributes: {
-          color: newVariation.color,
-          size: newVariation.size,
-        },
+        sku,
+        attributes: attrs,
         stock: newVariation.stock,
+        price: product.price,
+        cost: product.cost,
         isActive: true,
       };
 
       const newVar = await apiPost(`/products/${productId}/variations`, variationData, { 'x-branch-id': selectedBranchId || '' });
 
-      // Update local state
       setVariations(prev => [...prev, newVar as ProductVariation]);
       setNewVariation(null);
     } catch (err: unknown) {
@@ -387,7 +391,7 @@ export default function ProductDetailPage() {
                       <h2 className="text-xl font-semibold text-gray-900">Product Variations</h2>
                       {canEditProducts && (
                         <button
-                          onClick={() => setNewVariation({ color: '', size: '', stock: 0 })}
+                          onClick={() => setNewVariation({ attributes: {}, stock: 0 })}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
                         >
                           <FaPlus className="w-4 h-4" />
@@ -403,7 +407,7 @@ export default function ProductDetailPage() {
                         <p className="text-gray-600 mb-4">This product doesn&apos;t have any variations yet.</p>
                         {canEditProducts && (
                           <button
-                            onClick={() => setNewVariation({ color: '', size: '', stock: 0 })}
+                            onClick={() => setNewVariation({ attributes: {}, stock: 0 })}
                             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                           >
                             Add First Variation
@@ -427,19 +431,18 @@ export default function ProductDetailPage() {
                           <tbody className="bg-white divide-y divide-gray-200">
                             {variations.map((variation) => (
                               <tr key={variation.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="flex items-center gap-2">
-                                    {variation.attributes.color && (
-                                      <span className="inline-flex items-center gap-1 text-sm">
-                                        <FaPalette className="w-3 h-3 text-gray-400" />
-                                        {variation.attributes.color}
-                                      </span>
-                                    )}
-                                    {variation.attributes.size && (
-                                      <span className="inline-flex items-center gap-1 text-sm">
-                                        <FaRuler className="w-3 h-3 text-gray-400" />
-                                        {variation.attributes.size}
-                                      </span>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {Object.entries(variation.attributes || {}).map(([key, value]) => (
+                                      value ? (
+                                        <span key={key} className="inline-flex items-center gap-1 text-sm bg-gray-100 px-2 py-0.5 rounded">
+                                          <span className="text-gray-500 font-medium">{key}:</span>
+                                          {value}
+                                        </span>
+                                      ) : null
+                                    ))}
+                                    {Object.keys(variation.attributes || {}).length === 0 && (
+                                      <span className="text-gray-400 text-sm">—</span>
                                     )}
                                   </div>
                                 </td>
@@ -563,10 +566,10 @@ export default function ProductDetailPage() {
                       </div>
                     )}
 
-                    {/* Add New Variation Modal */}
+                    {/* Add New Variation Modal - attribute-driven: any attribute (Color, Size, Material, etc.) from Attributes tab */}
                     {newVariation && (
                       <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+                        <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xl font-bold text-gray-900">Add New Variation</h3>
                             <button
@@ -576,34 +579,45 @@ export default function ProductDetailPage() {
                               <FaTimes className="w-5 h-5" />
                             </button>
                           </div>
+                          <p className="text-sm text-gray-600 mb-4">
+                            Choose values for the attributes you need (e.g. Color, Size, Material). Create attributes in Products → Attributes if needed.
+                          </p>
 
                           <div className="space-y-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Color</label>
-                              <select
-                                value={newVariation.color}
-                                onChange={(e) => setNewVariation(prev => prev ? ({ ...prev, color: e.target.value }) : null)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              >
-                                <option value="">Select Color</option>
-                                {availableColors.map(color => (
-                                  <option key={color} value={color}>{color}</option>
-                                ))}
-                              </select>
-                            </div>
+                            {attributes.length === 0 ? (
+                              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                                No attributes defined yet. Go to <Link href="/products/unified" className="underline font-medium">Products → Attributes</Link> and create attributes (e.g. Color, Size, Material, Storage), then add values. Then you can add variations here.
+                              </div>
+                            ) : (
+                              attributes.map((attr) => (
+                                <div key={attr.id}>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">{attr.displayName || attr.name}</label>
+                                  <select
+                                    value={newVariation.attributes[attr.name] ?? ''}
+                                    onChange={(e) => setNewVariation(prev => prev ? ({
+                                      ...prev,
+                                      attributes: { ...prev.attributes, [attr.name]: e.target.value },
+                                    }) : null)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  >
+                                    <option value="">Select {attr.displayName || attr.name}</option>
+                                    {(attr.values || []).map((val) => (
+                                      <option key={val.id} value={val.value}>{val.displayName || val.value}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ))
+                            )}
 
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Size</label>
-                              <select
-                                value={newVariation.size}
-                                onChange={(e) => setNewVariation(prev => prev ? ({ ...prev, size: e.target.value }) : null)}
+                              <label className="block text-sm font-medium text-gray-700 mb-1">SKU (optional)</label>
+                              <input
+                                type="text"
+                                value={newVariation.sku ?? ''}
+                                onChange={(e) => setNewVariation(prev => prev ? ({ ...prev, sku: e.target.value }) : null)}
+                                placeholder="Auto-generated from attributes if blank"
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              >
-                                <option value="">Select Size</option>
-                                {availableSizes.map(size => (
-                                  <option key={size} value={size}>{size}</option>
-                                ))}
-                              </select>
+                              />
                             </div>
 
                             <div>
@@ -621,7 +635,7 @@ export default function ProductDetailPage() {
                           <div className="flex gap-3 mt-6">
                             <button
                               onClick={handleAddVariation}
-                              disabled={saving || !newVariation.color || !newVariation.size}
+                              disabled={saving || attributes.length === 0 || Object.values(newVariation.attributes).filter(Boolean).length === 0}
                               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <FaPlus className="w-4 h-4" />

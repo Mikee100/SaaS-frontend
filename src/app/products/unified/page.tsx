@@ -1921,11 +1921,11 @@ export default function UnifiedProductsInventoryPage() {
                             </div>
                             <div>
                               <span className="text-gray-400">Selling Price</span>
-                              <div className="font-bold">${price.toFixed(2)}</div>
+                              <div className="font-bold">Ksh {price.toFixed(2)}</div>
                             </div>
                             <div>
                               <span className="text-gray-400">Buying Price</span>
-                              <div className="font-bold">${cost.toFixed(2)}</div>
+                              <div className="font-bold">Ksh {cost.toFixed(2)}</div>
                             </div>
                             <div>
                               <span className="text-gray-400">Margin</span>
@@ -1936,11 +1936,11 @@ export default function UnifiedProductsInventoryPage() {
                           </div>
                           <div className="flex justify-between items-center text-[11px] border-t pt-1 mb-1">
                             <span className="text-gray-400">Total Value</span>
-                            <span className="font-bold text-green-600">${totalValue.toFixed(2)}</span>
+                            <span className="font-bold text-green-600">Ksh {totalValue.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between items-center text-[11px] mb-1">
                             <span className="text-gray-400">Total Profit</span>
-                            <span className={`font-bold ${totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>${totalProfit.toFixed(2)}</span>
+                            <span className={`font-bold ${totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>Ksh {totalProfit.toFixed(2)}</span>
                           </div>
                           {canEditInventory && (
                             <button

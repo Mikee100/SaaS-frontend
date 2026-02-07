@@ -13,15 +13,19 @@ interface ReceiptItem {
   name: string;
   price: number;
   quantity: number;
+  cost?: number;
 }
 
 interface Receipt {
   saleId: string;
   date: string;
+  receiptType?: 'customer' | 'merchant';
   items: ReceiptItem[];
   subtotal?: number;
   vatAmount?: number;
   total?: number;
+  totalCost?: number;
+  totalProfit?: number;
   paymentMethod?: string;
   amountReceived?: number;
   change?: number;
@@ -32,7 +36,7 @@ interface Receipt {
     name: string;
     address?: string;
   };
-  // ...other fields
+  businessInfo?: BusinessInfo;
 }
 
 interface BusinessInfo {
@@ -50,6 +54,7 @@ interface BusinessInfo {
 export default function DigitalReceiptPage() {
   const params = useParams();
   const receiptRef = useRef<HTMLDivElement>(null);
+  const [receiptType, setReceiptType] = useState<'customer' | 'merchant'>('customer');
   const [isPrinting, setIsPrinting] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [businessInfo, setBusinessInfo] = useState<BusinessInfo | null>(null);
@@ -91,10 +96,7 @@ useEffect(() => {
       setLoading(true);
       setError(null);
       try {
-        const [receiptDataRaw, business] = await Promise.all([
-          apiGet(`/sales/${id}`),
-          apiGet('/tenant/me'),
-        ]);
+        const receiptDataRaw = await apiGet(`/sales/${id}/receipt?type=${receiptType}`);
         const receiptData = receiptDataRaw as Receipt;
         const vatRate = 0.16;
         let subtotal = receiptData.subtotal;
@@ -110,16 +112,18 @@ useEffect(() => {
 
         const processedReceipt: Receipt = {
           ...receiptData,
+          receiptType: receiptType,
           vatAmount: vatAmount,
           subtotal: subtotal,
           items: receiptData.items?.map((item: ReceiptItem) => ({
             ...item,
             price: item.price || 0,
-            quantity: item.quantity || 1
+            quantity: item.quantity || 1,
+            cost: item.cost,
           })) || []
         };
         setReceipt(processedReceipt);
-        setBusinessInfo(business as BusinessInfo);
+        setBusinessInfo((receiptData.businessInfo as BusinessInfo) || null);
       } catch (error: unknown) {
         if (error instanceof Error) {
           setError(error.message || "Failed to load receipt");
@@ -131,7 +135,7 @@ useEffect(() => {
       }
     }
     if (id) fetchData();
-  }, [id]);
+  }, [id, receiptType]);
 
   if (!id) {
     return <div className="min-h-screen flex items-center justify-center text-red-600">Receipt ID is missing</div>;
@@ -256,6 +260,35 @@ const handleShare = async () => {
       `}</style>
       
       <div className="max-w-md mx-auto">
+        {/* Receipt type: Customer | Merchant */}
+        <div className="flex items-center gap-2 mb-4 no-print">
+          <span className="text-sm font-medium text-gray-700">Receipt:</span>
+          <div className="inline-flex rounded-lg border border-gray-300 p-0.5 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => setReceiptType('customer')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                receiptType === 'customer'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Customer
+            </button>
+            <button
+              type="button"
+              onClick={() => setReceiptType('merchant')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                receiptType === 'merchant'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Merchant
+            </button>
+          </div>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6 no-print">
           <button 
@@ -292,6 +325,13 @@ const handleShare = async () => {
         >
           {/* Receipt Header */}
           <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-4 text-center">
+            <div className="mb-2">
+              <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
+                receiptType === 'merchant' ? 'bg-amber-500/90 text-white' : 'bg-white/20 text-blue-100'
+              }`}>
+                {receiptType === 'merchant' ? 'MERCHANT COPY' : 'CUSTOMER COPY'}
+              </span>
+            </div>
             {(businessInfo?.receiptLogo || businessInfo?.logoUrl) && (
               <img
                 src={getReceiptLogoUrl(businessInfo.receiptLogo, businessInfo.logoUrl)}
@@ -379,7 +419,14 @@ const handleShare = async () => {
               <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 border-b border-gray-200 pb-1 mb-2">
                 <div className="col-span-7">ITEM</div>
                 <div className="col-span-2 text-right">QTY</div>
-                <div className="col-span-3 text-right">AMOUNT</div>
+                {receipt.receiptType === 'merchant' && receipt.items.some(i => i.cost != null) ? (
+                  <>
+                    <div className="col-span-2 text-right">AMOUNT</div>
+                    <div className="col-span-1 text-right">COST</div>
+                  </>
+                ) : (
+                  <div className="col-span-3 text-right">AMOUNT</div>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -387,10 +434,21 @@ const handleShare = async () => {
                   <div key={index} className="grid grid-cols-12 gap-2 text-sm">
                     <div className="col-span-7 font-medium">{item.name}</div>
                     <div className="col-span-2 text-right text-gray-600">×{item.quantity}</div>
-                    <div className="col-span-3 text-right font-medium">
-                      KES {(item.price * item.quantity).toFixed(2)}
-                    </div>
-                    {item.price > 0 && (
+                    {receipt.receiptType === 'merchant' && receipt.items.some(i => i.cost != null) ? (
+                      <>
+                        <div className="col-span-2 text-right font-medium">
+                          KES {(item.price * item.quantity).toFixed(2)}
+                        </div>
+                        <div className="col-span-1 text-right text-gray-600 text-xs">
+                          {item.cost != null ? `KES ${(item.cost * item.quantity).toFixed(2)}` : '—'}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-3 text-right font-medium">
+                        KES {(item.price * item.quantity).toFixed(2)}
+                      </div>
+                    )}
+                    {item.price > 0 && !(receipt.receiptType === 'merchant' && receipt.items.some(i => i.cost != null)) && (
                       <div className="col-span-12 text-xs text-gray-500 -mt-1">
                         @ KES {item.price.toFixed(2)} each
                       </div>
@@ -453,6 +511,29 @@ const handleShare = async () => {
                 </div>
               </div>
             </div>
+
+            {/* Merchant-only: Cost & Profit */}
+            {receipt.receiptType === 'merchant' && (receipt.totalCost != null || receipt.totalProfit != null) && (
+              <div className="bg-amber-50 rounded-lg p-3 mb-4 border border-amber-200">
+                <div className="text-xs font-semibold text-amber-800 mb-2">Internal (Merchant)</div>
+                <div className="space-y-1 text-sm">
+                  {receipt.totalCost != null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Cost:</span>
+                      <span className="font-medium">KES {(receipt.totalCost as number).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {receipt.totalProfit != null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Profit:</span>
+                      <span className={`font-bold ${(receipt.totalProfit as number) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        KES {(receipt.totalProfit as number).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             
             {/* Footer */}
             <div className="text-center text-xs text-gray-500 space-y-2">

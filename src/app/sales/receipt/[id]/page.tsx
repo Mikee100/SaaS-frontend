@@ -12,15 +12,19 @@ interface ReceiptItem {
   name: string;
   price: number;
   quantity: number;
+  cost?: number;
 }
 
 interface Receipt {
   saleId: string;
   date: string;
+  receiptType?: 'customer' | 'merchant';
   items: ReceiptItem[];
   subtotal?: number;
   vatAmount?: number;
   total?: number;
+  totalCost?: number;
+  totalProfit?: number;
   paymentMethod?: string;
   amountReceived?: number;
   change?: number;
@@ -31,6 +35,7 @@ interface Receipt {
     name: string;
     address?: string;
   };
+  businessInfo?: BusinessInfo;
   mpesaTransaction?: {
     phoneNumber: string;
     amount: number;
@@ -57,6 +62,7 @@ interface BusinessInfo {
 export default function DigitalReceiptPage() {
   const params = useParams();
   const receiptRef = useRef<HTMLDivElement>(null);
+  const [receiptType, setReceiptType] = useState<'customer' | 'merchant'>('customer');
   const [isPrinting, setIsPrinting] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [businessInfo, setBusinessInfo] = useState<BusinessInfo | null>(null);
@@ -156,10 +162,7 @@ export default function DigitalReceiptPage() {
       setLoading(true);
       setError(null);
       try {
-        const [receiptDataRaw, business] = await Promise.all([
-          apiGet(`/sales/${id}`),
-          apiGet('/tenant/me'),
-        ]);
+        const receiptDataRaw = await apiGet(`/sales/${id}/receipt?type=${receiptType}`);
         const receiptData = receiptDataRaw as Receipt;
         const vatRate = 0.16;
         let subtotal = receiptData.subtotal;
@@ -175,16 +178,18 @@ export default function DigitalReceiptPage() {
 
         const processedReceipt: Receipt = {
           ...receiptData,
+          receiptType: receiptType,
           vatAmount: vatAmount,
           subtotal: subtotal,
           items: receiptData.items?.map((item: ReceiptItem) => ({
             ...item,
             price: item.price || 0,
-            quantity: item.quantity || 1
+            quantity: item.quantity || 1,
+            cost: item.cost,
           })) || []
         };
         setReceipt(processedReceipt);
-        setBusinessInfo(business as BusinessInfo);
+        setBusinessInfo((receiptData.businessInfo as BusinessInfo) || null);
       } catch (error: unknown) {
         if (error instanceof Error) {
           setError(error.message || "Failed to load receipt");
@@ -196,7 +201,7 @@ export default function DigitalReceiptPage() {
       }
     }
     if (id) fetchData();
-  }, [id]);
+  }, [id, receiptType]);
 
   if (!id) {
     return <div className="min-h-screen flex items-center justify-center text-red-600">Receipt ID is missing</div>;
@@ -848,6 +853,35 @@ const handleShare = async () => {
       `}</style>
       
       <div className="max-w-md mx-auto">
+        {/* Receipt type: Customer | Merchant */}
+        <div className="flex items-center gap-2 mb-4 no-print">
+          <span className="text-sm font-medium text-gray-700">Receipt:</span>
+          <div className="inline-flex rounded-lg border border-gray-300 p-0.5 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => setReceiptType('customer')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                receiptType === 'customer'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Customer
+            </button>
+            <button
+              type="button"
+              onClick={() => setReceiptType('merchant')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                receiptType === 'merchant'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Merchant
+            </button>
+          </div>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6 no-print">
           <button 
@@ -884,6 +918,13 @@ const handleShare = async () => {
         >
           {/* Receipt Header */}
           <div className="bg-blue-600 text-white p-4 text-center">
+            <div className="mb-2">
+              <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
+                receiptType === 'merchant' ? 'bg-amber-500/90 text-white' : 'bg-white/20 text-blue-100'
+              }`}>
+                {receiptType === 'merchant' ? 'MERCHANT COPY' : 'CUSTOMER COPY'}
+              </span>
+            </div>
             {(businessInfo?.receiptLogo || businessInfo?.logoUrl) && (
               <img
                 src={getReceiptLogoUrl(businessInfo.receiptLogo, businessInfo.logoUrl)}
