@@ -1,1 +1,0 @@
-// Paused: Service Worker/PWA logic temporarily disabled for user consistency debugging. 

@@ -26,7 +26,7 @@ export default function MainNavbar() {
           <Link href="/settings" className="text-gray-700 hover:text-blue-600 transition">Settings</Link>
         )}
         {isAdmin && (
-          <Link href="/users" className="text-gray-700 hover:text-blue-600 transition">Users</Link>
+          <Link href="/settings/users" className="text-gray-700 hover:text-blue-600 transition">Users</Link>
         )}
         {user?.isSuperadmin && (
           <Link href="/superadmin" className="text-gray-700 hover:text-blue-600 transition">Superadmin</Link>

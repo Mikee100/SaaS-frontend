@@ -1,3 +1,5 @@
+import React from 'react';
+
 export interface Product {
   id: string;
   name: string;
@@ -6,7 +8,12 @@ export interface Product {
   cost: number;
   stock: number;
   description?: string;
+  category?: string;
   customFields?: Record<string, string | number | boolean>;
+  supplier?: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface Branch {
@@ -14,21 +21,26 @@ export interface Branch {
   name: string;
 }
 
-export interface PlanLimits {
-  maxProducts: number;
-  maxBranches?: number;
-  [key: string]: number | undefined;
-}
-
 export interface ProductsPageProps {
-  // State
-  products: Product[];
-  loading: boolean;
+  // Form related
+  showAddForm: boolean;
+  editProduct: Product | null;
+  saving: boolean;
   error: string;
-  branches: Branch[];
-  branchesLoading: boolean;
-  selectedBranchId: string | null;
-  canChangeBranch: boolean;
+  setShowAddForm: (show: boolean) => void;
+  setEditProduct: (product: Product | null) => void;
+  handleAddProduct: (e: React.FormEvent) => void;
+  handleEditProduct: (e: React.FormEvent) => void;
+
+  // Pagination related
+  totalPages: number;
+  currentPage: number;
+  startIndex: number;
+  endIndex: number;
+  filteredProducts: Product[];
+  setCurrentPage: (page: number) => void;
+
+  // Search and filter related
   search: string;
   showFilters: boolean;
   priceMin: string;
@@ -36,64 +48,49 @@ export interface ProductsPageProps {
   stockMin: string;
   stockMax: string;
   categoryFilter: string;
-  currentPage: number;
-  viewMode: 'grid' | 'table';
-  sortField: string;
-  sortDirection: 'asc' | 'desc';
-  visibleColumns: string[];
-  showColumnSelector: boolean;
-  showAddForm: boolean;
-  editProduct: Product | null;
-  saving: boolean;
-  clearMsg: string;
-  qrCodeProductId: string | null;
-
-  // Callbacks
-  setSelectedBranchId: (id: string) => void;
-  handleBranchChange: (id: string) => void;
-  setSearch: (value: string) => void;
+  products: Product[];
+  setSearch: (search: string) => void;
   setShowFilters: (show: boolean) => void;
-  setPriceMin: (value: string) => void;
-  setPriceMax: (value: string) => void;
-  setStockMin: (value: string) => void;
-  setStockMax: (value: string) => void;
-  setCategoryFilter: (value: string) => void;
-  setCurrentPage: (page: number) => void;
-  setViewMode: (mode: 'grid' | 'table') => void;
-  setSortField: (field: string) => void;
-  setSortDirection: (direction: 'asc' | 'desc') => void;
-  setVisibleColumns: (columns: string[]) => void;
-  setShowColumnSelector: (show: boolean) => void;
-  setShowAddForm: (show: boolean) => void;
-  setEditProduct: (product: Product | null) => void;
-  handleAddProduct: (e: React.FormEvent) => Promise<void>;
-  handleEditProduct: (e: React.FormEvent) => Promise<void>;
-  openEditModal: (product: Product) => void;
-  handleDelete: (id: string) => Promise<void>;
+  setPriceMin: (min: string) => void;
+  setPriceMax: (max: string) => void;
+  setStockMin: (min: string) => void;
+  setStockMax: (max: string) => void;
+  setCategoryFilter: (category: string) => void;
+  clearMsg: string;
   downloadTemplate: () => void;
-  handleClearAll: () => Promise<void>;
-  toggleColumnVisibility: (column: string) => void;
-  handleSort: (field: string) => void;
-  setQrCodeProductId: (id: string | null) => void;
+  handleClearAll: () => void;
 
-  // Computed values
-  filteredProducts: Product[];
-  totalPages: number;
-  startIndex: number;
-  endIndex: number;
-  currentProducts: Product[];
+  // Branch related
+  selectedBranchId: string | null;
+  branches: Branch[];
+  branchesLoading: boolean;
+  canChangeBranch: boolean;
+  handleBranchChange: (branchId: string) => void;
+
+  // View mode related
+  viewMode: 'grid' | 'table';
+  setViewMode: (mode: 'grid' | 'table') => void;
+
+  // Column visibility related
+  showColumnSelector: boolean;
+  visibleColumns: string[];
   allColumns: string[];
-  usagePercentage: number;
-  isNearLimit: boolean;
+  setShowColumnSelector: (show: boolean) => void;
+  toggleColumnVisibility: (column: string) => void;
 
-  // Permissions
-  canViewProducts: boolean;
-  canCreateProducts: boolean;
+  // Product display related
+  currentProducts: Product[];
   canEditProducts: boolean;
   canDeleteProducts: boolean;
-
-  // Plan limits
+  canCreateProducts: boolean;
   canCreate: () => boolean;
-  limits: PlanLimits;
-  getUsagePercentage: () => number;
+  openEditModal: (product: Product) => void;
+  handleDelete: (productId: string) => void;
+  handleSort: (field: string) => void;
+  sortField: string;
+  sortDirection: 'asc' | 'desc';
+
+  // QR Code related
+  qrCodeProductId: string | null;
+  setQrCodeProductId: (id: string | null) => void;
 }

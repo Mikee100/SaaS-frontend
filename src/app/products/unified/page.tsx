@@ -4,6 +4,8 @@
  * Combines: Products List, Basic Inventory, and Advanced Inventory
  */
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import dynamic from "next/dynamic";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { apiGet, apiPost, apiDelete, apiPut } from "@/utils/api";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
@@ -17,14 +19,22 @@ import {
   FaStore, FaClipboardList, FaSortAmountDown, FaPrint, FaTimes, FaChevronRight,
   FaLayerGroup, FaSync, FaPalette
 } from 'react-icons/fa';
-import ProductAttributesManager from '@/components/products/ProductAttributesManager';
-import VariationManager from '@/components/products/VariationManager';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import { useBranch } from "@/contexts/BranchContext";
 import Image from 'next/image';
 import API_BASE_URL from '../../../config/apiConfig';
-import * as XLSX from 'xlsx';
+
+// Lazy-load heavier product management modules used only in specific tabs
+const ProductAttributesManager = dynamic(
+  () => import('@/components/products/ProductAttributesManager'),
+  { ssr: false }
+);
+
+const VariationManager = dynamic(
+  () => import('@/components/products/VariationManager'),
+  { ssr: false }
+);
 
 // Types
 interface Product {
@@ -645,6 +655,15 @@ export default function UnifiedProductsInventoryPage() {
     });
   }, [products, sortField, sortDirection]);
 
+  // Virtualization for table view of products
+  const tableParentRef = useRef<HTMLDivElement | null>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: sortedProducts.length,
+    getScrollElement: () => tableParentRef.current,
+    estimateSize: () => 56, // approximate row height in px
+    overscan: 10,
+  });
+
   const loading = productsLoading || inventoryLoading || branchesLoading || advancedInventoryLoading;
   const isSearching = search !== debouncedSearch;
 
@@ -921,7 +940,7 @@ export default function UnifiedProductsInventoryPage() {
     });
   };
 
-  const exportInventory = () => {
+  const exportInventory = async () => {
     const inv = activeTab === 'advanced' ? filteredAdvancedInventory : filteredInventoryProducts;
     const exportData = inv.map(item => {
       const product = item.product;
@@ -953,6 +972,7 @@ export default function UnifiedProductsInventoryPage() {
       };
     });
 
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
@@ -1636,7 +1656,10 @@ export default function UnifiedProductsInventoryPage() {
                       </div>
                     ) : (
                       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-lg">
-                        <div className="overflow-x-auto">
+                        <div
+                          ref={tableParentRef}
+                          className="max-h-[600px] overflow-auto"
+                        >
                           <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                               <tr>
@@ -1657,7 +1680,10 @@ export default function UnifiedProductsInventoryPage() {
                                 <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                               </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody
+                              className="bg-white divide-y divide-gray-200 relative"
+                              style={sortedProducts.length ? { height: rowVirtualizer.getTotalSize() } : undefined}
+                            >
                               {sortedProducts.length === 0 ? (
                                 <tr>
                                   <td colSpan={visibleColumns.length + 1} className="text-center py-12">
@@ -1673,10 +1699,15 @@ export default function UnifiedProductsInventoryPage() {
                                   </td>
                                 </tr>
                               ) : (
-                                sortedProducts.map((product) => {
+                                rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                  const product = sortedProducts[virtualRow.index];
                                   const flat = flattenProduct(product);
                                   return (
-                                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                                    <tr
+                                      key={product.id}
+                                      className="hover:bg-gray-50 transition-colors absolute w-full"
+                                      style={{ transform: `translateY(${virtualRow.start}px)` }}
+                                    >
                                       {allColumns.filter(col => visibleColumns.includes(col)).map(col => {
                                         let displayValue: string | number | boolean | undefined = flat[col] ?? '-';
                                         let className = '';

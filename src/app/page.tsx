@@ -6,6 +6,7 @@ import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useTenant } from '@/hooks/useTenant';
 import BranchSwitcher from '@/components/BranchSwitcher';
+import QuickActions from './QuickActions';
 import { useQuery } from '@tanstack/react-query';
 import {
   FiTrendingUp,
@@ -157,10 +158,13 @@ interface AnalyticsData {
   }>;
 };
 
-
-
-
-
+type PriorityItem = {
+  id: string;
+  title: string;
+  description: string;
+  severity?: 'low' | 'medium' | 'high';
+  href?: string;
+};
 function StatCard({ icon, label, value, trend, trendDirection, loading = false, color = 'indigo' }: {
   icon: React.ReactNode;
   label: string;
@@ -172,40 +176,28 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false, 
 }) {
   const colorClasses = {
     indigo: {
-      bg: 'bg-indigo-50',
       icon: 'text-indigo-600',
-      value: 'text-indigo-900',
-      border: 'border-indigo-200'
+      value: 'text-gray-900',
     },
     emerald: {
-      bg: 'bg-emerald-50',
       icon: 'text-emerald-600',
-      value: 'text-emerald-900',
-      border: 'border-emerald-200'
+      value: 'text-gray-900',
     },
     amber: {
-      bg: 'bg-amber-50',
       icon: 'text-amber-600',
-      value: 'text-amber-900',
-      border: 'border-amber-200'
+      value: 'text-gray-900',
     },
     purple: {
-      bg: 'bg-purple-50',
       icon: 'text-purple-600',
-      value: 'text-purple-900',
-      border: 'border-purple-200'
+      value: 'text-gray-900',
     },
     blue: {
-      bg: 'bg-blue-50',
       icon: 'text-blue-600',
-      value: 'text-blue-900',
-      border: 'border-blue-200'
+      value: 'text-gray-900',
     },
     pink: {
-      bg: 'bg-pink-50',
       icon: 'text-pink-600',
-      value: 'text-pink-900',
-      border: 'border-pink-200'
+      value: 'text-gray-900',
     }
   };
 
@@ -223,24 +215,15 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false, 
     );
   }
 
-  const gradientClasses = {
-    indigo: 'bg-gradient-to-br from-white to-indigo-50 border-indigo-200',
-    emerald: 'bg-gradient-to-br from-white to-emerald-50 border-emerald-200',
-    amber: 'bg-gradient-to-br from-white to-amber-50 border-amber-200',
-    purple: 'bg-gradient-to-br from-white to-purple-50 border-purple-200',
-    blue: 'bg-gradient-to-br from-white to-blue-50 border-blue-200',
-    pink: 'bg-gradient-to-br from-white to-pink-50 border-pink-200'
-  };
-
   return (
     <motion.div
       whileHover={{ y: -2, scale: 1.02 }}
       transition={{ duration: 0.2 }}
-      className={`${gradientClasses[color]} dark:!bg-slate-800 dark:border-slate-600 rounded-lg shadow-md border p-4 h-full hover:shadow-lg transition-shadow duration-200`}
+      className="rounded-lg border border-gray-200 bg-white p-4 h-full shadow-sm hover:shadow-md transition-shadow duration-200 dark:border-slate-600 dark:bg-slate-800"
     >
       <div className="flex items-center justify-between mb-3">
-        <div className={`p-2 rounded-lg ${colors.bg} ${colors.icon} shadow-sm`}>
-          {icon}
+        <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-700 shadow-sm">
+          <span className={colors.icon}>{icon}</span>
         </div>
         {trend && (
           <span className={`flex items-center text-[11px] font-semibold gap-1 px-2 py-1 rounded-full ${
@@ -261,50 +244,6 @@ function StatCard({ icon, label, value, trend, trendDirection, loading = false, 
   );
 }
 
-function QuickActions() {
-  const actions = [
-    {
-      label: "Add Product",
-      href: "/products/unified",
-      icon: <FiPackage className="w-5 h-5" />,
-    },
-    {
-      label: "Add Customer",
-      href: "/users",
-      icon: <FiUserPlus className="w-5 h-5" />,
-    },
-    {
-      label: "New Sale",
-      href: "/sales",
-      icon: <FiShoppingCart className="w-5 h-5" />,
-    },
-    {
-      label: "Generate Report",
-      href: "/reports",
-      icon: <FiFileText className="w-5 h-5" />,
-    },
-  ];
-
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-md shadow-sm p-3 border border-gray-200 dark:border-slate-600">
-      <h2 className="text-base font-semibold text-gray-800 dark:text-slate-200 mb-2">Quick Actions</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        {actions.map((action, i) => (
-          <a
-            key={i}
-            href={action.href}
-            className="bg-gray-50 dark:bg-slate-700 text-gray-700 dark:text-slate-300 p-2 rounded-md flex flex-col items-center gap-2 transition-all duration-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 hover:text-indigo-700 dark:hover:text-indigo-300"
-          >
-            <div className="p-1 bg-white dark:bg-slate-600 rounded-md shadow-sm">
-              {action.icon}
-            </div>
-            <span className="text-xs font-medium text-center">{action.label}</span>
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function SkeletonLoader() {
   return (
@@ -426,6 +365,90 @@ export default function DashboardPage() {
     ? (analyticsData.totalRevenue || 0) / analyticsData.totalCustomers
     : 0;
 
+  // Hero metrics: "Is my business healthy today?"
+  const salesByDayEntries = Object.entries(salesByDay).filter(
+    ([, value]) => typeof value === 'number' && !Number.isNaN(value as number)
+  ) as Array<[string, number]>;
+
+  const sortedSalesByDay = salesByDayEntries.sort(
+    ([a], [b]) => new Date(a).getTime() - new Date(b).getTime()
+  );
+
+  const latestDayEntry = sortedSalesByDay[sortedSalesByDay.length - 1];
+  const revenueTodayFromSeries = latestDayEntry ? latestDayEntry[1] : 0;
+
+  const revenueToday =
+    analyticsData?.realTimeData?.revenueToday ??
+    revenueTodayFromSeries ??
+    0;
+
+  const previous7Entries =
+    sortedSalesByDay.length > 1
+      ? sortedSalesByDay.slice(-8, -1)
+      : [];
+
+  const previous7Total = previous7Entries.reduce(
+    (sum, [, value]) => sum + (typeof value === 'number' ? value : 0),
+    0
+  );
+
+  const previous7Avg =
+    previous7Entries.length > 0 ? previous7Total / previous7Entries.length : 0;
+
+  const revenueTodayTrendPercent =
+    previous7Avg > 0 ? ((revenueToday - previous7Avg) / previous7Avg) * 100 : 0;
+
+  const hasMeaningfulTrend = Math.abs(revenueTodayTrendPercent) >= 0.5;
+  const revenueTodayTrendDirection: 'up' | 'down' | 'flat' =
+    !hasMeaningfulTrend || previous7Avg === 0
+      ? 'flat'
+      : revenueTodayTrendPercent > 0
+      ? 'up'
+      : 'down';
+
+  const salesLast30Days = (() => {
+    if (sortedSalesByDay.length === 0) return 0;
+    const last30 = sortedSalesByDay.slice(-30);
+    return last30.reduce(
+      (sum, [, value]) => sum + (typeof value === 'number' ? value : 0),
+      0
+    );
+  })();
+
+  const lowStockCount =
+    analyticsData?.inventoryAnalytics?.lowStockItems ??
+    lowStockProducts.length;
+
+  const priorities: PriorityItem[] = [];
+
+  if (lowStockCount > 0) {
+    priorities.push({
+      id: 'low-stock',
+      title: 'Reorder stock',
+      description: `${lowStockCount} item${lowStockCount === 1 ? '' : 's'} below minimum`,
+      severity: lowStockCount > 10 ? 'high' : 'medium',
+      href: '/products/reports/low-stock-alerts',
+    });
+  }
+
+  if (
+    analyticsData?.inventoryAnalytics?.stockoutRate !== undefined &&
+    analyticsData.inventoryAnalytics.stockoutRate > 0.05
+  ) {
+    const stockoutRatePercent = Math.round(
+      analyticsData.inventoryAnalytics.stockoutRate * 100
+    );
+    priorities.push({
+      id: 'stockouts',
+      title: 'Reduce stockouts',
+      description: `${stockoutRatePercent}% stockout rate over recent period`,
+      severity: 'medium',
+      href: '/products/reports/stockout-lost-sales',
+    });
+  }
+
+  const showPriorities = priorities.length > 0;
+
   const loading = tenantLoading || analyticsLoading || limitsLoading;
 
   if (loading || limitsLoading) {
@@ -443,68 +466,194 @@ export default function DashboardPage() {
   }
 
   return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:bg-slate-900 dark:from-slate-900 dark:to-slate-900">
-        <div className="max-w-5xl mx-auto px-2 sm:px-3 lg:px-4 py-4">
-          {/* Header */}
-          <div className="mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent dark:text-indigo-300">{tenant?.name || 'Business'} Dashboard</h1>
-              <p className="text-gray-600 dark:text-slate-400 mt-1 text-base">
-                Welcome back! Here&apos;s what&apos;s happening with your business.
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:bg-slate-900 dark:from-slate-900 dark:to-slate-900">
+      <div className="max-w-5xl mx-auto px-2 sm:px-3 lg:px-4 py-4">
+        {/* Header */}
+        <div className="mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent dark:text-indigo-300">
+              {tenant?.name || 'Business'} – Today at a glance
+            </h1>
+            <p className="text-gray-600 dark:text-slate-400 mt-1 text-base">
+              Is your business healthy today and do you need to act on anything right now?
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <BranchSwitcher />
+            <button
+              onClick={() => window.location.reload()}
+              className="p-1.5 text-gray-500 hover:text-gray-700 transition-colors"
+              title="Refresh data"
+            >
+              <FiRefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Hero: primary KPI + secondary KPIs */}
+        <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {/* Primary KPI */}
+          <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">
+                  <FiDollarSign className="w-4 h-4" />
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                    Today&apos;s Revenue
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-slate-500">
+                    vs average of the last 7 days
+                  </p>
+                </div>
+              </div>
+              {hasMeaningfulTrend && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    revenueTodayTrendDirection === 'up'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-rose-50 text-rose-700'
+                  }`}
+                >
+                  {revenueTodayTrendDirection === 'up' ? '▲' : '▼'}
+                  {`${revenueTodayTrendPercent > 0 ? '+' : ''}${revenueTodayTrendPercent.toFixed(1)}%`}
+                </span>
+              )}
+            </div>
+            <div className="mt-2 flex items-baseline gap-3">
+              <p className="text-3xl font-semibold text-gray-900 dark:text-slate-50">
+                {revenueToday > 0 ? `Ksh ${Math.round(revenueToday).toLocaleString()}` : '—'}
+              </p>
+              {!hasMeaningfulTrend && (
+                <span className="text-xs text-gray-500 dark:text-slate-500">
+                  Trend data will appear as you record more days of sales.
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Secondary KPIs */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                Sales (Last 30 days)
+              </p>
+              <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-50">
+                {salesLast30Days > 0 ? `Ksh ${Math.round(salesLast30Days).toLocaleString()}` : '—'}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <BranchSwitcher />
-              <button
-                onClick={() => window.location.reload()}
-                className="p-1.5 text-gray-500 hover:text-gray-700 transition-colors"
-                title="Refresh data"
-              >
-                <FiRefreshCw className="w-4 h-4" />
-              </button>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                Avg Order Value
+              </p>
+              <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-50">
+                {averageOrderValue > 0 ? `Ksh ${averageOrderValue.toFixed(2)}` : '—'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                Customers
+              </p>
+              <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-50">
+                {analyticsData?.totalCustomers?.toLocaleString() ?? '—'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                Low-stock Items
+              </p>
+              <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-50">
+                {lowStockCount}
+              </p>
             </div>
           </div>
+        </div>
+
+        {/* Today’s priorities */}
+        <div className="mb-4 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300">
+              Today&apos;s priorities
+            </span>
+            {showPriorities ? (
+              priorities.slice(0, 3).map((item) => {
+                const severityClasses =
+                  item.severity === 'high'
+                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                    : item.severity === 'medium'
+                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                    : 'border-gray-200 bg-gray-50 text-gray-700';
+
+                const content = (
+                  <>
+                    <span className="text-xs font-semibold">{item.title}</span>
+                    <span className="text-[11px] text-gray-600 dark:text-slate-400">
+                      · {item.description}
+                    </span>
+                  </>
+                );
+
+                return item.href ? (
+                  <a
+                    key={item.id}
+                    href={item.href}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${severityClasses}`}
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <span
+                    key={item.id}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${severityClasses}`}
+                  >
+                    {content}
+                  </span>
+                );
+              })
+            ) : (
+              <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                No urgent issues – you&apos;re good for today.
+              </span>
+            )}
+          </div>
+        </div>
 
           {/* Quick Actions */}
-          <div className="mb-4">
-            <QuickActions />
+          <div className="mb-4 space-y-2">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">
+              Quick Actions
+            </h2>
+            <QuickActions lowStockCount={lowStockCount} />
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            <StatCard
-              icon={<FiDollarSign className="w-5 h-5" />}
-              label="Total Sales"
-              value={analyticsData?.totalSales?.toLocaleString() || '0'}
-              trend="12.5%"
-              trendDirection="up"
-              color="indigo"
-            />
-            <StatCard
-              icon={<FiTrendingUp className="w-5 h-5" />}
-              label="Total Revenue"
-              value={`Ksh ${analyticsData?.totalRevenue?.toLocaleString() || '0'}`}
-              trend="8.2%"
-              trendDirection="up"
-              color="emerald"
-            />
-            <StatCard
-              icon={<FiPackage className="w-5 h-5" />}
-              label="Products"
-              value={analyticsData?.totalProducts?.toLocaleString() || '0'}
-              trend="3.1%"
-              trendDirection="up"
-              color="amber"
-            />
-            <StatCard
-              icon={<FiUsers className="w-5 h-5" />}
-              label="Customers"
-              value={analyticsData?.totalCustomers?.toLocaleString() || '0'}
-              trend="5.7%"
-              trendDirection="up"
-              color="purple"
-            />
-          </div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <StatCard
+            icon={<FiDollarSign className="w-5 h-5" />}
+            label="Total Sales (all time)"
+            value={analyticsData?.totalSales?.toLocaleString() || '0'}
+            color="indigo"
+          />
+          <StatCard
+            icon={<FiTrendingUp className="w-5 h-5" />}
+            label="Total Revenue (all time)"
+            value={`Ksh ${analyticsData?.totalRevenue?.toLocaleString() || '0'}`}
+            color="emerald"
+          />
+          <StatCard
+            icon={<FiPackage className="w-5 h-5" />}
+            label="Products"
+            value={analyticsData?.totalProducts?.toLocaleString() || '0'}
+            color="amber"
+          />
+          <StatCard
+            icon={<FiUsers className="w-5 h-5" />}
+            label="Customers"
+            value={analyticsData?.totalCustomers?.toLocaleString() || '0'}
+            color="purple"
+          />
+        </div>
 
           {/* Additional Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">

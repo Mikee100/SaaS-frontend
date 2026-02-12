@@ -37,7 +37,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
   const navLinks = [
     { href: "/products/unified", label: "Products & Inventory", icon: <FaBox /> },
-    { href: "/users", label: "Users", icon: <FaUsers /> },
+    { href: "/settings/users", label: "Users", icon: <FaUsers /> },
     { href: "/sales", label: "Sales/POS", icon: <FaCashRegister /> },
     { href: "/sales/history", label: "Sales History", icon: <FaHistory /> },
     { href: "/credit", label: "Credit Management", icon: <FaCreditCard /> },
