@@ -118,7 +118,7 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
     });
   }
 
-  if (nearingAnyLimit) {
+  if (nearingAnyLimit && isOwnerOrAdmin) {
     contextActions.push({
       id: "review-plan",
       label: "Review Plan",

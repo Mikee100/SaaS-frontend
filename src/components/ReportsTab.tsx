@@ -26,7 +26,9 @@ import {
   applyPdfFooterAndPageNumbers,
   getPdfTableColors,
   type PdfTemplate,
+  preparePdfWatermark,
 } from '@/utils/pdfTemplate';
+import { getFullAssetUrl } from '@/utils/logoUrl';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -173,13 +175,14 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
   const isLoading = salesLoading || productsLoading || customersLoading || inventoryLoading || financialLoading;
 
   // Export functions — use tenant PDF template
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
     const margin = getPdfMargin(pdfTemplate);
     const fontSize = getPdfFontSize(pdfTemplate);
     const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
     const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    await preparePdfWatermark(doc, getFullAssetUrl(tenantData?.watermark as string | null | undefined));
     let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
     const reportTitle = `${selectedReportType.charAt(0).toUpperCase() + selectedReportType.slice(1)} Report`;

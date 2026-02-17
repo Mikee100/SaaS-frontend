@@ -6,6 +6,7 @@ import { FaCreditCard, FaMoneyBillWave, FaCalendarAlt, FaUser, FaPhone, FaExclam
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import { useTenant } from '@/hooks/useTenant';
+import { useAppPreferences, preferencePaymentToSales } from '@/hooks/useAppPreferences';
 import {
   getPdfDocOptions,
   getPdfMargin,
@@ -15,7 +16,9 @@ import {
   getPdfTableColors,
   getPdfCurrency,
   type PdfTemplate,
+  preparePdfWatermark,
 } from '@/utils/pdfTemplate';
+import { getFullAssetUrl } from '@/utils/logoUrl';
 import Spinner from '@/components/Spinner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import jsPDF from 'jspdf';
@@ -109,12 +112,18 @@ export default function CreditManagementPage() {
   const [selectedCredit, setSelectedCredit] = useState<Credit | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<string>('');
+  const { preferences: appPrefs } = useAppPreferences();
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [paymentNotes, setPaymentNotes] = useState<string>('');
   const [processingPayment, setProcessingPayment] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<{name: string, phone?: string} | null>(null);
   const [showCustomerHistoryModal, setShowCustomerHistoryModal] = useState(false);
+
+  // Apply saved default payment method from preferences
+  useEffect(() => {
+    setPaymentMethod(preferencePaymentToSales(appPrefs.posDefaultPaymentMethod));
+  }, [appPrefs.posDefaultPaymentMethod]);
 
   // Dashboard states
   const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'reports' | 'completed'>('overview');
@@ -209,13 +218,14 @@ export default function CreditManagementPage() {
   }, [credits]);
 
   // Export functions — use tenant PDF template
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
     const currency = getPdfCurrency(tenantData, pdfTemplate);
     const margin = getPdfMargin(pdfTemplate);
     const fontSize = getPdfFontSize(pdfTemplate);
     const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
     const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    await preparePdfWatermark(doc, getFullAssetUrl(tenantData?.watermark as string | null | undefined));
     let y = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
     doc.setFontSize(fontSize + 4);

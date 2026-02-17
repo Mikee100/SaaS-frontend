@@ -1,6 +1,7 @@
 "use client";
 import { apiGet } from "@/utils/api";
-import { getReceiptLogoUrl } from "@/utils/logoUrl";
+import { getReceiptLogoUrl, getFullAssetUrl } from "@/utils/logoUrl";
+import { preparePdfWatermark } from "@/utils/pdfTemplate";
 import { DocumentTextIcon, DocumentChartBarIcon, CalendarDaysIcon, UserIcon, CreditCardIcon, XMarkIcon, FunnelIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -237,6 +238,7 @@ export default function SalesHistoryPage() {
         unit: 'mm',
         format: (pdfTemplate.paperSize?.toLowerCase() || 'a4') as 'a4' | 'letter' | string
       });
+      await preparePdfWatermark(doc, getFullAssetUrl((tenantData as { watermark?: string })?.watermark));
 
       // Calculate margins based on template
       const marginMap: { [key: string]: number } = {

@@ -119,16 +119,19 @@ export default function BusinessInfoSettings() {
   const [validation, setValidation] = useState<{ kraPin?: boolean; vatNumber?: boolean; email?: boolean; phone?: boolean; website?: boolean }>({});
 
   useEffect(() => {
+    let cancelled = false;
     apiGet<Partial<BusinessInfoForm>>("/tenant/me")
       .then((data) => {
-        setForm(data || {});
-        setLoading(false);
+        if (!cancelled) setForm(data || {});
       })
       .catch((err: unknown) => {
-        const error = err as { message?: string };
-        setError(error.message || "Failed to load business info");
-        setLoading(false);
-      });
+        if (!cancelled) {
+          const errMsg = err as { message?: string };
+          setError(errMsg.message || "Failed to load business info");
+        }
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -178,6 +181,7 @@ export default function BusinessInfoSettings() {
     try {
       await apiPut("/tenant/me", form);
       setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
     } catch (err: unknown) {
       const error = err as { message?: string };
       setError(error.message || "Failed to save business info");
@@ -205,12 +209,12 @@ export default function BusinessInfoSettings() {
     
     return (
       <div key={field.name} className="flex flex-col gap-2">
-        <label htmlFor={field.name} className="font-medium text-gray-700">
+        <label htmlFor={field.name} className="font-medium text-gray-700 dark:text-gray-200">
           {field.label}
           {isRequired && <span className="text-red-500 ml-1">*</span>}
         </label>
         {fieldHelp[field.name] && (
-          <span className="text-sm text-gray-500">{fieldHelp[field.name]}</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{fieldHelp[field.name]}</span>
         )}
         {field.type === "textarea" ? (
           <textarea
@@ -219,8 +223,8 @@ export default function BusinessInfoSettings() {
             value={getFieldValue(field.name)}
             onChange={handleChange}
             rows={3}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500 ${
-              hasError ? 'border-red-500' : 'border-gray-300'
+            className={`w-full px-4 py-3 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 ${
+              hasError ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-gray-600'
             }`}
           />
         ) : field.type === "number" ? (
@@ -230,8 +234,8 @@ export default function BusinessInfoSettings() {
             type="number"
             value={getFieldValue(field.name, 'number')}
             onChange={handleChange}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500 ${
-              hasError ? 'border-red-500' : 'border-gray-300'
+            className={`w-full px-4 py-3 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 ${
+              hasError ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-gray-600'
             }`}
           />
         ) : (
@@ -241,8 +245,8 @@ export default function BusinessInfoSettings() {
             type="text"
             value={getFieldValue(field.name)}
             onChange={handleChange}
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500 ${
-              hasError ? 'border-red-500' : 'border-gray-300'
+            className={`w-full px-4 py-3 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 ${
+              hasError ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-gray-600'
             }`}
           />
         )}
@@ -271,20 +275,19 @@ export default function BusinessInfoSettings() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[300px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     );
   }
 
-  // Check if user has permission to edit business info
   if (!canEditSettings) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center py-12">
-          <FaLock className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don&apos;t have permission to edit business info.</p>
-          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
+          <FaLock className="w-16 h-16 text-red-500 dark:text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Access Denied</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">You don&apos;t have permission to edit business info.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Contact your administrator to request access.</p>
         </div>
       </div>
     );
@@ -294,61 +297,69 @@ export default function BusinessInfoSettings() {
     <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <FaBuilding className="text-blue-600 text-2xl" />
-          <h2 className="text-2xl font-bold text-gray-800">Business Info</h2>
+          <FaBuilding className="text-blue-600 dark:text-blue-400 text-2xl" />
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Business Info</h2>
         </div>
-        <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
+        <Link href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">← All Settings</Link>
       </div>
-      {success && <div className="mb-4 px-4 py-2 rounded bg-green-50 text-green-700 border border-green-200">Business info saved!</div>}
-      {error && <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 border border-red-200">{error}</div>}
+      {success && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700">
+          Business info saved!
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
+          {error}
+        </div>
+      )}
       <form onSubmit={handleSave} className="space-y-8">
         {/* Basic Business Information */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
-          <h3 className="text-lg font-semibold text-gray-800 mb-6">Basic Business Information</h3>
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6">Basic Business Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             {basicFields.map(renderField)}
           </div>
         </div>
 
         {/* Business Details */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
-          <h3 className="text-lg font-semibold text-gray-800 mb-6">Business Details</h3>
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6">Business Details</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             {businessDetailsFields.map(renderField)}
           </div>
         </div>
 
         {/* Location Information */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
-          <h3 className="text-lg font-semibold text-gray-800 mb-6">Location Information</h3>
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6">Location Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             {locationFields.map(renderField)}
           </div>
         </div>
 
         {/* Legal and Compliance */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
-          <h3 className="text-lg font-semibold text-gray-800 mb-6">Legal and Compliance</h3>
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6">Legal and Compliance</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             {legalFields.filter(field =>
               form.country?.toLowerCase() === 'kenya' || !['kraPin', 'vatNumber', 'etimsQrUrl'].includes(field.name)
             ).map(renderField)}
           </div>
           {form.country?.toLowerCase() !== 'kenya' && (
-            <p className="text-sm text-gray-500 mt-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
               KRA-specific fields (PIN, VAT, eTIMS) are only shown for Kenyan businesses.
             </p>
           )}
         </div>
 
         {/* Financial Settings */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
-          <h3 className="text-lg font-semibold text-gray-800 mb-6">Financial Settings</h3>
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6">Financial Settings</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             {financialFields.filter(f => f.name !== 'logoUrl').map(renderField)}
           </div>
           <div className="mt-8">
-            <label className="block text-sm font-medium text-gray-700 mb-4">Business Logo</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-4">Business Logo</label>
             <LogoUploader
               onUpload={(url) => setForm({ ...form, logoUrl: url })}
               initialLogo={form.logoUrl}
@@ -359,10 +370,10 @@ export default function BusinessInfoSettings() {
         <div className="flex justify-end">
           <button
             type="submit"
-            className="px-8 py-2 rounded-lg border border-blue-200 bg-blue-600 text-white font-semibold text-base shadow hover:bg-blue-700 transition disabled:opacity-60"
+            className="px-8 py-2.5 rounded-lg border border-blue-600 dark:border-blue-500 bg-blue-600 dark:bg-blue-500 text-white font-semibold text-base shadow hover:bg-blue-700 dark:hover:bg-blue-600 transition disabled:opacity-60 disabled:cursor-not-allowed"
             disabled={saving}
           >
-            {saving ? "Saving..." : "Save Business Info"}
+            {saving ? "Saving…" : "Save Business Info"}
           </button>
         </div>
       </form>

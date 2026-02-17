@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaTimes, FaMagic } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTimes, FaMagic, FaLayerGroup } from 'react-icons/fa';
 import {
   ProductAttribute,
   ProductVariation,
@@ -223,83 +223,116 @@ export default function VariationManager({
   };
 
   if (loading) {
-    return <div className="p-4">Loading variations...</div>;
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-12">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-sm text-gray-500">Loading variations...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="bg-white rounded-lg border border-gray-200">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50 border-l-4 border-red-400 text-red-700 px-4 py-3 m-4 rounded">
           {error}
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-4">
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Product Variations</h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Generate all combinations (e.g., Black-39, Black-40, Grey-39, Grey-40) or create individual variations
+          <h3 className="text-base font-semibold text-gray-900">Variations</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {variations.length === 0 
+              ? 'Create variations to offer different options for this product'
+              : `${variations.length} variation${variations.length !== 1 ? 's' : ''} created`}
           </p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowGenerateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
           >
-            <FaMagic /> Generate Variations
+            <FaMagic className="w-3.5 h-3.5" />
+            Generate
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
           >
-            <FaPlus /> Add Single Variation
+            <FaPlus className="w-3.5 h-3.5" />
+            Add One
           </button>
         </div>
       </div>
 
       {variations.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          No variations yet. Generate or create variations to get started.
+        <div className="p-12">
+          <div className="text-center max-w-sm mx-auto">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+              <FaLayerGroup className="w-8 h-8 text-gray-400" />
+            </div>
+            <h4 className="text-sm font-medium text-gray-900 mb-1">No variations yet</h4>
+            <p className="text-xs text-gray-500 mb-6">
+              Create variations to offer different sizes, colors, or other options for this product.
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setShowGenerateModal(true)}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Generate Variations
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-4 py-2 text-sm bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Add Manually
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-200">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="px-4 py-2 text-left border-b">SKU</th>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
                 {attributes
                   .filter((attr) =>
                     variations.some((v) => v.attributes[attr.name]),
                   )
                   .map((attr) => (
-                    <th key={attr.id} className="px-4 py-2 text-left border-b">
+                    <th key={attr.id} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {attr.displayName || attr.name}
                     </th>
                   ))}
-                <th className="px-4 py-2 text-left border-b">Selling Price</th>
-                <th className="px-4 py-2 text-left border-b">Buying Price</th>
-                <th className="px-4 py-2 text-left border-b">Stock</th>
-                <th className="px-4 py-2 text-left border-b">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="bg-white divide-y divide-gray-200">
               {variations.map((variation) => (
                 <tr key={variation.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 border-b">{variation.sku}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-900">{variation.sku}</td>
                   {attributes
                     .filter((attr) => variation.attributes[attr.name])
                     .map((attr) => (
-                      <td key={attr.id} className="px-4 py-2 border-b">
+                      <td key={attr.id} className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                         {variation.attributes[attr.name]}
                       </td>
                     ))}
-                  <td className="px-4 py-2 border-b">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     {editingVariation === variation.id ? (
                       <input
                         type="number"
                         step="0.01"
                         defaultValue={variation.price || basePrice}
-                        className="w-20 px-2 py-1 border rounded"
+                        className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         onBlur={(e) =>
                           handleUpdateVariation(variation.id, {
                             price: parseFloat(e.target.value),
@@ -310,13 +343,13 @@ export default function VariationManager({
                       `Ksh ${(variation.price || basePrice).toFixed(2)}`
                     )}
                   </td>
-                  <td className="px-4 py-2 border-b">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                     {editingVariation === variation.id ? (
                       <input
                         type="number"
                         step="0.01"
                         defaultValue={variation.cost || baseCost}
-                        className="w-20 px-2 py-1 border rounded"
+                        className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         onBlur={(e) =>
                           handleUpdateVariation(variation.id, {
                             cost: parseFloat(e.target.value),
@@ -327,12 +360,12 @@ export default function VariationManager({
                       `Ksh ${(variation.cost || baseCost).toFixed(2)}`
                     )}
                   </td>
-                  <td className="px-4 py-2 border-b">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     {editingVariation === variation.id ? (
                       <input
                         type="number"
                         defaultValue={variation.stock}
-                        className="w-20 px-2 py-1 border rounded"
+                        className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         onBlur={(e) =>
                           handleUpdateVariation(variation.id, {
                             stock: parseInt(e.target.value),
@@ -340,26 +373,28 @@ export default function VariationManager({
                         }
                       />
                     ) : (
-                      variation.stock
+                      <span className="font-medium">{variation.stock}</span>
                     )}
                   </td>
-                  <td className="px-4 py-2 border-b">
-                    <div className="flex gap-2">
+                  <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex gap-2 justify-end">
                       <button
                         onClick={() =>
                           setEditingVariation(
                             editingVariation === variation.id ? null : variation.id,
                           )
                         }
-                        className="text-blue-600 hover:text-blue-800"
+                        className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50"
+                        title="Edit"
                       >
-                        <FaEdit />
+                        <FaEdit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteVariation(variation.id)}
-                        className="text-red-600 hover:text-red-800"
+                        className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50"
+                        title="Delete"
                       >
-                        <FaTrash />
+                        <FaTrash className="w-4 h-4" />
                       </button>
                     </div>
                   </td>

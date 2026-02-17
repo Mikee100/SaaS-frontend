@@ -6,6 +6,8 @@ import { FaCogs, FaPalette, FaTachometerAlt, FaChartLine, FaCashRegister, FaBoxe
 import { useTheme } from "@/contexts/ThemeContext";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { SketchPicker, ColorResult } from "react-color";
+import { useUser } from "@/components/UserContext";
+import { hasPermission } from "@/utils/permissions";
 
 const LANGUAGES = [
   { value: "en", label: "English" },
@@ -37,15 +39,21 @@ interface UserPreferences {
   region: string;
 }
 
-interface StockConfig {
-  value: string;
+interface StockConfigResponse {
+  key?: string;
+  value?: string | null;
 }
 
 export default function PreferencesSettings() {
+  const { user } = useUser();
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [stockThresholdWarning, setStockThresholdWarning] = useState("");
+
+  const canEditBilling = hasPermission(user, "edit_billing");
+  const canViewBilling = hasPermission(user, "view_billing");
 
   const { theme, setTheme, loading: themeLoading, error: themeError } = useTheme();
   const { preferences: dashboardPrefs, toggleWidgetVisibility, loading: dashboardLoading, error: dashboardError } = useDashboard();
@@ -68,43 +76,59 @@ export default function PreferencesSettings() {
   });
 
   useEffect(() => {
-    // Load user preferences from /user/me and stock threshold from tenant config
-    Promise.all([
-      apiGet("/user/me"),
-      apiGet("/tenant/configurations/stockThreshold").catch(() => ({ value: undefined })),
-    ]).then(([user, config]) => {
-      const u = user as Record<string, unknown>;
-      const stockConfig = config as StockConfig;
-      const stored = (u.preferences as Record<string, unknown>) || {};
-      setPrefs({
-        notificationPreferences: {
-          email: (u.notificationPreferences as { email?: boolean })?.email ?? true,
-          sms: (u.notificationPreferences as { sms?: boolean })?.sms ?? false,
-        },
-        language: (u.language as string) || "en",
-        region: (u.region as string) || "ke",
-        stockThreshold: stockConfig?.value ? Number(stockConfig.value) : 15,
-        dashboardDefaultDateRange: (stored.dashboardDefaultDateRange as string) || "last_30_days",
-        dashboardAutoRefresh: Boolean(stored.dashboardAutoRefresh),
-        posDefaultPaymentMethod: (stored.posDefaultPaymentMethod as string) || "cash",
-        posAutoPrintReceipt: stored.posAutoPrintReceipt !== false,
-        inventoryLowStockAlertEmail: (stored.inventoryLowStockAlertEmail as string) || "",
-        inventoryAllowNegativeStock: Boolean(stored.inventoryAllowNegativeStock),
-        reportingDefaultExportFormat: (stored.reportingDefaultExportFormat as string) || "pdf",
-        securitySessionTimeout: Number(stored.securitySessionTimeout) || 30,
-      });
-    }).catch((err: unknown) => {
-      console.error(err);
-      setError("Failed to load preferences");
-    })
-      .finally(() => setPageLoading(false));
-  }, []);
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const u = (await apiGet("/user/me")) as Record<string, unknown>;
+        if (cancelled) return;
+        const stored = (u.preferences as Record<string, unknown>) || {};
+        const notif = (u.notificationPreferences as { email?: boolean; sms?: boolean }) || {};
+        let stockThreshold = 15;
+        if (canViewBilling) {
+          try {
+            const config = (await apiGet("/tenant/configurations/stockThreshold")) as StockConfigResponse;
+            if (config?.value != null && config.value !== "") stockThreshold = Number(config.value) || 15;
+          } catch {
+            // use default
+          }
+        }
+        if (cancelled) return;
+        setPrefs({
+          notificationPreferences: {
+            email: notif.email ?? true,
+            sms: notif.sms ?? false,
+          },
+          language: (u.language as string) || "en",
+          region: (u.region as string) || "ke",
+          stockThreshold,
+          dashboardDefaultDateRange: (stored.dashboardDefaultDateRange as string) || "last_30_days",
+          dashboardAutoRefresh: Boolean(stored.dashboardAutoRefresh),
+          posDefaultPaymentMethod: (stored.posDefaultPaymentMethod as string) || "cash",
+          posAutoPrintReceipt: stored.posAutoPrintReceipt !== false,
+          inventoryLowStockAlertEmail: (stored.inventoryLowStockAlertEmail as string) || "",
+          inventoryAllowNegativeStock: Boolean(stored.inventoryAllowNegativeStock),
+          reportingDefaultExportFormat: (stored.reportingDefaultExportFormat as string) || "pdf",
+          securitySessionTimeout: Number(stored.securitySessionTimeout) || 30,
+        });
+      } catch (err: unknown) {
+        if (!cancelled) {
+          console.error(err);
+          setError("Failed to load preferences");
+        }
+      } finally {
+        if (!cancelled) setPageLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [canViewBilling]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError("");
     setSuccess(false);
+    setStockThresholdWarning("");
     try {
       const userPrefsPayload = {
         notificationPreferences: prefs.notificationPreferences,
@@ -121,14 +145,19 @@ export default function PreferencesSettings() {
           securitySessionTimeout: prefs.securitySessionTimeout,
         },
       };
-      await Promise.all([
-        apiPut("/user/me/preferences", userPrefsPayload),
-        apiPut("/tenant/configurations/stockThreshold", {
-          value: String(prefs.stockThreshold),
-          category: "general",
-        }),
-      ]);
+      await apiPut("/user/me/preferences", userPrefsPayload);
+      if (canEditBilling) {
+        try {
+          await apiPut("/tenant/configurations/stockThreshold", {
+            value: String(prefs.stockThreshold),
+            category: "general",
+          });
+        } catch (stockErr) {
+          setStockThresholdWarning("Preferences saved. Low stock threshold could not be updated (requires billing permission).");
+        }
+      }
       setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
     } catch (err: unknown) {
       console.error(err);
       setError((err as Error).message || "Failed to save preferences");
@@ -139,7 +168,7 @@ export default function PreferencesSettings() {
 
   if (pageLoading) return (
     <div className="flex justify-center items-center min-h-[300px]">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
     </div>
   );
 
@@ -147,21 +176,34 @@ export default function PreferencesSettings() {
     <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <FaCogs className="text-blue-600 text-2xl" />
-          <h2 className="text-2xl font-bold text-gray-800">Preferences</h2>
+          <FaCogs className="text-blue-600 dark:text-blue-400 text-2xl" />
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Preferences</h2>
         </div>
-        <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
+        <Link href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">← All Settings</Link>
       </div>
-      {success && <div className="mb-4 px-4 py-2 rounded bg-green-50 text-green-700 border border-green-200">Preferences saved!</div>}
-      {error && <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 border border-red-200">{error}</div>}
+      {success && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700">
+          Preferences saved!
+        </div>
+      )}
+      {stockThresholdWarning && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-700 text-sm">
+          {stockThresholdWarning}
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
+          {error}
+        </div>
+      )}
       
       <form onSubmit={handleSave} className="space-y-8">
         {/* General Preferences */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             <div className="flex flex-col gap-4">
-              <h3 className="font-semibold mb-2 text-gray-700">Notifications</h3>
-              <p className="text-xs text-gray-400 mb-4">Choose how you want to receive important updates.</p>
+              <h3 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Notifications</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Choose how you want to receive important updates.</p>
               <label className="flex items-center gap-2 mb-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -169,7 +211,7 @@ export default function PreferencesSettings() {
                   onChange={e => setPrefs(p => ({ ...p, notificationPreferences: { ...p.notificationPreferences, email: e.target.checked } }))}
                   className="accent-blue-600"
                 />
-                <span className="text-gray-700">Email notifications</span>
+                <span className="text-gray-700 dark:text-gray-300">Email notifications</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -178,36 +220,41 @@ export default function PreferencesSettings() {
                   onChange={e => setPrefs(p => ({ ...p, notificationPreferences: { ...p.notificationPreferences, sms: e.target.checked } }))}
                   className="accent-blue-600"
                 />
-                <span className="text-gray-700">SMS notifications</span>
+                <span className="text-gray-700 dark:text-gray-300">SMS notifications</span>
               </label>
               <div className="mt-6">
-                <h3 className="font-semibold mb-2 text-gray-700">Low Stock Threshold</h3>
-                <p className="text-xs text-gray-400 mb-2">Set the minimum stock level before a low stock alert is triggered.</p>
+                <h3 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Low Stock Threshold</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Set the minimum stock level before a low stock alert is triggered.</p>
                 <input
                   type="number"
                   min={1}
                   value={prefs.stockThreshold}
                   onChange={e => setPrefs(p => ({ ...p, stockThreshold: Number(e.target.value) }))}
-                  className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200 w-32"
+                  className="border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-32"
+                  readOnly={!canEditBilling}
+                  title={!canEditBilling ? "Requires billing permission to change" : undefined}
                 />
+                {!canEditBilling && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Only users with billing permission can update this.</p>
+                )}
               </div>
             </div>
             <div className="flex flex-col gap-4">
-              <h3 className="font-semibold mb-2 text-gray-700">Language</h3>
-              <p className="text-xs text-gray-400 mb-4">Select your preferred language for the app interface.</p>
+              <h3 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Language</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Select your preferred language for the app interface.</p>
               <select
                 value={prefs.language}
                 onChange={e => setPrefs(p => ({ ...p, language: e.target.value }))}
-                className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               >
                 {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
-              <h3 className="font-semibold mb-2 text-gray-700 mt-8">Region</h3>
-              <p className="text-xs text-gray-400 mb-4">Set your region to localize content and features.</p>
+              <h3 className="font-semibold mb-2 text-gray-700 dark:text-gray-200 mt-8">Region</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Set your region to localize content and features.</p>
               <select
                 value={prefs.region}
                 onChange={e => setPrefs(p => ({ ...p, region: e.target.value }))}
-                className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               >
                 {REGIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
@@ -215,17 +262,18 @@ export default function PreferencesSettings() {
           </div>
         </div>
 
-        {/* Appearance Settings */}
-        <div className="bg-white rounded-xl shadow p-10 w-full relative">
-          {themeLoading && <div className="absolute inset-0 bg-white bg-opacity-50 flex justify-center items-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}
+        {/* Appearance Settings — changes save automatically */}
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full relative border border-gray-100 dark:border-gray-700">
+          {themeLoading && <div className="absolute inset-0 bg-white dark:bg-gray-800 bg-opacity-50 flex justify-center items-center rounded-xl"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div></div>}
           <div className="flex items-center gap-3 mb-6">
-            <FaPalette className="text-blue-600 text-xl" />
-            <h3 className="text-xl font-bold text-gray-800">Appearance</h3>
+            <FaPalette className="text-blue-600 dark:text-blue-400 text-xl" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Appearance</h3>
           </div>
-          {themeError && <div className="mb-4 text-red-500">Error loading theme: {themeError}</div>}
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Theme and accent color are saved automatically.</p>
+          {themeError && <div className="mb-4 text-red-500 dark:text-red-400">Error loading theme: {themeError}</div>}
           <div className={`grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8 ${themeLoading ? 'opacity-50' : ''}`}>
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Color Scheme</h4>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Color Scheme</h4>
               <div className="flex gap-4">
                 {(['light', 'dark', 'system'] as const).map(scheme => (
                   <label key={scheme} className="flex items-center gap-2 cursor-pointer">
@@ -237,20 +285,20 @@ export default function PreferencesSettings() {
                       onChange={() => setTheme({ ...theme, colorScheme: scheme })}
                       className="accent-blue-600"
                     />
-                    <span className="text-gray-700 capitalize">{scheme}</span>
+                    <span className="text-gray-700 dark:text-gray-300 capitalize">{scheme}</span>
                   </label>
                 ))}
               </div>
             </div>
             <div className="relative">
-              <h4 className="font-semibold mb-2 text-gray-700">Accent Color</h4>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Accent Color</h4>
               <div className="flex items-center gap-2">
                 <div
-                  className="w-8 h-8 rounded-full border border-gray-300 cursor-pointer"
+                  className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600 cursor-pointer shadow-inner"
                   style={{ backgroundColor: theme.accentColor }}
                   onClick={() => setShowColorPicker(!showColorPicker)}
-                ></div>
-                <span className="text-gray-600">{theme.accentColor}</span>
+                />
+                <span className="text-gray-600 dark:text-gray-400">{theme.accentColor}</span>
               </div>
               {showColorPicker && (
                 <div className="absolute z-10 mt-2" onMouseLeave={() => setShowColorPicker(false)}>
@@ -262,7 +310,7 @@ export default function PreferencesSettings() {
               )}
             </div>
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Font Size</h4>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Font Size</h4>
               <input
                 type="range"
                 min="12"
@@ -270,23 +318,24 @@ export default function PreferencesSettings() {
                 step="1"
                 value={theme.fontSize}
                 onChange={e => setTheme({ ...theme, fontSize: Number(e.target.value) })}
-                className="w-full"
+                className="w-full accent-blue-600"
               />
-              <span className="text-sm text-gray-500">{theme.fontSize}px</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">{theme.fontSize}px</span>
             </div>
           </div>
         </div>
 
-        {/* Dashboard Settings */}
-        <div className="bg-white rounded-xl shadow p-10 w-full relative">
-          {dashboardLoading && <div className="absolute inset-0 bg-white bg-opacity-50 flex justify-center items-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}
+        {/* Dashboard Widgets — toggles save automatically */}
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full relative border border-gray-100 dark:border-gray-700">
+          {dashboardLoading && <div className="absolute inset-0 bg-white dark:bg-gray-800 bg-opacity-50 flex justify-center items-center rounded-xl"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div></div>}
           <div className="flex items-center gap-3 mb-6">
-            <FaTachometerAlt className="text-blue-600 text-xl" />
-            <h3 className="text-xl font-bold text-gray-800">Dashboard</h3>
+            <FaTachometerAlt className="text-blue-600 dark:text-blue-400 text-xl" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Dashboard Widgets</h3>
           </div>
-          {dashboardError && <div className="mb-4 text-red-500">Error loading dashboard settings: {dashboardError}</div>}
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Choose which widgets appear on your dashboard. Changes save automatically.</p>
+          {dashboardError && <div className="mb-4 text-red-500 dark:text-red-400">Error loading dashboard settings: {dashboardError}</div>}
           <div className={`${dashboardLoading ? 'opacity-50' : ''}`}>
-            <h4 className="font-semibold mb-2 text-gray-700">Visible Widgets</h4>
+            <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Visible Widgets</h4>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {dashboardPrefs.widgets.map(widget => (
                 <label key={widget.id} className="flex items-center gap-2 cursor-pointer">
@@ -297,34 +346,34 @@ export default function PreferencesSettings() {
                     className="accent-blue-600"
                     disabled={dashboardLoading}
                   />
-                  <span className="text-gray-700">{widget.label}</span>
+                  <span className="text-gray-700 dark:text-gray-300">{widget.label}</span>
                 </label>
               ))}
             </div>
           </div>
         </div>
 
-        {/* New Dashboard Settings */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
+        {/* Dashboard date range & auto-refresh — saved with Save button below */}
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-6">
-            <FaChartLine className="text-blue-600 text-xl" />
-            <h3 className="text-xl font-bold text-gray-800">Dashboard Settings</h3>
+            <FaChartLine className="text-blue-600 dark:text-blue-400 text-xl" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Dashboard Defaults</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Default Date Range</h4>
-              <p className="text-xs text-gray-400 mb-4">Select the default time period for dashboard analytics.</p>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Default Date Range</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Select the default time period for dashboard analytics.</p>
               <select
                 value={prefs.dashboardDefaultDateRange}
                 onChange={e => setPrefs(p => ({ ...p, dashboardDefaultDateRange: e.target.value }))}
-                className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               >
                 {DATE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Auto-Refresh</h4>
-              <p className="text-xs text-gray-400 mb-4">Enable to automatically refresh dashboard data.</p>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Auto-Refresh</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Enable to automatically refresh dashboard data.</p>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -332,33 +381,33 @@ export default function PreferencesSettings() {
                   onChange={e => setPrefs(p => ({ ...p, dashboardAutoRefresh: e.target.checked }))}
                   className="accent-blue-600"
                 />
-                <span className="text-gray-700">Enable Auto-Refresh</span>
+                <span className="text-gray-700 dark:text-gray-300">Enable Auto-Refresh</span>
               </label>
             </div>
           </div>
         </div>
 
-        {/* New Point of Sale (POS) Settings */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
+        {/* Point of Sale (POS) Settings */}
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-6">
-            <FaCashRegister className="text-blue-600 text-xl" />
-            <h3 className="text-xl font-bold text-gray-800">Point of Sale (POS) Settings</h3>
+            <FaCashRegister className="text-blue-600 dark:text-blue-400 text-xl" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Point of Sale (POS)</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Default Payment Method</h4>
-              <p className="text-xs text-gray-400 mb-4">Choose the default payment method for new sales.</p>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Default Payment Method</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Choose the default payment method for new sales.</p>
               <select
                 value={prefs.posDefaultPaymentMethod}
                 onChange={e => setPrefs(p => ({ ...p, posDefaultPaymentMethod: e.target.value }))}
-                className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               >
                 {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Automatic Receipt Printing</h4>
-              <p className="text-xs text-gray-400 mb-4">Enable to automatically print receipts after a sale.</p>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Automatic Receipt Printing</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Enable to automatically print receipts after a sale.</p>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -366,33 +415,33 @@ export default function PreferencesSettings() {
                   onChange={e => setPrefs(p => ({ ...p, posAutoPrintReceipt: e.target.checked }))}
                   className="accent-blue-600"
                 />
-                <span className="text-gray-700">Auto-print receipts</span>
+                <span className="text-gray-700 dark:text-gray-300">Auto-print receipts</span>
               </label>
             </div>
           </div>
         </div>
 
-        {/* New Inventory Settings */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
+        {/* Inventory Settings */}
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-6">
-            <FaBoxes className="text-blue-600 text-xl" />
-            <h3 className="text-xl font-bold text-gray-800">Inventory Settings</h3>
+            <FaBoxes className="text-blue-600 dark:text-blue-400 text-xl" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Inventory</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Low Stock Alert Email</h4>
-              <p className="text-xs text-gray-400 mb-4">Email address to receive low stock notifications.</p>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Low Stock Alert Email</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Email address to receive low stock notifications.</p>
               <input
                 type="email"
                 placeholder="alerts@example.com"
                 value={prefs.inventoryLowStockAlertEmail}
                 onChange={e => setPrefs(p => ({ ...p, inventoryLowStockAlertEmail: e.target.value }))}
-                className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200 w-full"
+                className="border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full"
               />
             </div>
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Allow Negative Stock</h4>
-              <p className="text-xs text-gray-400 mb-4">Permit product stock levels to fall below zero.</p>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Allow Negative Stock</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Permit product stock levels to fall below zero.</p>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -400,26 +449,26 @@ export default function PreferencesSettings() {
                   onChange={e => setPrefs(p => ({ ...p, inventoryAllowNegativeStock: e.target.checked }))}
                   className="accent-blue-600"
                 />
-                <span className="text-gray-700">Allow negative stock</span>
+                <span className="text-gray-700 dark:text-gray-300">Allow negative stock</span>
               </label>
             </div>
           </div>
         </div>
 
-        {/* New Reporting Settings */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
+        {/* Reporting Settings */}
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-6">
-            <FaFileExport className="text-blue-600 text-xl" />
-            <h3 className="text-xl font-bold text-gray-800">Reporting Settings</h3>
+            <FaFileExport className="text-blue-600 dark:text-blue-400 text-xl" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Reporting</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Default Export Format</h4>
-              <p className="text-xs text-gray-400 mb-4">Select the default file format for exported reports.</p>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Default Export Format</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Select the default file format for exported reports.</p>
               <select
                 value={prefs.reportingDefaultExportFormat}
                 onChange={e => setPrefs(p => ({ ...p, reportingDefaultExportFormat: e.target.value }))}
-                className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               >
                 {EXPORT_FORMATS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
@@ -427,34 +476,34 @@ export default function PreferencesSettings() {
           </div>
         </div>
 
-        {/* New Security Settings */}
-        <div className="bg-white rounded-xl shadow p-10 w-full">
+        {/* Security Settings */}
+        <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-6">
-            <FaShieldAlt className="text-blue-600 text-xl" />
-            <h3 className="text-xl font-bold text-gray-800">Security Settings</h3>
+            <FaShieldAlt className="text-blue-600 dark:text-blue-400 text-xl" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Security</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
             <div>
-              <h4 className="font-semibold mb-2 text-gray-700">Session Timeout (minutes)</h4>
-              <p className="text-xs text-gray-400 mb-4">Automatically log out after a period of inactivity.</p>
+              <h4 className="font-semibold mb-2 text-gray-700 dark:text-gray-200">Session Timeout (minutes)</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Automatically log out after a period of inactivity.</p>
               <input
                 type="number"
                 min={5}
                 value={prefs.securitySessionTimeout}
                 onChange={e => setPrefs(p => ({ ...p, securitySessionTimeout: Number(e.target.value) }))}
-                className="border border-gray-200 rounded px-3 py-2 text-sm bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200 w-32"
+                className="border border-gray-200 dark:border-gray-600 rounded px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-32"
               />
             </div>
           </div>
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
           <button
             type="submit"
-            className="px-8 py-2 rounded-lg border border-blue-200 bg-blue-600 text-white font-semibold text-base shadow hover:bg-blue-700 transition disabled:opacity-60"
+            className="px-8 py-2.5 rounded-lg border border-blue-600 dark:border-blue-500 bg-blue-600 dark:bg-blue-500 text-white font-semibold text-base shadow hover:bg-blue-700 dark:hover:bg-blue-600 transition disabled:opacity-60 disabled:cursor-not-allowed"
             disabled={saving}
           >
-            {saving ? "Saving..." : "Save General Settings"}
+            {saving ? "Saving…" : "Save preferences"}
           </button>
         </div>
       </form>

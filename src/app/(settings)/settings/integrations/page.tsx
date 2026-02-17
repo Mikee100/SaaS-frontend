@@ -73,7 +73,7 @@ export default function IntegrationsSettings() {
     const fetchIntegrations = async () => {
       try {
         const data = await apiGet<Integration[]>("/tenant/integrations");
-        if (data) {
+        if (Array.isArray(data) && data.length) {
           setIntegrations(data);
         }
       } catch (err) {
@@ -84,7 +84,7 @@ export default function IntegrationsSettings() {
     const fetchMpesaConfig = async () => {
       try {
         if (!user?.tenantId) return;
-        const config = await apiGet<MpesaConfig>("/mpesa/config", { tenantId: user.tenantId });
+        const config = await apiGet<MpesaConfig>(`/mpesa/config?tenantId=${encodeURIComponent(user.tenantId)}`);
         if (config) {
           setMpesaForm({
             mpesaConsumerKey: config.consumerKey || '',
@@ -112,14 +112,22 @@ export default function IntegrationsSettings() {
   }, [user?.tenantId]);
 
   const handleConnect = async (integrationId: string) => {
+    setError(null);
+    setSuccess(null);
     try {
-      const response = await apiPost<{ url: string }>(`/tenant/integrations/${integrationId}/connect`, {});
-      if (response.url) {
-        window.open(response.url, '_blank');
+      const response = await apiPost<{ url: string | null }>(`/tenant/integrations/${integrationId}/connect`, {});
+      if (response?.url) {
+        if (response.url.startsWith('/')) {
+          window.location.href = response.url;
+        } else {
+          window.open(response.url, '_blank');
+        }
+      } else {
+        setError(`Connect not available for ${integrationId}.`);
       }
     } catch (err: unknown) {
-      const error = err as { message?: string };
-      setError(error.message || `Failed to connect ${integrationId}`);
+      const errMsg = err as { message?: string };
+      setError(errMsg.message || `Failed to connect ${integrationId}`);
     }
   };
 
@@ -158,6 +166,7 @@ export default function IntegrationsSettings() {
     try {
       await apiPost('/mpesa/config', { ...mpesaForm, tenantId: user?.tenantId });
       setSuccess('M-Pesa configuration saved successfully!');
+      setTimeout(() => setSuccess(null), 4000);
       // Update integration status
       setIntegrations(prev => prev.map(int =>
         int.id === 'mpesa' ? { ...int, status: mpesaForm.mpesaIsActive ? 'connected' : 'disconnected' } : int
@@ -198,7 +207,7 @@ export default function IntegrationsSettings() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[300px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     );
   }
@@ -207,10 +216,10 @@ export default function IntegrationsSettings() {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center py-12">
-          <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">You don&#39;t have permission to manage integrations.</p>
-          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
+          <FaExclamationTriangle className="w-16 h-16 text-red-500 dark:text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Access Denied</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">You don&apos;t have permission to manage integrations.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Contact your administrator to request access.</p>
         </div>
       </div>
     );
@@ -220,35 +229,43 @@ export default function IntegrationsSettings() {
     <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <FaPlug className="text-blue-600 text-2xl" />
-          <h2 className="text-2xl font-bold text-gray-800">API & Integrations</h2>
+          <FaPlug className="text-blue-600 dark:text-blue-400 text-2xl" />
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">API & Integrations</h2>
         </div>
-        <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
+        <Link href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">← All Settings</Link>
       </div>
 
-      {success && <div className="mb-4 px-4 py-2 rounded bg-green-50 text-green-700 border border-green-200">{success}</div>}
-      {error && <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 border border-red-200">{error}</div>}
+      {success && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700">
+          {success}
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {integrations.map((integration) => (
-          <div key={integration.id} className="bg-white rounded-xl shadow p-6 border">
+          <div key={integration.id} className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-6 border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className={`w-3 h-3 rounded-full ${
                   integration.status === 'connected' ? 'bg-green-500' :
-                  integration.status === 'error' ? 'bg-red-500' : 'bg-gray-400'
-                }`}></div>
-                <h3 className="text-lg font-semibold text-gray-800">{integration.name}</h3>
+                  integration.status === 'error' ? 'bg-red-500' : 'bg-gray-400 dark:bg-gray-500'
+                }`} />
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{integration.name}</h3>
               </div>
               {integration.status === 'connected' && (
-                <FaCheckCircle className="text-green-500 w-5 h-5" />
+                <FaCheckCircle className="text-green-500 dark:text-green-400 w-5 h-5" />
               )}
             </div>
 
-            <p className="text-gray-600 mb-4">{integration.description}</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">{integration.description}</p>
 
             {integration.lastSync && (
-              <p className="text-sm text-gray-500 mb-4">Last sync: {new Date(integration.lastSync).toLocaleString()}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Last sync: {new Date(integration.lastSync).toLocaleString()}</p>
             )}
 
             <div className="space-y-3">
@@ -260,58 +277,58 @@ export default function IntegrationsSettings() {
                       placeholder="Consumer Key"
                       value={mpesaForm.mpesaConsumerKey}
                       onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaConsumerKey: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     />
                     <input
                       type="password"
                       placeholder="Consumer Secret"
                       value={mpesaForm.mpesaConsumerSecret}
                       onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaConsumerSecret: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     />
                     <input
                       type="text"
                       placeholder="Short Code"
                       value={mpesaForm.mpesaShortCode}
                       onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaShortCode: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     />
                     <input
                       type="password"
                       placeholder="Passkey"
                       value={mpesaForm.mpesaPasskey}
                       onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaPasskey: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     />
                     <textarea
                       placeholder="Callback URL"
                       value={mpesaForm.mpesaCallbackUrl}
                       onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaCallbackUrl: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                       rows={2}
                     />
                     <select
                       value={mpesaForm.mpesaEnvironment}
                       onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaEnvironment: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                     >
                       <option value="sandbox">Sandbox</option>
                       <option value="production">Production</option>
                     </select>
-                    <label className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={mpesaForm.mpesaIsActive}
                         onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaIsActive: e.target.checked }))}
-                        className="rounded"
+                        className="rounded accent-blue-600"
                       />
-                      <span className="text-sm">Enable M-Pesa Integration</span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">Enable M-Pesa Integration</span>
                     </label>
                   </div>
                   <button
                     onClick={handleSaveMpesaConfig}
                     disabled={savingMpesa}
-                    className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+                    className="w-full px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors disabled:opacity-60"
                   >
                     {savingMpesa ? (
                       <>
@@ -326,7 +343,7 @@ export default function IntegrationsSettings() {
               ) : integration.id === 'stripe' ? (
                 <button
                   onClick={() => handleConnect(integration.id)}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="w-full px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
                 >
                   {integration.status === 'connected' ? 'Reconnect' : 'Connect'} {integration.name}
                 </button>
@@ -341,11 +358,11 @@ export default function IntegrationsSettings() {
                         handleSaveApiKey(integration.id, e.target.value);
                       }
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                   />
                   <button
                     onClick={() => handleSaveApiKey(integration.id, (document.querySelector(`input[placeholder*="API Key"]`) as HTMLInputElement)?.value || '')}
-                    className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    className="w-full px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors"
                   >
                     Save API Key
                   </button>
@@ -356,7 +373,7 @@ export default function IntegrationsSettings() {
                 <button
                   onClick={() => handleTestConnection(integration.id)}
                   disabled={testing === integration.id}
-                  className="w-full px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-60"
+                  className="w-full px-4 py-2 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors disabled:opacity-60"
                 >
                   {testing === integration.id ? (
                     <>
@@ -373,7 +390,7 @@ export default function IntegrationsSettings() {
                 <button
                   onClick={handleTestMpesaConnection}
                   disabled={testing === 'mpesa'}
-                  className="w-full px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-60"
+                  className="w-full px-4 py-2 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors disabled:opacity-60"
                 >
                   {testing === 'mpesa' ? (
                     <>
@@ -390,7 +407,7 @@ export default function IntegrationsSettings() {
                 href={`https://docs.example.com/integrations/${integration.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                className="flex items-center justify-center gap-2 w-full px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
               >
                 <FaExternalLinkAlt />
                 View Documentation
@@ -401,34 +418,34 @@ export default function IntegrationsSettings() {
       </div>
 
       {/* API Keys Section */}
-      <div className="mt-8 bg-white rounded-xl shadow p-6 border">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Your API Keys</h3>
+      <div className="mt-8 bg-white dark:bg-gray-800/80 rounded-xl shadow p-6 border border-gray-100 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Your API Keys</h3>
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
             <div>
-              <h4 className="font-medium">Public API Key</h4>
-              <p className="text-sm text-gray-600">Use this key for frontend integrations</p>
+              <h4 className="font-medium text-gray-800 dark:text-gray-200">Public API Key</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Use this key for frontend integrations</p>
             </div>
             <div className="flex items-center gap-2">
-              <code className="bg-white px-2 py-1 rounded text-sm">pk_live_...</code>
-              <button className="text-blue-600 hover:text-blue-800">Copy</button>
+              <code className="bg-white dark:bg-gray-800 px-2 py-1 rounded text-sm text-gray-800 dark:text-gray-200">pk_live_...</code>
+              <button type="button" className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">Copy</button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
             <div>
-              <h4 className="font-medium">Secret API Key</h4>
-              <p className="text-sm text-gray-600">Keep this key secure - never share it</p>
+              <h4 className="font-medium text-gray-800 dark:text-gray-200">Secret API Key</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Keep this key secure — never share it</p>
             </div>
             <div className="flex items-center gap-2">
-              <code className="bg-white px-2 py-1 rounded text-sm">sk_live_...</code>
-              <button className="text-blue-600 hover:text-blue-800">Copy</button>
+              <code className="bg-white dark:bg-gray-800 px-2 py-1 rounded text-sm text-gray-800 dark:text-gray-200">sk_live_...</code>
+              <button type="button" className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">Copy</button>
             </div>
           </div>
         </div>
 
         <div className="mt-4">
-          <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+          <button type="button" className="px-4 py-2 bg-red-600 dark:bg-red-500 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors">
             Regenerate Keys
           </button>
         </div>

@@ -6,6 +6,8 @@ import { getReceiptLogoUrl } from "@/utils/logoUrl";
 import Barcode from "react-barcode";
 import { QRCodeCanvas } from "qrcode.react";
 import { jsPDF } from "jspdf";
+import { preparePdfWatermark } from "@/utils/pdfTemplate";
+import { getFullAssetUrl } from "@/utils/logoUrl";
 import { Download, Printer, Share2 } from "lucide-react";
 
 interface ReceiptItem {
@@ -50,6 +52,7 @@ interface Receipt {
 interface BusinessInfo {
   logoUrl?: string;
   receiptLogo?: string;
+  watermark?: string | null;
   name?: string;
   businessType?: string;
   address?: string;
@@ -378,6 +381,7 @@ export default function DigitalReceiptPage() {
         unit: 'mm',
         format: [80, 297] // 80mm width (thermal receipt standard)
       });
+      await preparePdfWatermark(pdf, getFullAssetUrl(businessInfo?.watermark));
 
       const pageWidth = pdf.internal.pageSize.getWidth();
       let yPosition = 10;
@@ -566,7 +570,6 @@ export default function DigitalReceiptPage() {
 
       pdf.text('Created by Adeera Unitech Company', pageWidth / 2, yPosition, { align: 'center' });
 
-      // Save the PDF
       pdf.save(`receipt-${receipt.saleId?.slice(0, 8) || 'unknown'}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -586,6 +589,7 @@ const handleShare = async () => {
       unit: 'mm',
       format: [80, 297]
     });
+    await preparePdfWatermark(pdf, getFullAssetUrl(businessInfo?.watermark));
 
     const pageWidth = pdf.internal.pageSize.getWidth();
     let yPosition = 10;

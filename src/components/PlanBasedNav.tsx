@@ -15,7 +15,7 @@ import { MdOutlineInventory2, MdOutlineAnalytics, MdOutlineReport, MdOutlineSett
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { hasPermission } from '@/utils/permissions';
-import Image from 'next/image';
+import { getFullAssetUrl } from '@/utils/logoUrl';
 import { useTheme } from '@/contexts/ThemeContext';
 
 
@@ -71,10 +71,10 @@ export default function PlanBasedNav() {
     setOpenDropdowns(newOpen);
   }, [pathname]);
 
-  // Get tenant name and logo from cached data
+  // Get tenant name and logo from cached data (API returns logoUrl; some code may use logo)
   const tenant = tenantData ? {
     name: tenantData.name || '',
-    logoUrl: tenantData.logo as string | undefined,
+    logoUrl: (tenantData.logoUrl ?? tenantData.logo) as string | undefined,
   } : null;
 
   // Improved icon mapping for main and sub items
@@ -319,12 +319,12 @@ export default function PlanBasedNav() {
             <div className="border-b border-gray-200 px-4 py-2">
               <div className="flex items-center justify-center">
                 <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
-                  <Image
-                    src={tenant.logoUrl}
+                  <img
+                    src={getFullAssetUrl(tenant.logoUrl)}
                     alt={`${tenant.name} logo`}
                     width={32}
                     height={32}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
                     }}

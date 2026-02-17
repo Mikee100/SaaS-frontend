@@ -22,42 +22,62 @@ interface NotificationPrefs {
   };
 }
 
-export default function NotificationsSettings() {
-  const { user } = useUser();
-  const [prefs, setPrefs] = useState<NotificationPrefs>({
-    emailAlerts: true,
-    smsAlerts: false,
-    inApp: true,
+const defaultPrefs: NotificationPrefs = {
+  emailAlerts: true,
+  smsAlerts: false,
+  inApp: true,
+  emailTypes: { sales: true, inventory: true, billing: true, security: true },
+  smsTypes: { lowStock: true, paymentReceived: true },
+};
+
+function mergePrefs(data: unknown): NotificationPrefs {
+  if (!data || typeof data !== 'object') return defaultPrefs;
+  const o = data as Record<string, unknown>;
+  const et = (o.emailTypes as Record<string, boolean>) || {};
+  const st = (o.smsTypes as Record<string, boolean>) || {};
+  return {
+    emailAlerts: typeof o.emailAlerts === 'boolean' ? o.emailAlerts : defaultPrefs.emailAlerts,
+    smsAlerts: typeof o.smsAlerts === 'boolean' ? o.smsAlerts : defaultPrefs.smsAlerts,
+    inApp: typeof o.inApp === 'boolean' ? o.inApp : defaultPrefs.inApp,
     emailTypes: {
-      sales: true,
-      inventory: true,
-      billing: true,
-      security: true,
+      sales: typeof et.sales === 'boolean' ? et.sales : defaultPrefs.emailTypes.sales,
+      inventory: typeof et.inventory === 'boolean' ? et.inventory : defaultPrefs.emailTypes.inventory,
+      billing: typeof et.billing === 'boolean' ? et.billing : defaultPrefs.emailTypes.billing,
+      security: typeof et.security === 'boolean' ? et.security : defaultPrefs.emailTypes.security,
     },
     smsTypes: {
-      lowStock: true,
-      paymentReceived: true,
+      lowStock: typeof st.lowStock === 'boolean' ? st.lowStock : defaultPrefs.smsTypes.lowStock,
+      paymentReceived: typeof st.paymentReceived === 'boolean' ? st.paymentReceived : defaultPrefs.smsTypes.paymentReceived,
     },
-  });
+  };
+}
+
+export default function NotificationsSettings() {
+  const { user } = useUser();
+  const [prefs, setPrefs] = useState<NotificationPrefs>(defaultPrefs);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-
-useEffect(() => {
-  const fetchPrefs = async () => {
-    try {
-      const data = await apiGet<NotificationPrefs>("/tenant/notifications");
-      setPrefs(prev => data || prev); // functional update
-    } catch (err) {
-      console.error('Failed to load notification preferences:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-  fetchPrefs();
-}, []);
+  useEffect(() => {
+    let cancelled = false;
+    const fetchPrefs = async () => {
+      try {
+        const data = await apiGet<unknown>("/tenant/notifications");
+        if (!cancelled) setPrefs(mergePrefs(data));
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load notification preferences:', err);
+          setError('Failed to load notification preferences.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchPrefs();
+    return () => { cancelled = true; };
+  }, []);
 
 
 
@@ -86,6 +106,7 @@ useEffect(() => {
     try {
       await apiPut("/tenant/notifications", prefs);
       setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
     } catch (err: unknown) {
       const error = err as { message?: string };
       setError(error.message || "Failed to save notification preferences");
@@ -99,7 +120,7 @@ useEffect(() => {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[300px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     );
   }
@@ -108,10 +129,10 @@ useEffect(() => {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center py-12">
-          <FaExclamationTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-         <p className="text-gray-600 mb-4">You don&#39;t have permission to edit notification settings.</p>
-          <p className="text-sm text-gray-500">Contact your administrator to request access.</p>
+          <FaExclamationTriangle className="w-16 h-16 text-red-500 dark:text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Access Denied</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">You don&apos;t have permission to edit notification settings.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Contact your administrator to request access.</p>
         </div>
       </div>
     );
@@ -121,69 +142,77 @@ useEffect(() => {
     <div className="max-w-7xl mx-auto py-10 px-4 min-h-[80vh]">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <FaBell className="text-blue-600 text-2xl" />
-          <h2 className="text-2xl font-bold text-gray-800">Notification Preferences</h2>
+          <FaBell className="text-blue-600 dark:text-blue-400 text-2xl" />
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Notification Preferences</h2>
         </div>
-        <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
+        <Link href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">← All Settings</Link>
       </div>
 
-      {success && <div className="mb-4 px-4 py-2 rounded bg-green-50 text-green-700 border border-green-200">Preferences saved!</div>}
-      {error && <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 border border-red-200">{error}</div>}
+      {success && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700">
+          Preferences saved!
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
+          {error}
+        </div>
+      )}
 
-      <div className="bg-white rounded-xl shadow p-10">
+      <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 border border-gray-100 dark:border-gray-700">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Main Channels */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-6">Notification Channels</h3>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6">Notification Channels</h3>
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg">
+              <div className="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
                 <input
                   type="checkbox"
                   id="emailAlerts"
                   checked={prefs.emailAlerts}
                   onChange={(e) => handleToggle('emailAlerts', e.target.checked)}
-                  className="rounded"
+                  className="rounded accent-blue-600"
                 />
                 <label htmlFor="emailAlerts" className="flex-1 cursor-pointer">
                   <div className="flex items-center gap-2">
-                    <FaEnvelope className="text-blue-600" />
-                    <span className="font-medium">Email Alerts</span>
+                    <FaEnvelope className="text-blue-600 dark:text-blue-400" />
+                    <span className="font-medium text-gray-800 dark:text-gray-200">Email Alerts</span>
                   </div>
-                  <p className="text-sm text-gray-600">Receive notifications via email</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Receive notifications via email</p>
                 </label>
               </div>
 
-              <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg">
+              <div className="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
                 <input
                   type="checkbox"
                   id="smsAlerts"
                   checked={prefs.smsAlerts}
                   onChange={(e) => handleToggle('smsAlerts', e.target.checked)}
-                  className="rounded"
+                  className="rounded accent-blue-600"
                 />
                 <label htmlFor="smsAlerts" className="flex-1 cursor-pointer">
                   <div className="flex items-center gap-2">
-                    <FaMobileAlt className="text-green-600" />
-                    <span className="font-medium">SMS Alerts</span>
+                    <FaMobileAlt className="text-green-600 dark:text-green-400" />
+                    <span className="font-medium text-gray-800 dark:text-gray-200">SMS Alerts</span>
                   </div>
-                  <p className="text-sm text-gray-600">Receive SMS notifications (Pro+ plan required)</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Receive SMS notifications (Pro+ plan required)</p>
                 </label>
               </div>
 
-              <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg">
+              <div className="flex items-center gap-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
                 <input
                   type="checkbox"
                   id="inApp"
                   checked={prefs.inApp}
                   onChange={(e) => handleToggle('inApp', e.target.checked)}
-                  className="rounded"
+                  className="rounded accent-blue-600"
                 />
                 <label htmlFor="inApp" className="flex-1 cursor-pointer">
                   <div className="flex items-center gap-2">
-                    <FaBell className="text-purple-600" />
-                    <span className="font-medium">In-App Notifications</span>
+                    <FaBell className="text-purple-600 dark:text-purple-400" />
+                    <span className="font-medium text-gray-800 dark:text-gray-200">In-App Notifications</span>
                   </div>
-                  <p className="text-sm text-gray-600">See notifications in the dashboard</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">See notifications in the dashboard</p>
                 </label>
               </div>
             </div>
@@ -191,19 +220,19 @@ useEffect(() => {
 
           {/* Email Types */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-6">Email Notification Types</h3>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6">Email Notification Types</h3>
             <div className="space-y-3">
               {Object.entries(prefs.emailTypes).map(([type, enabled]) => (
-                <div key={type} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div key={type} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                   <input
                     type="checkbox"
                     id={`email-${type}`}
                     checked={enabled}
                     onChange={(e) => handleEmailTypeToggle(type as keyof NotificationPrefs['emailTypes'], e.target.checked)}
-                    className="rounded"
+                    className="rounded accent-blue-600"
                   />
                   <label htmlFor={`email-${type}`} className="flex-1 cursor-pointer">
-                    <span className="font-medium capitalize">{type.replace('_', ' ')}</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-200 capitalize">{type.replace('_', ' ')}</span>
                   </label>
                 </div>
               ))}
@@ -213,20 +242,20 @@ useEffect(() => {
 
         {/* SMS Types - Only if SMS enabled */}
         {prefs.smsAlerts && (
-          <div className="mt-8 pt-8 border-t border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-6">SMS Notification Types</h3>
+          <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-600">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6">SMS Notification Types</h3>
             <div className="space-y-3">
               {Object.entries(prefs.smsTypes).map(([type, enabled]) => (
-                <div key={type} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div key={type} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                   <input
                     type="checkbox"
                     id={`sms-${type}`}
                     checked={enabled}
                     onChange={(e) => handleSmsTypeToggle(type as keyof NotificationPrefs['smsTypes'], e.target.checked)}
-                    className="rounded"
+                    className="rounded accent-blue-600"
                   />
                   <label htmlFor={`sms-${type}`} className="flex-1 cursor-pointer">
-                    <span className="font-medium capitalize">{type.replace('_', ' ')}</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-200 capitalize">{type.replace('_', ' ')}</span>
                   </label>
                 </div>
               ))}
@@ -238,9 +267,9 @@ useEffect(() => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-8 py-2 rounded-lg border border-blue-200 bg-blue-600 text-white font-semibold text-base shadow hover:bg-blue-700 transition disabled:opacity-60"
+            className="px-8 py-2.5 rounded-lg border border-blue-600 dark:border-blue-500 bg-blue-600 dark:bg-blue-500 text-white font-semibold text-base shadow hover:bg-blue-700 dark:hover:bg-blue-600 transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {saving ? "Saving..." : "Save Preferences"}
+            {saving ? "Saving…" : "Save Preferences"}
           </button>
         </div>
       </div>

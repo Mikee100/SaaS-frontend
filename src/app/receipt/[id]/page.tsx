@@ -1,8 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { apiGet } from "@/utils/api";
-import { getReceiptLogoUrl } from "@/utils/logoUrl";
+import { getReceiptLogoUrl, getFullAssetUrl } from "@/utils/logoUrl";
+import { useAppPreferences } from "@/hooks/useAppPreferences";
+import { formatDate as formatDateLocale } from "@/utils/localeFormat";
+import { preparePdfWatermark } from "@/utils/pdfTemplate";
 import Barcode from "react-barcode";
 import { QRCodeCanvas } from "qrcode.react";
 import html2canvas from "html2canvas";
@@ -42,6 +45,7 @@ interface Receipt {
 interface BusinessInfo {
   logoUrl?: string;
   receiptLogo?: string;
+  watermark?: string | null;
   name?: string;
   businessType?: string;
   address?: string;
@@ -53,7 +57,9 @@ interface BusinessInfo {
 
 export default function DigitalReceiptPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const receiptRef = useRef<HTMLDivElement>(null);
+  const hasAutoPrinted = useRef(false);
   const [receiptType, setReceiptType] = useState<'customer' | 'merchant'>('customer');
   const [isPrinting, setIsPrinting] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -62,6 +68,7 @@ export default function DigitalReceiptPage() {
   const [error, setError] = useState<string | null>(null);
 
   const id = params?.id ? (Array.isArray(params.id) ? params.id[0] : params.id) : null;
+  const { preferences: appPrefs } = useAppPreferences();
 
   // Print styles for the receipt
   const printStyles = `
@@ -137,6 +144,15 @@ useEffect(() => {
     if (id) fetchData();
   }, [id, receiptType]);
 
+  // Auto-print when opened with ?print=1 (e.g. after POS sale with "auto-print receipt" preference)
+  useEffect(() => {
+    if (!receipt || hasAutoPrinted.current) return;
+    if (!searchParams || searchParams.get("print") !== "1") return;
+    hasAutoPrinted.current = true;
+    const t = setTimeout(() => window.print(), 600);
+    return () => clearTimeout(t);
+  }, [receipt, searchParams]);
+
   if (!id) {
     return <div className="min-h-screen flex items-center justify-center text-red-600">Receipt ID is missing</div>;
   }
@@ -169,7 +185,8 @@ useEffect(() => {
         unit: 'mm',
         format: [80, 297] // A4 width, auto height
       });
-      
+      await preparePdfWatermark(pdf, getFullAssetUrl(receipt?.businessInfo?.watermark));
+
       const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = 80; // mm
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
@@ -374,7 +391,7 @@ const handleShare = async () => {
               </div>
               <div className="flex justify-between text-sm">
                 <span>Date:</span>
-                <span>{new Date(receipt.date).toLocaleString('en-US', {
+                <span>{formatDateLocale(receipt.date, appPrefs.language, appPrefs.region, {
                   year: 'numeric',
                   month: 'short',
                   day: 'numeric',

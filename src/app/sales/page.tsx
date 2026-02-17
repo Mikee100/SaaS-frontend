@@ -23,6 +23,7 @@ import { useUser } from "@/components/UserContext";
 import { useBranch } from "@/contexts/BranchContext";
 import AuthGuard from "@/components/AuthGuard";
 import Spinner from "@/components/Spinner";
+import { useAppPreferences, preferencePaymentToSales } from "@/hooks/useAppPreferences";
 
 type ProductVariation = {
   id: string;
@@ -64,6 +65,7 @@ function SalesPageOriginal() {
   const router = useRouter();
   const { user } = useUser();
   const { selectedBranchId, setSelectedBranchId } = useBranch();
+  const { preferences: appPrefs } = useAppPreferences();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -83,6 +85,11 @@ function SalesPageOriginal() {
 
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "credit">("cash");
   const [amountReceived, setAmountReceived] = useState<number>(0);
+
+  // Apply saved default payment method from preferences
+  useEffect(() => {
+    setPaymentMethod(preferencePaymentToSales(appPrefs.posDefaultPaymentMethod));
+  }, [appPrefs.posDefaultPaymentMethod]);
 
   // IMPORTANT: make these OPTIONAL
   const [customerName, setCustomerName] = useState("");
@@ -344,8 +351,8 @@ function SalesPageOriginal() {
       setAmountReceived(0);
       setCheckoutStep(1);
 
-      // Route to receipt page immediately
-      router.push(`/receipt/${saleId}`);
+      // Route to receipt page (with ?print=1 when auto-print is enabled in preferences)
+      router.push(`/receipt/${saleId}${appPrefs.posAutoPrintReceipt ? "?print=1" : ""}`);
     } catch (e: any) {
       setError(e?.message || "Failed to complete sale");
       setProcessingSale(false);

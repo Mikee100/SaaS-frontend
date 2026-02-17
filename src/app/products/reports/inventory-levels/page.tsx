@@ -15,7 +15,9 @@ import {
   getPdfTableColors,
   getPdfCurrency,
   type PdfTemplate,
+  preparePdfWatermark,
 } from '@/utils/pdfTemplate';
+import { getFullAssetUrl } from '@/utils/logoUrl';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -51,8 +53,17 @@ export default function InventoryLevelsReportPage() {
   useEffect(() => {
     const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
     apiGet("/products", headers)
-      .then((data) => setProducts(data as Product[]))
-      .catch((err: unknown) => setError((err as Error).message || "An error occurred while fetching data."))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setProducts(data as Product[]);
+        } else {
+          const productsFromResponse = (data as { products?: Product[] })?.products || [];
+          setProducts(productsFromResponse);
+        }
+      })
+      .catch((err: unknown) =>
+        setError((err as Error).message || "An error occurred while fetching data.")
+      )
       .finally(() => setLoading(false));
   }, [selectedBranchId]);
 
@@ -85,7 +96,7 @@ export default function InventoryLevelsReportPage() {
     }],
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
     const currency = getPdfCurrency(tenantData, pdfTemplate);
     const margin = getPdfMargin(pdfTemplate);
@@ -93,6 +104,7 @@ export default function InventoryLevelsReportPage() {
     const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
     const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    await preparePdfWatermark(doc, getFullAssetUrl(tenantData?.watermark as string | null | undefined));
     let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
     doc.setFontSize(fontSize + 4);

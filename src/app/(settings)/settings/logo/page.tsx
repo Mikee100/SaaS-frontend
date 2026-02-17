@@ -1,31 +1,41 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+
+import { useEffect, useState, useRef, useCallback } from "react";
 import { apiGet, apiPut } from "@/utils/api";
 import API_BASE_URL from "@/config/apiConfig";
-import { FaImage, FaUpload, FaTrash, FaExclamationTriangle, FaInfoCircle } from 'react-icons/fa';
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  FaImage,
+  FaUpload,
+  FaTrash,
+  FaGlobe,
+  FaReceipt,
+  FaFileAlt,
+  FaShieldAlt,
+  FaCopy,
+  FaCheck,
+  FaTimes,
+  FaInfoCircle,
+} from "react-icons/fa";
 import Link from "next/link";
-import Image from 'next/image';
 
-/** Backend field names for each logo type (for PUT /tenant/me when removing). */
-const LOGO_TYPE_TO_BACKEND_FIELD: Record<keyof LogoConfig, string> = {
-  mainLogo: 'logoUrl',
-  favicon: 'favicon',
-  receiptLogo: 'receiptLogo',
-  etimsQrCode: 'etimsQrUrl',
-  watermark: 'watermark',
+const LOGO_TYPE_TO_BACKEND_FIELD: Record<string, string> = {
+  mainLogo: "logoUrl",
+  favicon: "favicon",
+  receiptLogo: "receiptLogo",
+  etimsQrCode: "etimsQrUrl",
+  watermark: "watermark",
 };
 
-/** Backend type for POST /tenant/logo (mainLogo -> 'main'). */
-function logoTypeToBackendType(type: keyof LogoConfig): string {
-  return type === 'mainLogo' ? 'main' : type;
+function logoTypeToBackendType(type: string): string {
+  return type === "mainLogo" ? "main" : type;
 }
 
-/** Full URL for an API-relative logo path (e.g. /uploads/logos/xxx). */
 function logoFullUrl(path: string | null | undefined): string {
-  if (!path) return '';
-  if (path.startsWith('http')) return path;
-  const base = API_BASE_URL.replace(/\/+$/, '');
-  return path.startsWith('/') ? `${base}${path}` : `${base}/${path}`;
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const base = API_BASE_URL.replace(/\/+$/, "");
+  return path.startsWith("/") ? `${base}${path}` : `${base}/${path}`;
 }
 
 interface LogoConfig {
@@ -36,429 +46,441 @@ interface LogoConfig {
   watermark?: string | null;
 }
 
-interface LogoValidation {
-  isValid: boolean;
-  errors: string[];
-  warnings: string[];
+interface TenantData {
+  logoUrl?: string;
+  favicon?: string;
+  receiptLogo?: string;
+  etimsQrUrl?: string;
+  watermark?: string;
 }
 
+const LOGO_TYPES = {
+  mainLogo: {
+    label: "Main logo",
+    description: "Primary branding across the app",
+    where: ["Sidebar & header", "Login screen", "Emails", "PDFs"],
+    icon: FaGlobe,
+    required: true,
+    maxSizeMB: 2,
+    formats: ["png", "jpg", "jpeg", "svg"],
+    spec: "200×80px recommended",
+  },
+  favicon: {
+    label: "Favicon",
+    description: "Browser tab and bookmarks",
+    where: ["Browser tab", "Bookmarks", "PWA icon"],
+    icon: FaImage,
+    required: false,
+    maxSizeMB: 0.5,
+    formats: ["ico", "png"],
+    spec: "32×32px",
+  },
+  receiptLogo: {
+    label: "Receipt & invoice logo",
+    description: "Printed and digital receipts",
+    where: ["Receipts", "Invoices", "Sales history"],
+    icon: FaReceipt,
+    required: false,
+    maxSizeMB: 1,
+    formats: ["png", "jpg", "jpeg"],
+    spec: "150×60px, high contrast",
+  },
+  etimsQrCode: {
+    label: "KRA eTIMS QR code",
+    description: "Tax compliance (Kenya)",
+    where: ["Receipts", "Invoices", "eTIMS compliance"],
+    icon: FaShieldAlt,
+    required: true,
+    maxSizeMB: 1,
+    formats: ["png", "jpg", "jpeg"],
+    spec: "200×200px QR",
+  },
+  watermark: {
+    label: "Watermark",
+    description: "Subtle branding on documents",
+    where: ["PDFs", "Exports", "Documents"],
+    icon: FaFileAlt,
+    required: false,
+    maxSizeMB: 1,
+    formats: ["png", "jpg", "jpeg"],
+    spec: "300×150px, semi-transparent",
+  },
+} as const;
+
 export default function LogoSettings() {
+  const queryClient = useQueryClient();
   const [logoConfig, setLogoConfig] = useState<LogoConfig>({});
-  const [preview, setPreview] = useState<{ [key: string]: string }>({});
-  const [file, setFile] = useState<{ [key: string]: File | null }>({});
-  const [uploading, setUploading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [validation, setValidation] = useState<{ [key: string]: LogoValidation }>({});
-  const [activeTab, setActiveTab] = useState<string>('main');
-  const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
-  
-  // Create ref objects for each input
-  const createInputRef = (type: string) => (el: HTMLInputElement | null) => {
-    if (el) {
-      inputRefs.current[type] = el;
-    }
-  };
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [applyEverywhereLoading, setApplyEverywhereLoading] = useState(false);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const logoTypes = {
-    main: {
-      label: 'Main Logo',
-      description: 'Primary logo displayed in the header and branding',
-      required: true,
-      maxSize: 2, // MB
-      dimensions: { width: 200, height: 80 },
-      formats: ['png', 'jpg', 'jpeg', 'svg']
-    },
-    favicon: {
-      label: 'Favicon',
-      description: 'Small icon displayed in browser tabs',
-      required: false,
-      maxSize: 0.5, // MB
-      dimensions: { width: 32, height: 32 },
-      formats: ['ico', 'png']
-    },
-    receiptLogo: {
-      label: 'Receipt Logo',
-      description: 'Logo displayed on receipts and invoices',
-      required: false,
-      maxSize: 1, // MB
-      dimensions: { width: 150, height: 60 },
-      formats: ['png', 'jpg', 'jpeg']
-    },
-    etimsQrCode: {
-      label: 'KRA eTIMS QR Code',
-      description: 'QR code for KRA eTIMS compliance (required for Kenya)',
-      required: true,
-      maxSize: 1, // MB
-      dimensions: { width: 200, height: 200 },
-      formats: ['png', 'jpg', 'jpeg']
-    },
-    watermark: {
-      label: 'Watermark',
-      description: 'Subtle watermark for documents',
-      required: false,
-      maxSize: 1, // MB
-      dimensions: { width: 300, height: 150 },
-      formats: ['png', 'jpg', 'jpeg']
+  const invalidateTenant = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["tenant"] });
+  }, [queryClient]);
+
+  const fetchTenant = useCallback(async () => {
+    try {
+      const data = await apiGet<TenantData>("/tenant/me");
+      setLogoConfig({
+        mainLogo: data.logoUrl ?? null,
+        favicon: data.favicon ?? null,
+        receiptLogo: data.receiptLogo ?? null,
+        etimsQrCode: data.etimsQrUrl ?? null,
+        watermark: data.watermark ?? null,
+      });
+    } catch (err) {
+      console.error("Error fetching tenant:", err);
+      setError("Failed to load logo settings.");
+    } finally {
+      setLoading(false);
     }
-  };
-
-  interface TenantData {
-    logoUrl?: string;
-    favicon?: string;
-    receiptLogo?: string;
-    etimsQrUrl?: string;
-    watermark?: string;
-  }
+  }, []);
 
   useEffect(() => {
-    const fetchTenant = async () => {
-        try {
-          const data = await apiGet<TenantData>("/tenant/me");
-          setLogoConfig({
-            mainLogo: data.logoUrl || null,
-            favicon: data.favicon || null,
-            receiptLogo: data.receiptLogo || null,
-            etimsQrCode: data.etimsQrUrl || null,
-            watermark: data.watermark || null
-          });
-        } catch (err: unknown) {
-          console.error("Error fetching tenant:", err);
-          setError("Failed to load tenant settings.");
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchTenant();
-    }, []);
+    fetchTenant();
+  }, [fetchTenant]);
 
-  const validateFile = (file: File, type: string): Promise<LogoValidation> => {
-    const config = logoTypes[type as keyof typeof logoTypes];
-    const errors: string[] = [];
-    const warnings: string[] = [];
-
-    // Check file size
-    const fileSizeMB = file.size / (1024 * 1024);
-    if (fileSizeMB > config.maxSize) {
-      errors.push(`File size must be less than ${config.maxSize}MB`);
-    }
-
-    // Check file format
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    if (!config.formats.includes(extension || '')) {
-      errors.push(`File must be one of: ${config.formats.join(', ')}`);
-    }
-
-    // Check if required
-    if (config.required && !file) {
-      errors.push(`${config.label} is required`);
-    }
-
-    return new Promise((resolveValidation) => {
-      const img = new window.Image();
-      img.onload = () => {
-        if (img.width > config.dimensions.width || img.height > config.dimensions.height) {
-          warnings.push(`Recommended size: ${config.dimensions.width}x${config.dimensions.height}px`);
-        }
-        resolveValidation({
-          isValid: errors.length === 0,
-          errors,
-          warnings
-        });
-      };
-      img.onerror = () => {
-        errors.push('Invalid image file');
-        resolveValidation({
-          isValid: false,
-          errors,
-          warnings: []
-        });
-      };
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: keyof LogoConfig) => {
-    const target = e.target as HTMLInputElement;
-    const f = target.files?.[0];
-    if (f) {
-      setFile(prev => ({ ...prev, [type]: f }));
-      setPreview(prev => ({ ...prev, [type]: URL.createObjectURL(f) }));
-      setSuccess(false);
-      setError(null);
-
-      // Validate file
-      const validationResult = await validateFile(f, type);
-      setValidation(prev => ({
-        ...prev,
-        [type]: validationResult
-      }));
-    }
-  };
-
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const filesToUpload = Object.entries(file).filter(([, f]) => f != null) as [keyof LogoConfig, File][];
-    
-    if (filesToUpload.length === 0) return;
-    
-    setUploading(true);
+  async function handleUpload(type: keyof LogoConfig, file: File) {
+    const key = type as string;
+    setUploading(key);
     setError(null);
-    setSuccess(false);
+    setSuccess(null);
+
+    const base = API_BASE_URL.replace(/\/+$/, "");
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("type", logoTypeToBackendType(key));
 
     try {
-      for (const [type, file] of filesToUpload) {
-        if (!file) continue;
+      const res = await fetch(`${base}/tenant/logo`, {
+        method: "POST",
+        credentials: "include",
+        headers:
+          typeof window !== "undefined" && localStorage.getItem("token")
+            ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
+            : {},
+        body: formData,
+      });
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("type", logoTypeToBackendType(type as keyof LogoConfig));
-
-        const base = API_BASE_URL.replace(/\/+$/, '');
-        const res = await fetch(`${base}/tenant/logo`, {
-          method: "POST",
-          credentials: 'include',
-          headers: {
-            ...(typeof window !== 'undefined' && localStorage.getItem('token')
-              ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {}),
-          },
-          body: formData,
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.message || `Upload failed for ${type}`);
-        }
-
-        const data = await res.json();
-        setLogoConfig(prev => ({ ...prev, [type]: data.logoUrl }));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `Upload failed for ${LOGO_TYPES[key as keyof typeof LOGO_TYPES]?.label ?? key}`);
       }
 
-      setSuccess(true);
-      setFile({});
-      setPreview({});
-      setValidation({});
-      
-      // Clear file inputs
-      Object.values(inputRefs.current).forEach(ref => {
-        if (ref) ref.value = "";
-      });
-    } catch (err: unknown) {
-      const error = err as { message?: string };
-      setError(error.message || "Upload failed");
+      const data = await res.json();
+      setLogoConfig((prev) => ({ ...prev, [type]: data.logoUrl }));
+      setSuccess(`${LOGO_TYPES[key as keyof typeof LOGO_TYPES]?.label ?? key} updated`);
+      invalidateTenant();
+      if (inputRefs.current[key]) inputRefs.current[key].value = "";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
-      setUploading(false);
+      setUploading(null);
     }
-  };
+  }
 
-  const handleRemoveLogo = async (type: keyof LogoConfig) => {
-    const backendField = LOGO_TYPE_TO_BACKEND_FIELD[type];
+  async function handleRemove(type: keyof LogoConfig) {
+    const backendField = LOGO_TYPE_TO_BACKEND_FIELD[type as string];
     if (!backendField) return;
+    setError(null);
+    setSuccess(null);
     try {
       await apiPut("/tenant/me", { [backendField]: null });
-      setLogoConfig(prev => ({ ...prev, [type]: null }));
-      setSuccess(true);
-      setError(null);
-    } catch (err: unknown) {
-      const error = err as { message?: string };
-      setError(error.message || "Failed to remove logo");
+      setLogoConfig((prev) => ({ ...prev, [type]: null }));
+      setSuccess(`${LOGO_TYPES[type as keyof typeof LOGO_TYPES]?.label ?? type} removed`);
+      invalidateTenant();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove logo");
     }
-  };
+  }
 
+  async function handleUseMainEverywhere() {
+    const main = logoConfig.mainLogo;
+    if (!main) {
+      setError("Upload a main logo first.");
+      return;
+    }
+    setApplyEverywhereLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiPut("/tenant/me", {
+        receiptLogo: main,
+        favicon: main,
+      });
+      setLogoConfig((prev) => ({
+        ...prev,
+        receiptLogo: main,
+        favicon: main,
+      }));
+      setSuccess("Main logo is now used in receipts and browser tab.");
+      invalidateTenant();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to apply.");
+    } finally {
+      setApplyEverywhereLoading(false);
+    }
+  }
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[320px]">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-300 border-t-slate-600" />
+      </div>
+    );
+  }
 
-  if (loading) return (
-    <div className="flex justify-center items-center min-h-[300px]">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    </div>
-  );
+  const mainLogoSet = !!logoConfig.mainLogo;
+  const canUseEverywhere = mainLogoSet;
 
   return (
-    <div className="max-w-6xl mx-auto py-10 px-4 min-h-[80vh]">
+    <div className="max-w-5xl mx-auto py-8 px-4 min-h-[80vh]">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <FaImage className="text-blue-600 text-2xl" />
-          <h2 className="text-2xl font-bold text-gray-800">Logo Management</h2>
+          <div className="p-2 rounded-xl bg-slate-100 text-slate-700">
+            <FaImage className="text-xl" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Logos & branding</h1>
+            <p className="text-slate-600 text-sm mt-0.5">These logos appear across your entire platform.</p>
+          </div>
         </div>
-        <Link href="/settings" className="text-blue-600 hover:underline text-sm">← All Settings</Link>
+        <Link
+          href="/settings"
+          className="text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-1"
+        >
+          ← All settings
+        </Link>
       </div>
 
       {success && (
-        <div className="mb-4 px-4 py-2 rounded bg-green-50 text-green-700 border border-green-200">
-          Logo updated successfully!
+        <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200">
+          <FaCheck className="text-emerald-600 shrink-0" />
+          <span>{success}</span>
+          <button
+            type="button"
+            onClick={() => setSuccess(null)}
+            className="ml-auto p-1 rounded hover:bg-emerald-100"
+            aria-label="Dismiss"
+          >
+            <FaTimes className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
       {error && (
-        <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 border border-red-200">
-          {error}
+        <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 text-red-800 border border-red-200">
+          <FaTimes className="text-red-600 shrink-0" />
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="ml-auto p-1 rounded hover:bg-red-100"
+            aria-label="Dismiss"
+          >
+            <FaTimes className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {/* Logo Types Tabs */}
-      <div className="bg-white rounded-xl shadow p-8 w-full mb-8">
-        <div className="flex flex-wrap gap-2 mb-6">
-          {Object.entries(logoTypes).map(([key, config]) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
-                activeTab === key
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+      {/* Global effect */}
+      <section className="mb-10 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white p-6 md:p-8">
+        <div className="flex items-center gap-2 mb-4">
+          <FaGlobe className="text-2xl text-slate-300" />
+          <h2 className="text-lg font-semibold">Global effect</h2>
+        </div>
+        <p className="text-slate-300 text-sm mb-6 max-w-2xl">
+          Logos you set here are used everywhere: sidebar, receipts, invoices, browser tab, and documents.
+          Changes apply across the app for all users in your organization.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-sm">
+          {(["Sidebar & header", "Receipts & invoices", "Browser tab", "PDFs & documents", "Compliance"] as const).map((area) => (
+            <div
+              key={area}
+              className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-slate-200"
             >
-              {config.label}
-              {config.required && <span className="text-red-500 ml-1">*</span>}
-            </button>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+              {area}
+            </div>
           ))}
         </div>
+      </section>
 
-        {/* Active Tab Content */}
-        {Object.entries(logoTypes).map(([key, config]) => (
-          <div key={key} className={activeTab === key ? 'block' : 'hidden'}>
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">{config.label}</h3>
-              <p className="text-gray-600 mb-4">{config.description}</p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Upload Section */}
-                <div>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                    <FaUpload className="mx-auto text-3xl text-gray-400 mb-4" />
-                    <p className="text-sm text-gray-600 mb-4">
-                      {config.required ? 'Required' : 'Optional'} • Max {config.maxSize}MB • {config.formats.join(', ')}
-                    </p>
-                    <input
-                      type="file"
-                      accept={config.formats.map(f => `.${f}`).join(',')}
-                      onChange={(e) => handleFileChange(e, key as keyof LogoConfig)}
-                      className="hidden"
-                      id={`file-${key}`}
-                      ref={createInputRef(key)}
-                    />
-                    <label
-                      htmlFor={`file-${key}`}
-                      className="cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-                    >
-                      Choose File
-                    </label>
+      {/* Use main logo everywhere */}
+      {canUseEverywhere && (
+        <div className="mb-8 flex flex-wrap items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <div className="flex items-center gap-3">
+            <FaCopy className="text-slate-500" />
+            <div>
+              <p className="font-medium text-slate-800">Use main logo everywhere</p>
+              <p className="text-sm text-slate-600">Copy main logo to receipt and favicon for consistent branding.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleUseMainEverywhere}
+            disabled={applyEverywhereLoading}
+            className="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 disabled:opacity-60"
+          >
+            {applyEverywhereLoading ? "Applying…" : "Apply"}
+          </button>
+        </div>
+      )}
+
+      {/* Logo cards */}
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {(Object.entries(LOGO_TYPES) as [keyof LogoConfig, (typeof LOGO_TYPES)[keyof typeof LOGO_TYPES]][]).map(
+          ([key, config]) => {
+            const Icon = config.icon;
+            const currentUrl = logoConfig[key];
+            const isUploading = uploading === key;
+
+            return (
+              <div
+                key={key}
+                className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow transition-shadow"
+              >
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="p-2 rounded-lg bg-slate-100 text-slate-600">
+                    <Icon className="text-lg" />
                   </div>
-
-                  {/* Validation Messages */}
-                  {validation[key] && (
-                    <div className="mt-4">
-                      {validation[key].errors.map((error, index) => (
-                        <div key={index} className="flex items-center gap-2 text-red-600 text-sm mb-1">
-                          <FaExclamationTriangle className="w-4 h-4" />
-                          {error}
-                        </div>
-                      ))}
-                      {validation[key].warnings.map((warning, index) => (
-                        <div key={index} className="flex items-center gap-2 text-yellow-600 text-sm mb-1">
-                          <FaInfoCircle className="w-4 h-4" />
-                          {warning}
-                        </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-slate-900 flex items-center gap-1.5">
+                      {config.label}
+                      {config.required && <span className="text-red-500 text-xs">Required</span>}
+                    </h3>
+                    <p className="text-sm text-slate-600 mt-0.5">{config.description}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {config.where.map((w) => (
+                        <span
+                          key={w}
+                          className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-100 rounded px-2 py-0.5"
+                        >
+                          <FaInfoCircle className="w-3 h-3 opacity-70" />
+                          {w}
+                        </span>
                       ))}
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                {/* Preview Section */}
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-3">Preview</h4>
-                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative h-40 flex items-center justify-center">
-                    {preview[key] ? (
-                      <div className="relative w-full h-full">
-                        <Image
-                          src={preview[key]}
-                          alt={`${config.label} preview`}
-                          fill
-                          style={{ objectFit: 'contain' }}
-                          sizes="(max-width: 768px) 100vw, 50vw"
-                        />
-                      </div>
-                    ) : logoConfig[key as keyof LogoConfig] ? (
-                      <div className="text-center">
-                        <div className="relative w-full h-32">
+                <div className="space-y-3">
+                  <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/50 p-4 min-h-[100px] flex flex-col items-center justify-center">
+                    {currentUrl ? (
+                      <>
+                        <div className="relative w-full aspect-video max-h-24 rounded overflow-hidden bg-white">
                           <img
-                            src={logoFullUrl(logoConfig[key as keyof LogoConfig])}
+                            src={logoFullUrl(currentUrl)}
                             alt={`Current ${config.label}`}
                             className="w-full h-full object-contain"
                           />
                         </div>
-                        <button
-                          onClick={() => handleRemoveLogo(key as keyof LogoConfig)}
-                          className="mt-2 text-red-600 hover:text-red-700 text-sm flex items-center gap-1 mx-auto"
-                        >
-                          <FaTrash className="w-3 h-3" />
-                          Remove
-                        </button>
-                      </div>
+                        <div className="mt-3 flex items-center gap-2 w-full justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemove(key)}
+                            className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
+                          >
+                            <FaTrash className="w-3.5 h-3.5" />
+                            Remove
+                          </button>
+                        </div>
+                      </>
                     ) : (
-                      <div className="text-center text-gray-500 py-8">
-                        <FaImage className="mx-auto text-2xl mb-2" />
-                        <p className="text-sm">No {config.label.toLowerCase()} uploaded</p>
-                      </div>
+                      <>
+                        <p className="text-xs text-slate-500 mb-2">{config.spec}</p>
+                        <p className="text-xs text-slate-400 mb-2">
+                          {config.formats.join(", ")} · max {config.maxSizeMB}MB
+                        </p>
+                        <input
+                          ref={(el) => {
+                            inputRefs.current[key] = el;
+                          }}
+                          type="file"
+                          accept={config.formats.map((f) => `.${f}`).join(",")}
+                          className="hidden"
+                          id={`file-${key}`}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleUpload(key, f);
+                          }}
+                          disabled={!!isUploading}
+                        />
+                        <label
+                          htmlFor={`file-${key}`}
+                          className={`cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                            isUploading
+                              ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                              : "bg-slate-800 text-white hover:bg-slate-700"
+                          }`}
+                        >
+                          {isUploading ? (
+                            <>
+                              <span className="animate-spin inline-block w-4 h-4 border-2 border-slate-400 border-t-white rounded-full" />
+                              Uploading…
+                            </>
+                          ) : (
+                            <>
+                              <FaUpload className="w-3.5 h-3.5" />
+                              Choose file
+                            </>
+                          )}
+                        </label>
+                      </>
                     )}
                   </div>
+
+                  {currentUrl && (
+                    <div className="flex justify-center">
+                      <input
+                        ref={(el) => {
+                          inputRefs.current[key] = el;
+                        }}
+                        type="file"
+                        accept={config.formats.map((f) => `.${f}`).join(",")}
+                        className="hidden"
+                        id={`replace-${key}`}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleUpload(key, f);
+                        }}
+                        disabled={!!isUploading}
+                      />
+                      <label
+                        htmlFor={`replace-${key}`}
+                        className={`cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition ${
+                          isUploading ? "opacity-60 cursor-not-allowed" : ""
+                        }`}
+                      >
+                        {isUploading ? (
+                          "Uploading…"
+                        ) : (
+                          <>
+                            <FaUpload className="w-3 h-3" />
+                            Replace
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          </div>
-        ))}
-
-        {/* Upload Button */}
-        <div className="flex justify-end mt-6">
-          <button
-            onClick={handleUpload}
-            disabled={uploading || Object.keys(file).filter(k => file[k]).length === 0}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <FaUpload className="w-4 h-4" />
-            {uploading ? 'Uploading...' : 'Upload Selected Logos'}
-          </button>
-        </div>
+            );
+          }
+        )}
       </div>
 
-      {/* Logo Usage Guidelines */}
-      <div className="bg-blue-50 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-blue-800 mb-4">Logo Guidelines</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-700">
-          <div>
-            <h4 className="font-medium mb-2">Main Logo</h4>
-            <ul className="space-y-1">
-              <li>• Used in header, branding, and main UI</li>
-              <li>• Recommended: 200x80px, PNG/SVG preferred</li>
-              <li>• Required for professional appearance</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-medium mb-2">KRA eTIMS QR Code</h4>
-            <ul className="space-y-1">
-              <li>• Required for Kenya tax compliance</li>
-              <li>• Must be valid QR code from KRA</li>
-              <li>• Used on receipts and invoices</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-medium mb-2">Receipt Logo</h4>
-            <ul className="space-y-1">
-              <li>• Displayed on receipts and invoices</li>
-              <li>• Should be high contrast for printing</li>
-              <li>• Recommended: 150x60px</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-medium mb-2">Favicon</h4>
-            <ul className="space-y-1">
-              <li>• Small icon for browser tabs</li>
-              <li>• Should be simple and recognizable</li>
-              <li>• Recommended: 32x32px, ICO/PNG</li>
-            </ul>
-          </div>
-        </div>
+      <div className="mt-8 rounded-xl bg-slate-50 border border-slate-200 p-5">
+        <h3 className="font-semibold text-slate-800 mb-2">Tips</h3>
+        <ul className="text-sm text-slate-600 space-y-1">
+          <li>• Main logo is shown in the sidebar and across the app—use a clear, recognizable image.</li>
+          <li>• Receipt logo is used on printed and PDF receipts; high contrast works best.</li>
+          <li>• Favicon should be simple and readable at 32×32px.</li>
+          <li>• After changing logos, refresh the page or navigate away and back to see updates everywhere.</li>
+        </ul>
       </div>
     </div>
   );
-} 
+}

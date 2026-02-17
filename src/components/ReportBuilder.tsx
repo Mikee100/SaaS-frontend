@@ -28,7 +28,9 @@ import {
   applyPdfBusinessHeader,
   applyPdfFooterAndPageNumbers,
   type PdfTemplate,
+  preparePdfWatermark,
 } from '@/utils/pdfTemplate';
+import { getFullAssetUrl } from '@/utils/logoUrl';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 

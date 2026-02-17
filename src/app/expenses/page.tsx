@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import { useTenant } from '@/hooks/useTenant';
+import { useAppPreferences } from '@/hooks/useAppPreferences';
 import {
   getPdfDocOptions,
   getPdfMargin,
@@ -17,7 +18,9 @@ import {
   getPdfTableColors,
   getPdfCurrency,
   type PdfTemplate,
+  preparePdfWatermark,
 } from '@/utils/pdfTemplate';
+import { getFullAssetUrl } from '@/utils/logoUrl';
 import Spinner from '@/components/Spinner';
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -175,7 +178,16 @@ export default function ExpensesPage() {
     category: 'other',
     expenseType: 'one_time',
   });
+  const { preferences: appPrefs } = useAppPreferences();
   const [exportType, setExportType] = useState<'csv' | 'pdf'>('csv');
+  const hasAppliedExportPref = React.useRef(false);
+
+  // Apply saved default export format once when preferences load
+  useEffect(() => {
+    if (hasAppliedExportPref.current) return;
+    hasAppliedExportPref.current = true;
+    setExportType(appPrefs.reportingDefaultExportFormat);
+  }, [appPrefs.reportingDefaultExportFormat]);
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
   const [salaryAssigning, setSalaryAssigning] = useState(false);
   const [salarySchemes, setSalarySchemes] = useState<SalaryScheme[]>([]);
@@ -360,7 +372,7 @@ export default function ExpensesPage() {
     }
   }, [activeTab, search, branchFilter, expenseTypeFilter]);
 
-  const handleDownloadReport = () => {
+  const handleDownloadReport = async () => {
     if (filteredExpenses.length === 0) {
       setError('No expenses to export');
       return;
@@ -417,6 +429,7 @@ export default function ExpensesPage() {
       const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
       const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+      await preparePdfWatermark(doc, getFullAssetUrl(tenantData?.watermark as string | null | undefined));
       let yPos = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
       doc.setFontSize(fontSize + 4);

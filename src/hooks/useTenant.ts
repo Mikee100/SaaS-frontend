@@ -9,6 +9,9 @@ export interface Tenant {
   phone?: string;
   address?: string;
   logo?: string;
+  logoUrl?: string;
+  receiptLogo?: string;
+  favicon?: string;
   [key: string]: unknown;
 }
 

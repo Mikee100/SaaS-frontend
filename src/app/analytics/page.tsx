@@ -78,7 +78,11 @@ export default function AnalyticsPage() {
   const canViewAnalytics = hasPermission(user, 'view_analytics');
 
   // Fetch analytics data using React Query - parallel queries with shared cache
-  const [trendsTimeRange, setTrendsTimeRange] = useState<'7d' | '30d' | '90d' | '6m' | '1y'>('30d');
+  const [trendsTimeRange, setTrendsTimeRange] = useState<'7d' | '30d' | '90d' | '6m' | '1y'>(() => {
+    if (typeof window === 'undefined') return '30d';
+    const stored = window.localStorage.getItem('analyticsTrendsRange') as '7d' | '30d' | '90d' | '6m' | '1y' | null;
+    return stored || '30d';
+  });
 
   const { data: basicData, isLoading: basicLoading } = useQuery({
     queryKey: ['analytics', 'basic'],
@@ -571,13 +575,23 @@ export default function AnalyticsPage() {
         {activeTab === 'trends' && (
           <div className="space-y-4">
             {/* Time Range Selector */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900">Sales Trends Analysis</h2>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Sales Trends Analysis</h2>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Comparisons below use the selected period vs the previous period.
+                </p>
+              </div>
               <div className="flex gap-2">
                 {(['7d', '30d', '90d', '6m', '1y'] as const).map((range) => (
                   <button
                     key={range}
-                    onClick={() => setTrendsTimeRange(range)}
+                    onClick={() => {
+                      setTrendsTimeRange(range);
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.setItem('analyticsTrendsRange', range);
+                      }
+                    }}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                       trendsTimeRange === range
                         ? 'bg-blue-600 text-white'

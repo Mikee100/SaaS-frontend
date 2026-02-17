@@ -42,6 +42,7 @@ export type TenantForPdf = {
   contactPhone?: string;
   contactEmail?: string;
   currency?: string;
+  watermark?: string | null;
   [key: string]: unknown;
 };
 
@@ -208,4 +209,103 @@ export function getPdfTableColors(template: PdfTemplate | null | undefined) {
 /** Currency symbol/code for reports (tenant or template) */
 export function getPdfCurrency(tenant: TenantForPdf | null | undefined, template: PdfTemplate | null | undefined): string {
   return (tenant as TenantForPdf)?.currency || (template?.currency as string) || 'KES';
+}
+
+/**
+ * Load image from URL (e.g. tenant watermark) and return as data URL, or null on failure.
+ * Caller should pass full asset URL (e.g. from getFullAssetUrl(tenant.watermark)).
+ */
+function loadImageAsDataUrl(url: string): Promise<string | null> {
+  if (typeof fetch === 'undefined') return Promise.resolve(null);
+  return fetch(url, { credentials: 'include', mode: 'cors' })
+    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('Failed to load image'))))
+    .then(
+      (blob) =>
+        new Promise<string | null>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        })
+    )
+    .catch(() => null);
+}
+
+/** Draw watermark on current page only (background). */
+function drawWatermarkOnCurrentPage(
+  doc: jsPDF,
+  dataUrl: string,
+  format: 'JPEG' | 'PNG',
+  GState: new (p: { opacity?: number }) => unknown
+): void {
+  const internal = (doc as unknown as { internal: { pageSize: { getWidth: () => number; getHeight: () => number } } }).internal;
+  const pageWidth = internal.pageSize.getWidth();
+  const pageHeight = internal.pageSize.getHeight();
+  const size = Math.min(pageWidth, pageHeight) * 0.4;
+  const x = (pageWidth - size) / 2;
+  const y = (pageHeight - size) / 2;
+  try {
+    if (GState) doc.setGState(new GState({ opacity: 0.12 }) as never);
+    doc.addImage(dataUrl, format, x, y, size, size);
+    if (GState) doc.setGState(new GState({ opacity: 1 }) as never);
+  } catch {
+    doc.addImage(dataUrl, format, x, y, size, size);
+  }
+}
+
+/**
+ * Prepare PDF so watermark is drawn as background on every page. Call once right after creating doc, before any content.
+ */
+export async function preparePdfWatermark(doc: jsPDF, watermarkUrl: string | null | undefined): Promise<void> {
+  if (!watermarkUrl || typeof watermarkUrl !== 'string' || !watermarkUrl.startsWith('http')) return;
+  const dataUrl = await loadImageAsDataUrl(watermarkUrl);
+  if (!dataUrl) return;
+
+  const format = dataUrl.indexOf('image/jpeg') !== -1 || dataUrl.indexOf('image/jpg') !== -1 ? 'JPEG' : 'PNG';
+  const JsPDF = (doc as unknown as { constructor: { GState?: new (p: { opacity?: number }) => unknown } }).constructor;
+  const GState = JsPDF?.GState;
+  if (!GState) return;
+
+  const draw = () => drawWatermarkOnCurrentPage(doc, dataUrl, format, GState);
+  draw(); // page 1
+
+  const internal = (doc as unknown as { internal: { events?: { subscribe: (ev: string, fn: () => void) => void } } }).internal;
+  if (internal?.events?.subscribe) {
+    internal.events.subscribe('addPage', () => draw());
+  }
+}
+
+/**
+ * Apply tenant watermark image to every page of the PDF.
+ * Pass full watermark URL (e.g. getFullAssetUrl(tenant.watermark)). No-op if url is empty.
+ * Call this after all content and footer are added, before save/output.
+ */
+export async function applyPdfWatermark(doc: jsPDF, watermarkUrl: string | null | undefined): Promise<void> {
+  if (!watermarkUrl || typeof watermarkUrl !== 'string' || !watermarkUrl.startsWith('http')) return;
+  const dataUrl = await loadImageAsDataUrl(watermarkUrl);
+  if (!dataUrl) return;
+
+  const format = dataUrl.indexOf('image/jpeg') !== -1 || dataUrl.indexOf('image/jpg') !== -1 ? 'JPEG' : 'PNG';
+  const pageCount = doc.getNumberOfPages();
+  const JsPDF = (doc as unknown as { constructor: { GState?: new (p: { opacity?: number }) => unknown } }).constructor;
+  const GState = JsPDF?.GState;
+
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    // Smaller, subtle watermark that doesn’t cover core content
+    const size = Math.min(pageWidth, pageHeight) * 0.35;
+    const x = (pageWidth - size) / 2;
+    const y = (pageHeight - size) / 2;
+
+    try {
+      // Very low opacity so content remains clearly readable
+      if (GState) doc.setGState(new GState({ opacity: 0.06 }) as never);
+      doc.addImage(dataUrl, format, x, y, size, size);
+      if (GState) doc.setGState(new GState({ opacity: 1 }) as never);
+    } catch {
+      doc.addImage(dataUrl, format, x, y, size, size);
+    }
+  }
 }

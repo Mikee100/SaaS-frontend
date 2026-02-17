@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useTenant } from '@/hooks/useTenant';
+import { useUser } from '@/components/UserContext';
 import BranchSwitcher from '@/components/BranchSwitcher';
 import QuickActions from './QuickActions';
 import { useQuery } from '@tanstack/react-query';
@@ -275,7 +276,7 @@ function MetricCard({ title, value, unit, trend }: { title: string; value: numbe
   return (
     <motion.div 
       whileHover={{ scale: 1.05 }}
-      className="bg-gradient-to-br from-gray-50 to-white dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow duration-200"
+      className="rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800/60 p-4 shadow-sm hover:shadow-md transition-shadow duration-200"
     >
       <p className="text-xs text-gray-600 dark:text-slate-400 mb-2 font-medium uppercase tracking-wide">{title}</p>
       <div className="flex items-end justify-between">
@@ -304,7 +305,8 @@ function formatChartData(data: Record<string, number>) {
 
 export default function DashboardPage() {
   const { data: tenant, isLoading: tenantLoading } = useTenant();
-  const { loading: limitsLoading } = usePlanLimits();
+  const { data: planLimits, loading: limitsLoading } = usePlanLimits();
+  const { user } = useUser();
 
   // Fetch stock threshold configuration
   const { data: stockConfig } = useQuery({
@@ -449,6 +451,11 @@ export default function DashboardPage() {
 
   const showPriorities = priorities.length > 0;
 
+  const isOwnerOrManager =
+    user?.isSuperadmin ||
+    user?.roles?.includes('owner') ||
+    user?.roles?.includes('manager');
+
   const loading = tenantLoading || analyticsLoading || limitsLoading;
 
   if (loading || limitsLoading) {
@@ -477,6 +484,23 @@ export default function DashboardPage() {
             <p className="text-gray-600 dark:text-slate-400 mt-1 text-base">
               Is your business healthy today and do you need to act on anything right now?
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+              <span>
+                Data for your current branch
+              </span>
+              {isOwnerOrManager && planLimits && (
+                <>
+                  <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-slate-600" />
+                  <span className="font-medium">
+                    Plan: {planLimits.currentPlan}
+                  </span>
+                  <span className="hidden sm:inline">
+                    · {planLimits.usage.branches.current}/{planLimits.usage.branches.limit} branches,{" "}
+                    {planLimits.usage.users.current}/{planLimits.usage.users.limit} users
+                  </span>
+                </>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <BranchSwitcher />
@@ -627,8 +651,12 @@ export default function DashboardPage() {
             <QuickActions lowStockCount={lowStockCount} />
           </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {/* Performance */}
+        <section className="mb-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-3">
+            Performance
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           <StatCard
             icon={<FiDollarSign className="w-5 h-5" />}
             label="Total Sales (all time)"
@@ -653,10 +681,8 @@ export default function DashboardPage() {
             value={analyticsData?.totalCustomers?.toLocaleString() || '0'}
             color="purple"
           />
-        </div>
-
-          {/* Additional Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <StatCard
               icon={<FiShoppingCart className="w-5 h-5" />}
               label="Avg Order Value"
@@ -682,12 +708,12 @@ export default function DashboardPage() {
               color="indigo"
             />
           </div>
+          </section>
 
-          {/* Revenue & Growth Section */}
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <FiTrendingUp className="w-5 h-5 text-indigo-600" />
-              Sales Trends by Branch
+          {/* Sales trends */}
+          <section className="mb-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-3">
+              Sales trends by branch
             </h2>
             {analyticsData?.branches && analyticsData.branches.length > 0 ? (
               analyticsData.branches.map((branch) => (
@@ -698,14 +724,13 @@ export default function DashboardPage() {
                     <motion.div 
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex flex-col bg-gradient-to-br from-white to-indigo-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-indigo-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                      className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 shadow-sm p-5 min-h-[240px] hover:shadow-md transition-shadow duration-200"
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
-                          <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-                          Daily Sales
+<span className="text-sm font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
+                          Daily sales
                         </span>
-                        <span className="text-[10px] text-gray-500 bg-indigo-100 px-2 py-1 rounded-full">
+                        <span className="text-[10px] text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-full">
                           {Object.keys(analyticsData.branchSalesByDay?.[branch.id] || {}).length} days
                         </span>
                       </div>
@@ -726,14 +751,13 @@ export default function DashboardPage() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.1 }}
-                      className="flex flex-col bg-gradient-to-br from-white to-emerald-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-emerald-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                      className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 shadow-sm p-5 min-h-[240px] hover:shadow-md transition-shadow duration-200"
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-bold text-emerald-700 flex items-center gap-2">
-                          <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                          Weekly Sales
+<span className="text-sm font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
+                          Weekly sales
                         </span>
-                        <span className="text-[10px] text-gray-500 bg-emerald-100 px-2 py-1 rounded-full">
+                        <span className="text-[10px] text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-full">
                           {Object.keys(analyticsData.branchSalesByWeek?.[branch.id] || {}).length} weeks
                         </span>
                       </div>
@@ -754,14 +778,13 @@ export default function DashboardPage() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.2 }}
-                      className="flex flex-col bg-gradient-to-br from-white to-purple-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-purple-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                      className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 shadow-sm p-5 min-h-[240px] hover:shadow-md transition-shadow duration-200"
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2">
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                          Monthly Sales
+<span className="text-sm font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
+                          Monthly sales
                         </span>
-                        <span className="text-[10px] text-gray-500 bg-purple-100 px-2 py-1 rounded-full">
+                        <span className="text-[10px] text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-full">
                           {Object.keys(analyticsData.branchSalesByMonth?.[branch.id] || {}).length} months
                         </span>
                       </div>
@@ -789,14 +812,13 @@ export default function DashboardPage() {
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col bg-gradient-to-br from-white to-indigo-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-indigo-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                    className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 shadow-sm p-5 min-h-[240px] hover:shadow-md transition-shadow duration-200"
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
-                        <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-                        Daily Sales
-                      </span>
-                      <span className="text-[10px] text-gray-500 bg-indigo-100 px-2 py-1 rounded-full">
+<span className="text-sm font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
+                          Daily sales
+                        </span>
+                        <span className="text-[10px] text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-full">
                         {Object.keys(salesByDay).length} days
                       </span>
                     </div>
@@ -817,14 +839,13 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="flex flex-col bg-gradient-to-br from-white to-emerald-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-emerald-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                    className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 shadow-sm p-5 min-h-[240px] hover:shadow-md transition-shadow duration-200"
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-bold text-emerald-700 flex items-center gap-2">
-                        <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                        Weekly Sales
-                      </span>
-                      <span className="text-[10px] text-gray-500 bg-emerald-100 px-2 py-1 rounded-full">
+<span className="text-sm font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
+                          Weekly sales
+                        </span>
+                        <span className="text-[10px] text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-full">
                         {Object.keys(salesByWeek).length} weeks
                       </span>
                     </div>
@@ -845,14 +866,13 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="flex flex-col bg-gradient-to-br from-white to-purple-50 dark:from-slate-800 dark:to-slate-800 dark:border-slate-600 rounded-xl border border-purple-200 shadow-md p-5 min-h-[240px] hover:shadow-xl transition-all duration-300"
+                    className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 shadow-sm p-5 min-h-[240px] hover:shadow-md transition-shadow duration-200"
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2">
-                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                        Monthly Sales
-                      </span>
-                      <span className="text-[10px] text-gray-500 bg-purple-100 px-2 py-1 rounded-full">
+<span className="text-sm font-semibold text-gray-700 dark:text-slate-300 flex items-center gap-2">
+                          Monthly sales
+                        </span>
+                        <span className="text-[10px] text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-full">
                         {Object.keys(salesByMonth).length} months
                       </span>
                     </div>
@@ -871,15 +891,18 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
-          </div>
+          </section>
 
-          {/* Inventory Overview */}
+          {/* Inventory & risk */}
+          <section className="mb-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-3">
+              Inventory & risk
+            </h2>
           {analyticsData?.inventoryAnalytics && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-lg p-5 mb-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <FiPackage className="w-5 h-5 text-amber-600" />
-                Inventory Overview
-              </h2>
+            <div className="bg-white dark:bg-slate-800/60 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-5 mb-4">
+              <h3 className="text-base font-semibold text-gray-800 dark:text-slate-200 mb-4">
+                Inventory overview
+              </h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <MetricCard
                   title="Low Stock Items"
@@ -901,8 +924,6 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
-
-          {/* Sales Targets Section */}
           <div className="mb-6">
             <SalesTarget
               currentRevenue={analyticsData?.totalRevenue || 0}
@@ -914,9 +935,8 @@ export default function DashboardPage() {
           {/* Branch Top Products Section */}
           {analyticsData?.branches && analyticsData.branches.length > 0 && analyticsData.branchTopProducts && (
             <div className="mb-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <FiPackage className="w-5 h-5 text-purple-600" />
-                Top Products by Branch
+              <h2 className="text-base font-semibold text-gray-800 dark:text-slate-200 mb-4">
+                Top products by branch
               </h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {analyticsData.branches.map((branch) => (
@@ -930,20 +950,20 @@ export default function DashboardPage() {
                     {analyticsData.branchTopProducts?.[branch.id] && analyticsData.branchTopProducts[branch.id].length > 0 ? (
                       <div className="space-y-3">
                         {analyticsData.branchTopProducts[branch.id].slice(0, 3).map((product, idx) => (
-                          <div key={idx} className="flex justify-between items-center p-3 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:border-indigo-200 hover:shadow-sm transition-all duration-200">
+                          <div key={idx} className="flex justify-between items-center p-3 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800/60 hover:shadow-sm transition-shadow">
                             <div className="flex-1">
                               <div className="text-sm font-semibold text-gray-900 mb-1">{product.name}</div>
                               <div className="text-xs text-gray-500 flex items-center gap-2">
                                 <span>{product.sales} units sold</span>
                                 {product.margin !== undefined && (
-                                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-medium">
+                                  <span className="text-[10px] font-medium text-gray-600 dark:text-slate-400">
                                     {(product.margin * 100).toFixed(1)}% margin
                                   </span>
                                 )}
                               </div>
                             </div>
                             <div className="text-right ml-4">
-                              <div className="text-base font-bold text-emerald-600">Ksh {product.revenue.toLocaleString()}</div>
+                              <div className="text-base font-bold text-gray-900 dark:text-slate-100">Ksh {product.revenue.toLocaleString()}</div>
                             </div>
                           </div>
                         ))}
@@ -960,8 +980,8 @@ export default function DashboardPage() {
           {/* Branch Comparison Section */}
           {analyticsData?.branches && analyticsData.branches.length > 1 && (
             <div className="mb-4">
-              <h2 className="text-lg font-semibold text-gray-800 mb-2">Branch Comparison</h2>
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-3">Branch comparison</h2>
+              <div className="bg-white dark:bg-slate-800/60 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-4">
                 <BranchComparisonChart
                   branchData={analyticsData.branches.map(branch => ({
                     branchName: branch.name,
@@ -978,7 +998,7 @@ export default function DashboardPage() {
           {/* Branch Monthly Sales Comparison Section */}
           {branchMonthlyComparison && branchMonthlyComparison.months && branchMonthlyComparison.months.length > 0 ? (
             <div className="mb-6">
-              <div className="bg-white rounded-xl border border-gray-200 shadow-lg p-6">
+              <div className="bg-white dark:bg-slate-800/60 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-6">
                 <BranchMonthlyComparisonChart
                   data={branchMonthlyComparison}
                   height={400}
@@ -988,43 +1008,40 @@ export default function DashboardPage() {
             </div>
           ) : null}
 
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            {/* Main Content Area */}
-
-
-            {/* Sidebar */}
-            <div className="space-y-3">
-              {/* Low Stock Notification */}
+          {/* Low stock (under Inventory & risk) */}
               {lowStockProducts.length > 0 && (
-                <div className="bg-white rounded-md border border-gray-200 p-3">
-                  <div className="flex items-center gap-1 mb-2">
-                    <FiAlertCircle className="w-4 h-4 text-amber-500" />
-                    <h2 className="text-base font-semibold text-gray-800">Low Stock Alert</h2>
+                <div className="bg-white dark:bg-slate-800/60 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FiAlertCircle className="w-4 h-4 text-gray-500 dark:text-slate-400" />
+                    <h3 className="text-base font-semibold text-gray-800 dark:text-slate-200">Low stock</h3>
                   </div>
-                  <p className="text-xs text-gray-600 mb-2">
+                  <p className="text-xs text-gray-600 dark:text-slate-400 mb-2">
                     {lowStockProducts.length} product{lowStockProducts.length > 1 ? 's' : ''} below {stockThreshold} in stock.
                   </p>
                   <div className="space-y-1">
                     {lowStockProducts.slice(0, 3).map((p, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-xs">
+                      <div key={idx} className="flex justify-between items-center text-xs text-gray-700 dark:text-slate-300">
                         <span className="font-medium">{p.name}</span>
-                        <span className="text-red-600">{p.sales ?? 0} left</span>
+                        <span>{p.sales ?? 0} left</span>
                       </div>
                     ))}
                   </div>
                   {lowStockProducts.length > 3 && (
-                    <p className="text-[10px] text-gray-500 mt-1">
-                      +{lowStockProducts.length - 3} more products with low stock
+                    <p className="text-[10px] text-gray-500 dark:text-slate-500 mt-1">
+                      +{lowStockProducts.length - 3} more with low stock
                     </p>
                   )}
-                  <button className="w-full mt-2 px-2 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-xs">
-                    Manage Inventory
-                  </button>
+                  <a
+                    href="/products/reports/low-stock-alerts"
+                    className="mt-3 block w-full text-center px-2 py-2 rounded-lg border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 text-xs font-medium transition-colors"
+                  >
+                    View low-stock report
+                  </a>
                 </div>
               )}
-            </div>
-          </div>
+          </section>
+
+          {/* Sales Targets Section */}
         </div>
       </div>
   );

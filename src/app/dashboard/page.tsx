@@ -8,6 +8,7 @@ import AuthGuard from '@/components/AuthGuard';
 import LogoEnforcement from '@/components/LogoEnforcement';
 import BranchSwitcher from '@/components/BranchSwitcher';
 import QuickActions from '../QuickActions';
+import { useAppPreferences, preferenceDateRangeToDashboard } from '@/hooks/useAppPreferences';
 import {
   FiTrendingUp,
   FiRefreshCw,
@@ -87,7 +88,23 @@ type PriorityItem = {
 
 
 export default function DashboardPage() {
-  const [dateRange, setDateRange] = useState('30d');
+  const { preferences: appPrefs, loading: prefsLoading } = useAppPreferences();
+  const [dateRange, setDateRange] = useState(() => {
+    if (typeof window === 'undefined') return '30d';
+    return window.localStorage.getItem('dashboardDateRange') || '30d';
+  });
+
+  // Apply saved default date range once when preferences first load (don't overwrite user's later choice)
+  const hasAppliedDatePref = React.useRef(false);
+  useEffect(() => {
+    if (prefsLoading || hasAppliedDatePref.current) return;
+    hasAppliedDatePref.current = true;
+    const preferred = preferenceDateRangeToDashboard(appPrefs.dashboardDefaultDateRange);
+    setDateRange(preferred);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('dashboardDateRange', preferred);
+    }
+  }, [prefsLoading, appPrefs.dashboardDefaultDateRange]);
 
   const {
     data,
@@ -96,6 +113,7 @@ export default function DashboardPage() {
     refetch,
   } = useQuery({
     queryKey: ['dashboard', dateRange],
+    refetchInterval: appPrefs.dashboardAutoRefresh ? 60 * 1000 : false,
     queryFn: async () => {
       // Fetch sales trends
       let trends: { data: SalesTrends | null } = { data: null };
@@ -292,7 +310,13 @@ export default function DashboardPage() {
                 <div className="relative w-full sm:w-48">
                   <select
                     value={dateRange}
-                    onChange={(e) => setDateRange(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setDateRange(value);
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.setItem('dashboardDateRange', value);
+                      }
+                    }}
                     className="block w-full rounded-lg border-0 bg-white dark:bg-slate-800 py-2.5 pl-4 pr-10 text-sm shadow-sm ring-1 ring-gray-200 dark:ring-slate-600 text-gray-900 dark:text-slate-100 transition-all hover:ring-gray-300 dark:hover:ring-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
                   >
                     <option value="7d">Last 7 days</option>

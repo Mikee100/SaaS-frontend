@@ -15,7 +15,9 @@ import {
   getPdfTableColors,
   getPdfCurrency,
   type PdfTemplate,
+  preparePdfWatermark,
 } from '@/utils/pdfTemplate';
+import { getFullAssetUrl } from '@/utils/logoUrl';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -237,7 +239,7 @@ export default function ProductSalesReportPage() {
     };
   }, [filteredSalesData]);
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
     const currency = getPdfCurrency(tenantData, pdfTemplate);
     const margin = getPdfMargin(pdfTemplate);
@@ -245,6 +247,7 @@ export default function ProductSalesReportPage() {
     const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
     const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    await preparePdfWatermark(doc, getFullAssetUrl(tenantData?.watermark as string | null | undefined));
     let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
     const reportTitle = `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Sales Report`;
@@ -793,18 +796,20 @@ export default function ProductSalesReportPage() {
           </section>
         )}
 
-        {/* Sales Forecast (Overview) */}
+        {/* Sales Projection (Overview) */}
         {activeTab === 'overview' && metrics.forecast?.forecast_months?.length && metrics.forecast?.forecast_sales?.length && (
           <section className="mb-4">
             <div className="bg-white rounded-md shadow p-3 flex flex-col">
-              <h2 className="text-base font-bold text-gray-800 mb-2">Sales Forecast (Next 6 Months)</h2>
-              <p className="text-xs text-gray-500 mb-2">Predicted transaction count based on recent trend.</p>
+              <h2 className="text-base font-bold text-gray-800 mb-1">Sales Projection (Next 6 Months)</h2>
+              <p className="text-xs text-gray-500 mb-1">
+                Simple projection based on your recent sales history. Use as a rough guide alongside your own judgment.
+              </p>
               <div className="h-48 bg-gray-50 rounded p-2">
                 <Line
                   data={{
                     labels: metrics.forecast.forecast_months,
                     datasets: [{
-                      label: 'Forecast (transactions)',
+                      label: 'Projected transactions',
                       data: metrics.forecast.forecast_sales,
                       borderColor: '#059669',
                       backgroundColor: 'rgba(5, 150, 105, 0.1)',
@@ -819,7 +824,7 @@ export default function ProductSalesReportPage() {
                       legend: { display: false },
                       tooltip: {
                         callbacks: {
-                          label: (ctx) => `Forecast: ${ctx.parsed.y} transactions`,
+                          label: (ctx) => `Projected: ${ctx.parsed.y} transactions`,
                         }
                       }
                     },
