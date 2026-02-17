@@ -45,6 +45,9 @@ export default function VariationManager({
   const [error, setError] = useState('');
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showQuickInputModal, setShowQuickInputModal] = useState(false);
+  const [quickInputType, setQuickInputType] = useState<{ name: string; unit: string; attributeName: string } | null>(null);
+  const [quickInputValues, setQuickInputValues] = useState<string>('');
   const [editingVariation, setEditingVariation] = useState<string | null>(null);
 
   // Generate variations state
@@ -139,6 +142,100 @@ export default function VariationManager({
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create variation');
+    }
+  };
+
+  const handleQuickInput = async () => {
+    if (!quickInputType || !quickInputValues.trim()) {
+      setError('Please enter at least one value');
+      return;
+    }
+
+    try {
+      setError('');
+      const values = quickInputValues
+        .split(/[,\n]/)
+        .map(v => v.trim())
+        .filter(v => v.length > 0);
+
+      if (values.length === 0) {
+        setError('Please enter at least one value');
+        return;
+      }
+
+      // Check if attribute exists (case-insensitive)
+      let attribute = attributes.find(
+        a => a.name.toLowerCase() === quickInputType.attributeName.toLowerCase()
+      );
+      
+      if (!attribute) {
+        // Create the attribute first
+        const newAttr = await productAttributesApi.create({
+          name: quickInputType.attributeName,
+          displayName: quickInputType.name,
+          type: quickInputType.unit && ['kg', 'g', 'm'].includes(quickInputType.unit) ? 'number' : 'text',
+          values: [],
+        });
+        // Reload to get the new attribute with its structure
+        await loadData();
+        attribute = attributes.find(a => a.id === newAttr.id) || newAttr;
+      }
+
+      // Add values to attribute if they don't exist
+      const existingValues = (attribute.values || []).map(v => v.value.toLowerCase());
+      for (const value of values) {
+        const valueWithUnit = quickInputType.unit ? `${value} ${quickInputType.unit}` : value;
+        if (!existingValues.includes(valueWithUnit.toLowerCase())) {
+          try {
+            await productAttributesApi.addValue(attribute.id, { value: valueWithUnit });
+          } catch (err) {
+            // Value might already exist, continue
+            console.warn(`Value ${valueWithUnit} might already exist`);
+          }
+        }
+      }
+
+      // Reload attributes to get updated values
+      await loadData();
+      
+      // Get fresh attribute data
+      const freshAttributes = await productAttributesApi.getAll(true);
+      const freshAttribute = freshAttributes.find(
+        a => a.name.toLowerCase() === quickInputType.attributeName.toLowerCase()
+      );
+
+      if (!freshAttribute) {
+        throw new Error('Failed to load attribute after creation');
+      }
+
+      // Create variations for each value
+      for (const value of values) {
+        const valueWithUnit = quickInputType.unit ? `${value} ${quickInputType.unit}` : value;
+        const skuSuffix = valueWithUnit.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+        const sku = baseSku ? `${baseSku}-${skuSuffix}` : `VAR-${skuSuffix}`;
+
+        try {
+          await productVariationsApi.create(productId, {
+            productId,
+            sku,
+            attributes: { [freshAttribute.name]: valueWithUnit },
+            price: basePrice,
+            cost: baseCost,
+            stock: 0,
+            branchId,
+          });
+        } catch (err) {
+          // Skip if variation already exists
+          console.warn(`Variation ${sku} already exists or failed to create`);
+        }
+      }
+
+      await loadData();
+      setShowQuickInputModal(false);
+      setQuickInputType(null);
+      setQuickInputValues('');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create variations');
     }
   };
 
@@ -241,30 +338,93 @@ export default function VariationManager({
         </div>
       )}
 
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <div>
-          <h3 className="text-base font-semibold text-gray-900">Variations</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {variations.length === 0 
-              ? 'Create variations to offer different options for this product'
-              : `${variations.length} variation${variations.length !== 1 ? 's' : ''} created`}
-          </p>
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Variations</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {variations.length === 0 
+                ? 'Create variations to offer different options for this product'
+                : `${variations.length} variation${variations.length !== 1 ? 's' : ''} created`}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowGenerateModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+            >
+              <FaMagic className="w-3.5 h-3.5" />
+              Generate
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+            >
+              <FaPlus className="w-3.5 h-3.5" />
+              Add One
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowGenerateModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-          >
-            <FaMagic className="w-3.5 h-3.5" />
-            Generate
-          </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-          >
-            <FaPlus className="w-3.5 h-3.5" />
-            Add One
-          </button>
+        
+        {/* Quick Input Buttons */}
+        <div className="mt-3 pt-3 border-t border-gray-200">
+          <p className="text-xs text-gray-600 mb-2 font-medium">Quick Add by Type:</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                setQuickInputType({ name: 'Kilograms', unit: 'kg', attributeName: 'Weight' });
+                setShowQuickInputModal(true);
+              }}
+              className="px-3 py-1.5 text-xs bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 font-medium transition-colors"
+            >
+              Kgs
+            </button>
+            <button
+              onClick={() => {
+                setQuickInputType({ name: 'Grams', unit: 'g', attributeName: 'Weight' });
+                setShowQuickInputModal(true);
+              }}
+              className="px-3 py-1.5 text-xs bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 font-medium transition-colors"
+            >
+              Grams
+            </button>
+            <button
+              onClick={() => {
+                setQuickInputType({ name: 'Size', unit: '', attributeName: 'Size' });
+                setShowQuickInputModal(true);
+              }}
+              className="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 font-medium transition-colors"
+            >
+              Size
+            </button>
+            <button
+              onClick={() => {
+                setQuickInputType({ name: 'Color', unit: '', attributeName: 'Color' });
+                setShowQuickInputModal(true);
+              }}
+              className="px-3 py-1.5 text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-100 font-medium transition-colors"
+            >
+              Color
+            </button>
+            <button
+              onClick={() => {
+                setQuickInputType({ name: 'Length', unit: 'm', attributeName: 'Length' });
+                setShowQuickInputModal(true);
+              }}
+              className="px-3 py-1.5 text-xs bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 font-medium transition-colors"
+            >
+              Length (m)
+            </button>
+            <button
+              onClick={() => {
+                setQuickInputType({ name: 'Quantity', unit: 'pcs', attributeName: 'Quantity' });
+                setShowQuickInputModal(true);
+              }}
+              className="px-3 py-1.5 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 font-medium transition-colors"
+            >
+              Quantity
+            </button>
+          </div>
         </div>
       </div>
 
@@ -736,6 +896,100 @@ export default function VariationManager({
                   className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
                 >
                   Create Variation
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Input Modal */}
+      {showQuickInputModal && quickInputType && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-bold">Quick Add: {quickInputType.name}</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Enter values separated by commas or new lines
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowQuickInputModal(false);
+                  setQuickInputType(null);
+                  setQuickInputValues('');
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Values {quickInputType.unit && `(in ${quickInputType.unit})`}
+                </label>
+                <textarea
+                  value={quickInputValues}
+                  onChange={(e) => setQuickInputValues(e.target.value)}
+                  placeholder={
+                    quickInputType.unit === 'kg' 
+                      ? 'e.g., 1, 2, 5, 10' 
+                      : quickInputType.unit === 'g'
+                      ? 'e.g., 100, 250, 500, 1000'
+                      : quickInputType.name === 'Size'
+                      ? 'e.g., S, M, L, XL or 38, 39, 40, 41'
+                      : quickInputType.name === 'Color'
+                      ? 'e.g., Black, White, Red, Blue'
+                      : 'e.g., 1, 2, 3, 5'
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  rows={6}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Example: {quickInputType.unit === 'kg' ? '1, 2, 5' : quickInputType.name === 'Size' ? 'S, M, L' : 'Black, White, Red'}
+                </p>
+              </div>
+
+              {quickInputValues.trim() && (
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs font-medium text-gray-700 mb-2">Preview variations to be created:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {quickInputValues
+                      .split(/[,\n]/)
+                      .map(v => v.trim())
+                      .filter(v => v.length > 0)
+                      .map((value, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-1 text-xs bg-white border border-gray-300 rounded"
+                        >
+                          {value} {quickInputType.unit}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => {
+                    setShowQuickInputModal(false);
+                    setQuickInputType(null);
+                    setQuickInputValues('');
+                  }}
+                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleQuickInput}
+                  disabled={!quickInputValues.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  Create Variations
                 </button>
               </div>
             </div>
