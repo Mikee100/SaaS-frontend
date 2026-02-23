@@ -1035,7 +1035,7 @@ export default function SalesHistoryPage() {
                         {sale.isSplitPayment && sale.splitPayments ? (
                           <div className="space-y-1">
                             <div className="text-xs font-semibold text-purple-600">💳 SPLIT PAYMENT</div>
-                            {sale.splitPayments.map((payment, idx) => (
+                            {sale.splitPayments.map((payment: SplitPayment, idx: number) => (
                               <div key={idx} className="text-xs text-gray-600">
                                 {payment.method === 'cash' && (
                                   <span>💵 CASH: Ksh {payment.amount.toFixed(2)}</span>
@@ -1152,7 +1152,7 @@ export default function SalesHistoryPage() {
                     <div className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
                       <div className="font-semibold text-purple-700 mb-2">💳 Split Payment Details:</div>
                       <div className="space-y-2">
-                        {selectedSale.splitPayments.map((payment, idx) => (
+                        {selectedSale.splitPayments.map((payment: SplitPayment, idx: number) => (
                           <div key={idx} className="text-sm border-l-2 border-purple-300 pl-2">
                             {payment.method === 'cash' && (
                               <div>

@@ -339,6 +339,8 @@ export default function LogoSettings() {
             const Icon = config.icon;
             const currentUrl = logoConfig[key];
             const isUploading = uploading === key;
+            const isEtims = key === "etimsQrCode";
+            const canEditThis = isEtims ? canEditEtims : true;
 
             return (
               <div

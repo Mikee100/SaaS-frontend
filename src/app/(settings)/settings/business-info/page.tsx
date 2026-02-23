@@ -15,7 +15,7 @@ interface FormField {
 }
 
 interface BusinessInfoForm {
-  [key: string]: string | number | null;
+  [key: string]: string | number | boolean | null;
   name: string;
   businessType: string;
   contactEmail: string;
@@ -222,13 +222,14 @@ export default function BusinessInfoSettings() {
                     (field.name === 'contactPhone' && form.contactPhone && validation.phone === false) ||
                     (field.name === 'website' && form.website && validation.website === false);
     
-    // Get the value for the field, handling null/undefined for number fields
-    const getFieldValue = (fieldName: string, fieldType?: string) => {
+    // Get the value for the field, handling null/undefined and boolean (e.g. kraEnabled) for text inputs
+    const getFieldValue = (fieldName: string, fieldType?: string): string => {
       const value = form[fieldName];
       if (fieldType === 'number') {
-        return value !== null && value !== undefined ? value.toString() : '';
+        return value !== null && value !== undefined ? String(value) : '';
       }
-      return value || '';
+      if (value == null || typeof value === 'boolean') return '';
+      return String(value);
     };
     
     return (
@@ -244,7 +245,7 @@ export default function BusinessInfoSettings() {
           <textarea
             id={field.name}
             name={field.name}
-            value={getFieldValue(field.name)}
+            value={getFieldValue(field.name) as string}
             onChange={handleChange}
             rows={3}
             disabled={!canEdit}
@@ -271,7 +272,7 @@ export default function BusinessInfoSettings() {
             id={field.name}
             name={field.name}
             type="text"
-            value={getFieldValue(field.name)}
+            value={getFieldValue(field.name) as string}
             onChange={handleChange}
             disabled={!canEdit}
             readOnly={!canEdit}

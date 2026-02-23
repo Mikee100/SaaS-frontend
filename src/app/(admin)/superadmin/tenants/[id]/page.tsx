@@ -879,7 +879,7 @@ const fetchMpesaConfig = useCallback(async () => {
                   <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Country</label>
                   <select
                     value={businessKra.country ?? ''}
-                    onChange={(e) => setBusinessKra(prev => ({ ...prev, country: e.target.value || null }))}
+                    onChange={(e) => setBusinessKra(prev => ({ ...prev, country: e.target.value || undefined }))}
                     style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }}
                   >
                     <option value="">Select country</option>
