@@ -1,36 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { apiGet } from "@/utils/api";
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
-import {
-  FaUsers,
-  FaBox,
-  FaShoppingCart,
-  FaDollarSign,
-  FaDatabase,
-  FaChartLine,
-  FaArrowUp,
-  FaArrowDown,
-} from "react-icons/fa";
 
 interface PlatformStats {
   totalTenants: number;
@@ -56,75 +38,15 @@ interface TenantGrowth {
   totalTenants: number;
 }
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#84cc16', '#f97316'];
+const formatKsh = (n: number) => {
+  if (n >= 1_000_000) return `Ksh ${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `Ksh ${(n / 1_000).toFixed(1)}k`;
+  return `Ksh ${n.toFixed(0)}`;
+};
 
-// Loading skeleton component
-const StatCardSkeleton = () => (
-  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse">
-    <div className="h-4 bg-gray-200 rounded w-24 mb-4"></div>
-    <div className="h-8 bg-gray-200 rounded w-32 mb-2"></div>
-    <div className="h-3 bg-gray-200 rounded w-40"></div>
-  </div>
-);
-
-// Stat card component
-const StatCard = ({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  trend,
-  trendValue,
-  color = "blue",
-}: {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ElementType;
-  trend?: "up" | "down";
-  trendValue?: string;
-  color?: "blue" | "green" | "orange" | "purple" | "cyan";
-}) => {
-  const colorClasses = {
-    blue: "bg-blue-100 text-blue-600",
-    green: "bg-green-100 text-green-600",
-    orange: "bg-orange-100 text-orange-600",
-    purple: "bg-purple-100 text-purple-600",
-    cyan: "bg-cyan-100 text-cyan-600",
-  };
-
-  return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between mb-4">
-        <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
-          <Icon className="w-6 h-6" />
-        </div>
-        {trend && trendValue && (
-          <div
-            className={`flex items-center gap-1 text-sm font-medium ${
-              trend === "up" ? "text-green-600" : "text-orange-600"
-            }`}
-          >
-            {trend === "up" ? (
-              <FaArrowUp className="w-3 h-3" />
-            ) : (
-              <FaArrowDown className="w-3 h-3" />
-            )}
-            <span>{trendValue}</span>
-          </div>
-        )}
-      </div>
-      <h3 className="text-sm font-medium text-gray-600 mb-1">{title}</h3>
-      <p className="text-3xl font-bold text-gray-900 mb-1">
-        {typeof value === "number" && value >= 1000
-          ? `$${(value / 1000).toFixed(1)}k`
-          : typeof value === "number" && value < 1
-          ? value.toFixed(2)
-          : value}
-      </p>
-      {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
-    </div>
-  );
+const formatBytes = (bytes: number) => {
+  const gb = bytes / (1024 * 1024 * 1024);
+  return `${gb.toFixed(1)} GB`;
 };
 
 export default function SuperadminDashboard() {
@@ -133,10 +55,9 @@ export default function SuperadminDashboard() {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [revenueHistory, setRevenueHistory] = useState<RevenueHistory[]>([]);
   const [tenantGrowth, setTenantGrowth] = useState<TenantGrowth[]>([]);
-  const [loadingStats, setLoadingStats] = useState(true);
-  const [loadingCharts, setLoadingCharts] = useState(true);
+  const [loadingData, setLoadingData] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
       router.replace("/");
     }
@@ -150,404 +71,178 @@ export default function SuperadminDashboard() {
 
   const fetchAllData = async () => {
     try {
-      setLoadingStats(true);
-      setLoadingCharts(true);
-
-      // Fetch all data in parallel
+      setLoadingData(true);
       const [statsData, revenueData, growthData] = await Promise.all([
         apiGet("/admin/stats") as Promise<PlatformStats>,
         apiGet("/admin/stats/revenue-history?months=12") as Promise<RevenueHistory[]>,
         apiGet("/admin/stats/tenant-growth?months=12") as Promise<TenantGrowth[]>,
       ]);
-
       setStats(statsData);
       setRevenueHistory(revenueData);
       setTenantGrowth(growthData);
     } catch (error) {
       console.error("Failed to fetch platform statistics:", error);
     } finally {
-      setLoadingStats(false);
-      setLoadingCharts(false);
+      setLoadingData(false);
     }
   };
-
-  // Calculate trends
-  const calculateTrend = (data: number[]) => {
-    if (data.length < 2) return null;
-    const current = data[data.length - 1];
-    const previous = data[data.length - 2];
-    if (previous === 0) return null;
-    const change = ((current - previous) / previous) * 100;
-    return {
-      direction: change >= 0 ? ("up" as const) : ("down" as const),
-      value: `${Math.abs(change).toFixed(1)}%`,
-    };
-  };
-
-  const mrrTrend = revenueHistory.length >= 2
-    ? calculateTrend(revenueHistory.map((d) => d.mrr))
-    : null;
-
-  const tenantTrend = tenantGrowth.length >= 2
-    ? calculateTrend(tenantGrowth.map((d) => d.newTenants))
-    : null;
 
   if (loading || !user) return null;
 
   return (
-    <main className="p-6 bg-gray-50 min-h-screen">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Superadmin Dashboard</h1>
-        <p className="text-gray-600">Platform overview and analytics</p>
-      </div>
+    <main className="p-6 min-h-screen bg-[#fafafa]">
+      {/* Header */}
+      <header className="mb-10">
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+          Dashboard
+        </h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          Platform snapshot
+        </p>
+      </header>
 
-      {loadingStats ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {[...Array(8)].map((_, i) => (
-            <StatCardSkeleton key={i} />
-          ))}
+      {loadingData ? (
+        <div className="space-y-8">
+          <div className="h-32 bg-zinc-200/60 rounded-xl animate-pulse" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-20 bg-zinc-200/60 rounded-lg animate-pulse" />
+            ))}
+          </div>
+          <div className="h-72 bg-zinc-200/60 rounded-xl animate-pulse" />
         </div>
       ) : stats ? (
-        <>
-          {/* Stat Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <StatCard
-              title="Total Tenants"
-              value={stats.totalTenants}
-              subtitle={`${stats.activeSubscriptions} active subscriptions`}
-              icon={FaUsers}
-              color="blue"
-              trend={tenantTrend?.direction}
-              trendValue={tenantTrend?.value}
-            />
-            <StatCard
-              title="Total MRR"
-              value={`Ksh ${stats.totalMRR.toFixed(2)}`}
-              subtitle="Monthly recurring revenue"
-              icon={FaDollarSign}
-              color="green"
-              trend={mrrTrend?.direction}
-              trendValue={mrrTrend?.value}
-            />
-            <StatCard
-              title="Total Revenue"
-              value={`Ksh ${stats.totalRevenue.toFixed(2)}`}
-              subtitle="All-time revenue"
-              icon={FaChartLine}
-              color="purple"
-            />
-            <StatCard
-              title="Storage Used"
-              value={`${(stats.totalStorage / (1024 * 1024 * 1024)).toFixed(1)} GB`}
-              subtitle="Total platform storage"
-              icon={FaDatabase}
-              color="cyan"
-            />
-            <StatCard
-              title="Total Users"
-              value={stats.totalUsers}
-              subtitle="Across all tenants"
-              icon={FaUsers}
-              color="blue"
-            />
-            <StatCard
-              title="Total Products"
-              value={stats.totalProducts}
-              subtitle="Across all tenants"
-              icon={FaBox}
-              color="orange"
-            />
-            <StatCard
-              title="Total Sales"
-              value={stats.totalSales}
-              subtitle="All-time transactions"
-              icon={FaShoppingCart}
-              color="green"
-            />
-            <StatCard
-              title="Near Capacity"
-              value={stats.nearCapacityTenants}
-              subtitle="Tenants over 80% usage"
-              icon={FaDatabase}
-              color="orange"
-            />
-          </div>
-
-          {/* Charts Section */}
-          {loadingCharts ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="h-64 bg-gray-100 rounded animate-pulse"></div>
-              </div>
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="h-64 bg-gray-100 rounded animate-pulse"></div>
-              </div>
+        <div className="space-y-8">
+          {/* Hero metrics - single row, emphasis on MRR */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white border border-zinc-200/80 rounded-xl p-6">
+              <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+                MRR
+              </p>
+              <p className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900">
+                {formatKsh(stats.totalMRR)}
+              </p>
+              <p className="mt-0.5 text-sm text-zinc-500">
+                {stats.activeSubscriptions} active subscriptions
+              </p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {/* MRR Trend Chart */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  MRR Growth Trend
-                </h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={revenueHistory}>
-                    <defs>
-                      <linearGradient id="colorMrr" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis
-                      dataKey="month"
-                      stroke="#6b7280"
-                      fontSize={12}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      stroke="#6b7280"
-                      fontSize={12}
-                      tickLine={false}
-                      tickFormatter={(value) => `$${value}`}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#fff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "6px",
-                      }}
-                      formatter={(value: number) => [`$${value.toFixed(2)}`, "MRR"]}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="mrr"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      fillOpacity={1}
-                      fill="url(#colorMrr)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Revenue Trend Chart */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Monthly Revenue
-                </h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={revenueHistory}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis
-                      dataKey="month"
-                      stroke="#6b7280"
-                      fontSize={12}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      stroke="#6b7280"
-                      fontSize={12}
-                      tickLine={false}
-                      tickFormatter={(value) => `$${value}`}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#fff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "6px",
-                      }}
-                      formatter={(value: number) => [`$${value.toFixed(2)}`, "Revenue"]}
-                    />
-                    <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Tenant Growth Chart */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Tenant Growth
-                </h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={tenantGrowth}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis
-                      dataKey="month"
-                      stroke="#6b7280"
-                      fontSize={12}
-                      tickLine={false}
-                    />
-                    <YAxis stroke="#6b7280" fontSize={12} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#fff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "6px",
-                      }}
-                    />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="totalTenants"
-                      name="Total Tenants"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      dot={{ fill: "#3b82f6", r: 4 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="newTenants"
-                      name="New Tenants"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      dot={{ fill: "#10b981", r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Subscription Status Distribution */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Subscription Overview
-                </h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
-                    <div>
-                      <p className="text-sm text-gray-600">Active Subscriptions</p>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {stats.activeSubscriptions}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-blue-100 rounded-full">
-                      <FaUsers className="w-6 h-6 text-blue-600" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-green-50 rounded-lg">
-                      <p className="text-sm text-gray-600 mb-1">Total Tenants</p>
-                      <p className="text-xl font-bold text-green-600">
-                        {stats.totalTenants}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-orange-50 rounded-lg">
-                      <p className="text-sm text-gray-600 mb-1">Near Capacity</p>
-                      <p className="text-xl font-bold text-orange-600">
-                        {stats.nearCapacityTenants}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div className="bg-white border border-zinc-200/80 rounded-xl p-6">
+              <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+                Tenants
+              </p>
+              <p className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900">
+                {stats.totalTenants}
+              </p>
+              <p className="mt-0.5 text-sm text-zinc-500">
+                {stats.totalUsers} users across platform
+              </p>
             </div>
-          )}
-
-          {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <button
-                onClick={() => router.push("/superadmin/tenants")}
-                className="p-4 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors text-left group"
-              >
-                <div className="text-blue-600 font-semibold mb-1 group-hover:text-blue-700">
-                  Manage Tenants
-                </div>
-                <div className="text-sm text-gray-600">
-                  View and manage all platform tenants
-                </div>
-              </button>
-
-              <button
-                onClick={() => router.push("/superadmin/users")}
-                className="p-4 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors text-left group"
-              >
-                <div className="text-green-600 font-semibold mb-1 group-hover:text-green-700">
-                  Manage Users
-                </div>
-                <div className="text-sm text-gray-600">
-                  View and manage all platform users
-                </div>
-              </button>
-
-              <button
-                onClick={() => router.push("/superadmin/support")}
-                className="p-4 bg-orange-50 hover:bg-orange-100 rounded-lg border border-orange-200 transition-colors text-left group"
-              >
-                <div className="text-orange-600 font-semibold mb-1 group-hover:text-orange-700">
-                  Support Tickets
-                </div>
-                <div className="text-sm text-gray-600">
-                  Handle client requests and issues
-                </div>
-              </button>
-
-              <button
-                onClick={() => router.push("/superadmin/health")}
-                className="p-4 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors text-left group"
-              >
-                <div className="text-purple-600 font-semibold mb-1 group-hover:text-purple-700">
-                  System Health
-                </div>
-                <div className="text-sm text-gray-600">
-                  Monitor platform performance
-                </div>
-              </button>
-
-              <button
-                onClick={() => router.push("/superadmin/bulk")}
-                className="p-4 bg-orange-50 hover:bg-orange-100 rounded-lg border border-orange-200 transition-colors text-left group"
-              >
-                <div className="text-orange-600 font-semibold mb-1 group-hover:text-orange-700">
-                  Bulk Operations
-                </div>
-                <div className="text-sm text-gray-600">
-                  Perform mass actions efficiently
-                </div>
-              </button>
-
-              <button
-                onClick={() => router.push("/superadmin/logs")}
-                className="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors text-left group"
-              >
-                <div className="text-gray-600 font-semibold mb-1 group-hover:text-gray-700">
-                  Audit Logs
-                </div>
-                <div className="text-sm text-gray-600">
-                  View system activity logs
-                </div>
-              </button>
-
-              <button
-                onClick={() => router.push("/superadmin/analytics")}
-                className="p-4 bg-orange-50 hover:bg-orange-100 rounded-lg border border-orange-200 transition-colors text-left group"
-              >
-                <div className="text-orange-600 font-semibold mb-1 group-hover:text-orange-700">
-                  System Analytics
-                </div>
-                <div className="text-sm text-gray-600">
-                  View platform analytics and insights
-                </div>
-              </button>
-
-              <button
-                onClick={() => router.push("/superadmin/billing")}
-                className="p-4 bg-cyan-50 hover:bg-cyan-100 rounded-lg border border-cyan-200 transition-colors text-left group"
-              >
-                <div className="text-cyan-600 font-semibold mb-1 group-hover:text-cyan-700">
-                  Billing Management
-                </div>
-                <div className="text-sm text-gray-600">
-                  Manage subscriptions and billing
-                </div>
-              </button>
+            <div className="bg-white border border-zinc-200/80 rounded-xl p-6">
+              <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+                All-time revenue
+              </p>
+              <p className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900">
+                {formatKsh(stats.totalRevenue)}
+              </p>
+              <p className="mt-0.5 text-sm text-zinc-500">
+                {stats.totalSales} total transactions
+              </p>
             </div>
           </div>
-        </>
+
+          {/* Secondary stats - compact strip */}
+          <div className="flex flex-wrap gap-6 py-4 border-y border-zinc-200/80">
+            <div>
+              <span className="text-zinc-400 text-sm">Products</span>
+              <span className="ml-2 font-medium text-zinc-900">{stats.totalProducts}</span>
+            </div>
+            <div>
+              <span className="text-zinc-400 text-sm">Storage</span>
+              <span className="ml-2 font-medium text-zinc-900">{formatBytes(stats.totalStorage)}</span>
+            </div>
+            <div>
+              <span className="text-zinc-400 text-sm">Near capacity</span>
+              <span className={`ml-2 font-medium ${stats.nearCapacityTenants > 0 ? "text-amber-600" : "text-zinc-900"}`}>
+                {stats.nearCapacityTenants} tenants
+              </span>
+            </div>
+          </div>
+
+          {/* Single chart - MRR over time */}
+          <section>
+            <h2 className="text-sm font-medium text-zinc-700 mb-4">MRR over the last 12 months</h2>
+            <div className="bg-white border border-zinc-200/80 rounded-xl p-6">
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={revenueHistory} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                  <defs>
+                    <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#71717a" stopOpacity={0.15} />
+                      <stop offset="100%" stopColor="#71717a" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                    tickFormatter={(v) => formatKsh(v)}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#fff",
+                      border: "1px solid #e4e4e7",
+                      borderRadius: "8px",
+                      fontSize: "13px",
+                    }}
+                    formatter={(value: number) => [formatKsh(value), "MRR"]}
+                    labelStyle={{ color: "#71717a" }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="mrr"
+                    stroke="#52525b"
+                    strokeWidth={1.5}
+                    fill="url(#mrrGrad)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          {/* Quick links - minimal list */}
+          <section>
+            <h2 className="text-sm font-medium text-zinc-700 mb-3">Quick links</h2>
+            <nav className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {[
+                { href: "/superadmin/tenants", label: "Tenants" },
+                { href: "/superadmin/users", label: "Users" },
+                { href: "/superadmin/subscriptions", label: "Subscriptions" },
+                { href: "/superadmin/billing", label: "Billing" },
+                { href: "/superadmin/support", label: "Support tickets" },
+                { href: "/superadmin/health", label: "System health" },
+                { href: "/superadmin/logs", label: "Audit logs" },
+                { href: "/superadmin/settings", label: "Settings" },
+              ].map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center justify-between px-4 py-3 bg-white border border-zinc-200/80 rounded-lg text-sm text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
+                >
+                  {label}
+                  <span className="text-zinc-400">→</span>
+                </Link>
+              ))}
+            </nav>
+          </section>
+        </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <p className="text-orange-600">Failed to load platform statistics</p>
+        <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center">
+          <p className="text-zinc-600">Failed to load stats. Try refreshing.</p>
         </div>
       )}
     </main>

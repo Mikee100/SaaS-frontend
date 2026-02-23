@@ -1,43 +1,60 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUser } from "@/components/UserContext";
 import { useRouter, usePathname } from "next/navigation";
-import { FiHome, FiUsers, FiServer, FiSettings, FiMonitor, FiLifeBuoy, FiBarChart2, FiFileText } from "react-icons/fi";
+import { FiHome, FiUsers, FiServer, FiSettings, FiMonitor, FiLifeBuoy, FiBarChart2, FiFileText, FiChevronLeft, FiChevronRight, FiLogOut } from "react-icons/fi";
 
-// Custom NavLink component with icon and active state
-function NavLink({ href, icon, children, active }: { href: string; icon: React.ReactNode; children: React.ReactNode; active: boolean }) {
+const SIDEBAR_COLLAPSED_KEY = "superadmin-sidebar-collapsed";
+
+// Custom NavLink component with icon, active state, and collapsed mode
+function NavLink({ href, icon, children, active, collapsed }: { href: string; icon: React.ReactNode; children: React.ReactNode; active: boolean; collapsed: boolean }) {
   return (
     <Link
       href={href}
-      className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105 ${
+      title={collapsed ? children as string : undefined}
+      className={`flex items-center rounded-lg transition-all duration-200 group ${
+        collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
+      } ${
         active 
-          ? 'bg-indigo-800 text-white shadow-lg shadow-indigo-900/50' 
-          : 'text-indigo-100 hover:bg-indigo-600 hover:text-white hover:shadow-md'
+          ? "bg-slate-700 text-white" 
+          : "text-slate-300 hover:bg-slate-600 hover:text-white"
       }`}
     >
-      <span className="mr-3 text-base transition-transform duration-200 group-hover:scale-110">{icon}</span>
-      {children}
+      <span className="text-base flex-shrink-0">{icon}</span>
+      {!collapsed && <span className="ml-3 text-sm font-medium truncate">{children}</span>}
     </Link>
   );
 }
 
 export default function SuperadminLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useUser();
+  const { user, loading, logout } = useUser();
   const router = useRouter();
   const pathname = usePathname();
-  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+
+  // Load sidebar state from localStorage (only on client)
+  useEffect(() => {
+    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    if (saved !== null) setCollapsed(saved === "true");
+  }, []);
+
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+  };
 
   React.useEffect(() => {
-    if (!loading && (!user || (!user.isSuperadmin && !user.roles?.includes('superadmin')))) {
+    if (!loading && (!user || (!user.isSuperadmin && !user.roles?.includes("superadmin")))) {
       router.replace("/");
     }
   }, [user, loading, router]);
 
   if (loading || !user) return null;
 
-  // Check if a link is active
   const isActive = (href: string) =>
     pathname !== null && (pathname === href || pathname.startsWith(`${href}/`));
 
@@ -45,32 +62,31 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
       <style jsx>{`
         .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
+          width: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(79, 70, 229, 0.1);
-          border-radius: 3px;
+          background: rgba(148, 163, 184, 0.1);
+          border-radius: 2px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(79, 70, 229, 0.6);
-          border-radius: 3px;
-          transition: background 0.2s ease;
+          background: rgba(148, 163, 184, 0.4);
+          border-radius: 2px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(79, 70, 229, 0.8);
+          background: rgba(148, 163, 184, 0.6);
         }
         .custom-scrollbar {
           scrollbar-width: thin;
-          scrollbar-color: rgba(79, 70, 229, 0.6) rgba(79, 70, 229, 0.1);
+          scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
         }
       `}</style>
-      
+
       {/* Mobile header */}
-      <header className="md:hidden bg-indigo-700 text-white p-4 flex justify-between items-center">
+      <header className="md:hidden bg-slate-800 text-white p-4 flex justify-between items-center">
         <h1 className="text-xl font-bold">Superadmin</h1>
-        <button 
+        <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-md hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-white"
+          className="p-2 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             {mobileMenuOpen ? (
@@ -82,94 +98,119 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
         </button>
       </header>
 
-      {/* Sidebar - shown on desktop, conditionally on mobile */}
-      <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} md:block w-full md:w-64 bg-indigo-700 text-white flex-shrink-0 md:h-screen md:sticky md:top-0`}>
-        <div className="p-4 h-full flex flex-col max-h-screen">
-          <h2 className="text-xl font-bold hidden md:block mb-4 flex-shrink-0">Superadmin</h2>
-          
-          <nav className="flex-1 space-y-3 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
+      {/* Sidebar - narrower, collapsible, slate color */}
+      <aside
+        className={`${mobileMenuOpen ? "block" : "hidden"} md:block flex-shrink-0 md:h-screen md:sticky md:top-0 bg-slate-800 text-white border-r border-slate-700/50 transition-all duration-300 ease-in-out ${
+          collapsed ? "md:w-[72px]" : "md:w-52"
+        } w-full`}
+      >
+        <div className="h-full flex flex-col">
+          {/* Header with collapse toggle */}
+          <div className={`flex items-center flex-shrink-0 border-b border-slate-700/50 ${collapsed ? "justify-center py-4 px-2" : "justify-between py-4 px-4"}`}>
+            {!collapsed && <h2 className="text-lg font-bold truncate">Superadmin</h2>}
+            <button
+              onClick={toggleCollapsed}
+              className="p-2 rounded-lg hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <FiChevronRight className="w-5 h-5" /> : <FiChevronLeft className="w-5 h-5" />}
+            </button>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto min-h-0 py-3 px-2 custom-scrollbar space-y-4">
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Overview</h3>
-              <NavLink href="/superadmin" icon={<FiHome />} active={isActive('/admin/superadmin')}>
+              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Overview</h3>}
+              <NavLink href="/superadmin" icon={<FiHome />} active={isActive("/superadmin")} collapsed={collapsed}>
                 Dashboard
               </NavLink>
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Management</h3>
-              <NavLink href="/superadmin/tenants" icon={<FiServer />} active={isActive('/admin/superadmin/tenants')}>
+              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Management</h3>}
+              <NavLink href="/superadmin/tenants" icon={<FiServer />} active={isActive("/superadmin/tenants")} collapsed={collapsed}>
                 Tenants
               </NavLink>
-              <NavLink href="/superadmin/billing" icon={<FiBarChart2 />} active={isActive('/admin/superadmin/billing')}>
+              <NavLink href="/superadmin/billing" icon={<FiBarChart2 />} active={isActive("/superadmin/billing")} collapsed={collapsed}>
                 Billing
               </NavLink>
-              <NavLink href="/superadmin/users" icon={<FiUsers />} active={isActive('/admin/superadmin/users')}>
+              <NavLink href="/superadmin/users" icon={<FiUsers />} active={isActive("/superadmin/users")} collapsed={collapsed}>
                 Users
               </NavLink>
-               <NavLink href="/superadmin/create-user" icon={<FiUsers />} active={isActive('/admin/superadmin/create-user')}>
+              <NavLink href="/superadmin/create-user" icon={<FiUsers />} active={isActive("/superadmin/create-user")} collapsed={collapsed}>
                 Create Users
               </NavLink>
-              <NavLink href="/superadmin/trial-management" icon={<FiLifeBuoy />} active={isActive('/admin/superadmin/trial-management')}>
+              <NavLink href="/superadmin/trial-management" icon={<FiLifeBuoy />} active={isActive("/superadmin/trial-management")} collapsed={collapsed}>
                 Trial Management
               </NavLink>
-              <NavLink href="/superadmin/plan-management" icon={<FiSettings />} active={isActive('/admin/superadmin/plan-management')}>
+              <NavLink href="/superadmin/plan-management" icon={<FiSettings />} active={isActive("/superadmin/plan-management")} collapsed={collapsed}>
                 Plan Management
               </NavLink>
-              <NavLink href="/superadmin/subscriptions" icon={<FiBarChart2 />} active={isActive('/superadmin/subscriptions')}>
-                Subscription Management
+              <NavLink href="/superadmin/subscriptions" icon={<FiBarChart2 />} active={isActive("/superadmin/subscriptions")} collapsed={collapsed}>
+                Subscriptions
               </NavLink>
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Support & Operations</h3>
-              <NavLink href="/superadmin/support" icon={<FiLifeBuoy />} active={isActive('/admin/superadmin/support')}>
+              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Support</h3>}
+              <NavLink href="/superadmin/support" icon={<FiLifeBuoy />} active={isActive("/superadmin/support")} collapsed={collapsed}>
                 Support Tickets
               </NavLink>
-              <NavLink href="/superadmin/bulk" icon={<FiFileText />} active={isActive('/admin/superadmin/bulk')}>
+              <NavLink href="/superadmin/bulk" icon={<FiFileText />} active={isActive("/superadmin/bulk")} collapsed={collapsed}>
                 Bulk Operations
               </NavLink>
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Monitoring</h3>
-              <NavLink href="/superadmin/health" icon={<FiMonitor />} active={isActive('/admin/superadmin/health')}>
+              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Monitoring</h3>}
+              <NavLink href="/superadmin/health" icon={<FiMonitor />} active={isActive("/superadmin/health")} collapsed={collapsed}>
                 System Health
               </NavLink>
-               <NavLink href="/superadmin/monitoring" icon={<FiMonitor />} active={isActive('/admin/superadmin/monitoring')}>
+              <NavLink href="/superadmin/monitoring" icon={<FiMonitor />} active={isActive("/superadmin/monitoring")} collapsed={collapsed}>
                 Monitoring
               </NavLink>
-              <NavLink href="/superadmin/logs" icon={<FiFileText />} active={isActive('/admin/superadmin/logs')}>
+              <NavLink href="/superadmin/logs" icon={<FiFileText />} active={isActive("/superadmin/logs")} collapsed={collapsed}>
                 Audit Logs
               </NavLink>
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-3 px-2 sticky top-0 bg-indigo-700 py-1 rounded">Settings</h3>
-              <NavLink href="/superadmin/settings" icon={<FiSettings />} active={isActive('/admin/superadmin/settings')}>
+              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Settings</h3>}
+              <NavLink href="/superadmin/settings" icon={<FiSettings />} active={isActive("/superadmin/settings")} collapsed={collapsed}>
                 Platform Settings
               </NavLink>
-              <NavLink href="/superadmin/configurations" icon={<FiSettings />} active={isActive('/admin/superadmin/configurations')}>
-                System Configurations
+              <NavLink href="/superadmin/configurations" icon={<FiSettings />} active={isActive("/superadmin/configurations")} collapsed={collapsed}>
+                Configurations
               </NavLink>
             </div>
           </nav>
 
-          {/* User profile at the bottom */}
-          <div className="mt-auto pt-4 border-t border-indigo-600 hidden md:block flex-shrink-0">
-            <div className="flex items-center space-x-3">
-              <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
-                {user.name?.charAt(0).toUpperCase() || 'U'}
+          {/* User profile and logout at bottom */}
+          <div className="mt-auto pt-3 pb-4 px-2 border-t border-slate-700/50 flex-shrink-0 space-y-2">
+            <div className={`flex items-center ${collapsed ? "justify-center" : ""}`}>
+              <div className="h-9 w-9 rounded-full bg-slate-600 flex items-center justify-center text-white font-medium flex-shrink-0">
+                {user.name?.charAt(0).toUpperCase() || "U"}
               </div>
-              <div>
-                <p className="text-sm font-medium">{user.name || 'Superadmin'}</p>
-                <p className="text-xs text-indigo-200">{user.email}</p>
-              </div>
+              {!collapsed && (
+                <div className="ml-3 min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{user.name || "Superadmin"}</p>
+                  <p className="text-xs text-slate-400 truncate">{user.email}</p>
+                </div>
+              )}
             </div>
+            <button
+              onClick={() => logout?.()}
+              title="Logout"
+              className={`flex items-center rounded-lg transition-all duration-200 text-slate-300 hover:bg-slate-600 hover:text-white w-full ${
+                collapsed ? "justify-center px-2 py-2" : "px-3 py-2"
+              }`}
+            >
+              <FiLogOut className="text-base flex-shrink-0" />
+              {!collapsed && <span className="ml-3 text-sm font-medium">Logout</span>}
+            </button>
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 overflow-x-hidden overflow-y-auto">
         {children}
       </main>

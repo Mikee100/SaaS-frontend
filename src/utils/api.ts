@@ -215,6 +215,13 @@ class EnhancedAPI {
   async delete<T = unknown>(endpoint: string, headers?: Record<string, string>): Promise<T> {
     return this.makeRequest<T>(endpoint, { method: 'DELETE', headers });
   }
+  async patch<T = unknown>(endpoint: string, data?: unknown, headers?: Record<string, string>): Promise<T> {
+    return this.makeRequest<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+      headers,
+    });
+  }
 }
 
 const enhancedAPI = new EnhancedAPI();
@@ -222,6 +229,7 @@ export const apiGet = <T = unknown>(endpoint: string, headers?: Record<string, s
 export const apiPost = <T = unknown>(endpoint: string, data: unknown, headers?: Record<string, string>): Promise<T> => enhancedAPI.post<T>(endpoint, data, headers);
 export const apiPut = <T = unknown>(endpoint: string, data: unknown, headers?: Record<string, string>): Promise<T> => enhancedAPI.put<T>(endpoint, data, headers);
 export const apiDelete = <T = unknown>(endpoint: string, headers?: Record<string, string>): Promise<T> => enhancedAPI.delete<T>(endpoint, headers);
+export const apiPatch = <T = unknown>(endpoint: string, data?: unknown, headers?: Record<string, string>): Promise<T> => enhancedAPI.patch<T>(endpoint, data, headers);
 export default enhancedAPI;
 
 export async function apiRequest(

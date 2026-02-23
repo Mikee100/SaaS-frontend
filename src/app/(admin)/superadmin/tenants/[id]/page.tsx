@@ -3,8 +3,22 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter, useParams } from "next/navigation";
-import { apiGet, apiPost } from "@/utils/api";
-import { FaArrowLeft, FaStore, FaReceipt, FaArrowRight, FaUsers, FaBuilding, FaPlug, FaSpinner, FaCheckCircle } from 'react-icons/fa';
+import { apiGet, apiPost, apiPut } from "@/utils/api";
+import { FaArrowLeft, FaStore, FaReceipt, FaArrowRight, FaUsers, FaBuilding, FaPlug, FaSpinner, FaCheckCircle, FaFileInvoice } from 'react-icons/fa';
+
+const EAST_AFRICAN_COUNTRIES = [
+  "Kenya",
+  "Tanzania",
+  "Uganda",
+  "Rwanda",
+  "Burundi",
+  "South Sudan",
+  "Democratic Republic of the Congo",
+  "Ethiopia",
+  "Somalia",
+  "Eritrea",
+  "Djibouti",
+] as const;
 
 interface TenantDetails {
   id: string;
@@ -12,6 +26,12 @@ interface TenantDetails {
   businessType: string;
   contactEmail: string;
   contactPhone: string;
+  address?: string;
+  country?: string;
+  kraEnabled?: boolean;
+  kraPin?: string;
+  vatNumber?: string;
+  etimsQrUrl?: string;
   createdAt: string;
   userCount: number;
   productCount: number;
@@ -47,7 +67,7 @@ interface Transaction {
 }
 
 export default function TenantDetailsPage() {
-  const { user, loading } = useUser();
+  const { user, loading, refreshUser } = useUser();
   const router = useRouter();
   const params = useParams();
   const tenantId = params?.id as string;
@@ -56,7 +76,11 @@ export default function TenantDetailsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions' | 'analytics' | 'integrations'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions' | 'analytics' | 'integrations' | 'business-kra'>('overview');
+
+  // Business & KRA (admin-editable)
+  const [businessKra, setBusinessKra] = useState<Partial<TenantDetails>>({});
+  const [savingBusinessKra, setSavingBusinessKra] = useState(false);
 
   // M-Pesa integration state
   const [mpesaConfig, setMpesaConfig] = useState({
@@ -88,6 +112,18 @@ export default function TenantDetailsPage() {
       ]);
 
       setTenant(tenantDetails);
+      setBusinessKra({
+        name: tenantDetails.name,
+        businessType: tenantDetails.businessType,
+        contactEmail: tenantDetails.contactEmail,
+        contactPhone: tenantDetails.contactPhone ?? '',
+        address: tenantDetails.address ?? '',
+        country: tenantDetails.country ?? '',
+        kraEnabled: tenantDetails.kraEnabled ?? false,
+        kraPin: tenantDetails.kraPin ?? '',
+        vatNumber: tenantDetails.vatNumber ?? '',
+        etimsQrUrl: tenantDetails.etimsQrUrl ?? '',
+      });
       setProducts(tenantProducts);
       setTransactions(tenantTransactions);
     } catch (error) {
@@ -136,7 +172,7 @@ const fetchMpesaConfig = useCallback(async () => {
         mpesaShortCode: mpesaConfig.mpesaShortCode,
         mpesaPasskey: mpesaConfig.mpesaPasskey,
         mpesaCallbackUrl: mpesaConfig.mpesaCallbackUrl,
-        mpesaIsActive: true,
+        mpesaIsActive: mpesaConfig.mpesaIsActive,
         mpesaEnvironment: mpesaConfig.mpesaEnvironment
       });
       setMpesaStatus('connected');
@@ -165,16 +201,42 @@ const fetchMpesaConfig = useCallback(async () => {
     }
   };
 
-  const handleEnterAccount = async () => {
+  const handleImpersonate = async () => {
     if (!tenant) return;
 
     try {
-      await apiPost(`/admin/tenants/${tenant.id}/switch`, {});
-      // Redirect to the tenant's dashboard
+      await apiPost('/admin/impersonate/start', { tenantId: tenant.id });
+      await refreshUser();
       router.push('/dashboard');
     } catch (error) {
-      console.error("Failed to switch tenant context:", error);
-      alert("Failed to enter tenant account");
+      console.error("Failed to impersonate tenant:", error);
+      alert("Failed to impersonate tenant");
+    }
+  };
+
+  const saveBusinessKra = async () => {
+    if (!tenantId) return;
+    try {
+      setSavingBusinessKra(true);
+      await apiPut(`/admin/tenants/${tenantId}`, {
+        name: businessKra.name,
+        businessType: businessKra.businessType,
+        contactEmail: businessKra.contactEmail,
+        contactPhone: businessKra.contactPhone || null,
+        address: businessKra.address || null,
+        country: businessKra.country || null,
+        kraEnabled: !!businessKra.kraEnabled,
+        kraPin: businessKra.kraPin || null,
+        vatNumber: businessKra.vatNumber || null,
+        etimsQrUrl: businessKra.etimsQrUrl || null,
+      });
+      await fetchTenantData();
+      alert("Business & KRA details saved.");
+    } catch (error) {
+      console.error("Failed to save:", error);
+      alert("Failed to save Business & KRA details");
+    } finally {
+      setSavingBusinessKra(false);
     }
   };
 
@@ -237,7 +299,7 @@ const fetchMpesaConfig = useCallback(async () => {
           </div>
 
           <button
-            onClick={handleEnterAccount}
+            onClick={handleImpersonate}
             style={{
               background: "#2563eb",
               color: "#fff",
@@ -253,7 +315,7 @@ const fetchMpesaConfig = useCallback(async () => {
               boxShadow: "0 1px 2px rgba(37,99,235,0.04)"
             }}
           >
-            <FaArrowRight /> Enter
+            <FaArrowRight /> Impersonate
           </button>
         </div>
       </div>
@@ -391,6 +453,21 @@ const fetchMpesaConfig = useCallback(async () => {
             }}
           >
             Integrations
+          </button>
+          <button
+            onClick={() => setActiveTab('business-kra')}
+            style={{
+              padding: "0.5rem 0",
+              border: "none",
+              background: "none",
+              borderBottom: activeTab === 'business-kra' ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === 'business-kra' ? "#2563eb" : "#64748b",
+              fontWeight: activeTab === 'business-kra' ? "600" : "500",
+              fontSize: "12px",
+              cursor: "pointer"
+            }}
+          >
+            Business & KRA
           </button>
         </nav>
       </div>
@@ -663,6 +740,17 @@ const fetchMpesaConfig = useCallback(async () => {
                     <option value="production">Production</option>
                   </select>
                 </div>
+                <div style={{ marginBottom: "0.7rem" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "12px" }}>
+                    <input
+                      type="checkbox"
+                      checked={mpesaConfig.mpesaIsActive}
+                      onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaIsActive: e.target.checked }))}
+                      style={{ width: "14px", height: "14px" }}
+                    />
+                    <span style={{ fontWeight: "500", color: "#334155" }}>Enable M-Pesa for this tenant</span>
+                  </label>
+                </div>
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
@@ -749,6 +837,86 @@ const fetchMpesaConfig = useCallback(async () => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'business-kra' && (
+        <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+          <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+              <FaFileInvoice style={{ color: "#2563eb", fontSize: "13px" }} />
+              <span style={{ fontSize: 13, fontWeight: "bold", color: "#334155" }}>Business & KRA (Kenya Revenue Authority)</span>
+            </div>
+            <span style={{ color: "#64748b", fontSize: "12px", display: "block", marginTop: "0.2rem" }}>
+              Edit business details and KRA compliance for this tenant. Tenant users can only view these details in Settings.
+            </span>
+          </div>
+          <div style={{ padding: "0.7rem" }}>
+            <form onSubmit={(e) => { e.preventDefault(); saveBusinessKra(); }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.7rem", marginBottom: "0.7rem" }}>
+                <div>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Business Name</label>
+                  <input type="text" value={businessKra.name ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, name: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Business Type</label>
+                  <input type="text" value={businessKra.businessType ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, businessType: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Contact Email</label>
+                  <input type="email" value={businessKra.contactEmail ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, contactEmail: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Contact Phone</label>
+                  <input type="text" value={businessKra.contactPhone ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, contactPhone: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Address</label>
+                  <input type="text" value={businessKra.address ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, address: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Country</label>
+                  <select
+                    value={businessKra.country ?? ''}
+                    onChange={(e) => setBusinessKra(prev => ({ ...prev, country: e.target.value || null }))}
+                    style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }}
+                  >
+                    <option value="">Select country</option>
+                    {EAST_AFRICAN_COUNTRIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "0.7rem", marginTop: "0.7rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                  <input type="checkbox" id="kraEnabled" checked={!!businessKra.kraEnabled} onChange={(e) => setBusinessKra(prev => ({ ...prev, kraEnabled: e.target.checked }))} style={{ width: "14px", height: "14px" }} />
+                  <label htmlFor="kraEnabled" style={{ fontWeight: "500", fontSize: "12px" }}>Enable KRA compliance (show KRA PIN / VAT / eTIMS on receipts)</label>
+                </div>
+                {businessKra.kraEnabled && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.7rem", marginTop: "0.5rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>KRA PIN</label>
+                      <input type="text" value={businessKra.kraPin ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, kraPin: e.target.value }))} placeholder="e.g. P051234567A" style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>VAT Number</label>
+                      <input type="text" value={businessKra.vatNumber ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, vatNumber: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>KRA eTIMS QR Code URL</label>
+                      <input type="url" value={businessKra.etimsQrUrl ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, etimsQrUrl: e.target.value }))} placeholder="URL to eTIMS QR image (required for Kenya)" style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div style={{ marginTop: "0.7rem" }}>
+                <button type="submit" disabled={savingBusinessKra} style={{ background: "#2563eb", color: "#fff", padding: "0.3rem 0.8rem", borderRadius: "5px", border: "none", cursor: savingBusinessKra ? "not-allowed" : "pointer", fontWeight: "500", fontSize: "12px", opacity: savingBusinessKra ? 0.6 : 1 }}>
+                  {savingBusinessKra ? "Saving..." : "Save Business & KRA"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

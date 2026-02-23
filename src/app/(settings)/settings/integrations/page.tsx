@@ -203,6 +203,7 @@ export default function IntegrationsSettings() {
   };
 
   const canManage = hasPermission(user, 'manage_integrations');
+  const canEditMpesa = user?.isSuperadmin === true;
 
   if (loading) {
     return (
@@ -271,74 +272,88 @@ export default function IntegrationsSettings() {
             <div className="space-y-3">
               {integration.id === 'mpesa' ? (
                 <div className="space-y-3">
+                  {!canEditMpesa && (
+                    <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                      Only an administrator can add or edit M-Pesa. Go to <strong>Superadmin → Tenants → this tenant → Integrations</strong> to configure.
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 gap-3">
                     <input
                       type="text"
                       placeholder="Consumer Key"
                       value={mpesaForm.mpesaConsumerKey}
-                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaConsumerKey: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      onChange={(e) => canEditMpesa && setMpesaForm(prev => ({ ...prev, mpesaConsumerKey: e.target.value }))}
+                      readOnly={!canEditMpesa}
+                      className={`w-full px-3 py-2 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent ${!canEditMpesa ? 'border-gray-200 dark:border-gray-600 opacity-90 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600'}`}
                     />
                     <input
                       type="password"
                       placeholder="Consumer Secret"
                       value={mpesaForm.mpesaConsumerSecret}
-                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaConsumerSecret: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      onChange={(e) => canEditMpesa && setMpesaForm(prev => ({ ...prev, mpesaConsumerSecret: e.target.value }))}
+                      readOnly={!canEditMpesa}
+                      className={`w-full px-3 py-2 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent ${!canEditMpesa ? 'border-gray-200 dark:border-gray-600 opacity-90 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600'}`}
                     />
                     <input
                       type="text"
                       placeholder="Short Code"
                       value={mpesaForm.mpesaShortCode}
-                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaShortCode: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      onChange={(e) => canEditMpesa && setMpesaForm(prev => ({ ...prev, mpesaShortCode: e.target.value }))}
+                      readOnly={!canEditMpesa}
+                      className={`w-full px-3 py-2 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent ${!canEditMpesa ? 'border-gray-200 dark:border-gray-600 opacity-90 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600'}`}
                     />
                     <input
                       type="password"
                       placeholder="Passkey"
                       value={mpesaForm.mpesaPasskey}
-                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaPasskey: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      onChange={(e) => canEditMpesa && setMpesaForm(prev => ({ ...prev, mpesaPasskey: e.target.value }))}
+                      readOnly={!canEditMpesa}
+                      className={`w-full px-3 py-2 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent ${!canEditMpesa ? 'border-gray-200 dark:border-gray-600 opacity-90 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600'}`}
                     />
                     <textarea
                       placeholder="Callback URL"
                       value={mpesaForm.mpesaCallbackUrl}
-                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaCallbackUrl: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      onChange={(e) => canEditMpesa && setMpesaForm(prev => ({ ...prev, mpesaCallbackUrl: e.target.value }))}
+                      readOnly={!canEditMpesa}
+                      className={`w-full px-3 py-2 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent ${!canEditMpesa ? 'border-gray-200 dark:border-gray-600 opacity-90 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600'}`}
                       rows={2}
                     />
                     <select
                       value={mpesaForm.mpesaEnvironment}
-                      onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaEnvironment: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      onChange={(e) => canEditMpesa && setMpesaForm(prev => ({ ...prev, mpesaEnvironment: e.target.value }))}
+                      disabled={!canEditMpesa}
+                      className={`w-full px-3 py-2 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent ${!canEditMpesa ? 'border-gray-200 dark:border-gray-600 opacity-90 cursor-not-allowed' : 'border-gray-300 dark:border-gray-600'}`}
                     >
                       <option value="sandbox">Sandbox</option>
                       <option value="production">Production</option>
                     </select>
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label className={`flex items-center gap-2 ${!canEditMpesa ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}>
                       <input
                         type="checkbox"
                         checked={mpesaForm.mpesaIsActive}
-                        onChange={(e) => setMpesaForm(prev => ({ ...prev, mpesaIsActive: e.target.checked }))}
+                        onChange={(e) => canEditMpesa && setMpesaForm(prev => ({ ...prev, mpesaIsActive: e.target.checked }))}
+                        disabled={!canEditMpesa}
                         className="rounded accent-blue-600"
                       />
                       <span className="text-sm text-gray-700 dark:text-gray-300">Enable M-Pesa Integration</span>
                     </label>
                   </div>
-                  <button
-                    onClick={handleSaveMpesaConfig}
-                    disabled={savingMpesa}
-                    className="w-full px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors disabled:opacity-60"
-                  >
-                    {savingMpesa ? (
-                      <>
-                        <FaSpinner className="inline mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Configuration'
-                    )}
-                  </button>
+                  {canEditMpesa && (
+                    <button
+                      onClick={handleSaveMpesaConfig}
+                      disabled={savingMpesa}
+                      className="w-full px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors disabled:opacity-60"
+                    >
+                      {savingMpesa ? (
+                        <>
+                          <FaSpinner className="inline mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Configuration'
+                      )}
+                    </button>
+                  )}
                 </div>
               ) : integration.id === 'stripe' ? (
                 <button
@@ -386,7 +401,7 @@ export default function IntegrationsSettings() {
                 </button>
               )}
 
-              {integration.id === 'mpesa' && integration.status === 'connected' && (
+              {integration.id === 'mpesa' && integration.status === 'connected' && canEditMpesa && (
                 <button
                   onClick={handleTestMpesaConnection}
                   disabled={testing === 'mpesa'}

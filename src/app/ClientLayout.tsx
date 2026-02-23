@@ -5,6 +5,7 @@ import { useUser } from "@/components/UserContext";
 import { BranchProvider } from "@/contexts/BranchContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { DashboardProvider } from "@/contexts/DashboardContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -27,19 +28,21 @@ function ClientContent({ children }: { children: ReactNode }) {
 
 
   return (
-    <BranchProvider
-      initialBranchId={user?.branchId}
-      canChangeBranch={user?.roles?.includes('owner')}
-    >
-      <ClientBranchProvider>
-        <Suspense fallback={<div>Loading...</div>}>
-          <LayoutWrapper>
-            {children}
-          </LayoutWrapper>
-          <ServiceWorkerWrapper />
-        </Suspense>
-      </ClientBranchProvider>
-    </BranchProvider>
+    <AuthProvider>
+      <BranchProvider
+        initialBranchId={user?.branchId}
+        canChangeBranch={user?.roles?.includes('owner')}
+      >
+        <ClientBranchProvider>
+          <Suspense fallback={<div>Loading...</div>}>
+            <LayoutWrapper>
+              {children}
+            </LayoutWrapper>
+            <ServiceWorkerWrapper />
+          </Suspense>
+        </ClientBranchProvider>
+      </BranchProvider>
+    </AuthProvider>
   );
 }
 

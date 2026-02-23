@@ -140,14 +140,19 @@ const fetchOperations = async () => {
       setConfirmationText("");
       setShowConfirmation(true);
     } else {
-      executeBulkAction(action);
+      executeBulkAction(action, false);
     }
   };
 
-  const executeBulkAction = async (action: string) => {
+  const executeBulkAction = async (action: string, confirmed = false) => {
     try {
       setLoadingAction(true);
-      await apiPost("/admin/bulk/execute", { action });
+      const body: { action: string; confirmation?: string } = { action };
+      const selectedBulkAction = bulkActions.find(a => a.action === action);
+      if (selectedBulkAction?.requiresConfirmation && confirmed) {
+        body.confirmation = "CONFIRM";
+      }
+      await apiPost("/admin/bulk/execute", body);
       fetchOperations();
       setShowConfirmation(false);
       setSelectedAction("");
@@ -390,7 +395,7 @@ const fetchOperations = async () => {
                 Cancel
               </button>
               <button
-                onClick={() => executeBulkAction(selectedAction)}
+                onClick={() => executeBulkAction(selectedAction, true)}
                 disabled={confirmationText !== "CONFIRM" || loadingAction}
                 style={{
                   padding: "0.5rem 1rem",

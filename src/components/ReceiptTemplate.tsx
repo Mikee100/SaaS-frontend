@@ -33,6 +33,7 @@ interface ReceiptProps {
     address?: string;
     phone?: string;
     email?: string;
+    kraEnabled?: boolean;
     kraPin?: string;
     vatNumber?: string;
     receiptLogo?: string | null;
@@ -186,7 +187,7 @@ export default function ReceiptTemplate({ sale, tenant }: ReceiptProps) {
             {tenant.phone && <span>Tel: {tenant.phone}</span>}
             {tenant.email && <span>Email: {tenant.email}</span>}
           </div>
-          {(tenant.kraPin || tenant.vatNumber) && (
+          {tenant.kraEnabled && (tenant.kraPin || tenant.vatNumber) && (
             <div className="flex flex-wrap justify-center gap-4 mt-2 text-gray-500">
               {tenant.kraPin && <span>KRA: {tenant.kraPin}</span>}
               {tenant.vatNumber && <span>VAT: {tenant.vatNumber}</span>}
@@ -194,13 +195,13 @@ export default function ReceiptTemplate({ sale, tenant }: ReceiptProps) {
           )}
         </div>
 
-        {/* QR Code and Receipt ID */}
+        {/* QR Code and Receipt ID (eTIMS only when KRA enabled) */}
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
           <div className="text-xs text-gray-500">
             <p>Receipt ID: {sale.id}</p>
             <p>Date: {new Date(sale.createdAt).toLocaleString()}</p>
           </div>
-          <EtimsQrCode size="sm" />
+          {tenant.kraEnabled && <EtimsQrCode size="sm" />}
         </div>
         
         {/* Action Buttons */}

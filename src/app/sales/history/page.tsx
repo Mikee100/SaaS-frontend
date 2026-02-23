@@ -27,6 +27,17 @@ type MpesaTransaction = {
   amount: number;
   status: string;
   mpesaReceipt?: string;
+  checkoutRequestID?: string;
+};
+
+type SplitPayment = {
+  method: 'cash' | 'mpesa' | 'credit';
+  amount: number;
+  amountReceived?: number;
+  mpesaTransactionId?: string;
+  mpesaReceipt?: string;
+  creditDueDate?: string;
+  creditNotes?: string;
 };
 
 type Sale = {
@@ -44,6 +55,8 @@ type Sale = {
     name: string;
     address?: string;
   };
+  isSplitPayment?: boolean;
+  splitPayments?: SplitPayment[];
 };
 
 type PdfTemplate = {
@@ -397,7 +410,16 @@ export default function SalesHistoryPage() {
       }
 
       // Get business info (you might need to fetch this or pass it as prop)
-      let businessInfo = {
+      let businessInfo: {
+        name: string;
+        businessType: string;
+        address: string;
+        contactPhone: string;
+        kraEnabled?: boolean;
+        kraPin: string;
+        vatNumber: string;
+        currency: string;
+      } = {
         name: "Business Name",
         businessType: "Retail",
         address: "Business Address",
@@ -413,6 +435,7 @@ export default function SalesHistoryPage() {
           businessType?: string;
           address?: string;
           contactPhone?: string;
+          kraEnabled?: boolean;
           kraPin?: string;
           vatNumber?: string;
           currency?: string;
@@ -428,6 +451,7 @@ export default function SalesHistoryPage() {
           businessType: (tenantData as BusinessData)?.businessType || "Retail",
           address: tenantData?.address || "Business Address",
           contactPhone: (tenantData as BusinessData)?.contactPhone || tenantData?.phone || "Phone Number",
+          kraEnabled: (tenantData as BusinessData)?.kraEnabled,
           kraPin: (tenantData as BusinessData)?.kraPin || "KRA PIN",
           vatNumber: (tenantData as BusinessData)?.vatNumber || "VAT Number",
           currency: (tenantData as BusinessData)?.currency || pdfTemplate.currency || "KES"
@@ -564,8 +588,7 @@ export default function SalesHistoryPage() {
                 <div class="text-sm mb-1">${businessInfo.businessType}</div>
                 <div class="text-xs mb-1">${businessInfo.address}</div>
                 <div class="text-xs mb-2">Phone: ${businessInfo.contactPhone}</div>
-                <div class="text-xs mb-1">KRA PIN: ${businessInfo.kraPin}</div>
-                <div class="text-xs mb-4">VAT No: ${businessInfo.vatNumber}</div>
+                ${businessInfo.kraEnabled ? `<div class="text-xs mb-1">KRA PIN: ${businessInfo.kraPin}</div><div class="text-xs mb-4">VAT No: ${businessInfo.vatNumber}</div>` : ''}
               </div>
 
               <!-- Receipt Title -->
@@ -1008,7 +1031,35 @@ export default function SalesHistoryPage() {
                       <td className="py-3 px-4">{new Date(sale.date).toLocaleString()}</td>
                       <td className="py-3 px-4">{sale.saleId.slice(0, 8)}</td>
                       <td className="py-3 px-4 text-right">{sale.total.toFixed(2)}</td>
-                      <td className="py-3 px-4">{sale.paymentType}</td>
+                      <td className="py-3 px-4">
+                        {sale.isSplitPayment && sale.splitPayments ? (
+                          <div className="space-y-1">
+                            <div className="text-xs font-semibold text-purple-600">💳 SPLIT PAYMENT</div>
+                            {sale.splitPayments.map((payment, idx) => (
+                              <div key={idx} className="text-xs text-gray-600">
+                                {payment.method === 'cash' && (
+                                  <span>💵 CASH: Ksh {payment.amount.toFixed(2)}</span>
+                                )}
+                                {payment.method === 'mpesa' && (
+                                  <span>
+                                    📱 MPESA: Ksh {payment.amount.toFixed(2)}
+                                    {payment.mpesaTransactionId && (
+                                      <div className="text-xs text-gray-500 mt-0.5">
+                                        Transaction: {payment.mpesaTransactionId}
+                                      </div>
+                                    )}
+                                  </span>
+                                )}
+                                {payment.method === 'credit' && (
+                                  <span>💳 CREDIT: Ksh {payment.amount.toFixed(2)}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="capitalize">{sale.paymentType || 'N/A'}</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4">{sale.customerName || '-'}</td>
                       <td className="py-3 px-4">{sale.branch?.name || '-'}</td>
                       <td className="py-3 px-4">{sale.cashier || '-'}</td>
@@ -1097,11 +1148,63 @@ export default function SalesHistoryPage() {
                   <div><span className="font-semibold">Date:</span> {new Date(selectedSale.date).toLocaleString()}</div>
                   <div><span className="font-semibold">Total:</span> {selectedSale.total.toFixed(2)}</div>
                   <div><span className="font-semibold">Payment:</span> {selectedSale.paymentType}</div>
+                  {selectedSale.isSplitPayment && selectedSale.splitPayments && (
+                    <div className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                      <div className="font-semibold text-purple-700 mb-2">💳 Split Payment Details:</div>
+                      <div className="space-y-2">
+                        {selectedSale.splitPayments.map((payment, idx) => (
+                          <div key={idx} className="text-sm border-l-2 border-purple-300 pl-2">
+                            {payment.method === 'cash' && (
+                              <div>
+                                <span className="font-semibold">💵 Cash:</span> Ksh {payment.amount.toFixed(2)}
+                                {payment.amountReceived && payment.amountReceived > payment.amount && (
+                                  <div className="text-xs text-gray-600 ml-4">
+                                    Received: Ksh {payment.amountReceived.toFixed(2)} 
+                                    (Change: Ksh {(payment.amountReceived - payment.amount).toFixed(2)})
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {payment.method === 'mpesa' && (
+                              <div>
+                                <span className="font-semibold">📱 M-Pesa:</span> Ksh {payment.amount.toFixed(2)}
+                                {payment.mpesaTransactionId && (
+                                  <div className="text-xs text-gray-600 ml-4 mt-1">
+                                    Transaction: {payment.mpesaTransactionId}
+                                  </div>
+                                )}
+                                {payment.mpesaReceipt && (
+                                  <div className="text-xs text-gray-600 ml-4">
+                                    Receipt: {payment.mpesaReceipt}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {payment.method === 'credit' && (
+                              <div>
+                                <span className="font-semibold">💳 Credit:</span> Ksh {payment.amount.toFixed(2)}
+                                {payment.creditDueDate && (
+                                  <div className="text-xs text-gray-600 ml-4">
+                                    Due Date: {new Date(payment.creditDueDate).toLocaleDateString()}
+                                  </div>
+                                )}
+                                {payment.creditNotes && (
+                                  <div className="text-xs text-gray-600 ml-4">
+                                    Notes: {payment.creditNotes}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div><span className="font-semibold">Customer:</span> {selectedSale.customerName || '-'}</div>
                   <div><span className="font-semibold">Phone:</span> {selectedSale.customerPhone || '-'}</div>
                   <div><span className="font-semibold">Branch:</span> {selectedSale.branch?.name || '-'}</div>
                   <div><span className="font-semibold">Cashier:</span> {selectedSale.cashier || '-'}</div>
-                  {selectedSale.mpesaTransaction && (
+                  {selectedSale.mpesaTransaction && !selectedSale.isSplitPayment && (
                     <div>
                       <span className="font-semibold">Mpesa:</span> {selectedSale.mpesaTransaction.phoneNumber} <br />
                       <span className="font-semibold">Mpesa Receipt:</span> {selectedSale.mpesaTransaction.mpesaReceipt || '-'}

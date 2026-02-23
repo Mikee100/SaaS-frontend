@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import PlanBasedNav from "@/components/PlanBasedNav";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
 
 import { SidebarProvider, useSidebar } from "@/components/SidebarContext";
 
@@ -20,8 +21,11 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/settings')
   );
 
+  const showImpersonationBanner = !isInRouteGroup && pathname && !pathname.startsWith('/superadmin');
+
   return (
     <>
+      {showImpersonationBanner && <ImpersonationBanner />}
       {!isInRouteGroup && <PlanBasedNav />}
       <main className={`min-h-screen bg-gray-50 transition-all duration-300 ${
         !isInRouteGroup

@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState, ReactNode, Dispatch, SetStateAction, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { apiGet } from "@/utils/api";
+import { apiGet, apiPost } from "@/utils/api";
 import { login as authLogin, logout as authLogout } from "@/lib/auth-client";
 
 export interface User {
@@ -14,6 +14,8 @@ export interface User {
   receiptLogo?: string;
   tenantId?: string;
   branchId?: string;
+  impersonating?: boolean;
+  impersonatingAsTenantName?: string | null;
   // Add more fields as needed
 }
 
@@ -26,6 +28,7 @@ interface UserContextType {
   logout: () => void | Promise<void>;
   refreshUser: () => Promise<void>;
   clearError: () => void;
+  endImpersonation?: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -137,7 +140,9 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         isSuperadmin: userData.isSuperadmin || roles.includes('superadmin') || roles.includes('admin'),
         tenantId: userData.tenantId,
         branchId: userData.branchId,
-        receiptLogo: userData.receiptLogo
+        receiptLogo: userData.receiptLogo,
+        impersonating: userData.impersonating ?? false,
+        impersonatingAsTenantName: userData.impersonatingAsTenantName ?? null,
       };
 
       if (userData.branchId && typeof window !== 'undefined') {
@@ -319,6 +324,21 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   // Clear error
   const clearError = () => setError(null);
 
+  // End impersonation: clear cookie, refresh user, redirect to superadmin
+  const endImpersonation = useCallback(async () => {
+    try {
+      await apiPost('/admin/impersonate/end', {});
+      clearUserCache();
+      await fetchUser(true);
+      router.push('/superadmin');
+    } catch (err) {
+      console.error('Failed to end impersonation:', err);
+      clearUserCache();
+      await fetchUser(true);
+      router.push('/superadmin');
+    }
+  }, [fetchUser, router]);
+
   // Memoize context value
   const ctxValue = React.useMemo(() => ({
     user,
@@ -329,7 +349,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     logout,
     refreshUser,
     clearError,
-  }), [user, loading, error, login, logout, refreshUser]);
+    endImpersonation,
+  }), [user, loading, error, login, logout, refreshUser, endImpersonation]);
 
   return (
     <UserContext.Provider value={ctxValue}>

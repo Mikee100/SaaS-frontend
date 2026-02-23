@@ -41,6 +41,13 @@ export default function PlanGuard({
       return;
     }
 
+    // Superadmins impersonating tenants bypass plan checks (support view)
+    if (userContext.user.isSuperadmin && userContext.user.impersonating) {
+      setHasAccess(true);
+      setLoading(false);
+      return;
+    }
+
     const checkAccess = async () => {
       try {
         setError(null);

@@ -58,8 +58,10 @@ interface BusinessInfo {
   address?: string;
   contactPhone?: string;
   contactEmail?: string;
+  kraEnabled?: boolean;
   kraPin?: string;
   vatNumber?: string;
+  etimsQrUrl?: string | null;
 }
 
 export default function DigitalReceiptPage() {
@@ -414,12 +416,12 @@ export default function DigitalReceiptPage() {
         yPosition += 4;
       }
 
-      if (businessInfo?.kraPin) {
+      if (businessInfo?.kraEnabled && businessInfo?.kraPin) {
         pdf.text(`KRA PIN: ${businessInfo.kraPin}`, pageWidth / 2, yPosition, { align: 'center' });
         yPosition += 4;
       }
 
-      if (businessInfo?.vatNumber) {
+      if (businessInfo?.kraEnabled && businessInfo?.vatNumber) {
         pdf.text(`VAT No: ${businessInfo.vatNumber}`, pageWidth / 2, yPosition, { align: 'center' });
         yPosition += 6;
       }
@@ -622,12 +624,12 @@ const handleShare = async () => {
       yPosition += 4;
     }
 
-    if (businessInfo?.kraPin) {
+    if (businessInfo?.kraEnabled && businessInfo?.kraPin) {
       pdf.text(`KRA PIN: ${businessInfo.kraPin}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 4;
     }
 
-    if (businessInfo?.vatNumber) {
+    if (businessInfo?.kraEnabled && businessInfo?.vatNumber) {
       pdf.text(`VAT No: ${businessInfo.vatNumber}`, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += 6;
     }
@@ -945,19 +947,21 @@ const handleShare = async () => {
               {businessInfo?.contactEmail && <div>Email: {businessInfo.contactEmail}</div>}
             </div>
             
-            {/* KRA and VAT Info */}
-            <div className="mt-3 pt-2 border-t border-blue-500/30">
-              {businessInfo?.kraPin && (
-                <div className="text-xs">
-                  <span className="font-semibold">KRA PIN:</span> {businessInfo.kraPin}
-                </div>
-              )}
-              {businessInfo?.vatNumber && (
-                <div className="text-xs">
-                  <span className="font-semibold">VAT No:</span> {businessInfo.vatNumber}
-                </div>
-              )}
-            </div>
+            {/* KRA and VAT Info (only when KRA compliance is enabled) */}
+            {businessInfo?.kraEnabled && (businessInfo?.kraPin || businessInfo?.vatNumber) && (
+              <div className="mt-3 pt-2 border-t border-blue-500/30">
+                {businessInfo?.kraPin && (
+                  <div className="text-xs">
+                    <span className="font-semibold">KRA PIN:</span> {businessInfo.kraPin}
+                  </div>
+                )}
+                {businessInfo?.vatNumber && (
+                  <div className="text-xs">
+                    <span className="font-semibold">VAT No:</span> {businessInfo.vatNumber}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           
           {/* Receipt Body */}

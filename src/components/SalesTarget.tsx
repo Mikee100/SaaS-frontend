@@ -226,7 +226,9 @@ export default function SalesTargetComponent({ currentRevenue, totalSales, filte
                 {/* Current Progress */}
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600">Current: ${currentRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span className="text-sm text-gray-600">
+                      Current: Ksh {currentRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                     <span className={`text-sm font-semibold ${getProgressTextColor(revenueProgress)}`}>
                       {revenueProgress.toFixed(1)}%
                     </span>
@@ -247,11 +249,11 @@ export default function SalesTargetComponent({ currentRevenue, totalSales, filte
                 {/* Status Message */}
                 <div className={`text-xs font-medium ${revenueProgress >= 100 ? 'text-green-600' : revenueProgress >= 75 ? 'text-blue-600' : 'text-gray-600'}`}>
                   {revenueProgress >= 100
-                    ? `🎉 Target exceeded by $${(currentRevenue - target).toFixed(2)}!`
+                    ? `🎉 Target exceeded by Ksh ${(currentRevenue - target).toFixed(2)}!`
                     : revenueProgress >= 75
-                    ? `Almost there! $${(target - currentRevenue).toFixed(2)} to go.`
+                    ? `Almost there! Ksh ${(target - currentRevenue).toFixed(2)} to go.`
                     : target > 0
-                    ? `$${target - currentRevenue > 0 ? (target - currentRevenue).toFixed(2) : '0.00'} remaining to reach target.`
+                    ? `Ksh ${target - currentRevenue > 0 ? (target - currentRevenue).toFixed(2) : '0.00'} remaining to reach target.`
                     : 'Set a target to start tracking progress.'
                   }
                 </div>

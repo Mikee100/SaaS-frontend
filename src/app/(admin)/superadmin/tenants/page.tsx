@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
 import { apiGet, apiPost, apiDelete } from "@/utils/api";
-import { FaEye, FaStore, FaReceipt, FaArrowRight } from 'react-icons/fa';
+import { FaEye, FaStore, FaReceipt, FaArrowRight, FaUserSecret, FaTrashRestore } from 'react-icons/fa';
 
 interface Tenant {
   id: string;
@@ -58,7 +58,7 @@ interface Transaction {
 }
 
 export default function SuperadminTenantsPage() {
-  const { user, loading } = useUser();
+  const { user, loading, refreshUser } = useUser();
   const router = useRouter();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantSpaceUsage, setTenantSpaceUsage] = useState<TenantSpaceUsage[]>([]);
@@ -69,6 +69,9 @@ export default function SuperadminTenantsPage() {
   const [tenantProducts] = useState<Product[]>([]);
   const [tenantTransactions] = useState<Transaction[]>([]);
   const [showTenantModal, setShowTenantModal] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [deletedTenants, setDeletedTenants] = useState<Array<{ id: string; name: string; businessType: string; contactEmail: string; deletedAt: string }>>([]);
+  const [restoring, setRestoring] = useState(false);
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
@@ -83,15 +86,35 @@ export default function SuperadminTenantsPage() {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (user?.isSuperadmin && showDeleted) {
+      apiGet("/admin/tenants/deleted").then((data) => setDeletedTenants(data as any)).catch(console.error);
+    }
+  }, [user, showDeleted]);
+
  
-  const handleEnterAccount = async (tenantId: string) => {
+  const handleRestoreTenant = async (tenantId: string) => {
     try {
-      await apiPost(`/admin/tenants/${tenantId}/switch`, {});
-      // Redirect to the tenant's dashboard or main app
-      router.push('/dashboard'); // Adjust this path as needed
+      setRestoring(true);
+      await apiPost(`/admin/tenants/${tenantId}/restore`, {});
+      setDeletedTenants((prev) => prev.filter((t) => t.id !== tenantId));
+      fetchTenants();
+    } catch (err) {
+      console.error("Failed to restore tenant:", err);
+      alert("Failed to restore tenant");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const handleImpersonate = async (tenantId: string) => {
+    try {
+      await apiPost('/admin/impersonate/start', { tenantId });
+      await refreshUser();
+      router.push('/dashboard');
     } catch (error) {
-      console.error("Failed to switch tenant context:", error);
-      alert("Failed to enter tenant account");
+      console.error("Failed to impersonate tenant:", error);
+      alert("Failed to impersonate tenant");
     }
   };
 
@@ -203,12 +226,22 @@ export default function SuperadminTenantsPage() {
         <h1 className="text-xl font-bold text-gray-900 md:text-2xl">
           Tenant Management
         </h1>
-        <button
-          onClick={() => setShowCreateForm(true)}
-          className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-blue-700 md:text-sm"
-        >
-          Create Tenant
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowDeleted(!showDeleted)}
+            className={`inline-flex items-center rounded-md px-3 py-2 text-xs font-medium transition-colors md:text-sm ${
+              showDeleted ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            <FaTrashRestore className="mr-1.5" /> {showDeleted ? "Active" : "Deleted"}
+          </button>
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-blue-700 md:text-sm"
+          >
+            Create Tenant
+          </button>
+        </div>
       </div>
 
       {/* Tenant Modal */}
@@ -264,10 +297,10 @@ export default function SuperadminTenantsPage() {
               )}
 
               <button
-                onClick={() => handleEnterAccount(selectedTenant.id)}
-                className="mt-2 inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
+                onClick={() => handleImpersonate(selectedTenant.id)}
+                className="mt-2 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
               >
-                <FaArrowRight /> Enter Account
+                <FaUserSecret /> Impersonate
               </button>
             </div>
 
@@ -436,7 +469,34 @@ export default function SuperadminTenantsPage() {
         </div>
       )}
 
-      {loadingTenants ? (
+      {showDeleted ? (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">Deleted tenants can be restored.</p>
+          {deletedTenants.length === 0 && !loadingTenants ? (
+            <p className="text-sm text-gray-500">No deleted tenants.</p>
+          ) : (
+            deletedTenants.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50/50 p-4 text-xs md:text-sm"
+              >
+                <div>
+                  <h3 className="font-semibold text-gray-900">{t.name}</h3>
+                  <p className="text-gray-600">{t.businessType} • {t.contactEmail}</p>
+                  <p className="text-xs text-gray-500">Deleted {new Date(t.deletedAt).toLocaleDateString()}</p>
+                </div>
+                <button
+                  onClick={() => handleRestoreTenant(t.id)}
+                  disabled={restoring}
+                  className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  <FaTrashRestore /> Restore
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      ) : loadingTenants ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, idx) => (
             <div
@@ -493,6 +553,13 @@ export default function SuperadminTenantsPage() {
                   className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-[11px] font-medium text-white shadow-sm transition-colors hover:bg-blue-700 md:text-xs"
                 >
                   <FaEye /> View
+                </button>
+                <button
+                  onClick={() => handleImpersonate(tenant.id)}
+                  className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-medium text-white shadow-sm transition-colors hover:bg-emerald-700 md:text-xs"
+                  title="Impersonate tenant for support"
+                >
+                  <FaUserSecret /> Impersonate
                 </button>
                 <button
                   onClick={() => handleDeleteTenant(tenant.id)}

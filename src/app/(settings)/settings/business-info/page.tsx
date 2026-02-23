@@ -32,6 +32,7 @@ interface BusinessInfoForm {
   state: string;
   country: string;
   postalCode: string;
+  kraEnabled: boolean;
   kraPin: string;
   vatNumber: string;
   businessLicense: string;
@@ -71,13 +72,17 @@ const locationFields = [
   { name: "postalCode", label: "Postal Code" },
 ];
 
-// Legal and compliance
+// Legal and compliance (non-KRA)
 const legalFields = [
-  { name: "kraPin", label: "KRA PIN" },
-  { name: "vatNumber", label: "VAT Number" },
   { name: "businessLicense", label: "Business License" },
   { name: "taxId", label: "Tax ID" },
-  { name: "etimsQrUrl", label: "KRA eTIMS QR Code URL" },
+];
+
+// KRA-specific fields (shown only when kraEnabled)
+const kraFields = [
+  { name: "kraPin", label: "KRA PIN", required: true },
+  { name: "vatNumber", label: "VAT Number" },
+  { name: "etimsQrUrl", label: "KRA eTIMS QR Code URL", required: true }, // Required for Kenya when KRA enabled
 ];
 
 // Financial settings
@@ -137,6 +142,12 @@ export default function BusinessInfoSettings() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
 
+    // Checkbox / toggle
+    if (e.target.type === 'checkbox') {
+      setForm({ ...form, [name]: (e.target as HTMLInputElement).checked });
+      return;
+    }
+
     // Convert number fields to integers
     if (e.target.type === 'number') {
       const numValue = value === '' ? null : parseInt(value, 10);
@@ -168,15 +179,28 @@ export default function BusinessInfoSettings() {
     setSaving(true);
     setError(null);
     setSuccess(false);
-    if (form.kraPin && !validateKraPin(form.kraPin)) {
-      setError('Invalid KRA PIN format.');
-      setSaving(false);
-      return;
-    }
-    if (form.vatNumber && !validateVatNumber(form.vatNumber)) {
-      setError('Invalid VAT Number format.');
-      setSaving(false);
-      return;
+    if (form.kraEnabled) {
+      if (!form.kraPin?.trim()) {
+        setError('KRA PIN is required when KRA compliance is enabled.');
+        setSaving(false);
+        return;
+      }
+      if (!validateKraPin(form.kraPin)) {
+        setError('Invalid KRA PIN format (e.g., P051234567A).');
+        setSaving(false);
+        return;
+      }
+      if (form.vatNumber && !validateVatNumber(form.vatNumber)) {
+        setError('Invalid VAT Number format.');
+        setSaving(false);
+        return;
+      }
+      const isKenya = form.country?.toLowerCase() === 'kenya';
+      if (isKenya && !form.etimsQrUrl?.trim()) {
+        setError('KRA eTIMS QR Code URL is required for Kenyan businesses when KRA compliance is enabled.');
+        setSaving(false);
+        return;
+      }
     }
     try {
       await apiPut("/tenant/me", form);
@@ -223,9 +247,11 @@ export default function BusinessInfoSettings() {
             value={getFieldValue(field.name)}
             onChange={handleChange}
             rows={3}
+            disabled={!canEdit}
+            readOnly={!canEdit}
             className={`w-full px-4 py-3 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 ${
               hasError ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-gray-600'
-            }`}
+            } ${!canEdit ? 'opacity-80 cursor-not-allowed' : ''}`}
           />
         ) : field.type === "number" ? (
           <input
@@ -234,9 +260,11 @@ export default function BusinessInfoSettings() {
             type="number"
             value={getFieldValue(field.name, 'number')}
             onChange={handleChange}
+            disabled={!canEdit}
+            readOnly={!canEdit}
             className={`w-full px-4 py-3 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 ${
               hasError ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-gray-600'
-            }`}
+            } ${!canEdit ? 'opacity-80 cursor-not-allowed' : ''}`}
           />
         ) : (
           <input
@@ -245,9 +273,11 @@ export default function BusinessInfoSettings() {
             type="text"
             value={getFieldValue(field.name)}
             onChange={handleChange}
+            disabled={!canEdit}
+            readOnly={!canEdit}
             className={`w-full px-4 py-3 border rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 ${
               hasError ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-gray-600'
-            }`}
+            } ${!canEdit ? 'opacity-80 cursor-not-allowed' : ''}`}
           />
         )}
         {field.name === 'kraPin' && form.kraPin && validation.kraPin === false && (
@@ -269,8 +299,9 @@ export default function BusinessInfoSettings() {
     );
   };
 
-  // Permission checks
+  // Only superadmin can edit; tenant users can only view (admin edits via Superadmin → Tenants → tenant → Business & KRA).
   const canEditSettings = hasPermission(user, 'edit_settings');
+  const canEdit = canEditSettings && !!user?.isSuperadmin;
 
   if (loading) {
     return (
@@ -302,6 +333,11 @@ export default function BusinessInfoSettings() {
         </div>
         <Link href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">← All Settings</Link>
       </div>
+      {!canEdit && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-700">
+          View only. Only an administrator can add or edit these details (Superadmin → Tenants → this tenant → Business &amp; KRA).
+        </div>
+      )}
       {success && (
         <div className="mb-4 px-4 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700">
           Business info saved!
@@ -341,15 +377,38 @@ export default function BusinessInfoSettings() {
         <div className="bg-white dark:bg-gray-800/80 rounded-xl shadow p-10 w-full border border-gray-100 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-6">Legal and Compliance</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-            {legalFields.filter(field =>
-              form.country?.toLowerCase() === 'kenya' || !['kraPin', 'vatNumber', 'etimsQrUrl'].includes(field.name)
-            ).map(renderField)}
+            {legalFields.map(renderField)}
           </div>
-          {form.country?.toLowerCase() !== 'kenya' && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-              KRA-specific fields (PIN, VAT, eTIMS) are only shown for Kenyan businesses.
+
+          {/* Optional KRA (Kenya Revenue Authority) compliance */}
+          <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-600">
+            <div className="flex items-center gap-3 mb-4">
+              <input
+                id="kraEnabled"
+                name="kraEnabled"
+                type="checkbox"
+                checked={!!form.kraEnabled}
+                onChange={(e) => setForm({ ...form, kraEnabled: e.target.checked })}
+                disabled={!canEdit}
+                className={`h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!canEdit ? 'opacity-70 cursor-not-allowed' : ''}`}
+              />
+              <label htmlFor="kraEnabled" className="font-medium text-gray-800 dark:text-gray-100">
+                Enable KRA compliance (Kenya Revenue Authority)
+              </label>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              Turn this on if you want KRA PIN, VAT, and eTIMS QR on receipts and invoices. You must provide the details below when enabled.
             </p>
-          )}
+            {form.kraEnabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                {kraFields.map((field) => {
+                  const isKenya = form.country?.toLowerCase() === 'kenya';
+                  const required = field.required && (field.name !== 'etimsQrUrl' || isKenya);
+                  return renderField({ ...field, required });
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Financial Settings */}
@@ -367,15 +426,17 @@ export default function BusinessInfoSettings() {
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="px-8 py-2.5 rounded-lg border border-blue-600 dark:border-blue-500 bg-blue-600 dark:bg-blue-500 text-white font-semibold text-base shadow hover:bg-blue-700 dark:hover:bg-blue-600 transition disabled:opacity-60 disabled:cursor-not-allowed"
-            disabled={saving}
-          >
-            {saving ? "Saving…" : "Save Business Info"}
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="px-8 py-2.5 rounded-lg border border-blue-600 dark:border-blue-500 bg-blue-600 dark:bg-blue-500 text-white font-semibold text-base shadow hover:bg-blue-700 dark:hover:bg-blue-600 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={saving}
+            >
+              {saving ? "Saving…" : "Save Business Info"}
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

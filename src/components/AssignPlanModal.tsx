@@ -10,6 +10,7 @@ interface Plan {
   name: string;
   price: number;
   description: string;
+  interval?: string;
 }
 
 interface Tenant {
@@ -42,7 +43,7 @@ export default function AssignPlanModal({ isOpen, onClose, onSuccess }: AssignPl
     setFetching(true);
     try {
       const [plansRes, tenantsRes] = await Promise.all([
-        apiGet('/billing/plans'),
+        apiGet('/admin/plans'),
         apiGet('/admin/tenants')
       ]);
 
@@ -166,7 +167,7 @@ export default function AssignPlanModal({ isOpen, onClose, onSuccess }: AssignPl
                     <option value="">Choose a subscription plan</option>
                     {plans.map((plan) => (
                       <option key={plan.id} value={plan.id}>
-                        {plan.name} - ${plan.price}/month
+                        {plan.name} - Ksh {plan.price}/{plan.interval === 'yearly' ? 'yr' : 'mo'}
                       </option>
                     ))}
                   </select>
@@ -180,7 +181,7 @@ export default function AssignPlanModal({ isOpen, onClose, onSuccess }: AssignPl
                       <p><strong>Tenant:</strong> {tenants.find(t => t.id === selectedTenantId)?.name}</p>
                       <p><strong>Email:</strong> {tenants.find(t => t.id === selectedTenantId)?.contactEmail}</p>
                       <p><strong>Plan:</strong> {plans.find(p => p.id === selectedPlanId)?.name}</p>
-                      <p><strong>Price:</strong> ${plans.find(p => p.id === selectedPlanId)?.price}/month</p>
+                      <p><strong>Price:</strong> Ksh {plans.find(p => p.id === selectedPlanId)?.price}/{plans.find(p => p.id === selectedPlanId)?.interval === 'yearly' ? 'yr' : 'mo'}</p>
                     </div>
                   </div>
                 )}

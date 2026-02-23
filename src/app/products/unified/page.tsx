@@ -13,7 +13,7 @@ import { useBranches } from '@/hooks/useBranches';
 import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
 import { 
-  FaBox, FaSearch, FaTrash, FaEdit, FaQrcode, FaPlus, FaExclamationTriangle, 
+  FaBox, FaSearch, FaTrash, FaTrashRestore, FaEdit, FaQrcode, FaPlus, FaExclamationTriangle, 
   FaCheckCircle, FaTimesCircle, FaArrowUp, FaArrowDown, FaHistory, FaBell, 
   FaChartLine, FaMapMarkerAlt, FaCalculator, FaCog, FaDownload, FaWarehouse,
   FaStore, FaClipboardList, FaSortAmountDown, FaPrint, FaTimes, FaChevronRight,
@@ -148,6 +148,7 @@ export default function UnifiedProductsInventoryPage() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showUsageBanner, setShowUsageBanner] = useState(true);
+  const [showDeletedProducts, setShowDeletedProducts] = useState(false);
   const [productType, setProductType] = useState<'simple' | 'withVariations'>('simple');
   const [redirectToVariations, setRedirectToVariations] = useState(false);
 
@@ -269,6 +270,26 @@ export default function UnifiedProductsInventoryPage() {
     enableEmailAlerts: true,
     enablePushAlerts: true
   });
+
+  const { data: deletedProducts = [], refetch: refetchDeleted } = useQuery({
+    queryKey: ['products', 'deleted', selectedBranchId],
+    queryFn: () => apiGet(
+      `/products/deleted${selectedBranchId ? `?branchId=${selectedBranchId}` : ''}`,
+      selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined
+    ) as Promise<Array<{ id: string; name: string; sku: string; price: number; deletedAt: string }>>,
+    enabled: showDeletedProducts && !!selectedBranchId,
+  });
+
+  async function handleRestoreProduct(id: string) {
+    try {
+      await apiPost(`/products/${id}/restore`, {}, { 'x-branch-id': selectedBranchId || '' });
+      queryClient.invalidateQueries({ queryKey: ['products', selectedBranchId] });
+      refetchDeleted();
+    } catch (err) {
+      console.error('Restore failed:', err);
+      alert('Failed to restore product');
+    }
+  }
 
   // Permission checks
   const canViewProducts = hasPermission(user, 'view_products');
@@ -1248,6 +1269,15 @@ export default function UnifiedProductsInventoryPage() {
                         )}
                       </div>
                       <button
+                        onClick={() => setShowDeletedProducts(!showDeletedProducts)}
+                        className={`px-4 py-2.5 border-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all shadow-sm hover:shadow ${
+                          showDeletedProducts ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+                        }`}
+                      >
+                        <FaTrashRestore className="w-4 h-4" />
+                        <span className="hidden sm:inline">{showDeletedProducts ? 'Active' : 'Deleted'}</span>
+                      </button>
+                      <button
                         onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
                         className="px-4 py-2.5 border-2 border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-300 flex items-center gap-2 text-sm font-medium transition-all shadow-sm hover:shadow"
                         aria-label={`Switch to ${viewMode === 'grid' ? 'table' : 'grid'} view`}
@@ -1467,7 +1497,37 @@ export default function UnifiedProductsInventoryPage() {
                   )}
 
                   {/* Products Content */}
-                  {loading || isSearching ? (
+                  {showDeletedProducts ? (
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                      <p className="text-sm text-gray-500 mb-4">Deleted products can be restored.</p>
+                      {deletedProducts.length === 0 ? (
+                        <p className="text-sm text-gray-500">No deleted products.</p>
+                      ) : (
+                        <div className="grid gap-3">
+                          {deletedProducts.map((p) => (
+                            <div
+                              key={p.id}
+                              className="flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50/50 p-4"
+                            >
+                              <div>
+                                <h3 className="font-semibold text-gray-900">{p.name}</h3>
+                                <p className="text-sm text-gray-600">{p.sku} • ${p.price?.toFixed(2)}</p>
+                                <p className="text-xs text-gray-500">Deleted {new Date(p.deletedAt).toLocaleDateString()}</p>
+                              </div>
+                              {canEditProducts && (
+                                <button
+                                  onClick={() => handleRestoreProduct(p.id)}
+                                  className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                                >
+                                  <FaTrashRestore /> Restore
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : loading || isSearching ? (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {Array.from({ length: 8 }).map((_, index) => (

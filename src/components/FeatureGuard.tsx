@@ -38,6 +38,13 @@ export default function FeatureGuard({
       return;
     }
 
+    // Superadmins impersonating tenants bypass feature checks (support view)
+    if (userContext.user.isSuperadmin && userContext.user.impersonating) {
+      setHasFeature(true);
+      setLoading(false);
+      return;
+    }
+
     const checkFeature = async () => {
       try {
         setError(null);

@@ -18,6 +18,7 @@ import {
   FaInfoCircle,
 } from "react-icons/fa";
 import Link from "next/link";
+import { useUser } from "@/components/UserContext";
 
 const LOGO_TYPE_TO_BACKEND_FIELD: Record<string, string> = {
   mainLogo: "logoUrl",
@@ -108,8 +109,10 @@ const LOGO_TYPES = {
 } as const;
 
 export default function LogoSettings() {
+  const { user } = useUser();
   const queryClient = useQueryClient();
   const [logoConfig, setLogoConfig] = useState<LogoConfig>({});
+  const canEditEtims = !!user?.isSuperadmin;
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -350,6 +353,7 @@ export default function LogoSettings() {
                     <h3 className="font-semibold text-slate-900 flex items-center gap-1.5">
                       {config.label}
                       {config.required && <span className="text-red-500 text-xs">Required</span>}
+                      {isEtims && !canEditThis && <span className="text-amber-600 text-xs">(View only — admin can edit)</span>}
                     </h3>
                     <p className="text-sm text-slate-600 mt-0.5">{config.description}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -377,19 +381,23 @@ export default function LogoSettings() {
                             className="w-full h-full object-contain"
                           />
                         </div>
-                        <div className="mt-3 flex items-center gap-2 w-full justify-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemove(key)}
-                            className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
-                          >
-                            <FaTrash className="w-3.5 h-3.5" />
-                            Remove
-                          </button>
-                        </div>
+                        {canEditThis && (
+                          <div className="mt-3 flex items-center gap-2 w-full justify-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemove(key)}
+                              className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
+                            >
+                              <FaTrash className="w-3.5 h-3.5" />
+                              Remove
+                            </button>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
+                        {canEditThis ? (
+                          <>
                         <p className="text-xs text-slate-500 mb-2">{config.spec}</p>
                         <p className="text-xs text-slate-400 mb-2">
                           {config.formats.join(", ")} · max {config.maxSizeMB}MB
@@ -428,11 +436,15 @@ export default function LogoSettings() {
                             </>
                           )}
                         </label>
+                          </>
+                        ) : (
+                          <p className="text-xs text-slate-500 text-center">Only an administrator can add the KRA eTIMS QR code (Superadmin → Tenants → this tenant → Business &amp; KRA).</p>
+                        )}
                       </>
                     )}
                   </div>
 
-                  {currentUrl && (
+                  {currentUrl && canEditThis && (
                     <div className="flex justify-center">
                       <input
                         ref={(el) => {

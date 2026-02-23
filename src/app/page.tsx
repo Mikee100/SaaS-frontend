@@ -521,7 +521,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">
-                  <FiDollarSign className="w-4 h-4" />
+                  <FiTrendingUp className="w-4 h-4" />
                 </span>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
