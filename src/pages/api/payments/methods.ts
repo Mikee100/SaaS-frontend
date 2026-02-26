@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Forward the request to the backend
   try {
-  const backendUrl = 'http://localhost:9000/payments/methods';
+  const backendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5100') + '/payments/methods';
     const response = await fetch(backendUrl, {
       method: 'GET',
       headers: {

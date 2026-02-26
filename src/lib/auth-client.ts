@@ -4,7 +4,7 @@
  */
 
 const getApiUrl = () =>
-  (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9000').replace(/\/+$/, '');
+  (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5100').replace(/\/+$/, '');
 
 export interface AuthUser {
   id: string;

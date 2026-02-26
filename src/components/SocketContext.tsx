@@ -23,7 +23,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     // Adjust the URL if your backend runs on a different host/port
-    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:9000', {
+    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5100', {
       transports: ['websocket'],
       autoConnect: true,
     });
