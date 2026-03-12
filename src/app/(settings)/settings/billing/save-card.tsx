@@ -88,7 +88,7 @@ export default function BillingCards() {
     setLoading(true);
     setError(null);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5100";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7000";
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
       const res = await fetch(`${apiUrl}/payments/methods`, {
         method: "GET",
@@ -172,7 +172,7 @@ export default function BillingCards() {
         throw new Error(stripeError?.message || "Failed to create payment method");
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5100";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7000";
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
       const res = await fetch(`${apiUrl}/payments/methods`, {
         method: "POST",

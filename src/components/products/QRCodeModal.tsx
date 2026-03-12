@@ -25,7 +25,7 @@ export default function QRCodeModal({ qrCodeProductId, setQrCodeProductId }: QRC
 
         <div className="text-center">
           <Image
-          src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5100'}/products/${qrCodeProductId}/qr`}
+          src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7000'}/products/${qrCodeProductId}/qr`}
             alt="Product QR Code"
             width={256}
             height={256}
@@ -38,7 +38,7 @@ export default function QRCodeModal({ qrCodeProductId, setQrCodeProductId }: QRC
                 const printWindow = window.open('', '', 'height=400,width=400');
                 if (printWindow) {
                   printWindow.document.write('<html><head><title>Print QR Code</title></head><body style="text-align:center;">');
-                  printWindow.document.write(`<img src="${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5100'}/products/${qrCodeProductId}/qr" />`);
+                  printWindow.document.write(`<img src="${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7000'}/products/${qrCodeProductId}/qr" />`);
                   printWindow.document.write('</body></html>');
                   printWindow.document.close();
                   printWindow.focus();

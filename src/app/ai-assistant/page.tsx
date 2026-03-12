@@ -1,20 +1,29 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { 
-  FaRobot, 
-  FaPaperPlane, 
-  FaSpinner, 
-  FaUser, 
-  FaCopy, 
-  FaBars, 
-  FaCheck,
-  FaDownload,
-  FaChartLine
-} from 'react-icons/fa';
+import {
+  Bot,
+  Send,
+  User,
+  Copy,
+  Menu,
+  Check,
+  Download,
+  BarChart3,
+  Sparkles,
+  TrendingUp,
+  Package,
+  Users,
+  ChevronRight,
+  PieChart,
+  Plus,
+  CreditCard,
+  Receipt,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Input } from '@/components/ui/input';
 import { useUser } from '@/components/UserContext';
 import { useTenant } from '@/hooks/useTenant';
+import { apiGet, apiPost } from '@/utils/api';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -75,7 +84,7 @@ const formatMessageContent = (content: string) => {
 
   lines.forEach((line, index) => {
     const trimmed = line.trim();
-    
+
     // Handle numbered sections with bold titles (e.g., "1. **Title**:")
     if (trimmed.match(/^\d+\.\s*\*\*/)) {
       if (currentSection.length > 0) {
@@ -87,9 +96,9 @@ const formatMessageContent = (content: string) => {
         const title = match[1];
         const rest = match[2];
         currentSection.push(
-          <div key={index} className="mb-3">
-            <h4 className="text-base font-bold text-gray-900 mb-2">{title}</h4>
-            {rest && <p className="text-sm text-gray-700 leading-relaxed">{rest}</p>}
+          <div key={index} className="mb-4 bg-gray-50/50 rounded-xl p-4 border border-gray-100/50">
+            <h4 className="text-base font-semibold text-gray-900 mb-2">{title}</h4>
+            {rest && <p className="text-[15px] text-gray-600 leading-relaxed">{rest}</p>}
           </div>
         );
       }
@@ -97,14 +106,13 @@ const formatMessageContent = (content: string) => {
     // Handle bullet points with better styling
     else if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
       const content = trimmed.substring(2).trim();
-      // Check if it contains bold text or numbers
       const hasBold = content.includes('**');
       const parts = content.split(/(\*\*.*?\*\*)/g);
-      
+
       currentSection.push(
-        <div key={index} className="flex items-start space-x-3 mb-2 pl-1">
-          <span className="text-blue-500 mt-1.5 flex-shrink-0">•</span>
-          <div className="flex-1 text-sm text-gray-700 leading-relaxed">
+        <div key={index} className="flex items-start gap-3 mb-2.5 pl-2">
+          <div className="mt-2 w-1.5 h-1.5 rounded-full bg-indigo-500/60 flex-shrink-0" />
+          <div className="flex-1 text-[15px] text-gray-700 leading-relaxed">
             {hasBold ? (
               parts.map((part, i) => {
                 if (part.startsWith('**') && part.endsWith('**')) {
@@ -112,9 +120,7 @@ const formatMessageContent = (content: string) => {
                 }
                 return <span key={i}>{part}</span>;
               })
-            ) : (
-              content
-            )}
+            ) : content}
           </div>
         </div>
       );
@@ -127,11 +133,11 @@ const formatMessageContent = (content: string) => {
         const content = numMatch[2];
         const hasBold = content.includes('**');
         const parts = content.split(/(\*\*.*?\*\*)/g);
-        
+
         currentSection.push(
-          <div key={index} className="flex items-start space-x-3 mb-2">
-            <span className="text-blue-600 font-bold text-sm flex-shrink-0 min-w-[24px]">{num}.</span>
-            <div className="flex-1 text-sm text-gray-700 leading-relaxed">
+          <div key={index} className="flex items-start gap-3 mb-2.5 pl-1">
+            <span className="text-indigo-600 font-semibold text-[15px] min-w-[20px] pt-0.5">{num}.</span>
+            <div className="flex-1 text-[15px] text-gray-700 leading-relaxed">
               {hasBold ? (
                 parts.map((part, i) => {
                   if (part.startsWith('**') && part.endsWith('**')) {
@@ -139,9 +145,7 @@ const formatMessageContent = (content: string) => {
                   }
                   return <span key={i}>{part}</span>;
                 })
-              ) : (
-                content
-              )}
+              ) : content}
             </div>
           </div>
         );
@@ -150,12 +154,14 @@ const formatMessageContent = (content: string) => {
     // Handle section headers
     else if (trimmed.startsWith('##')) {
       if (currentSection.length > 0) {
-        elements.push(<div key={`section-before-${index}`} className="mb-4">{currentSection}</div>);
+        elements.push(<div key={`section-before-${index}`} className="mb-5">{currentSection}</div>);
         currentSection = [];
       }
+      const isH3 = trimmed.startsWith('###');
+      const text = isH3 ? trimmed.substring(3).trim() : trimmed.substring(2).trim();
       elements.push(
-        <h3 key={index} className="text-lg font-bold text-gray-900 mt-6 mb-3 pb-2 border-b border-gray-200">
-          {trimmed.substring(2).trim()}
+        <h3 key={index} className={`font-semibold text-gray-900 mt-6 mb-4 tracking-tight ${isH3 ? 'text-lg' : 'text-xl'}`}>
+          {text}
         </h3>
       );
     }
@@ -185,18 +191,16 @@ const formatMessageContent = (content: string) => {
     // Handle empty lines
     else if (trimmed === '') {
       if (currentSection.length > 0 && index < lines.length - 1) {
-        // Only add spacing if there's content after
-        currentSection.push(<div key={`spacer-${index}`} className="h-2" />);
+        currentSection.push(<div key={`spacer-${index}`} className="h-3" />);
       }
     }
     // Handle regular paragraphs
     else {
-      // Check for bold text in paragraphs
       const hasBold = trimmed.includes('**');
       const parts = trimmed.split(/(\*\*.*?\*\*)/g);
-      
+
       currentSection.push(
-        <p key={index} className="text-sm text-gray-700 leading-relaxed mb-2">
+        <p key={index} className="text-[15px] text-gray-700 leading-relaxed mb-3">
           {hasBold ? (
             parts.map((part, i) => {
               if (part.startsWith('**') && part.endsWith('**')) {
@@ -204,21 +208,27 @@ const formatMessageContent = (content: string) => {
               }
               return <span key={i}>{part}</span>;
             })
-          ) : (
-            trimmed
-          )}
+          ) : trimmed}
         </p>
       );
     }
   });
 
-  // Add any remaining section
   if (currentSection.length > 0) {
-    elements.push(<div key="final-section" className="mb-4">{currentSection}</div>);
+    elements.push(<div key="final-section" className="mb-2">{currentSection}</div>);
   }
 
   return elements;
 };
+
+const INITIAL_SUGGESTIONS = [
+  { icon: TrendingUp, title: 'Sales Trends', prompt: 'Show me the sales trend this year' },
+  { icon: BarChart3, title: 'Revenue Report', prompt: 'Generate a sales report for the last 30 days' },
+  { icon: Package, title: 'Inventory Check', prompt: 'Which products are low on stock?' },
+  { icon: Users, title: 'Top Customers', prompt: 'Show me my top 10 customers' },
+  { icon: CreditCard, title: 'Creditors & Suppliers', prompt: 'Tell me about our suppliers and outstanding creditors' },
+  { icon: Receipt, title: 'Business Expenses', prompt: 'Show me the business expenses breakdown' },
+];
 
 export default function AIChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -252,7 +262,7 @@ export default function AIChatPage() {
     } else {
       const businessName = tenant?.name || 'your business';
       const greeting = `Hello! 👋 Welcome to ${businessName}'s AI Assistant. I'm here to help you understand your business better. I can answer questions about your sales performance, product analytics, inventory levels, customer insights, and much more. What would you like to know about ${businessName}?`;
-      
+
       setMessages([{
         role: 'assistant',
         content: greeting,
@@ -265,13 +275,12 @@ export default function AIChatPage() {
   const loadConversations = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/ai/conversations', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setConversations(data.conversations || []);
-      }
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const data = await apiGet<{ conversations: Conversation[] }>(
+        '/ai/conversations',
+        headers
+      );
+      setConversations(data.conversations || []);
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
@@ -280,30 +289,32 @@ export default function AIChatPage() {
   const loadConversationMessages = async (conversationId: string) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/ai/conversations/${conversationId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.conversation?.interactions) {
-          const loadedMessages = data.conversation.interactions.map((interaction: any) => ({
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const data = await apiGet<{ conversation?: any }>(
+        `/ai/conversations/${conversationId}`,
+        headers
+      );
+      if (data.conversation?.interactions) {
+        const loadedMessages = data.conversation.interactions
+          .map((interaction: any) => ({
             role: 'user' as const,
             content: interaction.userMessage,
             timestamp: new Date(interaction.createdAt),
-            id: interaction.id
-          })).concat(
+            id: interaction.id,
+          }))
+          .concat(
             data.conversation.interactions.map((interaction: any) => ({
               role: 'assistant' as const,
               content: interaction.aiResponse,
               category: interaction.metadata?.category,
               timestamp: new Date(interaction.createdAt),
-              id: interaction.id + '-ai'
+              id: interaction.id + '-ai',
             }))
-          ).sort((a: Message, b: Message) => a.timestamp.getTime() - b.timestamp.getTime());
-          setMessages(loadedMessages);
-        } else {
-          setMessages([]);
-        }
+          )
+          .sort((a: Message, b: Message) => a.timestamp.getTime() - b.timestamp.getTime());
+        setMessages(loadedMessages);
+      } else {
+        setMessages([]);
       }
     } catch (error) {
       console.error('Error loading conversation:', error);
@@ -313,28 +324,23 @@ export default function AIChatPage() {
   const createNewConversation = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/ai/conversations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({})
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setConversations(prev => [data.conversation, ...prev]);
-        setCurrentConversationId(data.conversation.id);
-        setSidebarOpen(false);
-        const businessName = tenant?.name || 'your business';
-        const greeting = `Hello! 👋 Welcome to ${businessName}'s AI Assistant. I'm here to help you understand your business better. I can answer questions about your sales performance, product analytics, inventory levels, customer insights, and much more. What would you like to know about ${businessName}?`;
-        setMessages([{
-          role: 'assistant',
-          content: greeting,
-          timestamp: new Date(),
-          id: Date.now().toString()
-        }]);
-      }
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const data = await apiPost<{ conversation: Conversation }>(
+        '/ai/conversations',
+        {},
+        headers
+      );
+      setConversations(prev => [data.conversation, ...prev]);
+      setCurrentConversationId(data.conversation.id);
+      setSidebarOpen(false);
+      const businessName = tenant?.name || 'your business';
+      const greeting = `Hello! 👋 Welcome to ${businessName}'s AI Assistant. I'm here to help you understand your business better. I can answer questions about your sales performance, product analytics, inventory levels, customer insights, and much more. What would you like to know about ${businessName}?`;
+      setMessages([{
+        role: 'assistant',
+        content: greeting,
+        timestamp: new Date(),
+        id: Date.now().toString()
+      }]);
     } catch (error) {
       console.error('Error creating conversation:', error);
     }
@@ -376,40 +382,32 @@ export default function AIChatPage() {
       let conversationId = currentConversationId;
 
       if (!conversationId) {
-        const createResponse = await fetch('/api/ai/conversations', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({})
-        });
-        if (createResponse.ok) {
-          const createData = await createResponse.json();
-          conversationId = createData.conversation.id;
-          setCurrentConversationId(conversationId);
-          setConversations(prev => [createData.conversation, ...prev]);
-        }
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+        const createData = await apiPost<{ conversation: Conversation }>(
+          '/ai/conversations',
+          {},
+          headers
+        );
+        conversationId = createData.conversation.id;
+        setCurrentConversationId(conversationId);
+        setConversations(prev => [createData.conversation, ...prev]);
       }
 
-      const response = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const data = await apiPost<{
+        response: string;
+        category: string;
+        suggestions?: string[];
+        chartData?: any;
+        reportData?: any;
+      }>(
+        '/ai/chat',
+        {
           message: currentInput,
-          userId: user.id,
-          tenantId: user.tenantId,
-          branchId: user.branchId,
-          conversationId: conversationId
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to get response from AI');
-
-      const data = await response.json();
+          conversationId,
+        },
+        headers
+      );
       addMessage(
         'assistant',
         data.response,
@@ -433,193 +431,178 @@ export default function AIChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Minimal Sidebar - Hidden by default, show on mobile */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div
-            initial={{ x: -280 }}
-            animate={{ x: 0 }}
-            exit={{ x: -280 }}
-            className="fixed inset-y-0 left-0 z-50 w-70 bg-white border-r border-gray-200 lg:hidden"
-          >
-            <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Conversations</h2>
-              <button onClick={() => setSidebarOpen(false)} className="p-1">
-                <FaBars className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="overflow-y-auto h-[calc(100%-60px)] p-2">
-              {conversations.map((conv) => (
-                <div
-                  key={conv.id}
-                  onClick={() => {
-                    setCurrentConversationId(conv.id);
-                    setSidebarOpen(false);
-                  }}
-                  className={`p-2 mb-1 rounded text-xs cursor-pointer ${
-                    currentConversationId === conv.id ? 'bg-blue-50' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  {conv.title || 'New Conversation'}
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Main Chat Area - Maximized */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Compact Header */}
-        <header className="bg-white border-b border-gray-200 px-3 py-2 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-1.5 hover:bg-gray-100 rounded"
-            >
-              <FaBars className="h-4 w-4 text-gray-600" />
+    <div className="flex flex-col lg:flex-row min-h-full bg-white transition-all duration-300">
+      {/* Sidebar - Integrated & Simple */}
+      {sidebarOpen && (
+        <div className="w-[280px] flex-shrink-0 bg-gray-50 border-r border-gray-200 flex flex-col">
+          <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">History</h2>
+            <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1.5 hover:bg-gray-200 rounded-lg transition-colors text-gray-500">
+              <Menu className="h-4 w-4" />
             </button>
-            <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-              <FaRobot className="h-3.5 w-3.5 text-white" />
+          </div>
+          <div className="p-4">
+            <button 
+              onClick={createNewConversation}
+              className="w-full flex items-center gap-2 justify-center px-4 py-2.5 bg-gray-900 hover:bg-black text-white text-sm font-medium rounded-lg transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4" /> New Chat
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-3 pb-6 custom-scrollbar space-y-1">
+            {conversations.length === 0 && (
+              <div className="text-center p-8">
+                <p className="text-xs text-gray-400">No chats yet</p>
+              </div>
+            )}
+            {conversations.map((conv) => (
+              <button
+                key={conv.id}
+                onClick={() => {
+                  setCurrentConversationId(conv.id);
+                  if (window.innerWidth < 1024) setSidebarOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-all flex items-center gap-3 border ${
+                  currentConversationId === conv.id 
+                    ? 'bg-white border-gray-200 text-indigo-600 font-semibold shadow-sm' 
+                    : 'border-transparent text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <Bot className={`w-4 h-4 flex-shrink-0 ${currentConversationId === conv.id ? 'text-indigo-600' : 'text-gray-400'}`} />
+                <span className="truncate">{conv.title || 'New Conversation'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main Container */}
+      <div className="flex-1 flex flex-col bg-white relative min-w-0">
+        
+        {/* Simple Header */}
+        <header className="px-6 py-4 flex items-center justify-between border-b border-gray-200 flex-shrink-0 bg-white sticky top-0 z-20">
+          <div className="flex items-center gap-4">
+            {!sidebarOpen && (
+              <button 
+                onClick={() => setSidebarOpen(true)} 
+                className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
+            <div className="relative">
+              <div className="h-9 w-9 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm">
+                <Bot className="h-5 w-5 text-white" />
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-white border-2 border-white flex items-center justify-center">
+                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+              </div>
             </div>
-            <h1 className="text-sm font-semibold text-gray-900">AI Assistant</h1>
+            <div className="min-w-0">
+              <h1 className="text-sm font-bold text-gray-900 leading-tight">Adeera Assistant</h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] font-medium text-gray-500">Online</span>
+              </div>
+            </div>
           </div>
         </header>
 
-        {/* Chat Container - Maximized */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 custom-scrollbar">
-          <AnimatePresence>
-            {messages.map((message) => (
-              <motion.div
-                key={message.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`flex items-start space-x-2 max-w-4xl ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                  {/* Small Avatar */}
-                  <div className={`flex-shrink-0 h-6 w-6 rounded-lg flex items-center justify-center ${
-                    message.role === 'user'
-                      ? 'bg-blue-500'
-                      : 'bg-purple-500'
-                  }`}>
-                    {message.role === 'assistant' ? (
-                      <FaRobot className="h-3 w-3 text-white" />
-                    ) : (
-                      <FaUser className="h-3 w-3 text-white" />
-                    )}
+        {/* Conversation Area */}
+        <div className="px-4 sm:px-8 py-4">
+          <div className="max-w-6xl mx-auto space-y-4">
+            
+            {/* Simple Empty State */}
+            {messages.length <= 1 && (
+              <div className="py-12 text-center max-w-2xl mx-auto">
+                <div className="mb-8">
+                  <div className="inline-block p-4 bg-gray-50 rounded-2xl mb-4 border border-gray-100">
+                    <Bot className="w-8 h-8 text-indigo-600" />
                   </div>
-
-                  {/* Message Bubble - Enhanced */}
-                  <div className={`flex-1 rounded-lg ${
-                    message.role === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white border border-gray-200 shadow-sm'
-                  }`}>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className={`text-xs ${
-                          message.role === 'user' ? 'text-white/70' : 'text-gray-400'
-                        }`}>
-                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        <button
-                          onClick={() => handleCopy(message.content, message.id)}
-                          className={`p-1.5 rounded hover:bg-opacity-20 transition-colors ${
-                            message.role === 'user' ? 'text-white/70 hover:bg-white/20' : 'text-gray-400 hover:bg-gray-100'
-                          }`}
-                        >
-                          {copiedId === message.id ? (
-                            <FaCheck className="h-3.5 w-3.5 text-green-500" />
-                          ) : (
-                            <FaCopy className="h-3.5 w-3.5" />
-                          )}
-                        </button>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">How can I help you today?</h2>
+                  <p className="text-gray-500 text-sm">Analyze sales, generate reports, or get business advice.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {INITIAL_SUGGESTIONS.map((sug, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setInput(sug.prompt)}
+                      className="group p-4 rounded-xl border border-gray-200 bg-white hover:border-indigo-600 hover:bg-indigo-50/30 transition-all flex flex-col items-start gap-3 text-left"
+                    >
+                      <div className={`p-2 rounded-lg bg-gray-100 text-gray-600 group-hover:text-indigo-600 group-hover:bg-indigo-100`}>
+                        <sug.icon className="w-5 h-5" />
                       </div>
-                      <div className={`prose prose-sm max-w-none ${
-                        message.role === 'user' ? 'text-white' : 'text-gray-800'
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900 group-hover:text-indigo-700">{sug.title}</h4>
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{sug.prompt}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-4">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`flex items-start gap-3 max-w-[95%] lg:max-w-[85%] ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                    <div className={`flex-shrink-0 h-8 w-8 rounded-lg flex items-center justify-center text-white mt-1 ${
+                      message.role === 'user' ? 'bg-gray-900' : 'bg-indigo-600'
+                    }`}>
+                      {message.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                    </div>
+
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <div className={`px-4 py-3 rounded-xl border ${
+                        message.role === 'user'
+                          ? 'bg-indigo-600 text-white border-indigo-700'
+                          : 'bg-white text-gray-800 border-gray-200 shadow-sm'
                       }`}>
-                        {formatMessageContent(message.content)}
-                      </div>
-                      
-                      {/* Chart Display */}
-                      {message.chartData && message.role === 'assistant' && (
-                        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                          <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                            <FaChartLine className="h-4 w-4" />
-                            {message.chartData.title}
-                          </h4>
-                          <div className="h-64">
-                            {message.chartData.type === 'line' && (
-                              <Line
-                                data={message.chartData.data}
-                                options={{
-                                  ...message.chartData.options,
-                                  responsive: true,
-                                  maintainAspectRatio: false,
-                                }}
-                              />
-                            )}
-                            {message.chartData.type === 'bar' && (
-                              <Bar
-                                data={message.chartData.data}
-                                options={{
-                                  ...message.chartData.options,
-                                  responsive: true,
-                                  maintainAspectRatio: false,
-                                }}
-                              />
-                            )}
-                            {message.chartData.type === 'pie' && (
-                              <Pie
-                                data={message.chartData.data}
-                                options={{
-                                  ...message.chartData.options,
-                                  responsive: true,
-                                  maintainAspectRatio: false,
-                                }}
-                              />
-                            )}
-                            {message.chartData.type === 'doughnut' && (
-                              <Doughnut
-                                data={message.chartData.data}
-                                options={{
-                                  ...message.chartData.options,
-                                  responsive: true,
-                                  maintainAspectRatio: false,
-                                }}
-                              />
-                            )}
-                          </div>
+                        <div className={`prose prose-sm max-w-none break-words ${message.role === 'user' ? 'text-white' : 'text-gray-700'}`}>
+                          {formatMessageContent(message.content)}
                         </div>
-                      )}
+                        
+                        {/* Simple Chart UI */}
+                        {message.chartData && message.role === 'assistant' && (
+                          <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+                            <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                              <BarChart3 className="h-4 w-4 text-indigo-600" />
+                              {message.chartData.title}
+                            </h4>
+                            <div className="h-64 w-full">
+                              {message.chartData.type === 'line' && <Line data={message.chartData.data} options={{...message.chartData.options, responsive: true, maintainAspectRatio: false}} />}
+                              {message.chartData.type === 'bar' && <Bar data={message.chartData.data} options={{...message.chartData.options, responsive: true, maintainAspectRatio: false}} />}
+                              {message.chartData.type === 'pie' && <Pie data={message.chartData.data} options={{...message.chartData.options, responsive: true, maintainAspectRatio: false}} />}
+                              {message.chartData.type === 'doughnut' && <Doughnut data={message.chartData.data} options={{...message.chartData.options, responsive: true, maintainAspectRatio: false}} />}
+                            </div>
+                          </div>
+                        )}
 
-                      {/* Report Download */}
-                      {message.reportData && message.role === 'assistant' && (
-                        <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="text-sm font-semibold text-blue-900 mb-1">
-                                Report Ready for Download
-                              </h4>
-                              <p className="text-xs text-blue-700">
-                                {message.reportData.reportType.charAt(0).toUpperCase() + message.reportData.reportType.slice(1)} Report • {message.reportData.format.toUpperCase()}
-                              </p>
+                        {/* Simple Download Button */}
+                        {message.reportData && message.role === 'assistant' && (
+                          <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <Download className="w-5 h-5 text-gray-600" />
+                              <div>
+                                <h4 className="text-sm font-bold text-gray-900">
+                                  {message.reportData.reportType.charAt(0).toUpperCase() + message.reportData.reportType.slice(1)} Summary
+                                </h4>
+                                <p className="text-xs text-gray-500 uppercase tracking-wider">
+                                  {message.reportData.format}
+                                </p>
+                              </div>
                             </div>
                             <button
                               onClick={async () => {
                                 if (!message.reportData) return;
                                 try {
                                   const token = localStorage.getItem('token');
-                                  const response = await fetch(
-                                    `/api/ai/reports/download/${message.reportData.filename}`,
-                                    {
-                                      headers: {
-                                        'Authorization': `Bearer ${token}`,
-                                      },
-                                    }
-                                  );
+                                  const response = await fetch(`/api/ai/reports/download/${message.reportData.filename}`, {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                  });
                                   if (response.ok) {
                                     const blob = await response.blob();
                                     const url = window.URL.createObjectURL(blob);
@@ -631,102 +614,111 @@ export default function AIChatPage() {
                                     window.URL.revokeObjectURL(url);
                                     document.body.removeChild(a);
                                   }
-                                } catch (error) {
-                                  console.error('Error downloading report:', error);
-                                }
+                                } catch (error) { console.error(error); }
                               }}
-                              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                              className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 transition-colors"
                             >
-                              <FaDownload className="h-3.5 w-3.5" />
                               Download
                             </button>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {message.suggestions && message.suggestions.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-gray-200/30">
-                          <div className="flex flex-wrap gap-1.5">
-                            {message.suggestions.map((suggestion, idx) => (
+                        {/* Simple Suggestions */}
+                        {message.suggestions && message.suggestions.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap gap-2">
+                            {message.suggestions.map((sug, idx) => (
                               <button
                                 key={idx}
-                                onClick={() => setInput(suggestion)}
-                                className={`px-2 py-1 text-xs rounded ${
+                                onClick={() => setInput(sug)}
+                                className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
                                   message.role === 'user'
-                                    ? 'bg-white/20 hover:bg-white/30 text-white'
-                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                    ? 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+                                    : 'bg-white border-gray-300 text-gray-700 hover:border-indigo-600 hover:text-indigo-600'
                                 }`}
                               >
-                                {suggestion}
+                                {sug}
                               </button>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      <div className={`mt-1 flex items-center gap-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <button
+                          onClick={() => handleCopy(message.content, message.id)}
+                          className="text-[10px] text-gray-400 hover:text-indigo-600 font-medium"
+                        >
+                          {copiedId === message.id ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+              ))}
+            </div>
 
-          {/* Compact Loading */}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="flex items-center space-x-2">
-                <div className="h-6 w-6 rounded-lg bg-purple-500 flex items-center justify-center">
-                  <FaRobot className="h-3 w-3 text-white" />
-                </div>
-                <div className="bg-white border border-gray-200 rounded-lg px-3 py-2">
-                  <div className="flex items-center space-x-2">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    >
-                      <FaSpinner className="h-3.5 w-3.5 text-blue-600" />
-                    </motion.div>
-                    <span className="text-xs text-gray-600">Thinking...</span>
+            {/* Simple Loading indicator */}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <Bot className="w-4 h-4 text-gray-400" />
+                  </div>
+                  <div className="bg-gray-100 px-4 py-2 rounded-xl text-xs font-medium text-gray-500 border border-gray-200">
+                    Assistant is thinking...
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+            )}
+            <div ref={messagesEndRef} className="h-6" />
+          </div>
 
-        {/* Compact Input Area */}
-        <div className="border-t border-gray-200 bg-white px-3 py-2">
-          <form onSubmit={handleSubmit} className="flex space-x-2">
-            <Input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask me anything about your business..."
-              className="flex-1 px-3 py-2 text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              disabled={isLoading}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                !input.trim() || isLoading
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
-            >
-              <FaPaperPlane className="h-3.5 w-3.5" />
-            </button>
-          </form>
+          {/* Simple Input Bar */}
+          <div className="mt-6 mb-10 px-2 sm:px-4">
+            <div className="max-w-5xl mx-auto w-full">
+              <form 
+                onSubmit={handleSubmit} 
+                className="relative bg-white border border-gray-300 rounded-xl p-1.5 flex items-center shadow-sm focus-within:border-indigo-600 transition-all"
+              >
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask a question about your business..."
+                  className="flex-1 bg-transparent px-4 py-3 text-sm outline-none placeholder:text-gray-400 text-gray-900"
+                  disabled={isLoading}
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isLoading}
+                  className={`px-6 py-3 rounded-lg text-sm font-bold transition-all ${
+                    !input.trim() || isLoading
+                      ? 'bg-gray-100 text-gray-400'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  Send
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/30 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f8fafc;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #e2e8f0;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #cbd5e1;
+        }
+      `}</style>
     </div>
   );
 }
