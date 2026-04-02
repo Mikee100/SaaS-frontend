@@ -842,30 +842,30 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-background text-foreground">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
           {/* Header */}
           <div className="mb-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <FaChartBar className="w-6 h-6 text-blue-500" />
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  <FaChartBar className="w-6 h-6 text-primary" />
                   Expenses
                 </h1>
-                <p className="text-sm text-gray-500 mt-1">Track and manage your business expenses</p>
+                <p className="text-sm text-muted-foreground mt-1">Track and manage your business expenses</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={exportType}
                   onChange={(e) => setExportType(e.target.value as 'csv' | 'pdf')}
-                  className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-3 py-2 bg-card border border-border rounded-lg text-sm focus:ring-2 focus:ring-ring focus:border-transparent"
                 >
                   <option value="csv">CSV Export</option>
                   <option value="pdf">PDF Export</option>
                 </select>
                 <button
                   onClick={handleDownloadReport}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium flex items-center gap-2 transition"
+                  className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-muted text-sm font-medium flex items-center gap-2 transition"
                 >
                   <FaFileDownload className="w-4 h-4" />
                   Export
@@ -873,7 +873,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 {canCreateExpenses && (
                   <button
                     onClick={() => setDrawerType('create')}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium flex items-center gap-2 shadow-sm transition"
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm font-medium flex items-center gap-2 shadow-sm transition"
                   >
                     <FaPlus className="w-4 h-4" />
                     Add Expense
@@ -884,13 +884,13 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
           </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 mb-6 border-b border-gray-200">
+        <div className="flex items-center gap-1 mb-6 border-b border-gray-200 dark:border-gray-800">
           <button
             onClick={() => setActiveTab('current')}
             className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'current'
                 ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
             }`}
           >
             <FaHistory className="w-4 h-4" />
@@ -901,7 +901,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'salaries'
                 ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
             }`}
           >
             <FaRedo className="w-4 h-4" />
@@ -912,7 +912,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'comparison'
                 ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
             }`}
           >
             <FaChartBar className="w-4 h-4" />
@@ -923,7 +923,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'past'
                 ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
             }`}
           >
             <FaCalendarAlt className="w-4 h-4" />
@@ -934,7 +934,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'records'
                 ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
             }`}
           >
             <FaEye className="w-4 h-4" />
@@ -944,24 +944,24 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
 
         {/* Filters - Only show in Current tab */}
         {activeTab === 'current' && (
-          <div className="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6 border border-gray-200 dark:border-gray-800">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Search</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search expenses..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-200"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Sort By</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-200"
                 >
                   <option value="createdAt">Date</option>
                   <option value="amount">Amount</option>
@@ -969,22 +969,22 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Order</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Order</label>
                 <select
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-200"
                 >
                   <option value="desc">Descending</option>
                   <option value="asc">Ascending</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Branch</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Branch</label>
                 <select
                   value={branchFilter || ''}
                   onChange={e => setBranchFilter(e.target.value || null)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-200"
                 >
                   <option value="">All Branches</option>
                   {branches.map(branch => (
@@ -994,14 +994,14 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               </div>
             </div>
             <div className="mt-3 flex items-center gap-3">
-              <label className="block text-xs font-medium text-gray-700">Type:</label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Type:</label>
               <div className="flex gap-2">
                 <button
                   onClick={() => setExpenseTypeFilter('all')}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
                     expenseTypeFilter === 'all'
                       ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   All
@@ -1011,7 +1011,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
                     expenseTypeFilter === 'one_time'
                       ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   One-time
@@ -1021,7 +1021,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
                     expenseTypeFilter === 'recurring'
                       ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   Recurring
@@ -1037,33 +1037,33 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             {/* Summary Cards - Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               {/* Total Expenses */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200 shadow-sm">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800/50 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">Total Expenses</span>
+                  <span className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide">Total Expenses</span>
                   <FaChartBar className="w-4 h-4 text-blue-500" />
                 </div>
-                <p className="text-2xl font-bold text-blue-900">
+                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
                   Ksh {totalAmount.toFixed(2)}
                 </p>
-                <p className="text-xs text-blue-600 mt-1">{expenses.length} {expenses.length === 1 ? 'expense' : 'expenses'}</p>
+                <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">{expenses.length} {expenses.length === 1 ? 'expense' : 'expenses'}</p>
               </div>
 
               {/* Salary Expenses */}
-              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 border border-emerald-200 shadow-sm">
+              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800/50 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-emerald-700 uppercase tracking-wide">Salary Expenses</span>
+                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">Salary Expenses</span>
                   <FaRedo className="w-4 h-4 text-emerald-500" />
                 </div>
-                <p className="text-2xl font-bold text-emerald-900">
+                <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
                   Ksh {salaryTotal.toFixed(2)}
                 </p>
-                <p className="text-xs text-emerald-600 mt-1">Recurring salaries</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">Recurring salaries</p>
               </div>
 
               {/* Current Month */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200 shadow-sm">
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800/50 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-purple-700 uppercase tracking-wide">This Month</span>
+                  <span className="text-xs font-medium text-purple-700 dark:text-purple-400 uppercase tracking-wide">This Month</span>
                   <FaCalendarAlt className="w-4 h-4 text-purple-500" />
                 </div>
                 {(() => {
@@ -1076,35 +1076,35 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   const monthTotal = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
                   return (
                     <>
-                      <p className="text-2xl font-bold text-purple-900">
+                      <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
                         Ksh {monthTotal.toFixed(2)}
                       </p>
-                      <p className="text-xs text-purple-600 mt-1">{monthExpenses.length} {monthExpenses.length === 1 ? 'expense' : 'expenses'}</p>
+                      <p className="text-xs text-purple-600 dark:text-purple-500 mt-1">{monthExpenses.length} {monthExpenses.length === 1 ? 'expense' : 'expenses'}</p>
                     </>
                   );
                 })()}
               </div>
 
               {/* Average Expense */}
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200 shadow-sm">
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl p-4 border border-orange-200 dark:border-orange-800/50 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-orange-700 uppercase tracking-wide">Avg Expense</span>
+                  <span className="text-xs font-medium text-orange-700 dark:text-orange-400 uppercase tracking-wide">Avg Expense</span>
                   <FaChartBar className="w-4 h-4 text-orange-500" />
                 </div>
-                <p className="text-2xl font-bold text-orange-900">
+                <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">
                   Ksh {expenses.length > 0 ? (totalAmount / expenses.length).toFixed(2) : '0.00'}
                 </p>
-                <p className="text-xs text-orange-600 mt-1">Per transaction</p>
+                <p className="text-xs text-orange-600 dark:text-orange-500 mt-1">Per transaction</p>
               </div>
             </div>
 
             {/* Expenses Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">All Expenses</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">All Expenses</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       Showing {filteredExpenses.length} of {expenses.length} expenses
                     </p>
                   </div>
@@ -1122,9 +1122,9 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
 
               {filteredExpenses.length === 0 ? (
                 <div className="text-center py-16">
-                  <FaHistory className="w-16 h-16 text-gray-200 mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">No expenses found</h3>
-                  <p className="text-gray-500 text-sm mb-4">Start by adding your first expense or adjust your filters</p>
+                  <FaHistory className="w-16 h-16 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">No expenses found</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">Start by adding your first expense or adjust your filters</p>
                   {canCreateExpenses && (
                     <button
                       onClick={() => setDrawerType('create')}
@@ -1137,67 +1137,67 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Description</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Branch</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Description</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Category</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Type</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Branch</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                       {filteredExpenses.map(expense => (
                         <tr
                           key={expense.id}
-                          className="hover:bg-blue-50/50 transition-colors cursor-pointer"
+                          className="hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer"
                           onClick={() => {
                             setSelectedExpense(expense);
                             setDrawerType('details');
                           }}
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-bold text-gray-900">Ksh {expense.amount.toFixed(2)}</span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-white">Ksh {expense.amount.toFixed(2)}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 font-medium">{expense.description}</div>
+                            <div className="text-sm text-gray-900 dark:text-gray-100 font-medium">{expense.description}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700 capitalize">
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 capitalize">
                               {getCategoryName(expense).replace('_', ' ')}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {expense.expenseType === 'recurring' ? (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
                                 <FaRedo className="w-3 h-3 mr-1" />
                                 Recurring
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                                 One-time
                               </span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                             {new Date(expense.createdAt).toLocaleDateString('en-US', { 
                               month: 'short', 
                               day: 'numeric', 
                               year: 'numeric' 
                             })}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {expense.branch?.name || <span className="text-gray-400">—</span>}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                            {expense.branch?.name || <span className="text-gray-400 dark:text-gray-600">—</span>}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                               expense.isActive 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-red-100 text-red-700'
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                             }`}>
                               <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
                                 expense.isActive ? 'bg-green-500' : 'bg-red-500'
@@ -1212,7 +1212,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                                 setSelectedExpense(expense);
                                 setDrawerType('details');
                               }}
-                              className="text-blue-600 hover:text-blue-900 inline-flex items-center gap-1"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 inline-flex items-center gap-1"
                             >
                               <FaEye className="w-4 h-4" />
                               View
@@ -1233,90 +1233,90 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               {/* Current Month Total */}
-              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 border border-emerald-200 shadow-sm">
+              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800/50 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-emerald-700 uppercase tracking-wide">This Month</span>
+                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">This Month</span>
                   <FaCalendarAlt className="w-4 h-4 text-emerald-500" />
                 </div>
                 {salarySummaryLoading ? (
                   <Spinner />
                 ) : currentMonthSalaryTotal ? (
                   <>
-                    <p className="text-2xl font-bold text-emerald-900">
+                    <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
                       Ksh {currentMonthSalaryTotal.totalAmount.toFixed(2)}
                     </p>
-                    <p className="text-xs text-emerald-600 mt-1">{currentMonthSalaryTotal.salarySchemeCount} active {currentMonthSalaryTotal.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">{currentMonthSalaryTotal.salarySchemeCount} active {currentMonthSalaryTotal.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-2xl font-bold text-emerald-900">Ksh 0.00</p>
-                    <p className="text-xs text-emerald-600 mt-1">No data</p>
+                    <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">Ksh 0.00</p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">No data</p>
                   </>
                 )}
               </div>
 
               {/* Selected Month Total */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200 shadow-sm">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800/50 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">Selected Month</span>
+                  <span className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide">Selected Month</span>
                   <FaCalendarAlt className="w-4 h-4 text-blue-500" />
                 </div>
                 {fetchingMonthlyTotal ? (
                   <Spinner />
                 ) : salaryTotalForMonth ? (
                   <>
-                    <p className="text-2xl font-bold text-blue-900">
+                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
                       Ksh {salaryTotalForMonth.totalAmount.toFixed(2)}
                     </p>
-                    <p className="text-xs text-blue-600 mt-1">{salaryTotalForMonth.salarySchemeCount} active {salaryTotalForMonth.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">{salaryTotalForMonth.salarySchemeCount} active {salaryTotalForMonth.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-2xl font-bold text-blue-900">Ksh 0.00</p>
-                    <p className="text-xs text-blue-600 mt-1">No data</p>
+                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">Ksh 0.00</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">No data</p>
                   </>
                 )}
               </div>
 
               {/* Total Schemes */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200 shadow-sm">
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800/50 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-purple-700 uppercase tracking-wide">Total Schemes</span>
+                  <span className="text-xs font-medium text-purple-700 dark:text-purple-400 uppercase tracking-wide">Total Schemes</span>
                   <FaRedo className="w-4 h-4 text-purple-500" />
                 </div>
-                <p className="text-2xl font-bold text-purple-900">
+                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
                   {salarySchemes.length}
                 </p>
-                <p className="text-xs text-purple-600 mt-1">
+                <p className="text-xs text-purple-600 dark:text-purple-500 mt-1">
                   {salarySchemes.filter(s => s.isActive).length} active
                 </p>
               </div>
 
               {/* Average Salary */}
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200 shadow-sm">
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl p-4 border border-orange-200 dark:border-orange-800/50 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-orange-700 uppercase tracking-wide">Avg Salary</span>
+                  <span className="text-xs font-medium text-orange-700 dark:text-orange-400 uppercase tracking-wide">Avg Salary</span>
                   <FaChartBar className="w-4 h-4 text-orange-500" />
                 </div>
-                <p className="text-2xl font-bold text-orange-900">
+                <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">
                   Ksh {salarySchemes.length > 0 
                     ? (salarySchemes.reduce((sum, s) => sum + s.salaryAmount, 0) / salarySchemes.length).toFixed(2)
                     : '0.00'}
                 </p>
-                <p className="text-xs text-orange-600 mt-1">Per employee</p>
+                <p className="text-xs text-orange-600 dark:text-orange-500 mt-1">Per employee</p>
               </div>
             </div>
 
             {/* Month/Year Selector */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6 border border-gray-200 dark:border-gray-800">
               <div className="flex flex-wrap items-end gap-4">
                 <div className="flex-1 min-w-[150px]">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Select Month & Year</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Select Month & Year</label>
                   <div className="flex gap-2">
                     <select
                       value={selectedMonth}
                       onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent dark:text-gray-200"
                     >
                       {Array.from({ length: 12 }, (_, i) => (
                         <option key={i + 1} value={i + 1}>
@@ -1327,7 +1327,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     <select
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent dark:text-gray-200"
                     >
                       {Array.from({ length: 5 }, (_, i) => {
                         const year = new Date().getFullYear() - 2 + i;
@@ -1351,12 +1351,12 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
             </div>
 
             {/* Salary Schemes Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Salary Schemes</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Salary Schemes</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       {loadingSchemes ? 'Loading...' : `${salarySchemes.length} ${salarySchemes.length === 1 ? 'scheme' : 'schemes'} total`}
                     </p>
                   </div>
@@ -1369,9 +1369,9 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
               ) : salarySchemes.length === 0 ? (
                 <div className="text-center py-16">
-                  <FaRedo className="w-16 h-16 text-gray-200 mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">No salary schemes found</h3>
-                  <p className="text-gray-500 text-sm mb-4">Create your first salary scheme to get started</p>
+                  <FaRedo className="w-16 h-16 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">No salary schemes found</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">Create your first salary scheme to get started</p>
                   <button
                     onClick={() => setSalaryDrawerType('create')}
                     className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow hover:bg-emerald-700 font-semibold flex items-center gap-2 text-sm mx-auto"
@@ -1382,57 +1382,57 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Employee</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Frequency</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Start Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Next Due</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Last Paid</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Branch</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Employee</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Frequency</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Start Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Next Due</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Last Paid</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Branch</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                       {salarySchemes.map(scheme => (
                         <tr
                           key={scheme.id}
-                          className="hover:bg-emerald-50/50 transition-colors cursor-pointer"
+                          className="hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20 transition-colors cursor-pointer"
                           onClick={() => {
                             setSelectedSalaryScheme(scheme);
                             setSalaryDrawerType('details');
                           }}
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">
                               {scheme.user?.name || scheme.employeeName}
                             </div>
                             {scheme.notes && (
-                              <div className="text-xs text-gray-500 mt-0.5 truncate max-w-[200px]" title={scheme.notes}>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate max-w-[200px]" title={scheme.notes}>
                                 {scheme.notes}
                               </div>
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-bold text-gray-900">Ksh {scheme.salaryAmount.toFixed(2)}</span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-white">Ksh {scheme.salaryAmount.toFixed(2)}</span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 capitalize">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 capitalize">
                               <FaRedo className="w-3 h-3 mr-1" />
                               {scheme.frequency}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                             {new Date(scheme.startDate).toLocaleDateString('en-US', { 
                               month: 'short', 
                               day: 'numeric', 
                               year: 'numeric' 
                             })}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                             {scheme.nextDueDate ? (
                               new Date(scheme.nextDueDate).toLocaleDateString('en-US', { 
                                 month: 'short', 
@@ -1440,10 +1440,10 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                                 year: 'numeric' 
                               })
                             ) : (
-                              <span className="text-gray-400">—</span>
+                              <span className="text-gray-400 dark:text-gray-600">—</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                             {scheme.lastPaidDate ? (
                               new Date(scheme.lastPaidDate).toLocaleDateString('en-US', { 
                                 month: 'short', 
@@ -1451,17 +1451,17 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                                 year: 'numeric' 
                               })
                             ) : (
-                              <span className="text-gray-400">Never</span>
+                              <span className="text-gray-400 dark:text-gray-600">Never</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {scheme.branch?.name || <span className="text-gray-400">—</span>}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                            {scheme.branch?.name || <span className="text-gray-400 dark:text-gray-600">—</span>}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                               scheme.isActive 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-red-100 text-red-700'
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                             }`}>
                               <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
                                 scheme.isActive ? 'bg-green-500' : 'bg-red-500'
@@ -1477,7 +1477,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                                   setSelectedSalaryScheme(scheme);
                                   setSalaryDrawerType('details');
                                 }}
-                                className="text-emerald-600 hover:text-emerald-900 inline-flex items-center gap-1"
+                                className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300 inline-flex items-center gap-1"
                                 title="View"
                               >
                                 <FaEye className="w-4 h-4" />
@@ -1498,7 +1498,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                                   setIsEditingSalary(true);
                                   setSalaryDrawerType('create');
                                 }}
-                                className="text-yellow-600 hover:text-yellow-900 inline-flex items-center gap-1"
+                                className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-300 inline-flex items-center gap-1"
                                 title="Edit"
                               >
                                 <FaEdit className="w-4 h-4" />
@@ -1510,7 +1510,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                                     handleDeleteSalaryScheme(scheme);
                                   }
                                 }}
-                                className="text-red-600 hover:text-red-900 inline-flex items-center gap-1"
+                                className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 inline-flex items-center gap-1"
                                 title="Delete"
                               >
                                 <FaTrash className="w-4 h-4" />
@@ -1529,13 +1529,13 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
 
         {activeTab === 'comparison' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Branch Comparison</h3>
-              <p className="text-xs text-gray-500 mb-4">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Branch Comparison</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
                 Compare total expense amount and count across your branches.
               </p>
               {!branchComparison || !branchComparison.branches || branchComparison.branches.length === 0 ? (
-                <div className="text-center py-10 text-gray-500 text-sm">
+                <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm">
                   No branch expense data available yet. Add expenses with branches to see comparisons here.
                 </div>
               ) : (
@@ -1544,21 +1544,21 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     {branchComparison.branches.map((branch: { branchName: string; totalAmount: number; expenseCount: number }) => (
                       <div
                         key={branch.branchName}
-                        className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200"
+                        className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800/50"
                       >
-                        <h4 className="font-semibold text-blue-900 mb-2">{branch.branchName}</h4>
+                        <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">{branch.branchName}</h4>
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-blue-700">Total Expenses:</span>
-                            <span className="font-bold">Ksh {branch.totalAmount?.toFixed(2)}</span>
+                            <span className="text-blue-700 dark:text-blue-400">Total Expenses:</span>
+                            <span className="font-bold text-blue-900 dark:text-blue-100">Ksh {branch.totalAmount?.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-blue-700">Count:</span>
-                            <span className="font-bold">{branch.expenseCount}</span>
+                            <span className="text-blue-700 dark:text-blue-400">Count:</span>
+                            <span className="font-bold text-blue-900 dark:text-blue-100">{branch.expenseCount}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-blue-700">Avg per Expense:</span>
-                            <span className="font-bold">
+                            <span className="text-blue-700 dark:text-blue-400">Avg per Expense:</span>
+                            <span className="font-bold text-blue-900 dark:text-blue-100">
                               Ksh {branch.expenseCount ? (branch.totalAmount / branch.expenseCount).toFixed(2) : '0.00'}
                             </span>
                           </div>
@@ -1567,13 +1567,17 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     ))}
                   </div>
                   <div className="mt-6">
-                    <h4 className="font-semibold text-gray-900 mb-3">Expense Distribution by Branch</h4>
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Expense Distribution by Branch</h4>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={branchComparison.branches}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="branchName" />
-                        <YAxis />
-                        <Tooltip formatter={(value: number) => [`Ksh ${value}`, 'Amount']} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="branchName" stroke="#9ca3af" />
+                        <YAxis stroke="#9ca3af" />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px' }}
+                          itemStyle={{ color: '#f3f4f6' }}
+                          formatter={(value: number) => [`Ksh ${value}`, 'Amount']} 
+                        />
                         <Legend />
                         <Bar dataKey="totalAmount" fill="#3b82f6" name="Total Amount" />
                       </BarChart>
@@ -1587,14 +1591,14 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
 
         {activeTab === 'past' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Past Months Records</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Past Months Records</h3>
                 {canCreateExpenses && (
                   <button
                     onClick={handleMonthlyReset}
                     disabled={resetting}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold flex items-center gap-2 text-sm disabled:opacity-50"
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold flex items-center gap-2 text-sm disabled:opacity-50 transition"
                   >
                     {resetting ? <Spinner /> : <FaSync className="w-4 h-4" />}
                     Reset Monthly Expenses
@@ -1602,8 +1606,8 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 )}
               </div>
               {!pastMonthsData || !pastMonthsData.records || pastMonthsData.records.length === 0 ? (
-                <div className="text-center py-10 text-gray-500 text-sm">
-                  <FaCalendarAlt className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm">
+                  <FaCalendarAlt className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
                   <p>No past months expense data available yet.</p>
                   <p className="text-xs mt-1">Expenses will be grouped by month as you add them.</p>
                 </div>
@@ -1611,20 +1615,20 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {pastMonthsData.records.map((record: { month: string; monthName: string; totalAmount: number; expenseCount: number }) => (
-                      <div key={record.month} className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
-                        <h4 className="font-semibold text-green-900 mb-2">{record.monthName}</h4>
+                      <div key={record.month} className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-4 border border-green-200 dark:border-green-800/50">
+                        <h4 className="font-semibold text-green-900 dark:text-green-100 mb-2">{record.monthName}</h4>
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-green-700">Total Expenses:</span>
-                            <span className="font-bold">Ksh {record.totalAmount?.toFixed(2)}</span>
+                            <span className="text-green-700 dark:text-green-400">Total Expenses:</span>
+                            <span className="font-bold text-green-900 dark:text-green-100">Ksh {record.totalAmount?.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-green-700">Count:</span>
-                            <span className="font-bold">{record.expenseCount}</span>
+                            <span className="text-green-700 dark:text-green-400">Count:</span>
+                            <span className="font-bold text-green-900 dark:text-green-100">{record.expenseCount}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-green-700">Avg per Expense:</span>
-                            <span className="font-bold">
+                            <span className="text-green-700 dark:text-green-400">Avg per Expense:</span>
+                            <span className="font-bold text-green-900 dark:text-green-100">
                               Ksh {record.expenseCount ? (record.totalAmount / record.expenseCount).toFixed(2) : '0.00'}
                             </span>
                           </div>
@@ -1633,13 +1637,17 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     ))}
                   </div>
                   <div className="mt-6">
-                    <h4 className="font-semibold text-gray-900 mb-3">Monthly Expense Trends</h4>
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Monthly Expense Trends</h4>
                     <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={pastMonthsData.records}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="monthName" />
-                        <YAxis />
-                        <Tooltip formatter={(value: number) => [`Ksh ${value}`, 'Amount']} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="monthName" stroke="#9ca3af" />
+                        <YAxis stroke="#9ca3af" />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px' }}
+                          itemStyle={{ color: '#f3f4f6' }}
+                          formatter={(value: number) => [`Ksh ${value}`, 'Amount']} 
+                        />
                         <Legend />
                         <Line type="monotone" dataKey="totalAmount" stroke="#10b981" strokeWidth={2} name="Total Amount" />
                       </LineChart>
@@ -1655,24 +1663,24 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
           <>
             {/* All Expenses Records Summary */}
             <div className="mb-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">All Expenses Records Summary</h3>
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">All Expenses Records Summary</h3>
                 {(() => {
                   const recordsExpenses = expenses.filter(exp => !exp.id.startsWith('salary-'));
                   const totalAmount = recordsExpenses.reduce((sum, exp) => sum + exp.amount, 0);
                   const totalCount = recordsExpenses.length;
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                        <h4 className="font-semibold text-blue-900 mb-2">Total Records</h4>
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800/50">
+                        <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Total Records</h4>
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-blue-700">Count:</span>
-                            <span className="font-bold">{totalCount}</span>
+                            <span className="text-blue-700 dark:text-blue-400">Count:</span>
+                            <span className="font-bold text-blue-900 dark:text-blue-100">{totalCount}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-blue-700">Total Amount:</span>
-                            <span className="font-bold">Ksh {totalAmount.toFixed(2)}</span>
+                            <span className="text-blue-700 dark:text-blue-400">Total Amount:</span>
+                            <span className="font-bold text-blue-900 dark:text-blue-100">Ksh {totalAmount.toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
@@ -1717,13 +1725,13 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
 
               return filteredRecords.length === 0 ? (
                 <div className="text-center py-10">
-                  <FaHistory className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                  <h3 className="text-base font-semibold text-gray-900 mb-1">No expense records found</h3>
-                  <p className="text-gray-400 text-xs mb-2">Start by adding your first expense</p>
+                  <FaHistory className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">No expense records found</h3>
+                  <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">Start by adding your first expense</p>
                   {canCreateExpenses && (
                     <button
                       onClick={() => setDrawerType('create')}
-                      className="px-3 py-1.5 bg-blue-600 text-white rounded shadow hover:bg-blue-700 font-semibold flex items-center gap-1 text-xs"
+                      className="px-3 py-1.5 bg-blue-600 text-white rounded shadow hover:bg-blue-700 font-semibold flex items-center gap-1 text-xs mx-auto"
                     >
                       <FaPlus className="w-3 h-3" />
                       Add Expense
@@ -1732,9 +1740,9 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white rounded-lg shadow-sm">
+                  <table className="min-w-full bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800">
                     <thead>
-                      <tr className="text-xs text-gray-500 border-b">
+                      <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
                         <th className="py-2 px-3 text-left">Amount</th>
                         <th className="py-2 px-3 text-left">Description</th>
                         <th className="py-2 px-3 text-left">Category</th>
@@ -1749,26 +1757,26 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       {filteredRecords.map(expense => (
                         <tr
                           key={expense.id}
-                          className="border-b hover:bg-blue-50 cursor-pointer"
+                          className="border-b border-gray-50 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors"
                           onClick={() => {
                             setSelectedExpense(expense);
                             setDrawerType('details');
                           }}
                         >
-                          <td className="py-2 px-3 font-bold text-gray-900">Ksh {expense.amount.toFixed(2)}</td>
-                          <td className="py-2 px-3 text-xs">{expense.description}</td>
-                          <td className="py-2 px-3 text-xs capitalize">{getCategoryName(expense).replace('_', ' ')}</td>
+                          <td className="py-2 px-3 font-bold text-gray-900 dark:text-white">Ksh {expense.amount.toFixed(2)}</td>
+                          <td className="py-2 px-3 text-xs text-gray-700 dark:text-gray-300">{expense.description}</td>
+                          <td className="py-2 px-3 text-xs capitalize text-gray-700 dark:text-gray-300">{getCategoryName(expense).replace('_', ' ')}</td>
                           <td className="py-2 px-3 text-xs">
                             {expense.expenseType === 'recurring' ? (
-                              <span className="text-orange-700">Recurring</span>
+                              <span className="text-orange-700 dark:text-orange-400">Recurring</span>
                             ) : (
-                              <span className="text-gray-700">One-time</span>
+                              <span className="text-gray-700 dark:text-gray-400">One-time</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 text-xs">{new Date(expense.createdAt).toLocaleDateString()}</td>
-                          <td className="py-2 px-3 text-xs">{expense.branch?.name || ''}</td>
+                          <td className="py-2 px-3 text-xs text-gray-600 dark:text-gray-400">{new Date(expense.createdAt).toLocaleDateString()}</td>
+                          <td className="py-2 px-3 text-xs text-gray-600 dark:text-gray-400">{expense.branch?.name || ''}</td>
                           <td className="py-2 px-3 text-xs">
-                            <span className={expense.isActive ? 'text-green-600' : 'text-red-600'}>
+                            <span className={expense.isActive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                               {expense.isActive ? 'Active' : 'Inactive'}
                             </span>
                           </td>
@@ -1829,11 +1837,11 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white/90 z-50 shadow-2xl border-l border-gray-100 flex flex-col rounded-l-xl"
+              className="fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white/90 dark:bg-gray-900 z-50 shadow-2xl border-l border-gray-100 dark:border-gray-700 flex flex-col rounded-l-xl"
               style={{ maxHeight: '100vh' }}
             >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white/90 z-10 rounded-t-xl">
-                <h3 className="text-lg font-bold text-gray-900">Add New Expense</h3>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-10 rounded-t-xl">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Add New Expense</h3>
                 <button
                   onClick={() => {
                     setDrawerType(null);
@@ -1845,26 +1853,26 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     });
                     setError(null);
                   }}
-                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition"
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
                 >
                   <FaTimesCircle className="w-5 h-5" />
                 </button>
               </div>
               <div className="overflow-y-auto px-6 py-6 flex-1 space-y-6">
                 {/* Expense Info Section */}
-                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-xl p-4 shadow-sm border border-gray-100">
-                  <h4 className="text-base font-semibold text-gray-800 mb-2">Expense Information</h4>
+                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h4 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Expense Information</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Amount */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Amount *</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Amount *</label>
                       <div className="relative">
-                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-blue-400 text-sm font-medium">Ksh</span>
+                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-blue-400 dark:text-blue-500 text-sm font-medium">Ksh</span>
                         <input
                           type="number"
                           value={formData.amount}
                           onChange={(e) => handleInputChange('amount', parseFloat(e.target.value) || 0)}
-                          className="w-full pl-12 pr-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                          className="w-full pl-12 pr-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                           placeholder="0.00"
                           min="0"
                           step="0.01"
@@ -1873,11 +1881,11 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     </div>
                     {/* Category */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Category</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Category</label>
                       <select
                         value={formData.category}
                         onChange={(e) => handleInputChange('category', e.target.value)}
-                        className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                        className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                       >
                         <option value="salary">Salary</option>
                         <option value="office_supplies">Office Supplies</option>
@@ -1892,28 +1900,28 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   </div>
                   {/* Description */}
                   <div className="mt-4">
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Description *</label>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Description *</label>
                     <input
                       type="text"
                       value={formData.description}
                       onChange={(e) => handleInputChange('description', e.target.value)}
-                      className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                      className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                       placeholder="Enter expense description"
                     />
                   </div>
                 </div>
                 {/* Recurring Section */}
-                <div className="bg-gradient-to-r from-purple-50 via-white to-blue-50 rounded-xl p-4 shadow-sm border border-gray-100">
-                  <h4 className="text-base font-semibold text-gray-800 mb-2">Recurring Options</h4>
+                <div className="bg-gradient-to-r from-purple-50 via-white to-blue-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h4 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Recurring Options</h4>
                   <div className="flex items-center gap-2 mb-2">
                     <input
                       type="checkbox"
                       id="recurring"
                       checked={formData.expenseType === 'recurring'}
                       onChange={(e) => handleInputChange('expenseType', e.target.checked ? 'recurring' : 'one_time')}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 dark:bg-gray-900"
                     />
-                    <label htmlFor="recurring" className="text-sm font-semibold text-gray-700">
+                    <label htmlFor="recurring" className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                       This is a recurring expense
                     </label>
                   </div>
@@ -1921,11 +1929,11 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Frequency */}
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1">Frequency</label>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Frequency</label>
                         <select
                           value={formData.frequency || ''}
                           onChange={(e) => handleInputChange('frequency', e.target.value)}
-                          className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                          className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                         >
                           <option value="">Select frequency</option>
                           <option value="daily">Daily</option>
@@ -1936,24 +1944,24 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       </div>
                       {/* Next Due Date */}
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1">Next Due Date</label>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Next Due Date</label>
                         <input
                           type="date"
                           value={formData.nextDueDate || ''}
                           onChange={(e) => handleInputChange('nextDueDate', e.target.value)}
-                          className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                          className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                         />
                       </div>
                     </div>
                   )}
                 </div>
                 {/* Branch Selection */}
-                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-xl p-4 shadow-sm border border-gray-100">
-                  <h4 className="text-base font-semibold text-gray-800 mb-2">Branch</h4>
+                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h4 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Branch</h4>
                   <select
                     value={formData.branchId || ''}
                     onChange={e => handleInputChange('branchId', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                    className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                   >
                     <option value="">Select branch</option>
                     {branches.map(branch => (
@@ -1962,24 +1970,24 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   </select>
                 </div>
                 {/* Notes Section */}
-                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-xl p-4 shadow-sm border border-gray-100">
-                  <h4 className="text-base font-semibold text-gray-800 mb-2">Notes</h4>
+                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-xl p-4 shadow-sm border border-gray-100 dark:bg-gradient-to-r dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 dark:border-gray-700">
+                  <h4 className="text-base font-semibold text-gray-800 mb-2 dark:text-gray-100">Notes</h4>
                   <textarea
                     value={formData.notes || ''}
                     onChange={(e) => handleInputChange('notes', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700 placeholder-gray-400 dark:placeholder-gray-500"
                     placeholder="Additional notes..."
                     rows={3}
                   />
                 </div>
                 {/* Error */}
                 {error && (
-                  <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm shadow">
+                  <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm shadow">
                     {error}
                   </div>
                 )}
                 {/* Action Buttons */}
-                <div className="flex justify-end gap-3 mt-2 sticky bottom-0 bg-white/90 py-2 rounded-b-xl">
+                <div className="flex justify-end gap-3 mt-2 sticky bottom-0 bg-white/90 dark:bg-gray-900/90 py-2 rounded-b-xl">
                   <button
                     onClick={() => {
                       setDrawerType(null);
@@ -1991,7 +1999,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       });
                       setError(null);
                     }}
-                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold text-sm"
+                    className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 font-semibold text-sm"
                     disabled={creating}
                   >
                     Cancel
@@ -2026,35 +2034,35 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[440px] bg-white/95 z-50 shadow-2xl border-l border-gray-100 flex flex-col rounded-l-xl"
+              className="fixed top-0 right-0 h-full w-full sm:w-[440px] bg-white/95 dark:bg-gray-900/95 z-50 shadow-2xl border-l border-gray-100 dark:border-gray-800 flex flex-col rounded-l-xl backdrop-blur-md"
               style={{ maxHeight: '100vh' }}
             >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white/90 z-10 rounded-t-xl">
-                <h3 className="text-lg font-bold text-gray-900">Expense Details</h3>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white/90 dark:bg-gray-900/90 z-10 rounded-t-xl">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Expense Details</h3>
                 <button
                   onClick={() => {
                     setDrawerType(null);
                     setSelectedExpense(null);
                   }}
-                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition"
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
                 >
                   <FaTimesCircle className="w-5 h-5" />
                 </button>
               </div>
               <div className="overflow-y-auto px-6 py-6 flex-1 space-y-6">
                 {/* Amount and Type Section */}
-                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
+                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900">Ksh {selectedExpense.amount.toFixed(2)}</div>
-                    <div className="text-sm text-gray-600">{selectedExpense.description}</div>
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">Ksh {selectedExpense.amount.toFixed(2)}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{selectedExpense.description}</div>
                   </div>
                   <div className="text-right">
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor()}`}>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300`}>
                       {getCategoryName(selectedExpense).replace('_', ' ')}
                     </span>
                     <div className="mt-2 flex items-center gap-1">
                       {getExpenseTypeIcon(selectedExpense.expenseType)}
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
                         {selectedExpense.expenseType === 'recurring' ? `Recurring (${selectedExpense.frequency})` : 'One-time'}
                       </span>
                     </div>
@@ -2062,52 +2070,52 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
                 {/* Details Grid Section */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white/80 rounded-xl p-5 border border-gray-100 shadow-sm">
-                    <h4 className="font-medium text-gray-900 mb-3">Basic Information</h4>
+                  <div className="bg-white/80 dark:bg-gray-800/80 rounded-xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">Basic Information</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Created:</span>
-                        <span>{new Date(selectedExpense.createdAt).toLocaleDateString()}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Created:</span>
+                        <span className="text-gray-900 dark:text-gray-200">{new Date(selectedExpense.createdAt).toLocaleDateString()}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Last Updated:</span>
-                        <span>{new Date(selectedExpense.updatedAt).toLocaleDateString()}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Last Updated:</span>
+                        <span className="text-gray-900 dark:text-gray-200">{new Date(selectedExpense.updatedAt).toLocaleDateString()}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Created By:</span>
-                        <span>{selectedExpense.user.name}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Created By:</span>
+                        <span className="text-gray-900 dark:text-gray-200">{selectedExpense.user.name}</span>
                       </div>
                       {selectedExpense.branch && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Branch:</span>
-                          <span>{selectedExpense.branch.name}</span>
+                          <span className="text-gray-600 dark:text-gray-400">Branch:</span>
+                          <span className="text-gray-900 dark:text-gray-200">{selectedExpense.branch.name}</span>
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="bg-white/80 rounded-xl p-5 border border-gray-100 shadow-sm">
-                    <h4 className="font-medium text-gray-900 mb-3">Expense Details</h4>
+                  <div className="bg-white/80 dark:bg-gray-800/80 rounded-xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">Expense Details</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Status:</span>
-                        <span className={selectedExpense.isActive ? 'text-green-600' : 'text-red-600'}>
+                        <span className="text-gray-600 dark:text-gray-400">Status:</span>
+                        <span className={selectedExpense.isActive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                           {selectedExpense.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </div>
                       {selectedExpense.expenseType === 'recurring' && selectedExpense.nextDueDate && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Next Due:</span>
-                          <span>{new Date(selectedExpense.nextDueDate).toLocaleDateString()}</span>
+                          <span className="text-gray-600 dark:text-gray-400">Next Due:</span>
+                          <span className="text-gray-900 dark:text-gray-200">{new Date(selectedExpense.nextDueDate).toLocaleDateString()}</span>
                         </div>
                       )}
                       {selectedExpense.receiptUrl && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Receipt:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Receipt:</span>
                           <a
                             href={selectedExpense.receiptUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800"
+                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                           >
                             View Receipt
                           </a>
@@ -2118,9 +2126,9 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
                 {/* Notes Section */}
                 {selectedExpense.notes && (
-                  <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-2xl p-4 shadow-sm border border-gray-100">
-                    <h4 className="font-medium text-gray-900 mb-3">Notes</h4>
-                    <div className="text-sm text-gray-700">
+                  <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h4 className="font-medium text-gray-900 dark:text-white mb-3">Notes</h4>
+                    <div className="text-sm text-gray-700 dark:text-gray-300">
                       {selectedExpense.notes}
                     </div>
                   </div>
@@ -2169,11 +2177,11 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white/90 z-50 shadow-2xl border-l border-gray-100 flex flex-col rounded-l-xl"
+              className="fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white dark:bg-gray-900 z-50 shadow-2xl border-l border-gray-100 dark:border-gray-800 flex flex-col rounded-l-xl"
               style={{ maxHeight: '100vh' }}
             >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white/90 z-10 rounded-t-xl">
-                <h3 className="text-lg font-bold text-gray-900">{isEditingSalary ? 'Edit Salary Scheme' : 'Add New Salary Scheme'}</h3>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-10 rounded-t-xl">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{isEditingSalary ? 'Edit Salary Scheme' : 'Add New Salary Scheme'}</h3>
                 <button
                   onClick={() => {
                     setSalaryDrawerType(null);
@@ -2190,19 +2198,19 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     setSelectedSalarySchemeForEdit(null);
                     setError(null);
                   }}
-                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition"
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
                 >
                   <FaTimesCircle className="w-5 h-5" />
                 </button>
               </div>
               <div className="overflow-y-auto px-6 py-6 flex-1 space-y-6">
                 {/* Salary Info Section */}
-                <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-xl p-4 shadow-sm border border-gray-100">
-                  <h4 className="text-base font-semibold text-gray-800 mb-2">Salary Information</h4>
+                <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h4 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Salary Information</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Select Employee */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Select Employee *</label>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Select Employee *</label>
                       <select
                         value={salaryForm.userId}
                         onChange={(e) => {
@@ -2211,7 +2219,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                           handleSalaryFormChange('userId', selectedUserId);
                           handleSalaryFormChange('employeeName', selectedUser ? selectedUser.name : '');
                         }}
-                        className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
+                        className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                       >
                         <option value="">Select an employee</option>
                         {users.map(user => (
@@ -2221,14 +2229,14 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     </div>
                     {/* Salary Amount */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Salary Amount *</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Salary Amount *</label>
                       <div className="relative">
-                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-emerald-400 text-sm font-medium">Ksh</span>
+                        <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-emerald-400 dark:text-emerald-500 text-sm font-medium">Ksh</span>
                         <input
                           type="number"
                           value={salaryForm.salaryAmount}
                           onChange={(e) => handleSalaryFormChange('salaryAmount', parseFloat(e.target.value) || 0)}
-                          className="w-full pl-12 pr-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
+                          className="w-full pl-12 pr-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                           placeholder="0.00"
                           min="0"
                           step="0.01"
@@ -2238,11 +2246,11 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   </div>
                   {/* Frequency */}
                   <div className="mt-4">
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Frequency</label>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Frequency</label>
                     <select
                       value={salaryForm.frequency}
                       onChange={(e) => handleSalaryFormChange('frequency', e.target.value as 'monthly' | 'yearly')}
-                      className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
+                      className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                     >
                       <option value="monthly">Monthly</option>
                       <option value="yearly">Yearly</option>
@@ -2250,22 +2258,22 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   </div>
                   {/* Start Date */}
                   <div className="mt-4">
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Start Date *</label>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Start Date *</label>
                     <input
                       type="date"
                       value={salaryForm.startDate}
                       onChange={(e) => handleSalaryFormChange('startDate', e.target.value)}
-                      className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80"
+                      className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
                 {/* Branch Selection */}
-                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-xl p-4 shadow-sm border border-gray-100">
-                  <h4 className="text-base font-semibold text-gray-800 mb-2">Branch</h4>
+                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h4 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Branch</h4>
                   <select
                     value={salaryForm.branchId || ''}
                     onChange={(e) => handleSalaryFormChange('branchId', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                    className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white"
                   >
                     <option value="">Select branch</option>
                     {branches.map(branch => (
@@ -2274,24 +2282,24 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   </select>
                 </div>
                 {/* Notes Section */}
-                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 rounded-xl p-4 shadow-sm border border-gray-100">
-                  <h4 className="text-base font-semibold text-gray-800 mb-2">Notes</h4>
+                <div className="bg-gradient-to-r from-blue-50 via-white to-purple-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+                  <h4 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Notes</h4>
                   <textarea
                     value={salaryForm.notes || ''}
                     onChange={(e) => handleSalaryFormChange('notes', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80"
+                    className="w-full px-2 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-gray-900 dark:text-white placeholder-gray-400"
                     placeholder="Additional notes..."
                     rows={3}
                   />
                 </div>
                 {/* Error */}
                 {error && (
-                  <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm shadow">
+                  <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm shadow">
                     {error}
                   </div>
                 )}
                 {/* Action Buttons */}
-                <div className="flex justify-end gap-3 mt-2 sticky bottom-0 bg-white/90 py-2 rounded-b-xl">
+                <div className="flex justify-end gap-3 mt-2 sticky bottom-0 bg-white/90 dark:bg-gray-900/90 py-2 rounded-b-xl">
                   <button
                     onClick={() => {
                       setSalaryDrawerType(null);
@@ -2308,7 +2316,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       setSelectedSalarySchemeForEdit(null);
                       setError(null);
                     }}
-                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold text-sm"
+                    className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 font-semibold text-sm"
                     disabled={salaryAssigning}
                   >
                     Cancel
@@ -2344,13 +2352,13 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-white/90 z-50 shadow-2xl border-l border-gray-100 flex flex-col rounded-l-xl"
+              className="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-white dark:bg-gray-900 z-50 shadow-2xl border-l border-gray-100 dark:border-gray-800 flex flex-col rounded-l-xl"
               style={{ maxHeight: '100vh' }}
             >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white/95 z-10 rounded-t-xl">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white/95 dark:bg-gray-900/95 z-10 rounded-t-xl backdrop-blur-md">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">Salary Scheme Details</h3>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Salary Scheme Details</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Overview of this employee&apos;s recurring salary arrangement
                   </p>
                 </div>
@@ -2359,33 +2367,33 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     setSalaryDrawerType(null);
                     setSelectedSalaryScheme(null);
                   }}
-                  className="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition"
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
                 >
                   <FaTimesCircle className="w-5 h-5" />
                 </button>
               </div>
               <div className="overflow-y-auto px-6 py-6 flex-1 space-y-6">
                 {/* Amount and Employee Section */}
-                <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-2xl p-5 shadow-sm border border-emerald-100">
+                <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-2xl p-5 shadow-sm border border-emerald-100 dark:border-emerald-900/30">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 mb-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400 mb-1">
                         Monthly salary
                       </p>
-                      <div className="text-2xl font-bold text-gray-900">
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">
                         Ksh {selectedSalaryScheme.salaryAmount.toFixed(2)}
                       </div>
-                      <div className="mt-2 text-sm font-medium text-gray-700">
+                      <div className="mt-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                         {selectedSalaryScheme.user?.name || selectedSalaryScheme.employeeName}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300">
                         Salary scheme
                       </span>
-                      <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/80 border border-emerald-100">
+                      <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/80 dark:bg-gray-800/80 border border-emerald-100 dark:border-emerald-900/30">
                         <FaRedo className="w-3.5 h-3.5 text-emerald-500" />
-                        <span className="text-xs text-gray-700 capitalize">
+                        <span className="text-xs text-gray-700 dark:text-gray-300 capitalize">
                           {selectedSalaryScheme.frequency}
                         </span>
                       </div>
@@ -2394,67 +2402,67 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
                 {/* Details Grid Section */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="bg-white/90 rounded-xl p-5 border border-gray-100 shadow-sm">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-3">Basic Information</h4>
+                  <div className="bg-white/90 dark:bg-gray-800/90 rounded-xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Basic Information</h4>
                     <div className="space-y-3 text-sm">
                       <div>
-                        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                        <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
                           Employee ID
                         </p>
-                        <p className="font-medium text-gray-800 break-all">
+                        <p className="font-medium text-gray-800 dark:text-gray-200 break-all">
                           {selectedSalaryScheme.userId}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                        <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
                           Employee Name
                         </p>
-                        <p className="font-medium text-gray-800">
+                        <p className="font-medium text-gray-800 dark:text-gray-200">
                           {selectedSalaryScheme.user?.name || selectedSalaryScheme.employeeName}
                         </p>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                          <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
                             Start Date
                           </p>
-                          <p className="font-medium text-gray-800">
+                          <p className="font-medium text-gray-800 dark:text-gray-200">
                             {new Date(selectedSalaryScheme.startDate).toLocaleDateString()}
                           </p>
                         </div>
                         <div>
-                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                          <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
                             Created
                           </p>
-                          <p className="font-medium text-gray-800">
+                          <p className="font-medium text-gray-800 dark:text-gray-200">
                             {new Date(selectedSalaryScheme.createdAt).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
                       {selectedSalaryScheme.branch && (
                         <div>
-                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                          <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
                             Branch
                           </p>
-                          <p className="font-medium text-gray-800">
+                          <p className="font-medium text-gray-800 dark:text-gray-200">
                             {selectedSalaryScheme.branch.name}
                           </p>
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="bg-white/90 rounded-xl p-5 border border-gray-100 shadow-sm">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-3">Payment Details</h4>
+                  <div className="bg-white/90 dark:bg-gray-800/90 rounded-xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Payment Details</h4>
                     <div className="space-y-3 text-sm">
                       <div>
-                        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                        <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
                           Status
                         </p>
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                             selectedSalaryScheme.isActive
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                              : 'bg-red-50 text-red-700 border border-red-100'
+                              ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30'
+                              : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30'
                           }`}
                         >
                           <span
@@ -2467,20 +2475,20 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                          <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
                             Next Due Date
                           </p>
-                          <p className="font-medium text-gray-800">
+                          <p className="font-medium text-gray-800 dark:text-gray-200">
                             {selectedSalaryScheme.nextDueDate
                               ? new Date(selectedSalaryScheme.nextDueDate).toLocaleDateString()
                               : '-'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                          <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
                             Last Paid Date
                           </p>
-                          <p className="font-medium text-gray-800">
+                          <p className="font-medium text-gray-800 dark:text-gray-200">
                             {selectedSalaryScheme.lastPaidDate
                               ? new Date(selectedSalaryScheme.lastPaidDate).toLocaleDateString()
                               : '-'}
@@ -2488,10 +2496,10 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                         </div>
                       </div>
                       <div>
-                        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-0.5">
+                        <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-0.5">
                           Frequency
                         </p>
-                        <p className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-gray-50 text-gray-800 text-xs font-medium capitalize">
+                        <p className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-medium capitalize">
                           {selectedSalaryScheme.frequency}
                         </p>
                       </div>
@@ -2500,9 +2508,9 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
                 {/* Notes Section */}
                 {selectedSalaryScheme.notes && (
-                  <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 rounded-2xl p-4 shadow-sm border border-gray-100">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Notes</h4>
-                    <div className="text-sm text-gray-700 leading-relaxed">
+                  <div className="bg-gradient-to-r from-emerald-50 via-white to-blue-50 dark:from-gray-800 dark:via-gray-850 dark:to-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Notes</h4>
+                    <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                       {selectedSalaryScheme.notes}
                     </div>
                   </div>
@@ -2514,7 +2522,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                       setSalaryDrawerType(null);
                       setSelectedSalaryScheme(null);
                     }}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold text-sm transition"
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 font-semibold text-sm transition"
                   >
                     Close
                   </button>

@@ -943,7 +943,7 @@ export default function SalesHistoryPage() {
             </div>
             <div>
               <p className="text-[10px] text-green-700 font-medium leading-tight">Total Revenue</p>
-              <p className="text-base font-bold text-green-900 leading-tight">${totalRevenue.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
+              <p className="text-base font-bold text-green-900 leading-tight">Ksh {totalRevenue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</p>
             </div>
           </div>
           <p className="text-[9px] text-green-600 mt-0.5 leading-tight">Sum of values</p>
@@ -956,7 +956,7 @@ export default function SalesHistoryPage() {
             </div>
             <div>
               <p className="text-[10px] text-purple-700 font-medium leading-tight">Average Sale</p>
-              <p className="text-base font-bold text-purple-900 leading-tight">${avgSaleValue.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
+              <p className="text-base font-bold text-purple-900 leading-tight">Ksh {avgSaleValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:3})}</p>
             </div>
           </div>
           <p className="text-[9px] text-purple-600 mt-0.5 leading-tight">Avg per transaction</p>
