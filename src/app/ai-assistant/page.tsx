@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Bot,
   Send,
@@ -231,6 +232,7 @@ const INITIAL_SUGGESTIONS = [
 ];
 
 export default function AIChatPage() {
+  const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -429,6 +431,30 @@ export default function AIChatPage() {
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  if (!user) return null;
+
+  const hasAIPermission = user.isSuperadmin || user.roles?.includes('owner') || user.roles?.includes('admin') || user.permissions?.includes('use_ai_assistant');
+
+  if (!hasAIPermission) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white p-6 text-center">
+        <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-6">
+          <Bot className="w-10 h-10 text-red-500" />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+        <p className="text-gray-600 max-w-md mb-8">
+          You don't have permission to use the AI Assistant. Please contact your administrator to request access.
+        </p>
+        <button 
+          onClick={() => router.push('/')}
+          className="px-6 py-3 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black transition-all"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col lg:flex-row min-h-full bg-white transition-all duration-300">

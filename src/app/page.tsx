@@ -303,10 +303,14 @@ function formatChartData(data: Record<string, number>) {
     .map(([label, value]) => ({ label, value }));
 }
 
+
+import { useBranch } from '@/contexts/BranchContext';
+
 export default function DashboardPage() {
   const { data: tenant, isLoading: tenantLoading } = useTenant();
   const { data: planLimits, loading: limitsLoading } = usePlanLimits();
   const { user } = useUser();
+  const { selectedBranchId } = useBranch();
 
   // Fetch stock threshold configuration
   const { data: stockConfig } = useQuery({
@@ -317,11 +321,11 @@ export default function DashboardPage() {
 
   const stockThreshold = stockConfig?.value ? Number(stockConfig.value) : 15;
 
-  // Fetch dashboard analytics data
+  // Fetch dashboard analytics data (branch-aware)
   const { data: analyticsData, isLoading: analyticsLoading } = useQuery({
-    queryKey: ['analytics', 'dashboard'],
+    queryKey: ['analytics', 'dashboard', selectedBranchId],
     queryFn: async () => {
-      const stats = await apiGet('/analytics/dashboard') as AnalyticsData;
+      const stats = await apiGet('/analytics/dashboard', { 'x-branch-id': selectedBranchId || undefined }) as AnalyticsData;
       return {
         ...stats,
         topProducts: stats.topProducts?.map((p: { name: string; sales: number; revenue: number; margin?: number; cost?: number }) => ({
@@ -336,6 +340,7 @@ export default function DashboardPage() {
     },
     staleTime: 2 * 60 * 1000, // 2 minutes - analytics change frequently
     gcTime: 5 * 60 * 1000, // React Query v5: gcTime replaces cacheTime
+    enabled: !!selectedBranchId,
   });
 
   // Fetch branch monthly comparison
@@ -470,6 +475,16 @@ export default function DashboardPage() {
         </div>
       </div>
     );
+  }
+
+  // DEBUG: Show selectedBranchId and query state
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.log('[Dashboard] selectedBranchId:', selectedBranchId);
+    // eslint-disable-next-line no-console
+    console.log('[Dashboard] analyticsData:', analyticsData);
+    // eslint-disable-next-line no-console
+    console.log('[Dashboard] analyticsLoading:', analyticsLoading);
   }
 
   return (

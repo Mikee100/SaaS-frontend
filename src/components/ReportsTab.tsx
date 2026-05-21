@@ -279,43 +279,43 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
     if (!data) return null;
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-3">
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Total Orders</h3>
-              <FaShoppingCart className="w-5 h-5 text-blue-600" />
+              <h3 className="text-xs font-medium text-gray-600">Total Orders</h3>
+              <FaShoppingCart className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{data.totalOrders || 0}</p>
+            <p className="text-sm font-semibold text-gray-900">{data.totalOrders || 0}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Total Sales</h3>
-              <FaMoneyBillWave className="w-5 h-5 text-green-600" />
+              <h3 className="text-xs font-medium text-gray-600">Total Sales</h3>
+              <FaMoneyBillWave className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">Ksh {(data.totalSales || 0).toLocaleString()}</p>
+            <p className="text-sm font-semibold text-gray-900">Ksh {(data.totalSales || 0).toLocaleString()}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Avg Order Value</h3>
-              <FaChartLine className="w-5 h-5 text-purple-600" />
+              <h3 className="text-xs font-medium text-gray-600">Avg Order Value</h3>
+              <FaChartLine className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">Ksh {(data.averageOrderValue || 0).toLocaleString()}</p>
+            <p className="text-sm font-semibold text-gray-900">Ksh {(data.averageOrderValue || 0).toLocaleString()}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Top Products</h3>
-              <FaChartBar className="w-5 h-5 text-orange-600" />
+              <h3 className="text-xs font-medium text-gray-600">Top Products</h3>
+              <FaChartBar className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{data.topProducts?.length || 0}</p>
+            <p className="text-sm font-semibold text-gray-900">{data.topProducts?.length || 0}</p>
           </div>
         </div>
 
         {/* Sales Trend Chart */}
         {data.salesTrend && data.salesTrend.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Sales Trend</h3>
+          <div className="bg-white rounded border border-gray-200 p-3">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Sales Trend</h3>
             <div className="h-64 flex items-end justify-between gap-1">
               {data.salesTrend.map((item: any, index: number) => {
                 const maxSales = Math.max(...data.salesTrend.map((i: any) => i.sales || 0), 1);
@@ -323,7 +323,7 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
                 return (
                   <div key={index} className="flex flex-col items-center flex-1 group">
                     <div
-                      className="w-full bg-gradient-to-t from-blue-500 to-blue-600 rounded-t mb-2 transition-all hover:from-blue-600 hover:to-blue-700 cursor-pointer relative"
+                      className="w-full bg-slate-500 rounded-t mb-2 transition-all hover:bg-slate-600 cursor-pointer relative"
                       style={{ height: `${height}px` }}
                       title={`${item.date}: Ksh ${(item.sales || 0).toLocaleString()}`}
                     >
@@ -341,23 +341,23 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
 
         {/* Top Products */}
         {data.topProducts && data.topProducts.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Products</h3>
+          <div className="bg-white rounded border border-gray-200 p-3">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Top Products</h3>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Product</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Quantity Sold</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Revenue</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-700">Product</th>
+                    <th className="text-right py-2 px-3 text-xs font-medium text-gray-700">Quantity Sold</th>
+                    <th className="text-right py-2 px-3 text-xs font-medium text-gray-700">Revenue</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.topProducts.map((product: any, index: number) => (
                     <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-sm text-gray-900">{product.productName || 'Unknown'}</td>
-                      <td className="py-3 px-4 text-sm text-gray-600 text-right">{product.quantitySold || 0}</td>
-                      <td className="py-3 px-4 text-sm font-medium text-gray-900 text-right">Ksh {(product.totalRevenue || 0).toLocaleString()}</td>
+                      <td className="py-2 px-3 text-xs text-gray-900">{product.productName || 'Unknown'}</td>
+                      <td className="py-2 px-3 text-xs text-gray-600 text-right">{product.quantitySold || 0}</td>
+                      <td className="py-2 px-3 text-xs font-medium text-gray-900 text-right">Ksh {(product.totalRevenue || 0).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -368,16 +368,16 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
 
         {/* Payment Methods */}
         {data.paymentMethods && data.paymentMethods.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Payment Methods</h3>
+          <div className="bg-white rounded border border-gray-200 p-3">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Payment Methods</h3>
             <div className="space-y-3">
               {data.paymentMethods.map((method: any, index: number) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                   <div>
-                    <p className="font-medium text-gray-900">{method.method || 'Unknown'}</p>
-                    <p className="text-sm text-gray-600">{method.count || 0} transactions</p>
+                    <p className="text-xs font-medium text-gray-900">{method.method || 'Unknown'}</p>
+                    <p className="text-[11px] text-gray-600">{method.count || 0} transactions</p>
                   </div>
-                  <p className="text-lg font-bold text-gray-900">Ksh {(method.amount || 0).toLocaleString()}</p>
+                  <p className="text-sm font-semibold text-gray-900">Ksh {(method.amount || 0).toLocaleString()}</p>
                 </div>
               ))}
             </div>
@@ -392,44 +392,44 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
     if (!data) return null;
 
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Total Products</h3>
-            <p className="text-3xl font-bold text-gray-900">{data.totalProducts || 0}</p>
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="bg-white rounded border border-gray-200 p-2">
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Total Products</h3>
+            <p className="text-sm font-semibold text-gray-900">{data.totalProducts || 0}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Top Selling Products</h3>
-            <p className="text-3xl font-bold text-gray-900">{data.topProducts?.length || 0}</p>
+          <div className="bg-white rounded border border-gray-200 p-2">
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Top Selling Products</h3>
+            <p className="text-sm font-semibold text-gray-900">{data.topProducts?.length || 0}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Total Revenue</h3>
-            <p className="text-3xl font-bold text-gray-900">
+          <div className="bg-white rounded border border-gray-200 p-2">
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Total Revenue</h3>
+            <p className="text-sm font-semibold text-gray-900">
               Ksh {data.topProducts?.reduce((sum: number, p: any) => sum + (p.revenue || 0), 0).toLocaleString() || '0'}
             </p>
           </div>
         </div>
 
         {data.topProducts && data.topProducts.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Products Performance</h3>
+          <div className="bg-white rounded border border-gray-200 p-3">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Top Products Performance</h3>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Product</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Sales</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Revenue</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Margin</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-700">Product</th>
+                    <th className="text-right py-2 px-3 text-xs font-medium text-gray-700">Sales</th>
+                    <th className="text-right py-2 px-3 text-xs font-medium text-gray-700">Revenue</th>
+                    <th className="text-right py-2 px-3 text-xs font-medium text-gray-700">Margin</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.topProducts.map((product: any, index: number) => (
                     <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-sm text-gray-900">{product.name || 'Unknown'}</td>
-                      <td className="py-3 px-4 text-sm text-gray-600 text-right">{product.sales || 0}</td>
-                      <td className="py-3 px-4 text-sm font-medium text-gray-900 text-right">Ksh {(product.revenue || 0).toLocaleString()}</td>
-                      <td className="py-3 px-4 text-sm text-gray-600 text-right">{((product.margin || 0) * 100).toFixed(1)}%</td>
+                      <td className="py-2 px-3 text-xs text-gray-900">{product.name || 'Unknown'}</td>
+                      <td className="py-2 px-3 text-xs text-gray-600 text-right">{product.sales || 0}</td>
+                      <td className="py-2 px-3 text-xs font-medium text-gray-900 text-right">Ksh {(product.revenue || 0).toLocaleString()}</td>
+                      <td className="py-2 px-3 text-xs text-gray-600 text-right">{((product.margin || 0) * 100).toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -446,28 +446,28 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
     if (!data) return null;
 
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Total Customers</h3>
-              <FaUser className="w-5 h-5 text-blue-600" />
+              <h3 className="text-xs font-medium text-gray-600">Total Customers</h3>
+              <FaUser className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{(data.totalCustomers || 0).toLocaleString()}</p>
+            <p className="text-sm font-semibold text-gray-900">{(data.totalCustomers || 0).toLocaleString()}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Customer Retention</h3>
-              <FaChartLine className="w-5 h-5 text-green-600" />
+              <h3 className="text-xs font-medium text-gray-600">Customer Retention</h3>
+              <FaChartLine className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{(data.customerRetention || 0).toFixed(1)}%</p>
+            <p className="text-sm font-semibold text-gray-900">{(data.customerRetention || 0).toFixed(1)}%</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Avg Order Value</h3>
-              <FaMoneyBillWave className="w-5 h-5 text-purple-600" />
+              <h3 className="text-xs font-medium text-gray-600">Avg Order Value</h3>
+              <FaMoneyBillWave className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">Ksh {(data.averageOrderValue || 0).toLocaleString()}</p>
+            <p className="text-sm font-semibold text-gray-900">Ksh {(data.averageOrderValue || 0).toLocaleString()}</p>
           </div>
         </div>
       </div>
@@ -479,27 +479,27 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
     if (!data) return null;
 
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Low Stock Items</h3>
-            <p className="text-3xl font-bold text-red-600">{data.lowStockItems || 0}</p>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <div className="bg-white rounded border border-gray-200 p-2">
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Low Stock Items</h3>
+            <p className="text-sm font-semibold text-gray-900">{data.lowStockItems || 0}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Overstock Items</h3>
-            <p className="text-3xl font-bold text-orange-600">{data.overstockItems || 0}</p>
+          <div className="bg-white rounded border border-gray-200 p-2">
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Overstock Items</h3>
+            <p className="text-sm font-semibold text-gray-900">{data.overstockItems || 0}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Inventory Turnover</h3>
-            <p className="text-3xl font-bold text-gray-900">{(data.inventoryTurnover || 0).toFixed(2)}</p>
+          <div className="bg-white rounded border border-gray-200 p-2">
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Inventory Turnover</h3>
+            <p className="text-sm font-semibold text-gray-900">{(data.inventoryTurnover || 0).toFixed(2)}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Stockout Rate</h3>
-            <p className="text-3xl font-bold text-gray-900">{((data.stockoutRate || 0) * 100).toFixed(1)}%</p>
+          <div className="bg-white rounded border border-gray-200 p-2">
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Stockout Rate</h3>
+            <p className="text-sm font-semibold text-gray-900">{((data.stockoutRate || 0) * 100).toFixed(1)}%</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Total Stock Value</h3>
-            <p className="text-3xl font-bold text-gray-900">Ksh {(data.totalStockValue || 0).toLocaleString()}</p>
+          <div className="bg-white rounded border border-gray-200 p-2">
+            <h3 className="text-xs font-medium text-gray-600 mb-1">Total Stock Value</h3>
+            <p className="text-sm font-semibold text-gray-900">Ksh {(data.totalStockValue || 0).toLocaleString()}</p>
           </div>
         </div>
       </div>
@@ -511,45 +511,45 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
     if (!data) return null;
 
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Total Revenue</h3>
-              <FaMoneyBillWave className="w-5 h-5 text-green-600" />
+              <h3 className="text-xs font-medium text-gray-600">Total Revenue</h3>
+              <FaMoneyBillWave className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">Ksh {(data.totalRevenue || 0).toLocaleString()}</p>
+            <p className="text-sm font-semibold text-gray-900">Ksh {(data.totalRevenue || 0).toLocaleString()}</p>
             {data.revenueGrowth !== undefined && (
-              <p className={`text-sm mt-1 ${data.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-xs mt-1 ${data.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {data.revenueGrowth >= 0 ? '+' : ''}{data.revenueGrowth.toFixed(1)}%
               </p>
             )}
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Total Sales</h3>
-              <FaShoppingCart className="w-5 h-5 text-blue-600" />
+              <h3 className="text-xs font-medium text-gray-600">Total Sales</h3>
+              <FaShoppingCart className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{(data.totalSales || 0).toLocaleString()}</p>
+            <p className="text-sm font-semibold text-gray-900">{(data.totalSales || 0).toLocaleString()}</p>
             {data.salesGrowth !== undefined && (
-              <p className={`text-sm mt-1 ${data.salesGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-xs mt-1 ${data.salesGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {data.salesGrowth >= 0 ? '+' : ''}{data.salesGrowth.toFixed(1)}%
               </p>
             )}
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Avg Order Value</h3>
-              <FaChartLine className="w-5 h-5 text-purple-600" />
+              <h3 className="text-xs font-medium text-gray-600">Avg Order Value</h3>
+              <FaChartLine className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">Ksh {(data.averageOrderValue || 0).toLocaleString()}</p>
+            <p className="text-sm font-semibold text-gray-900">Ksh {(data.averageOrderValue || 0).toLocaleString()}</p>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded border border-gray-200 p-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">ROI</h3>
-              <FaChartBar className="w-5 h-5 text-orange-600" />
+              <h3 className="text-xs font-medium text-gray-600">ROI</h3>
+              <FaChartBar className="w-3 h-3 text-gray-400" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">
+            <p className="text-sm font-semibold text-gray-900">
               {data.performanceMetrics?.returnOnInvestment 
                 ? `${(data.performanceMetrics.returnOnInvestment * 100).toFixed(1)}%`
                 : 'N/A'}
@@ -558,24 +558,24 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
         </div>
 
         {data.performanceMetrics && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Performance Metrics</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Customer Lifetime Value</p>
-                <p className="text-xl font-bold text-gray-900">Ksh {(data.performanceMetrics.customerLifetimeValue || 0).toLocaleString()}</p>
+          <div className="bg-white rounded border border-gray-200 p-3">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Performance Metrics</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+              <div className="p-2 bg-gray-50 rounded">
+                <p className="text-xs text-gray-600 mb-1">Customer Lifetime Value</p>
+                <p className="text-sm font-semibold text-gray-900">Ksh {(data.performanceMetrics.customerLifetimeValue || 0).toLocaleString()}</p>
               </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Customer Acquisition Cost</p>
-                <p className="text-xl font-bold text-gray-900">Ksh {(data.performanceMetrics.customerAcquisitionCost || 0).toLocaleString()}</p>
+              <div className="p-2 bg-gray-50 rounded">
+                <p className="text-xs text-gray-600 mb-1">Customer Acquisition Cost</p>
+                <p className="text-sm font-semibold text-gray-900">Ksh {(data.performanceMetrics.customerAcquisitionCost || 0).toLocaleString()}</p>
               </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Return on Investment</p>
-                <p className="text-xl font-bold text-gray-900">{(data.performanceMetrics.returnOnInvestment || 0).toFixed(2)}x</p>
+              <div className="p-2 bg-gray-50 rounded">
+                <p className="text-xs text-gray-600 mb-1">Return on Investment</p>
+                <p className="text-sm font-semibold text-gray-900">{(data.performanceMetrics.returnOnInvestment || 0).toFixed(2)}x</p>
               </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Net Promoter Score</p>
-                <p className="text-xl font-bold text-gray-900">{data.performanceMetrics.netPromoterScore || 0}</p>
+              <div className="p-2 bg-gray-50 rounded">
+                <p className="text-xs text-gray-600 mb-1">Net Promoter Score</p>
+                <p className="text-sm font-semibold text-gray-900">{data.performanceMetrics.netPromoterScore || 0}</p>
               </div>
             </div>
           </div>
@@ -610,48 +610,48 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Reports</h2>
-          <p className="text-sm text-gray-600 mt-1">Generate and export detailed business reports</p>
+          <h2 className="text-sm font-semibold text-gray-900">Reports</h2>
+          <p className="text-[11px] text-gray-500 mt-1">Generate and export business reports</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={exportToPDF}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 text-sm"
+            className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 flex items-center gap-1.5 text-xs"
           >
-            <FaFilePdf className="w-4 h-4" />
+            <FaFilePdf className="w-3 h-3" />
             PDF
           </button>
           <button
             onClick={exportToExcel}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm"
+            className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 flex items-center gap-1.5 text-xs"
           >
-            <FaFileExcel className="w-4 h-4" />
+            <FaFileExcel className="w-3 h-3" />
             Excel
           </button>
           <button
             onClick={exportToCSV}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm"
+            className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 flex items-center gap-1.5 text-xs"
           >
-            <FaFileCsv className="w-4 h-4" />
+            <FaFileCsv className="w-3 h-3" />
             CSV
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center gap-4 flex-wrap">
+      <div className="bg-white rounded border border-gray-200 p-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Report Type Selector */}
           <div className="flex items-center gap-2">
-            <FaFilter className="w-4 h-4 text-gray-500" />
+            <FaFilter className="w-3 h-3 text-gray-500" />
             <select
               value={selectedReportType}
               onChange={(e) => setSelectedReportType(e.target.value as ReportType)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-slate-500 text-xs"
             >
               <option value="sales">Sales Report</option>
               <option value="products">Products Report</option>
@@ -663,11 +663,11 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
 
           {/* Date Range Selector */}
           <div className="flex items-center gap-2">
-            <FaCalendarAlt className="w-4 h-4 text-gray-500" />
+            <FaCalendarAlt className="w-3 h-3 text-gray-500" />
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value as DateRange)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-slate-500 text-xs"
             >
               <option value="7d">Last 7 Days</option>
               <option value="30d">Last 30 Days</option>
@@ -685,14 +685,14 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
                 type="date"
                 value={customStartDate}
                 onChange={(e) => setCustomStartDate(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-slate-500 text-xs"
               />
               <span className="text-gray-500">to</span>
               <input
                 type="date"
                 value={customEndDate}
                 onChange={(e) => setCustomEndDate(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-slate-500 text-xs"
               />
             </>
           )}
@@ -703,7 +703,7 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
               <select
                 value={selectedBranchId}
                 onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-slate-500 text-xs"
               >
                 <option value="all">All Branches</option>
                 {branches.map((branch) => (
@@ -718,7 +718,7 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
       </div>
 
       {/* Report Content */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="bg-white rounded border border-gray-200 p-2">
         {renderReportContent()}
       </div>
     </div>

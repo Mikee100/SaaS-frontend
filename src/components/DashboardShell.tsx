@@ -2,13 +2,15 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { FaChartLine, FaBox, FaClipboardList, FaUsers, FaCashRegister, FaHistory, FaCog, FaSignOutAlt, FaBell, FaCreditCard } from "react-icons/fa";
+import { FaChartLine, FaBox, FaClipboardList, FaUsers, FaCashRegister, FaHistory, FaCog, FaSignOutAlt, FaBell, FaCreditCard, FaRobot, FaMoneyBillWave } from "react-icons/fa";
 import { usePathname } from "next/navigation";
 
 type User = {
   name: string;
   email: string;
-  // Add other fields as needed
+  roles?: string[];
+  permissions?: string[];
+  isSuperadmin?: boolean;
 };
 
 export default function DashboardShell({ children }: { children: ReactNode }) {
@@ -20,7 +22,8 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      setUser(JSON.parse(localStorage.getItem("user") || "null"));
+      const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+      setUser(storedUser);
     } catch {
       setUser(null);
     }
@@ -30,21 +33,32 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("isAuthenticated");
     router.replace("/login");
   }
 
   if (loading) return null;
 
-  const navLinks = [
-    { href: "/products/unified", label: "Products & Inventory", icon: <FaBox /> },
-    { href: "/settings/users", label: "Users", icon: <FaUsers /> },
-    { href: "/sales", label: "Sales/POS", icon: <FaCashRegister /> },
-    { href: "/sales/history", label: "Sales History", icon: <FaHistory /> },
-    { href: "/credit", label: "Credit Management", icon: <FaCreditCard /> },
-    { href: "/reports", label: "Reports", icon: <FaClipboardList /> },
-    { href: "/analytics", label: "Analytics", icon: <FaChartLine /> },
-    { href: "/settings", label: "Settings", icon: <FaCog /> },
+  const allNavLinks = [
+    { href: "/products/unified", label: "Products & Inventory", icon: <FaBox />, permission: 'view_products' },
+    { href: "/ai-assistant", label: "AI Assistant", icon: <FaRobot />, permission: 'use_ai_assistant' },
+    { href: "/settings/users", label: "Users", icon: <FaUsers />, permission: 'view_users' },
+    { href: "/sales", label: "Sales/POS", icon: <FaCashRegister />, permission: 'create_sales' },
+    { href: "/sales/history", label: "Sales History", icon: <FaHistory />, permission: 'view_sales' },
+    { href: "/credit", label: "Credit Management", icon: <FaCreditCard />, permission: 'view_sales' },
+    { href: "/reports", label: "Reports", icon: <FaClipboardList />, permission: 'view_reports' },
+    { href: "/analytics", label: "Analytics", icon: <FaChartLine />, permission: 'view_analytics' },
+    { href: "/account/billing", label: "Billing", icon: <FaMoneyBillWave />, permission: 'view_billing' },
+    { href: "/settings", label: "Settings", icon: <FaCog />, permission: 'view_settings' },
   ];
+
+  const navLinks = allNavLinks.filter(link => {
+    if (!user) return false;
+    if (user.isSuperadmin) return true;
+    if (user.roles?.includes('owner') || user.roles?.includes('admin')) return true;
+    if (!link.permission) return true;
+    return user.permissions?.includes(link.permission);
+  });
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-100 to-blue-50">

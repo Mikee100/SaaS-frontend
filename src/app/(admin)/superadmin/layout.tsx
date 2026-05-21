@@ -145,6 +145,9 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
               <NavLink href="/superadmin/plan-management" icon={<FiSettings />} active={isActive("/superadmin/plan-management")} collapsed={collapsed}>
                 Plan Management
               </NavLink>
+              <NavLink href="/superadmin/classifications" icon={<FiFileText />} active={isActive("/superadmin/classifications")} collapsed={collapsed}>
+                Classifications
+              </NavLink>
               <NavLink href="/superadmin/subscriptions" icon={<FiBarChart2 />} active={isActive("/superadmin/subscriptions")} collapsed={collapsed}>
                 Subscriptions
               </NavLink>

@@ -88,6 +88,22 @@ export default function PlanBasedNav() {
       requiredPermission: null
     },
     {
+      name: 'Accounts',
+      href: '/accounts',
+      icon: FaFileInvoiceDollar,
+      requiredPlan: null,
+      requiredPermission: null,
+      subItems: [
+        { name: 'Ledgers', href: '/accounts/ledgers', icon: FaHistory },
+        { name: 'Balance Sheet', href: '/accounts/balance-sheet', icon: MdOutlineAnalytics },
+        { name: 'Trial Balance', href: '/accounts/trial-balance', icon: FaLayerGroup },
+        { name: 'Capital', href: '/accounts/capital', icon: FaMoneyBillWave },
+        { name: 'Revenue', href: '/accounts/revenue', icon: FaCreditCard },
+        { name: 'Profit & Loss', href: '/accounts/profit-loss', icon: FaChartBar },
+        { name: 'Inventory', href: '/accounts/inventory', icon: MdOutlineInventory2 }
+      ]
+    },
+    {
       name: 'Products & Inventory',
       href: '/products/unified',
       icon: FaBoxOpen,

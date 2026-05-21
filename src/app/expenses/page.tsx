@@ -210,6 +210,36 @@ export default function ExpensesPage() {
   const [fetchingExpenseMonthlyTotal, /* setFetchingExpenseMonthlyTotal */] = useState(false);
   const [expenseTotalForSelectedMonth, /* setExpenseTotalForSelectedMonth */] = useState<{ monthName: string; totalAmount: number; expenseCount: number } | null>(null);
 
+  const normalizedRoles = Array.isArray(user?.roles)
+    ? user.roles.map((role) => String(role).toLowerCase())
+    : [];
+  const isBranchScopedUser = normalizedRoles.includes('manager') || normalizedRoles.includes('cashier');
+  const assignedBranchId = user?.branchId || null;
+  const effectiveBranchFilter = isBranchScopedUser ? assignedBranchId : branchFilter;
+  const assignedBranchNameFromList = assignedBranchId
+    ? branches.find((branch) => branch.id === assignedBranchId)?.name
+    : undefined;
+  const assignedBranchNameFromExpenses = assignedBranchId
+    ? expenses.find((expense) => expense.branch?.id === assignedBranchId)?.branch?.name
+    : undefined;
+  const assignedBranchName =
+    assignedBranchNameFromList || assignedBranchNameFromExpenses || 'Assigned Branch';
+
+  useEffect(() => {
+    if (!isBranchScopedUser || !assignedBranchId) return;
+
+    if (branchFilter !== assignedBranchId) {
+      setBranchFilter(assignedBranchId);
+    }
+
+    setFormData((prev) =>
+      prev.branchId === assignedBranchId ? prev : { ...prev, branchId: assignedBranchId },
+    );
+    setSalaryForm((prev) =>
+      prev.branchId === assignedBranchId ? prev : { ...prev, branchId: assignedBranchId },
+    );
+  }, [isBranchScopedUser, assignedBranchId, branchFilter]);
+
   // Derive branch comparison data from loaded expenses
   useEffect(() => {
     if (!expenses || expenses.length === 0) {
@@ -332,7 +362,16 @@ export default function ExpensesPage() {
   const fetchSalarySchemes = useCallback(async () => {
     try {
       setLoadingSchemes(true);
-      const response = await apiGet('/salary-schemes');
+      let url = '/salary-schemes';
+      const params = new URLSearchParams();
+      if (effectiveBranchFilter) {
+        params.append('branchId', effectiveBranchFilter);
+      }
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      const response = await apiGet(url);
       const data = (response as { data?: unknown })?.data || response || [];
       setSalarySchemes(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -341,7 +380,7 @@ export default function ExpensesPage() {
     } finally {
       setLoadingSchemes(false);
     }
-  }, []);
+  }, [effectiveBranchFilter]);
 
   // Permission checks
   const canViewExpenses = hasPermission(user, 'view_sales');
@@ -510,14 +549,23 @@ export default function ExpensesPage() {
       setLoading(true);
       let url = '/expenses';
       const params = new URLSearchParams();
-      if (branchFilter) params.append('branchId', branchFilter);
+      if (effectiveBranchFilter) params.append('branchId', effectiveBranchFilter);
       if (expenseTypeFilter !== 'all') params.append('expenseType', expenseTypeFilter);
       if (params.toString()) url += `?${params.toString()}`;
       const response = await apiGet(url);
       const data = (response as { data?: unknown })?.data || response || [];
       const expenseData = Array.isArray(data) ? data : [];
       try {
-        const salaryResponse = await apiGet('/salary-schemes');
+        let salaryUrl = '/salary-schemes';
+        const salaryParams = new URLSearchParams();
+        if (effectiveBranchFilter) {
+          salaryParams.append('branchId', effectiveBranchFilter);
+        }
+        if (salaryParams.toString()) {
+          salaryUrl += `?${salaryParams.toString()}`;
+        }
+
+        const salaryResponse = await apiGet(salaryUrl);
         const salaryData = (salaryResponse as { data?: unknown })?.data || salaryResponse || [];
         const salaryExpenses: Expense[] = Array.isArray(salaryData)
           ? salaryData.map((scheme: unknown) => {
@@ -570,7 +618,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
     } finally {
       setLoading(false);
     }
-  }, [branchFilter, expenseTypeFilter]);
+  }, [effectiveBranchFilter, expenseTypeFilter]);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -579,7 +627,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
       await fetchUsers();
     };
     fetchAll();
-  }, [branchFilter, fetchExpenses]);
+  }, [effectiveBranchFilter, fetchExpenses]);
 
   // Filter and sort expenses
   useEffect(() => {
@@ -640,7 +688,15 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
   const fetchBranches = async () => {
     try {
       const data = await apiGet('/branches');
-      setBranches(data as { id: string; name: string }[]);
+      const branchList = Array.isArray(data) ? (data as { id: string; name: string }[]) : [];
+
+      if (isBranchScopedUser && assignedBranchId) {
+        const ownBranch = branchList.find((branch) => branch.id === assignedBranchId);
+        setBranches(ownBranch ? [ownBranch] : []);
+        return;
+      }
+
+      setBranches(branchList);
     } catch {
       // ignore branch fetch error for now
     }
@@ -843,39 +899,38 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
   return (
     <AuthGuard>
       <div className="min-h-screen bg-background text-foreground">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
+        <div className="max-w-7xl mx-auto px-2 sm:px-3 lg:px-4 py-3">
           {/* Header */}
-          <div className="mb-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="mb-3">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
               <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                  <FaChartBar className="w-6 h-6 text-primary" />
+                <h1 className="text-lg font-semibold flex items-center gap-2">
+                  <FaChartBar className="w-4 h-4 text-primary" />
                   Expenses
                 </h1>
-                <p className="text-sm text-muted-foreground mt-1">Track and manage your business expenses</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={exportType}
                   onChange={(e) => setExportType(e.target.value as 'csv' | 'pdf')}
-                  className="px-3 py-2 bg-card border border-border rounded-lg text-sm focus:ring-2 focus:ring-ring focus:border-transparent"
+                  className="px-2.5 py-1.5 bg-card border border-border rounded text-xs focus:ring-1 focus:ring-ring focus:border-transparent"
                 >
                   <option value="csv">CSV Export</option>
                   <option value="pdf">PDF Export</option>
                 </select>
                 <button
                   onClick={handleDownloadReport}
-                  className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-muted text-sm font-medium flex items-center gap-2 transition"
+                  className="px-3 py-1.5 bg-secondary text-secondary-foreground rounded border border-border hover:bg-muted text-xs font-medium flex items-center gap-1.5 transition"
                 >
-                  <FaFileDownload className="w-4 h-4" />
+                  <FaFileDownload className="w-3.5 h-3.5" />
                   Export
                 </button>
                 {canCreateExpenses && (
                   <button
                     onClick={() => setDrawerType('create')}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm font-medium flex items-center gap-2 shadow-sm transition"
+                    className="px-3 py-1.5 bg-primary text-primary-foreground rounded border border-primary hover:bg-primary/90 text-xs font-medium flex items-center gap-1.5 transition"
                   >
-                    <FaPlus className="w-4 h-4" />
+                    <FaPlus className="w-3.5 h-3.5" />
                     Add Expense
                   </button>
                 )}
@@ -884,123 +939,125 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
           </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 mb-6 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex flex-wrap items-center gap-1 mb-3 border-b border-gray-200 dark:border-gray-800">
           <button
             onClick={() => setActiveTab('current')}
-            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors flex items-center gap-1.5 ${
               activeTab === 'current'
-                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
+                ? 'bg-slate-700 text-white border-b-2 border-slate-700'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900'
             }`}
           >
-            <FaHistory className="w-4 h-4" />
+            <FaHistory className="w-3 h-3" />
             Current
           </button>
           <button
             onClick={() => setActiveTab('salaries')}
-            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors flex items-center gap-1.5 ${
               activeTab === 'salaries'
-                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
+                ? 'bg-slate-700 text-white border-b-2 border-slate-700'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900'
             }`}
           >
-            <FaRedo className="w-4 h-4" />
+            <FaRedo className="w-3 h-3" />
             Salaries
           </button>
           <button
             onClick={() => setActiveTab('comparison')}
-            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors flex items-center gap-1.5 ${
               activeTab === 'comparison'
-                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
+                ? 'bg-slate-700 text-white border-b-2 border-slate-700'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900'
             }`}
           >
-            <FaChartBar className="w-4 h-4" />
+            <FaChartBar className="w-3 h-3" />
             Comparison
           </button>
           <button
             onClick={() => setActiveTab('past')}
-            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors flex items-center gap-1.5 ${
               activeTab === 'past'
-                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
+                ? 'bg-slate-700 text-white border-b-2 border-slate-700'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900'
             }`}
           >
-            <FaCalendarAlt className="w-4 h-4" />
+            <FaCalendarAlt className="w-3 h-3" />
             Past Months
           </button>
           <button
             onClick={() => setActiveTab('records')}
-            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors flex items-center gap-1.5 ${
               activeTab === 'records'
-                ? 'bg-blue-600 text-white border-b-2 border-blue-600'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900'
+                ? 'bg-slate-700 text-white border-b-2 border-slate-700'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900'
             }`}
           >
-            <FaEye className="w-4 h-4" />
+            <FaEye className="w-3 h-3" />
             Records
           </button>
         </div>
 
         {/* Filters - Only show in Current tab */}
         {activeTab === 'current' && (
-          <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6 border border-gray-200 dark:border-gray-800">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-              <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
+          <div className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 p-3 mb-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[180px] flex-1">
+                <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1">Search</label>
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search expenses..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-200"
+                  className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-xs focus:ring-1 focus:ring-slate-500 focus:border-transparent dark:text-gray-200"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Sort By</label>
+              <div className="w-[130px]">
+                <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1">Sort</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-200"
+                  className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-xs focus:ring-1 focus:ring-slate-500 focus:border-transparent dark:text-gray-200"
                 >
                   <option value="createdAt">Date</option>
                   <option value="amount">Amount</option>
                   <option value="category">Category</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Order</label>
+              <div className="w-[120px]">
+                <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1">Order</label>
                 <select
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-200"
+                  className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-xs focus:ring-1 focus:ring-slate-500 focus:border-transparent dark:text-gray-200"
                 >
                   <option value="desc">Descending</option>
                   <option value="asc">Ascending</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Branch</label>
+              <div className="w-[160px]">
+                <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1">Branch</label>
                 <select
-                  value={branchFilter || ''}
+                  value={effectiveBranchFilter || ''}
                   onChange={e => setBranchFilter(e.target.value || null)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-200"
+                  disabled={isBranchScopedUser}
+                  className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-xs focus:ring-1 focus:ring-slate-500 focus:border-transparent dark:text-gray-200"
                 >
-                  <option value="">All Branches</option>
+                  {!isBranchScopedUser && <option value="">All Branches</option>}
+                  {isBranchScopedUser && assignedBranchId && (
+                    <option value={assignedBranchId}>{assignedBranchName}</option>
+                  )}
                   {branches.map(branch => (
                     <option key={branch.id} value={branch.id}>{branch.name}</option>
                   ))}
                 </select>
               </div>
-            </div>
-            <div className="mt-3 flex items-center gap-3">
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Type:</label>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-1.5 ml-auto">
+                <span className="text-[11px] font-medium text-gray-600 dark:text-gray-400">Type</span>
                 <button
                   onClick={() => setExpenseTypeFilter('all')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  className={`px-2 py-1 rounded text-[11px] font-medium transition ${
                     expenseTypeFilter === 'all'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-slate-700 text-white'
                       : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
@@ -1008,9 +1065,9 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </button>
                 <button
                   onClick={() => setExpenseTypeFilter('one_time')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  className={`px-2 py-1 rounded text-[11px] font-medium transition ${
                     expenseTypeFilter === 'one_time'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-slate-700 text-white'
                       : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
@@ -1018,9 +1075,9 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </button>
                 <button
                   onClick={() => setExpenseTypeFilter('recurring')}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  className={`px-2 py-1 rounded text-[11px] font-medium transition ${
                     expenseTypeFilter === 'recurring'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-slate-700 text-white'
                       : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
@@ -1034,86 +1091,53 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
         {/* Tab Content */}
         {activeTab === 'current' && (
           <>
-            {/* Summary Cards - Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              {/* Total Expenses */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800/50 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide">Total Expenses</span>
-                  <FaChartBar className="w-4 h-4 text-blue-500" />
-                </div>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                  Ksh {totalAmount.toFixed(2)}
-                </p>
-                <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">{expenses.length} {expenses.length === 1 ? 'expense' : 'expenses'}</p>
+            {/* Compact Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
+              <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">Total Expenses</div>
+                <div className="text-sm font-semibold text-gray-900 dark:text-white">Ksh {totalAmount.toFixed(2)}</div>
               </div>
-
-              {/* Salary Expenses */}
-              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800/50 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">Salary Expenses</span>
-                  <FaRedo className="w-4 h-4 text-emerald-500" />
-                </div>
-                <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
-                  Ksh {salaryTotal.toFixed(2)}
-                </p>
-                <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">Recurring salaries</p>
+              <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">Salary Expenses</div>
+                <div className="text-sm font-semibold text-gray-900 dark:text-white">Ksh {salaryTotal.toFixed(2)}</div>
               </div>
-
-              {/* Current Month */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800/50 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-purple-700 dark:text-purple-400 uppercase tracking-wide">This Month</span>
-                  <FaCalendarAlt className="w-4 h-4 text-purple-500" />
+              <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">This Month</div>
+                <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Ksh {expenses
+                    .filter((exp) => {
+                      const d = new Date(exp.createdAt);
+                      const now = new Date();
+                      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    })
+                    .reduce((sum, exp) => sum + exp.amount, 0)
+                    .toFixed(2)}
                 </div>
-                {(() => {
-                  const currentMonth = new Date().getMonth();
-                  const currentYear = new Date().getFullYear();
-                  const monthExpenses = expenses.filter(exp => {
-                    const expDate = new Date(exp.createdAt);
-                    return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
-                  });
-                  const monthTotal = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-                  return (
-                    <>
-                      <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                        Ksh {monthTotal.toFixed(2)}
-                      </p>
-                      <p className="text-xs text-purple-600 dark:text-purple-500 mt-1">{monthExpenses.length} {monthExpenses.length === 1 ? 'expense' : 'expenses'}</p>
-                    </>
-                  );
-                })()}
               </div>
-
-              {/* Average Expense */}
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl p-4 border border-orange-200 dark:border-orange-800/50 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-orange-700 dark:text-orange-400 uppercase tracking-wide">Avg Expense</span>
-                  <FaChartBar className="w-4 h-4 text-orange-500" />
-                </div>
-                <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">
+              <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">Avg Expense</div>
+                <div className="text-sm font-semibold text-gray-900 dark:text-white">
                   Ksh {expenses.length > 0 ? (totalAmount / expenses.length).toFixed(2) : '0.00'}
-                </p>
-                <p className="text-xs text-orange-600 dark:text-orange-500 mt-1">Per transaction</p>
+                </div>
               </div>
             </div>
 
             {/* Expenses Table */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+            <div className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 overflow-hidden">
+              <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">All Expenses</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">All Expenses</h3>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
                       Showing {filteredExpenses.length} of {expenses.length} expenses
                     </p>
                   </div>
                   {canCreateExpenses && (
                     <button
                       onClick={() => setDrawerType('create')}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2 text-sm shadow-sm transition"
+                      className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 font-medium flex items-center gap-1.5 text-xs transition"
                     >
-                      <FaPlus className="w-4 h-4" />
+                      <FaPlus className="w-3 h-3" />
                       Add Expense
                     </button>
                   )}
@@ -1121,16 +1145,16 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               </div>
 
               {filteredExpenses.length === 0 ? (
-                <div className="text-center py-16">
-                  <FaHistory className="w-16 h-16 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">No expenses found</h3>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">Start by adding your first expense or adjust your filters</p>
+                <div className="text-center py-8">
+                  <FaHistory className="w-8 h-8 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No expenses found</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mb-3">Add an expense or adjust filters.</p>
                   {canCreateExpenses && (
                     <button
                       onClick={() => setDrawerType('create')}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 font-semibold flex items-center gap-2 text-sm mx-auto"
+                      className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 font-medium flex items-center gap-1.5 text-xs mx-auto"
                     >
-                      <FaPlus className="w-4 h-4" />
+                      <FaPlus className="w-3 h-3" />
                       Add Expense
                     </button>
                   )}
@@ -1140,14 +1164,14 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
                     <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Amount</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Description</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Category</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Type</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Branch</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Amount</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Description</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Category</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Type</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Date</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Branch</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Status</th>
+                        <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
@@ -1160,52 +1184,52 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                             setDrawerType('details');
                           }}
                         >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-bold text-gray-900 dark:text-white">Ksh {expense.amount.toFixed(2)}</span>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className="text-xs font-semibold text-gray-900 dark:text-white">Ksh {expense.amount.toFixed(2)}</span>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 dark:text-gray-100 font-medium">{expense.description}</div>
+                          <td className="px-3 py-2.5">
+                            <div className="text-xs text-gray-900 dark:text-gray-100 font-medium">{expense.description}</div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 capitalize">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className="px-1.5 py-0.5 text-[11px] font-medium rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 capitalize">
                               {getCategoryName(expense).replace('_', ' ')}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
                             {expense.expenseType === 'recurring' ? (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
-                                <FaRedo className="w-3 h-3 mr-1" />
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
+                                <FaRedo className="w-2.5 h-2.5 mr-1" />
                                 Recurring
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                                 One-time
                               </span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">
                             {new Date(expense.createdAt).toLocaleDateString('en-US', { 
                               month: 'short', 
                               day: 'numeric', 
                               year: 'numeric' 
                             })}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">
                             {expense.branch?.name || <span className="text-gray-400 dark:text-gray-600">—</span>}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${
                               expense.isActive 
                                 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
                                 : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                             }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                              <span className={`w-1 h-1 rounded-full mr-1 ${
                                 expense.isActive ? 'bg-green-500' : 'bg-red-500'
                               }`} />
                               {expense.isActive ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-right text-xs font-medium">
                             <button
                               onClick={e => {
                                 e.stopPropagation();
@@ -1214,7 +1238,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                               }}
                               className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 inline-flex items-center gap-1"
                             >
-                              <FaEye className="w-4 h-4" />
+                              <FaEye className="w-3 h-3" />
                               View
                             </button>
                           </td>
@@ -1230,93 +1254,81 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
 
         {activeTab === 'salaries' && (
           <>
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            {/* Compact Salary Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
               {/* Current Month Total */}
-              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800/50 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">This Month</span>
-                  <FaCalendarAlt className="w-4 h-4 text-emerald-500" />
-                </div>
+              <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">This Month</div>
                 {salarySummaryLoading ? (
                   <Spinner />
                 ) : currentMonthSalaryTotal ? (
                   <>
-                    <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
                       Ksh {currentMonthSalaryTotal.totalAmount.toFixed(2)}
                     </p>
-                    <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">{currentMonthSalaryTotal.salarySchemeCount} active {currentMonthSalaryTotal.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{currentMonthSalaryTotal.salarySchemeCount} active {currentMonthSalaryTotal.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">Ksh 0.00</p>
-                    <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">No data</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Ksh 0.00</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">No data</p>
                   </>
                 )}
               </div>
 
               {/* Selected Month Total */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800/50 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide">Selected Month</span>
-                  <FaCalendarAlt className="w-4 h-4 text-blue-500" />
-                </div>
+              <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">Selected Month</div>
                 {fetchingMonthlyTotal ? (
                   <Spinner />
                 ) : salaryTotalForMonth ? (
                   <>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
                       Ksh {salaryTotalForMonth.totalAmount.toFixed(2)}
                     </p>
-                    <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">{salaryTotalForMonth.salarySchemeCount} active {salaryTotalForMonth.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{salaryTotalForMonth.salarySchemeCount} active {salaryTotalForMonth.salarySchemeCount === 1 ? 'scheme' : 'schemes'}</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">Ksh 0.00</p>
-                    <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">No data</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Ksh 0.00</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">No data</p>
                   </>
                 )}
               </div>
 
               {/* Total Schemes */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800/50 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-purple-700 dark:text-purple-400 uppercase tracking-wide">Total Schemes</span>
-                  <FaRedo className="w-4 h-4 text-purple-500" />
-                </div>
-                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+              <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">Total Schemes</div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
                   {salarySchemes.length}
                 </p>
-                <p className="text-xs text-purple-600 dark:text-purple-500 mt-1">
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                   {salarySchemes.filter(s => s.isActive).length} active
                 </p>
               </div>
 
               {/* Average Salary */}
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl p-4 border border-orange-200 dark:border-orange-800/50 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-orange-700 dark:text-orange-400 uppercase tracking-wide">Avg Salary</span>
-                  <FaChartBar className="w-4 h-4 text-orange-500" />
-                </div>
-                <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">
+              <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">Avg Salary</div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
                   Ksh {salarySchemes.length > 0 
                     ? (salarySchemes.reduce((sum, s) => sum + s.salaryAmount, 0) / salarySchemes.length).toFixed(2)
                     : '0.00'}
                 </p>
-                <p className="text-xs text-orange-600 dark:text-orange-500 mt-1">Per employee</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Per employee</p>
               </div>
             </div>
 
             {/* Month/Year Selector */}
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6 border border-gray-200 dark:border-gray-800">
-              <div className="flex flex-wrap items-end gap-4">
+            <div className="bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 p-3 mb-3">
+              <div className="flex flex-wrap items-end gap-2">
                 <div className="flex-1 min-w-[150px]">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Select Month & Year</label>
+                  <label className="block text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Month & Year</label>
                   <div className="flex gap-2">
                     <select
                       value={selectedMonth}
                       onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent dark:text-gray-200"
+                      className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent dark:text-gray-200"
                     >
                       {Array.from({ length: 12 }, (_, i) => (
                         <option key={i + 1} value={i + 1}>
@@ -1327,7 +1339,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                     <select
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent dark:text-gray-200"
+                      className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent dark:text-gray-200"
                     >
                       {Array.from({ length: 5 }, (_, i) => {
                         const year = new Date().getFullYear() - 2 + i;
@@ -1342,21 +1354,21 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
                 <button
                   onClick={() => setSalaryDrawerType('create')}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium flex items-center gap-2 shadow-sm transition"
+                  className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 text-xs font-medium flex items-center gap-1.5 transition"
                 >
-                  <FaPlus className="w-4 h-4" />
+                  <FaPlus className="w-3 h-3" />
                   Add Salary Scheme
                 </button>
               </div>
             </div>
 
             {/* Salary Schemes Table */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+            <div className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 overflow-hidden">
+              <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Salary Schemes</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Salary Schemes</h3>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                       {loadingSchemes ? 'Loading...' : `${salarySchemes.length} ${salarySchemes.length === 1 ? 'scheme' : 'schemes'} total`}
                     </p>
                   </div>
@@ -1364,19 +1376,19 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               </div>
 
               {loadingSchemes ? (
-                <div className="flex justify-center items-center min-h-[200px]">
+                <div className="flex justify-center items-center min-h-[120px]">
                   <Spinner />
                 </div>
               ) : salarySchemes.length === 0 ? (
-                <div className="text-center py-16">
-                  <FaRedo className="w-16 h-16 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">No salary schemes found</h3>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">Create your first salary scheme to get started</p>
+                <div className="text-center py-8">
+                  <FaRedo className="w-8 h-8 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No salary schemes found</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mb-3">Create your first salary scheme.</p>
                   <button
                     onClick={() => setSalaryDrawerType('create')}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow hover:bg-emerald-700 font-semibold flex items-center gap-2 text-sm mx-auto"
+                    className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 font-medium flex items-center gap-1.5 text-xs mx-auto"
                   >
-                    <FaPlus className="w-4 h-4" />
+                    <FaPlus className="w-3 h-3" />
                     Add Salary Scheme
                   </button>
                 </div>
@@ -1385,54 +1397,54 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
                     <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Employee</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Amount</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Frequency</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Start Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Next Due</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Last Paid</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Branch</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Employee</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Amount</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Frequency</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Start Date</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Next Due</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Last Paid</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Branch</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Status</th>
+                        <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                       {salarySchemes.map(scheme => (
                         <tr
                           key={scheme.id}
-                          className="hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20 transition-colors cursor-pointer"
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors cursor-pointer"
                           onClick={() => {
                             setSelectedSalaryScheme(scheme);
                             setSalaryDrawerType('details');
                           }}
                         >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <div className="text-xs font-medium text-gray-900 dark:text-white">
                               {scheme.user?.name || scheme.employeeName}
                             </div>
                             {scheme.notes && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate max-w-[200px]" title={scheme.notes}>
+                              <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate max-w-[160px]" title={scheme.notes}>
                                 {scheme.notes}
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-bold text-gray-900 dark:text-white">Ksh {scheme.salaryAmount.toFixed(2)}</span>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className="text-xs font-semibold text-gray-900 dark:text-white">Ksh {scheme.salaryAmount.toFixed(2)}</span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 capitalize">
-                              <FaRedo className="w-3 h-3 mr-1" />
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 capitalize">
+                              <FaRedo className="w-2.5 h-2.5 mr-1" />
                               {scheme.frequency}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">
                             {new Date(scheme.startDate).toLocaleDateString('en-US', { 
                               month: 'short', 
                               day: 'numeric', 
                               year: 'numeric' 
                             })}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">
                             {scheme.nextDueDate ? (
                               new Date(scheme.nextDueDate).toLocaleDateString('en-US', { 
                                 month: 'short', 
@@ -1443,7 +1455,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                               <span className="text-gray-400 dark:text-gray-600">—</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">
                             {scheme.lastPaidDate ? (
                               new Date(scheme.lastPaidDate).toLocaleDateString('en-US', { 
                                 month: 'short', 
@@ -1454,22 +1466,22 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                               <span className="text-gray-400 dark:text-gray-600">Never</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">
                             {scheme.branch?.name || <span className="text-gray-400 dark:text-gray-600">—</span>}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${
                               scheme.isActive 
                                 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
                                 : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                             }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                              <span className={`w-1 h-1 rounded-full mr-1 ${
                                 scheme.isActive ? 'bg-green-500' : 'bg-red-500'
                               }`} />
                               {scheme.isActive ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-right text-xs font-medium">
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={e => {
@@ -1480,7 +1492,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                                 className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300 inline-flex items-center gap-1"
                                 title="View"
                               >
-                                <FaEye className="w-4 h-4" />
+                                <FaEye className="w-3 h-3" />
                               </button>
                               <button
                                 onClick={e => {
@@ -1501,7 +1513,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                                 className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-900 dark:hover:text-yellow-300 inline-flex items-center gap-1"
                                 title="Edit"
                               >
-                                <FaEdit className="w-4 h-4" />
+                                <FaEdit className="w-3 h-3" />
                               </button>
                               <button
                                 onClick={e => {
@@ -1513,7 +1525,7 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                                 className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 inline-flex items-center gap-1"
                                 title="Delete"
                               >
-                                <FaTrash className="w-4 h-4" />
+                                <FaTrash className="w-3 h-3" />
                               </button>
                             </div>
                           </td>
@@ -1528,58 +1540,56 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
         )}
 
         {activeTab === 'comparison' && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Branch Comparison</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          <div className="space-y-3">
+            <div className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 p-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Branch Comparison</h3>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3">
                 Compare total expense amount and count across your branches.
               </p>
               {!branchComparison || !branchComparison.branches || branchComparison.branches.length === 0 ? (
-                <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm">
+                <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-xs">
                   No branch expense data available yet. Add expenses with branches to see comparisons here.
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {branchComparison.branches.map((branch: { branchName: string; totalAmount: number; expenseCount: number }) => (
-                      <div
-                        key={branch.branchName}
-                        className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800/50"
-                      >
-                        <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">{branch.branchName}</h4>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-blue-700 dark:text-blue-400">Total Expenses:</span>
-                            <span className="font-bold text-blue-900 dark:text-blue-100">Ksh {branch.totalAmount?.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-blue-700 dark:text-blue-400">Count:</span>
-                            <span className="font-bold text-blue-900 dark:text-blue-100">{branch.expenseCount}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-blue-700 dark:text-blue-400">Avg per Expense:</span>
-                            <span className="font-bold text-blue-900 dark:text-blue-100">
+                <div className="space-y-3">
+                  <div className="overflow-x-auto border border-gray-200 dark:border-gray-800 rounded">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+                      <thead className="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Branch</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Count</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Avg</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                        {branchComparison.branches.map((branch: { branchName: string; totalAmount: number; expenseCount: number }) => (
+                          <tr key={branch.branchName}>
+                            <td className="px-3 py-2 text-xs font-medium text-gray-900 dark:text-white">{branch.branchName}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">Ksh {branch.totalAmount?.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{branch.expenseCount}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">
                               Ksh {branch.expenseCount ? (branch.totalAmount / branch.expenseCount).toFixed(2) : '0.00'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="mt-6">
-                    <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Expense Distribution by Branch</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={branchComparison.branches}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis dataKey="branchName" stroke="#9ca3af" />
-                        <YAxis stroke="#9ca3af" />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px' }}
+
+                  <div className="border border-gray-200 dark:border-gray-800 rounded p-2">
+                    <h4 className="text-xs font-semibold text-gray-900 dark:text-white mb-2">Expense Distribution by Branch</h4>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={branchComparison.branches} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="2 2" stroke="#4b5563" opacity={0.35} />
+                        <XAxis dataKey="branchName" stroke="#9ca3af" tick={{ fontSize: 11 }} />
+                        <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '6px', fontSize: '12px' }}
                           itemStyle={{ color: '#f3f4f6' }}
-                          formatter={(value: number) => [`Ksh ${value}`, 'Amount']} 
+                          formatter={(value: number) => [`Ksh ${value}`, 'Amount']}
                         />
-                        <Legend />
-                        <Bar dataKey="totalAmount" fill="#3b82f6" name="Total Amount" />
+                        <Bar dataKey="totalAmount" fill="#64748b" radius={[4, 4, 0, 0]} name="Total Amount" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -1590,66 +1600,67 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
         )}
 
         {activeTab === 'past' && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Past Months Records</h3>
+          <div className="space-y-3">
+            <div className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 p-3">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Past Months Records</h3>
                 {canCreateExpenses && (
                   <button
                     onClick={handleMonthlyReset}
                     disabled={resetting}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold flex items-center gap-2 text-sm disabled:opacity-50 transition"
+                    className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 font-medium flex items-center gap-1.5 text-xs disabled:opacity-50 transition"
                   >
-                    {resetting ? <Spinner /> : <FaSync className="w-4 h-4" />}
+                    {resetting ? <Spinner /> : <FaSync className="w-3 h-3" />}
                     Reset Monthly Expenses
                   </button>
                 )}
               </div>
               {!pastMonthsData || !pastMonthsData.records || pastMonthsData.records.length === 0 ? (
-                <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm">
-                  <FaCalendarAlt className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
+                <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-xs">
+                  <FaCalendarAlt className="w-7 h-7 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
                   <p>No past months expense data available yet.</p>
-                  <p className="text-xs mt-1">Expenses will be grouped by month as you add them.</p>
+                  <p className="text-[11px] mt-1">Expenses will be grouped by month as you add them.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {pastMonthsData.records.map((record: { month: string; monthName: string; totalAmount: number; expenseCount: number }) => (
-                      <div key={record.month} className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-4 border border-green-200 dark:border-green-800/50">
-                        <h4 className="font-semibold text-green-900 dark:text-green-100 mb-2">{record.monthName}</h4>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-green-700 dark:text-green-400">Total Expenses:</span>
-                            <span className="font-bold text-green-900 dark:text-green-100">Ksh {record.totalAmount?.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-green-700 dark:text-green-400">Count:</span>
-                            <span className="font-bold text-green-900 dark:text-green-100">{record.expenseCount}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-green-700 dark:text-green-400">Avg per Expense:</span>
-                            <span className="font-bold text-green-900 dark:text-green-100">
+                <div className="space-y-3">
+                  <div className="overflow-x-auto border border-gray-200 dark:border-gray-800 rounded">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+                      <thead className="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Month</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Count</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Avg</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                        {pastMonthsData.records.map((record: { month: string; monthName: string; totalAmount: number; expenseCount: number }) => (
+                          <tr key={record.month}>
+                            <td className="px-3 py-2 text-xs font-medium text-gray-900 dark:text-white">{record.monthName}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">Ksh {record.totalAmount?.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">{record.expenseCount}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300">
                               Ksh {record.expenseCount ? (record.totalAmount / record.expenseCount).toFixed(2) : '0.00'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="mt-6">
-                    <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Monthly Expense Trends</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={pastMonthsData.records}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis dataKey="monthName" stroke="#9ca3af" />
-                        <YAxis stroke="#9ca3af" />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px' }}
+
+                  <div className="border border-gray-200 dark:border-gray-800 rounded p-2">
+                    <h4 className="text-xs font-semibold text-gray-900 dark:text-white mb-2">Monthly Expense Trend</h4>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={pastMonthsData.records} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="2 2" stroke="#4b5563" opacity={0.35} />
+                        <XAxis dataKey="monthName" stroke="#9ca3af" tick={{ fontSize: 11 }} />
+                        <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '6px', fontSize: '12px' }}
                           itemStyle={{ color: '#f3f4f6' }}
-                          formatter={(value: number) => [`Ksh ${value}`, 'Amount']} 
+                          formatter={(value: number) => [`Ksh ${value}`, 'Amount']}
                         />
-                        <Legend />
-                        <Line type="monotone" dataKey="totalAmount" stroke="#10b981" strokeWidth={2} name="Total Amount" />
+                        <Line type="monotone" dataKey="totalAmount" stroke="#64748b" strokeWidth={2} dot={{ r: 2 }} name="Total Amount" />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -1662,27 +1673,27 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
         {activeTab === 'records' && (
           <>
             {/* All Expenses Records Summary */}
-            <div className="mb-6">
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 p-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">All Expenses Records Summary</h3>
+            <div className="mb-3">
+              <div className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 p-3">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">All Expense Records</h3>
                 {(() => {
                   const recordsExpenses = expenses.filter(exp => !exp.id.startsWith('salary-'));
                   const totalAmount = recordsExpenses.reduce((sum, exp) => sum + exp.amount, 0);
                   const totalCount = recordsExpenses.length;
+                  const avgAmount = totalCount > 0 ? totalAmount / totalCount : 0;
                   return (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800/50">
-                        <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Total Records</h4>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-blue-700 dark:text-blue-400">Count:</span>
-                            <span className="font-bold text-blue-900 dark:text-blue-100">{totalCount}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-blue-700 dark:text-blue-400">Total Amount:</span>
-                            <span className="font-bold text-blue-900 dark:text-blue-100">Ksh {totalAmount.toFixed(2)}</span>
-                          </div>
-                        </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                      <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400">Count</div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white">{totalCount}</div>
+                      </div>
+                      <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400">Total Amount</div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white">Ksh {totalAmount.toFixed(2)}</div>
+                      </div>
+                      <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400">Average</div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white">Ksh {avgAmount.toFixed(2)}</div>
                       </div>
                     </div>
                   );
@@ -1724,14 +1735,14 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
               });
 
               return filteredRecords.length === 0 ? (
-                <div className="text-center py-10">
-                  <FaHistory className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">No expense records found</h3>
-                  <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">Start by adding your first expense</p>
+                <div className="text-center py-6">
+                  <FaHistory className="w-7 h-7 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No expense records found</h3>
+                  <p className="text-gray-400 dark:text-gray-500 text-xs mb-2">Start by adding your first expense.</p>
                   {canCreateExpenses && (
                     <button
                       onClick={() => setDrawerType('create')}
-                      className="px-3 py-1.5 bg-blue-600 text-white rounded shadow hover:bg-blue-700 font-semibold flex items-center gap-1 text-xs mx-auto"
+                      className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 font-medium flex items-center gap-1 text-xs mx-auto"
                     >
                       <FaPlus className="w-3 h-3" />
                       Add Expense
@@ -1740,47 +1751,47 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800">
-                    <thead>
-                      <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
-                        <th className="py-2 px-3 text-left">Amount</th>
-                        <th className="py-2 px-3 text-left">Description</th>
-                        <th className="py-2 px-3 text-left">Category</th>
-                        <th className="py-2 px-3 text-left">Type</th>
-                        <th className="py-2 px-3 text-left">Date</th>
-                        <th className="py-2 px-3 text-left">Branch</th>
-                        <th className="py-2 px-3 text-left">Status</th>
-                        <th className="py-2 px-3"></th>
+                  <table className="min-w-full bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr className="border-b border-gray-200 dark:border-gray-800">
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Amount</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Description</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Category</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Type</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Date</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Branch</th>
+                        <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Status</th>
+                        <th className="px-3 py-2"></th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                       {filteredRecords.map(expense => (
                         <tr
                           key={expense.id}
-                          className="border-b border-gray-50 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors"
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800/30 cursor-pointer transition-colors"
                           onClick={() => {
                             setSelectedExpense(expense);
                             setDrawerType('details');
                           }}
                         >
-                          <td className="py-2 px-3 font-bold text-gray-900 dark:text-white">Ksh {expense.amount.toFixed(2)}</td>
-                          <td className="py-2 px-3 text-xs text-gray-700 dark:text-gray-300">{expense.description}</td>
-                          <td className="py-2 px-3 text-xs capitalize text-gray-700 dark:text-gray-300">{getCategoryName(expense).replace('_', ' ')}</td>
-                          <td className="py-2 px-3 text-xs">
+                          <td className="px-3 py-2.5 text-xs font-semibold text-gray-900 dark:text-white">Ksh {expense.amount.toFixed(2)}</td>
+                          <td className="px-3 py-2.5 text-xs text-gray-700 dark:text-gray-300">{expense.description}</td>
+                          <td className="px-3 py-2.5 text-xs capitalize text-gray-700 dark:text-gray-300">{getCategoryName(expense).replace('_', ' ')}</td>
+                          <td className="px-3 py-2.5 text-xs">
                             {expense.expenseType === 'recurring' ? (
                               <span className="text-orange-700 dark:text-orange-400">Recurring</span>
                             ) : (
                               <span className="text-gray-700 dark:text-gray-400">One-time</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 text-xs text-gray-600 dark:text-gray-400">{new Date(expense.createdAt).toLocaleDateString()}</td>
-                          <td className="py-2 px-3 text-xs text-gray-600 dark:text-gray-400">{expense.branch?.name || ''}</td>
-                          <td className="py-2 px-3 text-xs">
+                          <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400">{new Date(expense.createdAt).toLocaleDateString()}</td>
+                          <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400">{expense.branch?.name || '—'}</td>
+                          <td className="px-3 py-2.5 text-xs">
                             <span className={expense.isActive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                               {expense.isActive ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td className="py-2 px-3">
+                          <td className="px-3 py-2.5">
                             <button
                               onClick={e => {
                                 e.stopPropagation();
@@ -1961,9 +1972,13 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   <select
                     value={formData.branchId || ''}
                     onChange={e => handleInputChange('branchId', e.target.value)}
+                    disabled={isBranchScopedUser}
                     className="w-full px-3 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-slate-800 dark:text-white transition-all font-medium"
                   >
-                    <option value="">Select branch</option>
+                    {!isBranchScopedUser && <option value="">Select branch</option>}
+                    {isBranchScopedUser && assignedBranchId && (
+                      <option value={assignedBranchId}>{assignedBranchName}</option>
+                    )}
                     {branches.map(branch => (
                       <option key={branch.id} value={branch.id}>{branch.name}</option>
                     ))}
@@ -2273,9 +2288,13 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                   <select
                     value={salaryForm.branchId || ''}
                     onChange={(e) => handleSalaryFormChange('branchId', e.target.value)}
+                    disabled={isBranchScopedUser}
                     className="w-full px-3 py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base bg-white/80 dark:bg-slate-800 dark:text-white transition-all font-medium"
                   >
-                    <option value="">Select branch</option>
+                    {!isBranchScopedUser && <option value="">Select branch</option>}
+                    {isBranchScopedUser && assignedBranchId && (
+                      <option value={assignedBranchId}>{assignedBranchName}</option>
+                    )}
                     {branches.map(branch => (
                       <option key={branch.id} value={branch.id}>{branch.name}</option>
                     ))}

@@ -160,15 +160,15 @@ export default function AnalyticsPage() {
     <AuthGuard>
       <div className="max-w-7xl mx-auto px-2 py-2">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 mb-1">Analytics</h1>
-            <p className="text-xs text-gray-600">Business insights and performance metrics</p>
+            <h1 className="text-lg font-semibold text-gray-900">Analytics</h1>
+            <p className="text-[11px] text-gray-500">Business insights</p>
           </div>
 
           <div className="flex gap-1">
             <Tooltip content="Export analytics data">
-              <button className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs">
+              <button className="px-2 py-1 bg-slate-700 text-white rounded hover:bg-slate-800 text-xs">
                 <FaDownload className="w-3 h-3 inline mr-1" />
                 Export
               </button>
@@ -191,13 +191,13 @@ export default function AnalyticsPage() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded px-3 py-1 cursor-pointer" onClick={() => setAlertBannerExpanded(true)}>
-              <span className="text-xs text-blue-700 font-medium flex items-center gap-2">
+            <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-3 py-1 cursor-pointer" onClick={() => setAlertBannerExpanded(true)}>
+              <span className="text-xs text-gray-700 font-medium flex items-center gap-2">
                 <FaChevronDown className="w-3 h-3" />
                 Show Alerts
               </span>
               <button
-                className="text-xs text-blue-600 hover:underline"
+                className="text-xs text-gray-600 hover:underline"
                 onClick={e => { e.stopPropagation(); setAlertBannerExpanded(true); }}
                 aria-label="Expand alerts"
               >
@@ -209,7 +209,7 @@ export default function AnalyticsPage() {
 
         {/* Tab Navigation */}
         <div className="border-b border-gray-200 mb-4">
-          <nav className="-mb-px flex space-x-2">
+          <nav className="-mb-px flex space-x-2 overflow-x-auto">
             {[
               { id: 'overview', label: 'Overview', icon: FaChartLine },
               { id: 'trends', label: 'Trends', icon: FaChartBar },
@@ -220,9 +220,9 @@ export default function AnalyticsPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1 py-2 px-1 border-b-2 font-medium text-xs ${
+                className={`flex items-center gap-1 py-2 px-1 border-b-2 font-medium text-xs whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-slate-700 text-slate-700'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -240,20 +240,18 @@ export default function AnalyticsPage() {
             {basicData && (
               <>
                 {/* Key Performance Indicators */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded border border-blue-200 p-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                  <div className="bg-white rounded border border-gray-200 p-2">
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <h3 className="text-base font-semibold text-blue-900">Total Sales</h3>
-                        <p className="text-xs text-blue-700">All time transactions</p>
+                        <h3 className="text-xs font-semibold text-gray-900">Total Sales</h3>
+                        <p className="text-[11px] text-gray-500">All-time transactions</p>
                       </div>
-                      <div className="bg-blue-500 p-2 rounded-full">
-                        <FaChartLine className="w-4 h-4 text-white" />
-                      </div>
+                      <FaChartLine className="w-3 h-3 text-gray-400" />
                     </div>
-                    <p className="text-xl font-bold text-blue-900 mb-1">{basicData.totalSales?.toLocaleString() || '0'}</p>
+                    <p className="text-sm font-semibold text-gray-900 mb-1">{basicData.totalSales?.toLocaleString() || '0'}</p>
                     {basicData.salesGrowth !== undefined && (
-                      <div className="flex items-center text-xs">
+                      <div className="flex items-center text-[11px]">
                         {basicData.salesGrowth >= 0 ? (
                           <FaArrowUp className="w-3 h-3 text-green-500 mr-1" />
                         ) : (
@@ -262,23 +260,21 @@ export default function AnalyticsPage() {
                         <span className={`font-medium ${basicData.salesGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {basicData.salesGrowth >= 0 ? '+' : ''}{basicData.salesGrowth.toFixed(1)}%
                         </span>
-                        <span className="text-blue-600 ml-1">vs last month</span>
+                        <span className="text-gray-500 ml-1">vs last month</span>
                       </div>
                     )}
                   </div>
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded border border-green-200 p-3">
+                  <div className="bg-white rounded border border-gray-200 p-2">
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <h3 className="text-base font-semibold text-green-900">Total Revenue</h3>
-                        <p className="text-xs text-green-700">All time earnings</p>
+                        <h3 className="text-xs font-semibold text-gray-900">Total Revenue</h3>
+                        <p className="text-[11px] text-gray-500">All-time earnings</p>
                       </div>
-                      <div className="bg-green-500 p-2 rounded-full">
-                        <FaChartBar className="w-4 h-4 text-white" />
-                      </div>
+                      <FaChartBar className="w-3 h-3 text-gray-400" />
                     </div>
-                    <p className="text-xl font-bold text-green-900 mb-1">Ksh {basicData.totalRevenue?.toLocaleString() || '0'}</p>
+                    <p className="text-sm font-semibold text-gray-900 mb-1">Ksh {basicData.totalRevenue?.toLocaleString() || '0'}</p>
                     {basicData.revenueGrowth !== undefined && (
-                      <div className="flex items-center text-xs">
+                      <div className="flex items-center text-[11px]">
                         {basicData.revenueGrowth >= 0 ? (
                           <FaArrowUp className="w-3 h-3 text-green-500 mr-1" />
                         ) : (
@@ -287,72 +283,62 @@ export default function AnalyticsPage() {
                         <span className={`font-medium ${basicData.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {basicData.revenueGrowth >= 0 ? '+' : ''}{basicData.revenueGrowth.toFixed(1)}%
                         </span>
-                        <span className="text-green-600 ml-1">vs last month</span>
+                        <span className="text-gray-500 ml-1">vs last month</span>
                       </div>
                     )}
                   </div>
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded border border-purple-200 p-3">
+                  <div className="bg-white rounded border border-gray-200 p-2">
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <h3 className="text-base font-semibold text-purple-900">Active Products</h3>
-                        <p className="text-xs text-purple-700">In inventory</p>
+                        <h3 className="text-xs font-semibold text-gray-900">Active Products</h3>
+                        <p className="text-[11px] text-gray-500">In inventory</p>
                       </div>
-                      <div className="bg-purple-500 p-2 rounded-full">
-                        <FaBox className="w-4 h-4 text-white" />
-                      </div>
+                      <FaBox className="w-3 h-3 text-gray-400" />
                     </div>
-                    <p className="text-xl font-bold text-purple-900 mb-1">{basicData.totalProducts?.toLocaleString() || '0'}</p>
-                    <div className="flex items-center text-xs">
-                      <span className="text-purple-600">Total products</span>
+                    <p className="text-sm font-semibold text-gray-900 mb-1">{basicData.totalProducts?.toLocaleString() || '0'}</p>
+                    <div className="flex items-center text-[11px]">
+                      <span className="text-gray-500">Total products</span>
                     </div>
                   </div>
-                  <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded border border-indigo-200 p-3">
+                  <div className="bg-white rounded border border-gray-200 p-2">
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <h3 className="text-base font-semibold text-indigo-900">Total Customers</h3>
-                        <p className="text-xs text-indigo-700">Unique buyers</p>
+                        <h3 className="text-xs font-semibold text-gray-900">Total Customers</h3>
+                        <p className="text-[11px] text-gray-500">Unique buyers</p>
                       </div>
-                      <div className="bg-indigo-500 p-2 rounded-full">
-                        <FaUsers className="w-4 h-4 text-white" />
-                      </div>
+                      <FaUsers className="w-3 h-3 text-gray-400" />
                     </div>
-                    <p className="text-xl font-bold text-indigo-900 mb-1">{basicData.totalCustomers?.toLocaleString() || '0'}</p>
+                    <p className="text-sm font-semibold text-gray-900 mb-1">{basicData.totalCustomers?.toLocaleString() || '0'}</p>
                     {basicData.customerRetention && (
                       <div className="flex items-center text-xs">
-                        <span className="text-indigo-600">{basicData.customerRetention.toFixed(1)}% retention</span>
+                        <span className="text-gray-500">{basicData.customerRetention.toFixed(1)}% retention</span>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Secondary Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
-                  <div className="bg-white rounded border p-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                  <div className="bg-white rounded border border-gray-200 p-2">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-base font-semibold text-gray-800">Avg Order Value</h3>
-                      <FaBox className="w-4 h-4 text-orange-600" />
+                      <h3 className="text-xs font-semibold text-gray-800">Avg Order Value</h3>
+                      <FaBox className="w-3 h-3 text-gray-400" />
                     </div>
-                    <p className="text-xl font-bold text-gray-900 mb-1">Ksh {basicData.averageOrderValue?.toFixed(2) || '0'}</p>
-                    <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
-                      <div className="bg-orange-500 h-1 rounded-full" style={{ width: '75%' }}></div>
-                    </div>
-                    <p className="text-xs text-gray-600">Above industry average</p>
+                    <p className="text-sm font-semibold text-gray-900 mb-1">Ksh {basicData.averageOrderValue?.toFixed(2) || '0'}</p>
+                    <p className="text-[11px] text-gray-500">Average per order</p>
                   </div>
-                  <div className="bg-white rounded border p-3">
+                  <div className="bg-white rounded border border-gray-200 p-2">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-base font-semibold text-gray-800">Conversion Rate</h3>
-                      <FaBrain className="w-4 h-4 text-red-600" />
+                      <h3 className="text-xs font-semibold text-gray-800">Conversion Rate</h3>
+                      <FaBrain className="w-3 h-3 text-gray-400" />
                     </div>
-                    <p className="text-xl font-bold text-gray-900 mb-1">{((basicData.conversionRate || 0) * 100).toFixed(1)}%</p>
-                    <div className="w-full bg-gray-200 rounded-full h-1 mb-1">
-                      <div className="bg-red-500 h-1 rounded-full" style={{ width: '65%' }}></div>
-                    </div>
-                    <p className="text-xs text-gray-600">Room for improvement</p>
+                    <p className="text-sm font-semibold text-gray-900 mb-1">{((basicData.conversionRate || 0) * 100).toFixed(1)}%</p>
+                    <p className="text-[11px] text-gray-500">Visitor to buyer ratio</p>
                   </div>
-                  <div className="bg-white rounded border p-3">
+                  <div className="bg-white rounded border border-gray-200 p-2">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-base font-semibold text-gray-800">Monthly Growth</h3>
-                      <FaChartLine className="w-4 h-4 text-green-600" />
+                      <h3 className="text-xs font-semibold text-gray-800">Monthly Growth</h3>
+                      <FaChartLine className="w-3 h-3 text-gray-400" />
                     </div>
                     {basicData.revenueGrowth !== undefined ? (
                       <>
@@ -365,7 +351,7 @@ export default function AnalyticsPage() {
                             style={{ width: `${Math.min(Math.abs(basicData.revenueGrowth), 100)}%` }}
                           ></div>
                         </div>
-                        <p className="text-xs text-gray-600">
+                        <p className="text-[11px] text-gray-500">
                           {basicData.revenueGrowth >= 0 ? 'Growth' : 'Decline'} this month
                         </p>
                       </>
@@ -379,10 +365,10 @@ export default function AnalyticsPage() {
                 </div>
 
                 {/* Sales Overview Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-3">
-                  <div className="bg-white rounded border p-3">
-                    <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                      <FaChartLine className="w-4 h-4 text-blue-600" />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2">
+                  <div className="bg-white rounded border border-gray-200 p-2">
+                    <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                      <FaChartLine className="w-3 h-3 text-gray-400" />
                       Sales Trend (6mo)
                     </h3>
                     {basicData.salesByMonth && Object.keys(basicData.salesByMonth).length > 0 ? (
@@ -396,7 +382,7 @@ export default function AnalyticsPage() {
                             return (
                               <div key={month} className="flex flex-col items-center flex-1">
                                 <div
-                                  className="bg-gradient-to-t from-blue-500 to-blue-600 rounded-t w-full mb-1 transition-all hover:from-blue-600 hover:to-blue-700"
+                                  className="bg-slate-500 rounded-t w-full mb-1 transition-all hover:bg-slate-600"
                                   style={{ height: `${(salesValue / maxSales) * 120}px` }}
                                 ></div>
                                 <span className="text-[11px] font-medium text-gray-600">{monthName}</span>
@@ -411,9 +397,9 @@ export default function AnalyticsPage() {
                       </div>
                     )}
                   </div>
-                  <div className="bg-white rounded border p-3">
-                    <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                      <FaChartPie className="w-4 h-4 text-green-600" />
+                  <div className="bg-white rounded border border-gray-200 p-2">
+                    <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                      <FaChartPie className="w-3 h-3 text-gray-400" />
                       Top Products by Revenue
                     </h3>
                     {basicData.topProducts && basicData.topProducts.length > 0 ? (
@@ -437,7 +423,7 @@ export default function AnalyticsPage() {
                                 <div className="flex items-center gap-1">
                                   <div className="w-14 bg-gray-200 rounded-full h-1">
                                     <div
-                                      className="bg-green-500 h-1 rounded-full"
+                                      className="bg-slate-500 h-1 rounded-full"
                                       style={{ width: `${Math.min(percentage, 100)}%` }}
                                     ></div>
                                   </div>
@@ -457,10 +443,10 @@ export default function AnalyticsPage() {
                 </div>
 
                 {/* Geographic Performance & Quick Insights */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 mb-3">
-                  <div className="bg-white rounded border p-3">
-                    <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                      <FaUsers className="w-4 h-4 text-purple-600" />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 mb-2">
+                  <div className="bg-white rounded border border-gray-200 p-2">
+                    <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                      <FaUsers className="w-3 h-3 text-gray-400" />
                       Customer Insights
                     </h3>
                     <div className="space-y-2">
@@ -482,9 +468,9 @@ export default function AnalyticsPage() {
                       )}
                     </div>
                   </div>
-                  <div className="bg-white rounded border p-3">
-                    <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                      <FaBrain className="w-4 h-4 text-indigo-600" />
+                  <div className="bg-white rounded border border-gray-200 p-2">
+                    <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                      <FaBrain className="w-3 h-3 text-gray-400" />
                       Performance Score
                     </h3>
                     <div className="text-center">
@@ -538,30 +524,30 @@ export default function AnalyticsPage() {
                       })()}
                     </div>
                   </div>
-                  <div className="bg-white rounded border p-3">
-                    <h3 className="text-base font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                      <FaStar className="w-4 h-4 text-yellow-500" />
+                  <div className="bg-white rounded border border-gray-200 p-2">
+                    <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                      <FaStar className="w-3 h-3 text-gray-400" />
                       Quick Insights
                     </h3>
                     <div className="space-y-2">
                       {basicData.topProducts && basicData.topProducts.length > 0 && (
-                        <div className="p-2 bg-blue-50 rounded border border-blue-200">
-                          <h4 className="font-medium text-blue-900 text-xs mb-0.5">Top Product</h4>
-                          <p className="text-[10px] text-blue-700">
+                        <div className="p-2 bg-gray-50 rounded border border-gray-200">
+                          <h4 className="font-medium text-gray-900 text-xs mb-0.5">Top Product</h4>
+                          <p className="text-[10px] text-gray-600">
                             {basicData.topProducts[0].name} - Ksh {basicData.topProducts[0].revenue?.toLocaleString() || '0'}
                           </p>
                         </div>
                       )}
                       {basicData.totalRevenue !== undefined && (
-                        <div className="p-2 bg-green-50 rounded border border-green-200">
-                          <h4 className="font-medium text-green-900 text-xs mb-0.5">Total Revenue</h4>
-                          <p className="text-[10px] text-green-700">Ksh {basicData.totalRevenue.toLocaleString()}</p>
+                        <div className="p-2 bg-gray-50 rounded border border-gray-200">
+                          <h4 className="font-medium text-gray-900 text-xs mb-0.5">Total Revenue</h4>
+                          <p className="text-[10px] text-gray-600">Ksh {basicData.totalRevenue.toLocaleString()}</p>
                         </div>
                       )}
                       {basicData.customerRetention !== undefined && (
-                        <div className="p-2 bg-purple-50 rounded border border-purple-200">
-                          <h4 className="font-medium text-purple-900 text-xs mb-0.5">Retention</h4>
-                          <p className="text-[10px] text-purple-700">{basicData.customerRetention.toFixed(1)}% repeat rate</p>
+                        <div className="p-2 bg-gray-50 rounded border border-gray-200">
+                          <h4 className="font-medium text-gray-900 text-xs mb-0.5">Retention</h4>
+                          <p className="text-[10px] text-gray-600">{basicData.customerRetention.toFixed(1)}% repeat rate</p>
                         </div>
                       )}
                     </div>
@@ -573,11 +559,11 @@ export default function AnalyticsPage() {
         )}
 
         {activeTab === 'trends' && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Time Range Selector */}
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Sales Trends Analysis</h2>
+                <h2 className="text-sm font-semibold text-gray-900">Sales Trends Analysis</h2>
                 <p className="mt-1 text-[11px] text-gray-500">
                   Comparisons below use the selected period vs the previous period.
                 </p>
@@ -592,9 +578,9 @@ export default function AnalyticsPage() {
                         window.localStorage.setItem('analyticsTrendsRange', range);
                       }
                     }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                       trendsTimeRange === range
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-slate-700 text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
@@ -605,7 +591,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Trend Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {(() => {
                 const getTrendData = () => {
                   if (trendsTimeRange === '7d' && dailySales) return dailySales;
@@ -633,31 +619,31 @@ export default function AnalyticsPage() {
 
                 return (
                   <>
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="bg-white rounded border border-gray-200 p-2">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xs font-medium text-gray-600">Total Revenue</h3>
                         <FaChartLine className="w-4 h-4 text-blue-600" />
                       </div>
-                      <p className="text-xl font-bold text-gray-900">Ksh {(total || 0).toLocaleString()}</p>
+                      <p className="text-sm font-semibold text-gray-900">Ksh {(total || 0).toLocaleString()}</p>
                       <p className="text-xs text-gray-500 mt-1">Over {trendsTimeRange}</p>
                     </div>
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="bg-white rounded border border-gray-200 p-2">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xs font-medium text-gray-600">Average Daily</h3>
                         <FaChartBar className="w-4 h-4 text-green-600" />
                       </div>
-                      <p className="text-xl font-bold text-gray-900">Ksh {(avg || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p className="text-sm font-semibold text-gray-900">Ksh {(avg || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                       <p className="text-xs text-gray-500 mt-1">Per period</p>
                     </div>
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="bg-white rounded border border-gray-200 p-2">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xs font-medium text-gray-600">Peak Period</h3>
                         <FaArrowUp className="w-4 h-4 text-purple-600" />
                       </div>
-                      <p className="text-xl font-bold text-gray-900">Ksh {(max || 0).toLocaleString()}</p>
+                      <p className="text-sm font-semibold text-gray-900">Ksh {(max || 0).toLocaleString()}</p>
                       <p className="text-xs text-gray-500 mt-1">Highest value</p>
                     </div>
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <div className="bg-white rounded border border-gray-200 p-2">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xs font-medium text-gray-600">Trend</h3>
                         {growth >= 0 ? (
@@ -666,7 +652,7 @@ export default function AnalyticsPage() {
                           <FaArrowUp className="w-4 h-4 text-red-600 rotate-180" />
                         )}
                       </div>
-                      <p className={`text-xl font-bold ${growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <p className={`text-sm font-semibold ${growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {growth >= 0 ? '+' : ''}{growth.toFixed(1)}%
                       </p>
                       <p className="text-xs text-gray-500 mt-1">Growth rate</p>
@@ -677,11 +663,11 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Main Trend Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
               {/* Revenue Trend Chart */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <FaChartLine className="w-4 h-4 text-blue-600" />
+              <div className="bg-white rounded border border-gray-200 p-2">
+                <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                  <FaChartLine className="w-3 h-3 text-gray-400" />
                   Revenue Trend
                 </h3>
                 {(() => {
@@ -733,7 +719,7 @@ export default function AnalyticsPage() {
                         return (
                           <div key={index} className="flex flex-col items-center flex-1 group">
                             <div
-                              className="w-full bg-gradient-to-t from-blue-500 to-blue-600 rounded-t mb-2 transition-all hover:from-blue-600 hover:to-blue-700 cursor-pointer relative"
+                              className="w-full bg-slate-500 rounded-t mb-2 transition-all hover:bg-slate-600 cursor-pointer relative"
                               style={{ height: `${(value / maxValue) * 240}px` }}
                               title={`${data.label}: Ksh ${value.toLocaleString()}`}
                             >
@@ -755,9 +741,9 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Top Products Trend */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <FaChartPie className="w-4 h-4 text-green-600" />
+              <div className="bg-white rounded border border-gray-200 p-2">
+                <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                  <FaChartPie className="w-3 h-3 text-gray-400" />
                   Top Products Performance
                 </h3>
                 {basicData?.topProducts && basicData.topProducts.length > 0 ? (
@@ -776,7 +762,7 @@ export default function AnalyticsPage() {
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
-                              className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
+                              className="bg-slate-500 h-2 rounded-full transition-all"
                               style={{ width: `${Math.min(percentage, 100)}%` }}
                             ></div>
                           </div>
@@ -798,11 +784,11 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Additional Trend Analysis */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
               {/* Sales Comparison */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <FaChartBar className="w-4 h-4 text-purple-600" />
+              <div className="bg-white rounded border border-gray-200 p-2">
+                <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                  <FaChartBar className="w-3 h-3 text-gray-400" />
                   Period Comparison
                 </h3>
                 {(() => {
@@ -817,17 +803,17 @@ export default function AnalyticsPage() {
                   
                   return (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                         <span className="text-sm font-medium text-gray-700">Current Period</span>
-                        <span className="text-lg font-bold text-blue-600">Ksh {currentTotal.toLocaleString()}</span>
+                        <span className="text-sm font-semibold text-gray-900">Ksh {currentTotal.toLocaleString()}</span>
                       </div>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                         <span className="text-sm font-medium text-gray-700">Average</span>
-                        <span className="text-lg font-bold text-gray-900">Ksh {currentAvg.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                        <span className="text-sm font-semibold text-gray-900">Ksh {currentAvg.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                       </div>
-                      <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                         <span className="text-sm font-medium text-gray-700">Data Points</span>
-                        <span className="text-lg font-bold text-green-600">{currentData ? Object.keys(currentData).length : 0}</span>
+                        <span className="text-sm font-semibold text-gray-900">{currentData ? Object.keys(currentData).length : 0}</span>
                       </div>
                     </div>
                   );
@@ -835,9 +821,9 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Growth Indicators */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <FaArrowUp className="w-4 h-4 text-orange-600" />
+              <div className="bg-white rounded border border-gray-200 p-2">
+                <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                  <FaArrowUp className="w-3 h-3 text-gray-400" />
                   Growth Indicators
                 </h3>
                 {(() => {
@@ -861,8 +847,8 @@ export default function AnalyticsPage() {
                   
                   return growthData ? (
                     <div className="space-y-3">
-                      <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
-                        <p className="text-3xl font-bold text-green-600">
+                      <div className="text-center p-2 bg-gray-50 rounded">
+                        <p className="text-sm font-semibold text-gray-900">
                           {growthData.growth >= 0 ? '+' : ''}{growthData.growth.toFixed(1)}%
                         </p>
                         <p className="text-xs text-gray-600 mt-1">Growth Rate</p>
@@ -887,9 +873,9 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Trend Insights */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <FaBrain className="w-4 h-4 text-indigo-600" />
+              <div className="bg-white rounded border border-gray-200 p-2">
+                <h3 className="text-xs font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                  <FaBrain className="w-3 h-3 text-gray-400" />
                   Trend Insights
                 </h3>
                 {(() => {
@@ -1130,7 +1116,7 @@ export default function AnalyticsPage() {
 
         {activeTab === 'segments' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Customer Segments</h2>
+            <h2 className="text-sm font-semibold text-gray-900">Customer Segments</h2>
             {advancedData?.customerSegments && (
               <InteractiveChart
                 data={advancedData.customerSegments.map(segment => ({
@@ -1150,22 +1136,22 @@ export default function AnalyticsPage() {
 
         {activeTab === 'predictive' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Predictive Analytics</h2>
+            <h2 className="text-sm font-semibold text-gray-900">Predictive Analytics</h2>
             {advancedData?.predictiveAnalytics && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg border p-3">
-                  <h3 className="text-base font-semibold mb-4">Forecast Data</h3>
-                  <p className="text-2xl font-bold text-blue-600">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="bg-white rounded border border-gray-200 p-2">
+                  <h3 className="text-xs font-semibold mb-2">Forecast Data</h3>
+                  <p className="text-sm font-semibold text-gray-900">
                     ${advancedData.predictiveAnalytics.nextMonthForecast?.toLocaleString()}
                   </p>
-                  <p className="text-sm text-gray-600">Next month forecast</p>
+                  <p className="text-[11px] text-gray-500">Next month forecast</p>
                 </div>
-                <div className="bg-white rounded-lg border p-3">
-                  <h3 className="text-base font-semibold mb-4">Growth Rate</h3>
-                  <p className="text-2xl font-bold text-green-600">
+                <div className="bg-white rounded border border-gray-200 p-2">
+                  <h3 className="text-xs font-semibold mb-2">Growth Rate</h3>
+                  <p className="text-sm font-semibold text-gray-900">
                     {advancedData.predictiveAnalytics.growthRate?.toFixed(1)}%
                   </p>
-                  <p className="text-sm text-gray-600">Predicted growth</p>
+                  <p className="text-[11px] text-gray-500">Predicted growth</p>
                 </div>
               </div>
             )}

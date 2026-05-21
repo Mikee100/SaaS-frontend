@@ -21,6 +21,7 @@ import {
 } from 'react-icons/fa';
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
+import { useTenant } from '@/hooks/useTenant';
 import { useBranch } from "@/contexts/BranchContext";
 import Image from 'next/image';
 import API_BASE_URL from '../../../config/apiConfig';
@@ -116,6 +117,27 @@ type TabType = 'products' | 'inventory' | 'advanced' | 'attributes' | 'variation
 type AdvancedSubTab = 'overview' | 'movements' | 'alerts' | 'forecasting' | 'locations';
 
 export default function UnifiedProductsInventoryPage() {
+  // Fetch tenant info (includes classificationId)
+  const { data: tenant, isLoading: tenantLoading } = useTenant();
+  // State for classification units
+  const [classificationUnits, setClassificationUnits] = useState<any[]>([]);
+
+  // Fetch classification units when tenant changes
+  useEffect(() => {
+    async function fetchUnits() {
+      if (tenant?.classificationId) {
+        try {
+          const classification = await apiGet(`/admin/classifications/${tenant.classificationId}`);
+          setClassificationUnits(classification.units || []);
+        } catch (e) {
+          setClassificationUnits([]);
+        }
+      } else {
+        setClassificationUnits([]);
+      }
+    }
+    fetchUnits();
+  }, [tenant?.classificationId]);
   const { user } = useUser();
   const { selectedBranchId, setSelectedBranchId } = useBranch();
   const queryClient = useQueryClient();
@@ -2558,6 +2580,20 @@ export default function UnifiedProductsInventoryPage() {
                     onChange={e => setModalProductFields(f => ({ ...f, category: e.target.value }))}
                     className="w-full px-2 py-1 border border-gray-200 rounded bg-white text-gray-900 font-semibold text-xs"
                   />
+                </div>
+                <div className="mb-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Measurement Unit</label>
+                  <select
+                    value={modalProductFields.unitAbbreviation ?? ""}
+                    onChange={e => setModalProductFields(f => ({ ...f, unitAbbreviation: e.target.value }))}
+                    className="w-full px-2 py-1 border border-gray-200 rounded bg-white text-gray-900 font-semibold text-xs"
+                    required
+                  >
+                    <option value="">Select unit</option>
+                    {classificationUnits.map((unit: any) => (
+                      <option key={unit.id} value={unit.abbreviation}>{unit.name} ({unit.abbreviation})</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="mb-3">
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Quantity</label>
