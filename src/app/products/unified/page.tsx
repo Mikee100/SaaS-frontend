@@ -47,6 +47,7 @@ interface Product {
   stock: number;
   description?: string;
   category?: string;
+  unitAbbreviation?: string;
   customFields?: Record<string, string | number | boolean>;
   supplier?: {
     id: string;
@@ -66,6 +67,11 @@ interface InventoryItem {
   lastUpdated?: string;
   updatedAt?: string;
   branchId?: string;
+}
+
+interface ProductVariationStock {
+  id: string;
+  stock: number;
 }
 
 interface StockMovement {
@@ -127,7 +133,7 @@ export default function UnifiedProductsInventoryPage() {
     async function fetchUnits() {
       if (tenant?.classificationId) {
         try {
-          const classification = await apiGet(`/admin/classifications/${tenant.classificationId}`);
+          const classification = (await apiGet(`/admin/classifications/${tenant.classificationId}`)) as { units?: any[] };
           setClassificationUnits(classification.units || []);
         } catch (e) {
           setClassificationUnits([]);
@@ -180,7 +186,7 @@ export default function UnifiedProductsInventoryPage() {
   const [showStockModal, setShowStockModal] = useState(false);
   const [modalProduct, setModalProduct] = useState<Product | null>(null);
   const [modalQuantity, setModalQuantity] = useState(0);
-  const [modalProductFields, setModalProductFields] = useState<Partial<Product>>({});
+  const [modalProductFields, setModalProductFields] = useState<Record<string, any>>({});
   const [modalError, setModalError] = useState("");
 
   // Advanced tab states
@@ -447,6 +453,17 @@ export default function UnifiedProductsInventoryPage() {
     gcTime: 10 * 60 * 1000,
   });
 
+  // Lightweight setup progress: check whether attributes exist.
+  const { data: attributesSetupData = [] } = useQuery({
+    queryKey: ['product-attributes', 'setup-progress'],
+    queryFn: async () => {
+      const data = await apiGet('/product-attributes?includeValues=true');
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+
   // Fetch products for variations tab (simplified, all products)
   const { data: variationsProductsData } = useQuery({
     queryKey: ['products', 'variations', selectedBranchId],
@@ -484,6 +501,53 @@ export default function UnifiedProductsInventoryPage() {
     enabled: !!selectedBranchId && (activeTab === 'advanced'),
     staleTime: 2 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
+  });
+
+  // Aggregate variation stock for products that look out-of-stock at parent level.
+  const { data: variationStockMap = {} } = useQuery({
+    queryKey: ['products', 'variation-stock-map', selectedBranchId, activeTab, (inventoryProductsData?.length || 0), (advancedProductsData?.length || 0), (inventoryData?.length || 0), (advancedInventoryData?.length || 0)],
+    queryFn: async () => {
+      const productsForTab = activeTab === 'advanced'
+        ? (advancedProductsData || [])
+        : (inventoryProductsData || []);
+
+      if (!selectedBranchId || productsForTab.length === 0) return {} as Record<string, number>;
+
+      const baseInventory = activeTab === 'advanced' ? (advancedInventoryData || []) : (inventoryData || []);
+      const invMap = new Map(baseInventory.map(item => [item.productId || item.product?.id, item]));
+
+      const candidateProductIds = productsForTab
+        .filter((product) => {
+          const item = invMap.get(product.id);
+          const baseQty = item?.quantity ?? product.stock ?? 0;
+          return baseQty === 0;
+        })
+        .map((product) => product.id);
+
+      if (candidateProductIds.length === 0) return {} as Record<string, number>;
+
+      const variationResults = await Promise.allSettled(
+        candidateProductIds.map(async (productId) => {
+          const vars = await apiGet(`/products/${productId}/variations`, { 'x-branch-id': selectedBranchId }) as ProductVariationStock[];
+          const totalStock = Array.isArray(vars)
+            ? vars.reduce((sum, variation) => sum + (Number(variation?.stock) || 0), 0)
+            : 0;
+          return { productId, totalStock };
+        })
+      );
+
+      const map: Record<string, number> = {};
+      variationResults.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          map[result.value.productId] = result.value.totalStock;
+        }
+      });
+
+      return map;
+    },
+    enabled: !!selectedBranchId && (activeTab === 'inventory' || activeTab === 'advanced'),
+    staleTime: 60 * 1000,
+    gcTime: 3 * 60 * 1000,
   });
 
   // Update products state
@@ -545,14 +609,18 @@ export default function UnifiedProductsInventoryPage() {
     // Merge products with their inventory entries (or create synthetic entries for products without inventory)
     const allInventoryItems = productsForInventory.map(product => {
       const existingInv = inventoryMap.get(product.id);
+      const variationQty = variationStockMap[product.id] || 0;
+      const effectiveQty = variationQty > 0
+        ? variationQty
+        : (existingInv?.quantity ?? product.stock ?? 0);
       if (existingInv) {
-        return existingInv;
+        return { ...existingInv, quantity: effectiveQty };
       }
       // Create synthetic inventory item for product without inventory entry
       return {
         id: `synth_${product.id}`,
         productId: product.id,
-        quantity: product.stock || 0,
+        quantity: effectiveQty,
         product: product,
         location: "Main Warehouse",
         minStock: 0,
@@ -575,7 +643,7 @@ export default function UnifiedProductsInventoryPage() {
       if (stockFilter === "low") return matchesSearch && matchesCategory && qty > 0 && qty <= 5;
       return matchesSearch && matchesCategory;
     });
-  }, [activeTab, inventoryData, inventoryProductsData, products, search, stockFilter, categoryFilter]);
+  }, [activeTab, inventoryData, inventoryProductsData, products, search, stockFilter, categoryFilter, variationStockMap]);
 
   // Calculate statistics for inventory tab - use all merged products
   const inventoryStats = useMemo(() => {
@@ -588,11 +656,15 @@ export default function UnifiedProductsInventoryPage() {
       const invMap = new Map((inventoryData || []).map(item => [item.productId || item.product?.id, item]));
       inv = productsForInventory.map(product => {
         const existingInv = invMap.get(product.id);
-        if (existingInv) return existingInv;
+        const variationQty = variationStockMap[product.id] || 0;
+        const effectiveQty = variationQty > 0
+          ? variationQty
+          : (existingInv?.quantity ?? product.stock ?? 0);
+        if (existingInv) return { ...existingInv, quantity: effectiveQty };
         return {
           id: `synth_${product.id}`,
           productId: product.id,
-          quantity: product.stock || 0,
+          quantity: effectiveQty,
           product: product,
         };
       });
@@ -614,7 +686,7 @@ export default function UnifiedProductsInventoryPage() {
         return sum + (qty * (price - cost));
       }, 0),
     };
-  }, [activeTab, inventoryData, advancedInventoryData, inventoryProductsData, products]);
+  }, [activeTab, inventoryData, advancedInventoryData, inventoryProductsData, products, variationStockMap]);
 
   // Advanced inventory stats
   const advancedStats = useMemo(() => {
@@ -647,14 +719,18 @@ export default function UnifiedProductsInventoryPage() {
     // Merge products with their advanced inventory entries (or create synthetic entries)
     const allAdvancedItems = productsForAdvanced.map(product => {
       const existingAdv = advancedMap.get(product.id);
+      const variationQty = variationStockMap[product.id] || 0;
+      const effectiveQty = variationQty > 0
+        ? variationQty
+        : (existingAdv?.quantity ?? product.stock ?? 0);
       if (existingAdv) {
-        return existingAdv;
+        return { ...existingAdv, quantity: effectiveQty };
       }
       // Create synthetic advanced inventory item for product without advanced entry
       return {
         id: `synth_adv_${product.id}`,
         productId: product.id,
-        quantity: product.stock || 0,
+        quantity: effectiveQty,
         product: product,
         location: "Main Warehouse",
         minStock: 0,
@@ -679,7 +755,7 @@ export default function UnifiedProductsInventoryPage() {
 
       return matchesSearch && matchesLocation && matchesStock;
     });
-  }, [activeTab, advancedInventoryData, advancedProductsData, products, search, locationFilter, stockFilter]);
+  }, [activeTab, advancedInventoryData, advancedProductsData, products, search, locationFilter, stockFilter, variationStockMap]);
 
   // Sort products
   const sortedProducts = useMemo(() => {
@@ -710,6 +786,9 @@ export default function UnifiedProductsInventoryPage() {
 
   const loading = productsLoading || inventoryLoading || branchesLoading || advancedInventoryLoading;
   const isSearching = search !== debouncedSearch;
+  const hasCreatedProduct = (products.length > 0) || ((inventoryProductsData?.length || 0) > 0);
+  const hasAttributes = (attributesSetupData?.length || 0) > 0;
+  const hasPickedVariationProduct = !!selectedProductId;
 
   // Product handlers
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -1110,35 +1189,35 @@ export default function UnifiedProductsInventoryPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="min-h-screen bg-gray-50">
+        <div className="mx-auto max-w-screen-2xl px-2 py-3 sm:px-3 lg:px-4">
           {/* Usage Warning Banner */}
           {isNearLimit && showUsageBanner && activeTab === 'products' && (
-            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-lg animate-in slide-in-from-top-5">
-              <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-2 border-amber-300 rounded-xl shadow-lg backdrop-blur-sm">
+            <div className="fixed left-1/2 top-3 z-50 w-full max-w-md -translate-x-1/2 animate-in slide-in-from-top-5">
+              <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5">
                 <div className="flex-shrink-0">
-                  <FaExclamationTriangle className="text-amber-600 w-5 h-5" />
+                  <FaExclamationTriangle className="h-4 w-4 text-amber-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-amber-900 text-sm">Approaching Product Limit</p>
-                  <p className="text-sm text-amber-700 mt-0.5">
+                  <p className="text-xs font-semibold text-amber-900">Approaching Product Limit</p>
+                  <p className="mt-0.5 text-xs text-amber-700">
                     {limits?.usage.products.current} of {limits?.usage.products.limit} products used
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <a
                     href="/settings/billing"
-                    className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg text-sm font-semibold hover:from-amber-700 hover:to-orange-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                    className="rounded bg-amber-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
                   >
                     Upgrade
                   </a>
                   <button
                     onClick={() => setShowUsageBanner(false)}
-                    className="p-2 text-amber-700 hover:text-amber-900 rounded-lg hover:bg-amber-100 transition-colors"
+                    className="rounded p-1 text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900"
                     title="Dismiss"
                     aria-label="Dismiss banner"
                   >
-                    <FaTimes className="w-4 h-4" />
+                    <FaTimes className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
@@ -1147,20 +1226,20 @@ export default function UnifiedProductsInventoryPage() {
 
           {/* Header Section */}
           <div className="mb-4">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div className="rounded-md border border-gray-200 bg-white p-2.5">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className="flex-shrink-0 p-1.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-sm">
-                    <FaBox className="w-4 h-4 text-white" />
+                  <div className="flex-shrink-0 rounded bg-blue-600 p-1.5">
+                    <FaBox className="h-3.5 w-3.5 text-white" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h1 className="text-lg font-semibold text-gray-900">Products & Inventory</h1>
+                    <h1 className="text-sm font-semibold text-gray-900">Products & Inventory</h1>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-1 border border-gray-200">
+                  <div className="flex items-center gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1">
                     <FaStore className="w-3.5 h-3.5 text-gray-500" />
-                    <label className="text-xs font-medium text-gray-700 whitespace-nowrap">Branch:</label>
+                    <label className="whitespace-nowrap text-[11px] font-medium text-gray-700">Branch:</label>
                     {branchesLoading ? (
                       <div className="flex items-center gap-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
@@ -1170,7 +1249,7 @@ export default function UnifiedProductsInventoryPage() {
                       <select
                         value={selectedBranchId || ''}
                         onChange={e => setSelectedBranchId(e.target.value)}
-                        className="bg-white border-0 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500 rounded-md cursor-pointer min-w-[120px]"
+                        className="min-w-[110px] cursor-pointer rounded bg-white text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500"
                         aria-label="Select branch"
                       >
                         <option value="" disabled>Select Branch</option>
@@ -1186,7 +1265,7 @@ export default function UnifiedProductsInventoryPage() {
           </div>
 
           {/* Tabs Navigation */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
+          <div className="mb-3 overflow-hidden rounded-md border border-gray-200 bg-white">
             <div className="border-b border-gray-200 bg-gray-50/50">
               <nav className="flex overflow-x-auto scrollbar-hide -mb-px" role="tablist">
                 {[
@@ -1201,16 +1280,16 @@ export default function UnifiedProductsInventoryPage() {
                     onClick={() => setActiveTab(id as TabType)}
                     role="tab"
                     aria-selected={activeTab === id}
-                    className={`group relative flex items-center gap-2 px-6 py-4 text-sm font-semibold border-b-2 transition-all duration-200 whitespace-nowrap ${
+                    className={`group relative flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
                       activeTab === id
                         ? 'border-blue-600 text-blue-600 bg-blue-50/50'
                         : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 transition-transform ${activeTab === id ? 'scale-110' : ''}`} />
+                    <Icon className="h-3.5 w-3.5" />
                     <span>{label}</span>
                     {count !== undefined && count > 0 && (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
                         activeTab === id
                           ? 'bg-blue-100 text-blue-700'
                           : 'bg-gray-200 text-gray-600 group-hover:bg-gray-300'
@@ -1227,16 +1306,16 @@ export default function UnifiedProductsInventoryPage() {
             </div>
 
             {/* Tab Content */}
-            <div className="p-6">
+            <div className="p-3">
               {/* PRODUCTS TAB */}
               {activeTab === 'products' && (
-                <div className="space-y-6">
+                <div className="space-y-3">
                   {/* Products Header Actions */}
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
                       <div className="flex items-center gap-2">
-                        <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
-                          <span className="text-sm font-bold text-blue-700">
+                        <div className="rounded border border-blue-200 bg-blue-50 px-2 py-1">
+                          <span className="text-xs font-semibold text-blue-700">
                             {loading || isSearching ? (
                               <span className="flex items-center gap-2">
                                 <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-500 border-t-transparent"></div>
@@ -1248,12 +1327,12 @@ export default function UnifiedProductsInventoryPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-200">
-                        <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Per page:</label>
+                      <div className="flex items-center gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1">
+                        <label className="whitespace-nowrap text-xs font-medium text-gray-700">Per page:</label>
                         <select
                           value={itemsPerPage}
                           onChange={(e) => handleItemsPerPageChange(parseInt(e.target.value, 10))}
-                          className="bg-white border-0 text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500 rounded-md cursor-pointer"
+                          className="cursor-pointer rounded bg-white text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500"
                           disabled={loading || isSearching}
                           aria-label="Items per page"
                         >
@@ -1264,15 +1343,15 @@ export default function UnifiedProductsInventoryPage() {
                         </select>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <div className="relative flex-1 min-w-[280px] max-w-md">
-                        <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative min-w-[220px] max-w-md flex-1">
+                        <FaSearch className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
                         <input
                           type="text"
                           value={search}
                           onChange={e => setSearch(e.target.value)}
                           placeholder="Search products by name, SKU, or description..."
-                          className="w-full pl-11 pr-4 py-2.5 border-2 border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white text-gray-900 placeholder-gray-400"
+                          className="w-full rounded border border-gray-300 bg-white py-2 pl-9 pr-3 text-xs text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                           aria-label="Search products"
                         />
                         {isSearching && (
@@ -1292,28 +1371,28 @@ export default function UnifiedProductsInventoryPage() {
                       </div>
                       <button
                         onClick={() => setShowDeletedProducts(!showDeletedProducts)}
-                        className={`px-4 py-2.5 border-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all shadow-sm hover:shadow ${
-                          showDeletedProducts ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+                        className={`flex items-center gap-1.5 rounded border px-3 py-2 text-xs font-medium transition-colors ${
+                          showDeletedProducts ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
                         }`}
                       >
-                        <FaTrashRestore className="w-4 h-4" />
+                        <FaTrashRestore className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">{showDeletedProducts ? 'Active' : 'Deleted'}</span>
                       </button>
                       <button
                         onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
-                        className="px-4 py-2.5 border-2 border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-300 flex items-center gap-2 text-sm font-medium transition-all shadow-sm hover:shadow"
+                        className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
                         aria-label={`Switch to ${viewMode === 'grid' ? 'table' : 'grid'} view`}
                       >
-                        {viewMode === 'grid' ? <FaSortAmountDown className="w-4 h-4" /> : <FaLayerGroup className="w-4 h-4" />}
+                        {viewMode === 'grid' ? <FaSortAmountDown className="h-3.5 w-3.5" /> : <FaLayerGroup className="h-3.5 w-3.5" />}
                         <span className="hidden sm:inline">{viewMode === 'grid' ? 'Table' : 'Grid'}</span>
                       </button>
                       {canCreateProducts && (
                         <button
                           onClick={() => setShowAddForm(true)}
-                          className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 flex items-center gap-2 text-sm font-semibold transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                          className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
                           aria-label="Add new product"
                         >
-                          <FaPlus className="w-4 h-4" />
+                          <FaPlus className="h-3.5 w-3.5" />
                           <span className="hidden sm:inline">Add Product</span>
                           <span className="sm:hidden">Add</span>
                         </button>
@@ -1321,19 +1400,66 @@ export default function UnifiedProductsInventoryPage() {
                     </div>
                   </div>
 
+                  {/* Quick Setup Guide */}
+                  <div className="rounded border border-blue-200 bg-blue-50 px-2.5 py-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-blue-800">New here? Follow this order:</p>
+                        <p className="text-[11px] text-blue-700">1. Create Product, 2. Add Attributes (optional), 3. Add Variations, 4. Update Variation Stock</p>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${hasCreatedProduct ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-gray-600 border border-blue-200'}`}>
+                            {hasCreatedProduct ? 'Step 1 complete' : 'Step 1 pending'}
+                          </span>
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${hasAttributes ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-gray-600 border border-blue-200'}`}>
+                            {hasAttributes ? 'Step 2 complete' : 'Step 2 pending'}
+                          </span>
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${hasPickedVariationProduct ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-gray-600 border border-blue-200'}`}>
+                            {hasPickedVariationProduct ? 'Step 3 in progress' : 'Step 3 pending'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          onClick={() => setShowAddForm(true)}
+                          className="rounded border border-blue-300 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                        >
+                          Create Product
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('attributes')}
+                          className="rounded border border-blue-300 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                        >
+                          Attributes
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!selectedProduct && products.length > 0) {
+                              setSelectedProduct(products[0]);
+                              setSelectedProductId(products[0].id);
+                            }
+                            setActiveTab('variations');
+                          }}
+                          className="rounded border border-blue-300 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                        >
+                          Variations
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Add/Edit Product Form */}
                   {showAddForm && (
-                    <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6 mb-6 animate-in slide-in-from-top-5">
-                      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
+                    <div className="mb-3 animate-in slide-in-from-top-5 rounded-md border border-gray-200 bg-white p-4">
+                      <div className="mb-4 flex items-center justify-between border-b border-gray-200 pb-2">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                            <FaBox className="w-5 h-5 text-white" />
+                          <div className="rounded bg-blue-600 p-1.5">
+                            <FaBox className="h-4 w-4 text-white" />
                           </div>
                           <div>
-                            <h2 className="text-xl font-bold text-gray-900">
+                            <h2 className="text-base font-semibold text-gray-900">
                               {editProduct ? 'Edit Product' : 'Add New Product'}
                             </h2>
-                            <p className="text-sm text-gray-500 mt-0.5">
+                            <p className="mt-0.5 text-xs text-gray-500">
                               {editProduct
                                 ? 'Update product information'
                                 : productType === 'withVariations'
@@ -1347,10 +1473,10 @@ export default function UnifiedProductsInventoryPage() {
                             setShowAddForm(false);
                             resetForm();
                           }}
-                          className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                          className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                           aria-label="Close form"
                         >
-                          <FaTimes className="w-5 h-5" />
+                          <FaTimes className="h-4 w-4" />
                         </button>
                       </div>
 
@@ -1364,8 +1490,8 @@ export default function UnifiedProductsInventoryPage() {
                         </div>
                       )}
 
-                      <form onSubmit={editProduct ? handleEditProduct : handleAddProduct} className="space-y-5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <form onSubmit={editProduct ? handleEditProduct : handleAddProduct} className="space-y-3">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                               Product Name <span className="text-red-500">*</span>
@@ -1375,7 +1501,7 @@ export default function UnifiedProductsInventoryPage() {
                               name="name"
                               defaultValue={editProduct?.name || ''}
                               required
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                               placeholder="Enter product name"
                             />
                           </div>
@@ -1388,7 +1514,7 @@ export default function UnifiedProductsInventoryPage() {
                               name="sku"
                               defaultValue={editProduct?.sku || ''}
                               required
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                               placeholder="Enter SKU"
                             />
                           </div>
@@ -1397,7 +1523,7 @@ export default function UnifiedProductsInventoryPage() {
                               Selling Price <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
-                              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-medium text-gray-500">$</span>
                               <input
                                 type="number"
                                 name="price"
@@ -1405,7 +1531,7 @@ export default function UnifiedProductsInventoryPage() {
                                 min="0"
                                 defaultValue={editProduct?.price || ''}
                                 required
-                                className="w-full pl-8 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                                className="w-full rounded border border-gray-300 bg-white py-2 pl-7 pr-3 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 placeholder="0.00"
                               />
                             </div>
@@ -1413,14 +1539,14 @@ export default function UnifiedProductsInventoryPage() {
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Buying Price</label>
                             <div className="relative">
-                              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-medium text-gray-500">$</span>
                               <input
                                 type="number"
                                 name="cost"
                                 step="0.01"
                                 min="0"
                                 defaultValue={editProduct?.cost || ''}
-                                className="w-full pl-8 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900"
+                                className="w-full rounded border border-gray-300 bg-white py-2 pl-7 pr-3 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 placeholder="0.00"
                               />
                             </div>
@@ -1429,11 +1555,11 @@ export default function UnifiedProductsInventoryPage() {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                               Product type
                             </label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                               <button
                                 type="button"
                                 onClick={() => setProductType('simple')}
-                                className={`w-full text-left px-4 py-3 rounded-lg border-2 text-sm transition-all ${
+                                className={`w-full rounded border px-3 py-2 text-left text-xs transition-colors ${
                                   productType === 'simple'
                                     ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-sm'
                                     : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
@@ -1447,7 +1573,7 @@ export default function UnifiedProductsInventoryPage() {
                               <button
                                 type="button"
                                 onClick={() => setProductType('withVariations')}
-                                className={`w-full text-left px-4 py-3 rounded-lg border-2 text-sm transition-all ${
+                                className={`w-full rounded border px-3 py-2 text-left text-xs transition-colors ${
                                   productType === 'withVariations'
                                     ? 'border-purple-500 bg-purple-50 text-purple-900 shadow-sm'
                                     : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
@@ -1472,15 +1598,15 @@ export default function UnifiedProductsInventoryPage() {
                             name="description"
                             defaultValue={editProduct?.description || ''}
                             rows={4}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white text-gray-900 resize-none"
+                            className="w-full resize-none rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                             placeholder="Enter product description (optional)"
                           />
                         </div>
-                        <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+                        <div className="flex items-center gap-2 border-t border-gray-200 pt-2.5">
                           <button
                             type="submit"
                             disabled={saving}
-                            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 text-sm font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                            className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {saving ? (
                               <>
@@ -1509,7 +1635,7 @@ export default function UnifiedProductsInventoryPage() {
                               setShowAddForm(false);
                               resetForm();
                             }}
-                            className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 text-sm font-semibold transition-all"
+                            className="rounded border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
                           >
                             Cancel
                           </button>
@@ -1520,7 +1646,7 @@ export default function UnifiedProductsInventoryPage() {
 
                   {/* Products Content */}
                   {showDeletedProducts ? (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                    <div className="rounded-md border border-gray-200 bg-white p-3">
                       <p className="text-sm text-gray-500 mb-4">Deleted products can be restored.</p>
                       {deletedProducts.length === 0 ? (
                         <p className="text-sm text-gray-500">No deleted products.</p>
@@ -1529,7 +1655,7 @@ export default function UnifiedProductsInventoryPage() {
                           {deletedProducts.map((p) => (
                             <div
                               key={p.id}
-                              className="flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50/50 p-4"
+                              className="flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50/50 p-2.5"
                             >
                               <div>
                                 <h3 className="font-semibold text-gray-900">{p.name}</h3>
@@ -1550,10 +1676,10 @@ export default function UnifiedProductsInventoryPage() {
                       )}
                     </div>
                   ) : loading || isSearching ? (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                    <div className="rounded-md border border-gray-200 bg-white p-3">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {Array.from({ length: 8 }).map((_, index) => (
-                          <div key={`skeleton-${index}`} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-gray-200 p-5 animate-pulse">
+                          <div key={`skeleton-${index}`} className="animate-pulse rounded border border-gray-200 bg-gray-50 p-3">
                             <div className="flex items-start justify-between mb-4">
                               <div className="flex items-start gap-3 flex-1">
                                 <div className="w-10 h-10 bg-gray-300 rounded-lg"></div>
@@ -1577,19 +1703,19 @@ export default function UnifiedProductsInventoryPage() {
                       </div>
                     </div>
                   ) : sortedProducts.length === 0 ? (
-                    <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 shadow-sm p-12">
+                    <div className="rounded-md border border-dashed border-gray-300 bg-white p-6">
                       <div className="text-center">
-                        <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                          <FaBox className="w-8 h-8 text-gray-400" />
+                        <div className="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
+                          <FaBox className="h-5 w-5 text-gray-400" />
                         </div>
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">No products found</h3>
-                        <p className="text-sm text-gray-600 mb-6">
+                        <h3 className="mb-1 text-sm font-semibold text-gray-900">No products found</h3>
+                        <p className="mb-3 text-xs text-gray-600">
                           {search ? 'Try adjusting your search criteria' : 'Get started by adding your first product'}
                         </p>
                         {canCreateProducts && !search && (
                           <button
                             onClick={() => setShowAddForm(true)}
-                            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 text-sm font-semibold inline-flex items-center gap-2 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                            className="inline-flex items-center gap-1.5 rounded bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
                           >
                             <FaPlus className="w-4 h-4" />
                             Add Your First Product
@@ -1607,20 +1733,20 @@ export default function UnifiedProductsInventoryPage() {
                           return (
                             <div 
                               key={product.id} 
-                              className="group bg-white rounded-xl border-2 border-gray-200 p-5 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all duration-300 transform hover:-translate-y-1"
+                              className="group rounded-md border border-gray-200 bg-white p-3 transition-colors hover:border-blue-300"
                             >
                               {/* Header */}
-                              <div className="flex items-start justify-between mb-4">
+                              <div className="mb-2.5 flex items-start justify-between">
                                 <div className="flex items-start gap-3 flex-1 min-w-0">
-                                  <div className="flex-shrink-0 p-2.5 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg group-hover:from-blue-200 group-hover:to-indigo-200 transition-colors">
-                                    <FaBox className="w-5 h-5 text-blue-600" />
+                                  <div className="flex-shrink-0 rounded bg-blue-100 p-1.5">
+                                    <FaBox className="h-4 w-4 text-blue-600" />
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-2 group-hover:text-blue-600 transition-colors">
+                                    <h3 className="mb-0.5 line-clamp-2 text-sm font-semibold text-gray-900 group-hover:text-blue-600">
                                       {product.name}
                                     </h3>
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
                                         {product.sku}
                                       </span>
                                       {product.category && (
@@ -1629,7 +1755,7 @@ export default function UnifiedProductsInventoryPage() {
                                     </div>
                                   </div>
                                 </div>
-                                <div className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-bold shadow-sm ${
+                                <div className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                                   stockStatus === 'good' ? 'bg-green-100 text-green-700 border border-green-200' :
                                   stockStatus === 'low' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
                                   'bg-red-100 text-red-700 border border-red-200'
@@ -1639,19 +1765,19 @@ export default function UnifiedProductsInventoryPage() {
                               </div>
 
                               {/* Metrics */}
-                              <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                              <div className="mb-2.5 grid grid-cols-2 gap-2 rounded border border-gray-200 bg-gray-50 p-2">
                                 <div>
                                   <p className="text-xs font-medium text-gray-500 mb-1">Selling Price</p>
-                                  <p className="text-lg font-bold text-gray-900">Ksh {product.price.toFixed(2)}</p>
+                                  <p className="text-sm font-semibold text-gray-900">Ksh {product.price.toFixed(2)}</p>
                                 </div>
                                 <div>
                                   <p className="text-xs font-medium text-gray-500 mb-1">Buying Price</p>
-                                  <p className="text-lg font-bold text-gray-700">Ksh {(product.cost || 0).toFixed(2)}</p>
+                                  <p className="text-sm font-semibold text-gray-700">Ksh {(product.cost || 0).toFixed(2)}</p>
                                 </div>
                                 <div className="col-span-2 pt-2 border-t border-gray-200">
                                   <div className="flex items-center justify-between">
                                     <p className="text-xs font-medium text-gray-500">Profit Margin</p>
-                                    <p className={`text-base font-bold ${
+                                    <p className={`text-sm font-semibold ${
                                       margin >= 30 ? 'text-green-600' : 
                                       margin >= 20 ? 'text-amber-600' : 
                                       margin >= 0 ? 'text-orange-600' : 'text-red-600'
@@ -1659,9 +1785,9 @@ export default function UnifiedProductsInventoryPage() {
                                       {margin.toFixed(1)}%
                                     </p>
                                   </div>
-                                  <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
+                                  <div className="mt-1.5 h-1 w-full rounded-full bg-gray-200">
                                     <div 
-                                      className={`h-1.5 rounded-full transition-all ${
+                                      className={`h-1 rounded-full transition-all ${
                                         margin >= 30 ? 'bg-green-500' : 
                                         margin >= 20 ? 'bg-amber-500' : 
                                         margin >= 0 ? 'bg-orange-500' : 'bg-red-500'
@@ -1673,11 +1799,11 @@ export default function UnifiedProductsInventoryPage() {
                               </div>
 
                               {/* Actions */}
-                              <div className="flex gap-2 pt-4 border-t border-gray-200">
+                              <div className="flex gap-1.5 border-t border-gray-200 pt-2">
                                 {canEditProducts && (
                                   <button
                                     onClick={() => openEditModal(product)}
-                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium transition-all border border-gray-200 hover:border-gray-300"
+                                    className="flex flex-1 items-center justify-center gap-1 px-2.5 py-1.5 rounded border border-gray-200 bg-gray-100 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-200"
                                     aria-label={`Edit ${product.name}`}
                                   >
                                     <FaEdit className="w-3.5 h-3.5" />
@@ -1695,7 +1821,7 @@ export default function UnifiedProductsInventoryPage() {
                                 }>
                                   <button
                                     onClick={() => setQrCodeProductId(product.id)}
-                                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-50 hover:bg-green-100 border border-green-200 hover:border-green-300 text-green-700 text-sm font-medium transition-all"
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-green-200 bg-green-50 text-xs font-medium text-green-700 transition-colors hover:bg-green-100"
                                     aria-label={`Generate QR code for ${product.name}`}
                                   >
                                     <FaQrcode className="w-3.5 h-3.5" />
@@ -1707,7 +1833,7 @@ export default function UnifiedProductsInventoryPage() {
                                     setSelectedProductId(product.id);
                                     setActiveTab('variations');
                                   }}
-                                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 text-blue-700 text-sm font-medium transition-all"
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-blue-200 bg-blue-50 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
                                   title="Manage Variations"
                                   aria-label={`Manage variations for ${product.name}`}
                                 >
@@ -1716,7 +1842,7 @@ export default function UnifiedProductsInventoryPage() {
                                 {canDeleteProducts && (
                                   <button
                                     onClick={() => handleDelete(product.id)}
-                                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 hover:border-red-300 text-red-700 text-sm font-medium transition-all"
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-red-200 bg-red-50 text-xs font-medium text-red-700 transition-colors hover:bg-red-100"
                                     aria-label={`Delete ${product.name}`}
                                   >
                                     <FaTrash className="w-3.5 h-3.5" />
@@ -1728,7 +1854,7 @@ export default function UnifiedProductsInventoryPage() {
                         })}
                       </div>
                     ) : (
-                      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                      <div className="overflow-hidden rounded-md border border-gray-200 bg-white">
                         <div
                           ref={tableParentRef}
                           className="overflow-x-auto"
@@ -1736,7 +1862,7 @@ export default function UnifiedProductsInventoryPage() {
                           <table className="w-full">
                             <thead>
                               <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                                   <button
                                     onClick={() => handleSort('name')}
                                     className="flex items-center gap-2 hover:text-gray-900"
@@ -1747,7 +1873,7 @@ export default function UnifiedProductsInventoryPage() {
                                     )}
                                   </button>
                                 </th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                                   <button
                                     onClick={() => handleSort('sku')}
                                     className="flex items-center gap-2 hover:text-gray-900"
@@ -1758,7 +1884,7 @@ export default function UnifiedProductsInventoryPage() {
                                     )}
                                   </button>
                                 </th>
-                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                                   <button
                                     onClick={() => handleSort('price')}
                                     className="flex items-center justify-end gap-2 hover:text-gray-900 ml-auto"
@@ -1769,7 +1895,7 @@ export default function UnifiedProductsInventoryPage() {
                                     )}
                                   </button>
                                 </th>
-                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                                   <button
                                     onClick={() => handleSort('cost')}
                                     className="flex items-center justify-end gap-2 hover:text-gray-900 ml-auto"
@@ -1780,7 +1906,7 @@ export default function UnifiedProductsInventoryPage() {
                                     )}
                                   </button>
                                 </th>
-                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                                   <button
                                     onClick={() => handleSort('stock')}
                                     className="flex items-center justify-end gap-2 hover:text-gray-900 ml-auto"
@@ -1791,7 +1917,7 @@ export default function UnifiedProductsInventoryPage() {
                                     )}
                                   </button>
                                 </th>
-                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                                   <button
                                     onClick={() => handleSort('margin')}
                                     className="flex items-center justify-end gap-2 hover:text-gray-900 ml-auto"
@@ -1802,7 +1928,7 @@ export default function UnifiedProductsInventoryPage() {
                                     )}
                                   </button>
                                 </th>
-                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                                   Actions
                                 </th>
                               </tr>
@@ -1810,7 +1936,7 @@ export default function UnifiedProductsInventoryPage() {
                             <tbody className="bg-white divide-y divide-gray-200">
                               {sortedProducts.length === 0 ? (
                                 <tr>
-                                  <td colSpan={7} className="px-6 py-12 text-center">
+                                  <td colSpan={7} className="px-3 py-7 text-center">
                                     <div className="flex flex-col items-center">
                                       <FaBox className="w-12 h-12 text-gray-300 mb-3" />
                                       <p className="text-sm font-medium text-gray-900 mb-1">No products found</p>
@@ -1835,38 +1961,38 @@ export default function UnifiedProductsInventoryPage() {
                                       className="hover:bg-gray-50 transition-colors"
                                     >
                                       {/* Product Name */}
-                                      <td className="px-6 py-4 whitespace-nowrap">
+                                      <td className="whitespace-nowrap px-3 py-2.5">
                                         <div className="font-medium text-gray-900">{product.name || '-'}</div>
                                       </td>
 
                                       {/* SKU */}
-                                      <td className="px-6 py-4 whitespace-nowrap">
+                                      <td className="whitespace-nowrap px-3 py-2.5">
                                         <div className="text-sm font-mono text-gray-600">{product.sku || '-'}</div>
                                       </td>
 
                                       {/* Selling Price */}
-                                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
                                         <div className="text-sm font-medium text-gray-900">
                                           {price > 0 ? `Ksh ${price.toFixed(2)}` : '-'}
                                         </div>
                                       </td>
 
                                       {/* Buying Price */}
-                                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
                                         <div className="text-sm text-gray-700">
                                           {cost > 0 ? `Ksh ${cost.toFixed(2)}` : '-'}
                                         </div>
                                       </td>
 
                                       {/* Stock */}
-                                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
                                         <div className={`text-sm font-medium ${stock > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
                                           {stock}
                                         </div>
                                       </td>
 
                                       {/* Margin */}
-                                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
                                         {margin !== null && !isNaN(margin) ? (
                                           <div className={`text-sm font-semibold ${
                                             margin >= 30 ? 'text-green-600' 
@@ -1882,7 +2008,7 @@ export default function UnifiedProductsInventoryPage() {
                                       </td>
 
                                       {/* Actions */}
-                                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
                                         <div className="flex items-center justify-end gap-2">
                                           {canEditProducts && (
                                             <button
@@ -1942,21 +2068,21 @@ export default function UnifiedProductsInventoryPage() {
 
                 {/* Load More */}
                 {hasMore && !loading && !isSearching && (
-                  <div className="flex justify-center mt-8">
+                  <div className="mt-4 flex justify-center">
                     <button
                       onClick={loadMoreProducts}
                       disabled={loadingMore}
-                      className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 rounded border border-blue-700 bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {loadingMore ? (
                         <>
-                          <span className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></span>
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
                           Loading Products...
                         </>
                       ) : (
                         <>
                           Load More Products
-                          <FaChevronRight className="w-4 h-4" />
+                          <FaChevronRight className="h-3.5 w-3.5" />
                         </>
                       )}
                     </button>
@@ -2088,7 +2214,7 @@ export default function UnifiedProductsInventoryPage() {
                       const stockStatus = getStockStatus(quantity);
 
                       return (
-                        <div key={item.id} className="bg-white rounded-xl border border-gray-100 p-2 shadow-sm hover:shadow transition-all">
+                        <div key={item.id} className="rounded border border-gray-200 bg-white p-2 transition-colors hover:border-gray-300">
                           <div className="flex items-center justify-between mb-1">
                             <div>
                               <h3 className="font-semibold text-gray-900 text-sm">{product?.name}</h3>
@@ -2190,37 +2316,37 @@ export default function UnifiedProductsInventoryPage() {
                   <>
                     {/* Statistics */}
                     {advancedStats && (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                      <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                        <div className="rounded border border-gray-200 bg-white p-3">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-xs font-medium text-gray-500 mb-1">Total Products</p>
-                              <p className="text-2xl font-bold text-gray-900">{advancedStats.totalProducts}</p>
+                              <p className="text-lg font-semibold text-gray-900">{advancedStats.totalProducts}</p>
                             </div>
-                            <div className="p-3 bg-blue-50 rounded-lg">
-                              <FaBox className="w-5 h-5 text-blue-600" />
+                            <div className="rounded bg-blue-50 p-2">
+                              <FaBox className="h-4 w-4 text-blue-600" />
                             </div>
                           </div>
                         </div>
-                        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                        <div className="rounded border border-gray-200 bg-white p-3">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-xs font-medium text-gray-500 mb-1">Total Stock</p>
-                              <p className="text-2xl font-bold text-gray-900">{advancedStats.totalStock.toLocaleString()}</p>
+                              <p className="text-lg font-semibold text-gray-900">{advancedStats.totalStock.toLocaleString()}</p>
                             </div>
-                            <div className="p-3 bg-green-50 rounded-lg">
-                              <FaWarehouse className="w-5 h-5 text-green-600" />
+                            <div className="rounded bg-green-50 p-2">
+                              <FaWarehouse className="h-4 w-4 text-green-600" />
                             </div>
                           </div>
                         </div>
-                        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                        <div className="rounded border border-gray-200 bg-white p-3">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-xs font-medium text-gray-500 mb-1">Inventory Value</p>
-                              <p className="text-2xl font-bold text-gray-900">Ksh {advancedStats.totalValue.toLocaleString()}</p>
+                              <p className="text-lg font-semibold text-gray-900">Ksh {advancedStats.totalValue.toLocaleString()}</p>
                             </div>
-                            <div className="p-3 bg-purple-50 rounded-lg">
-                              <FaCalculator className="w-5 h-5 text-purple-600" />
+                            <div className="rounded bg-purple-50 p-2">
+                              <FaCalculator className="h-4 w-4 text-purple-600" />
                             </div>
                           </div>
                         </div>
@@ -2228,25 +2354,25 @@ export default function UnifiedProductsInventoryPage() {
                     )}
 
                 {/* Simplified Advanced Inventory View */}
-                <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <div className="p-4 border-b border-gray-200">
+                <div className="rounded border border-gray-200 bg-white">
+                  <div className="border-b border-gray-200 p-3">
                     <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-                      <h3 className="text-lg font-semibold text-gray-900">Inventory Overview</h3>
+                      <h3 className="text-sm font-semibold text-gray-900">Inventory Overview</h3>
                       <div className="flex flex-1 sm:flex-initial gap-2 w-full sm:w-auto">
                         <div className="relative flex-1 sm:flex-initial sm:min-w-[200px]">
-                          <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                          <FaSearch className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
                           <input
                             type="text"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Search products..."
-                            className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full rounded border border-gray-300 py-1.5 pl-8 pr-2 text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
                         <select
                           value={stockFilter}
                           onChange={e => setStockFilter(e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="rounded border border-gray-300 px-2 py-1.5 text-xs font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="all">All Stock</option>
                           <option value="low">Low Stock</option>
@@ -2260,10 +2386,10 @@ export default function UnifiedProductsInventoryPage() {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Product</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Stock</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-600">Product</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-600">Stock</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-600">Status</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-600">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -2282,22 +2408,22 @@ export default function UnifiedProductsInventoryPage() {
                             const status = getAdvancedStockStatus(item);
                             return (
                               <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="whitespace-nowrap px-3 py-2">
                                   <div>
                                     <div className="text-sm font-medium text-gray-900">{item.product?.name}</div>
                                     <div className="text-xs text-gray-500 mt-0.5">{item.product?.sku}</div>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="whitespace-nowrap px-3 py-2">
                                   <span className={`text-sm font-semibold ${status.color}`}>{item.quantity || 0}</span>
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="whitespace-nowrap px-3 py-2">
                                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${status.bg} ${status.color}`}>
                                     {status.icon}
                                     {status.text}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                <td className="whitespace-nowrap px-3 py-2 text-xs font-medium">
                                   {canEditInventory && (
                                     <button
                                       onClick={() => {
@@ -2326,25 +2452,25 @@ export default function UnifiedProductsInventoryPage() {
 
                   {/* Pagination */}
                   {advancedTotalPages > 1 && (
-                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                      <div className="text-sm text-gray-600">
+                    <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-3 py-2">
+                      <div className="text-xs text-gray-600">
                         Showing {advancedStartIndex + 1} to {Math.min(advancedEndIndex, filteredAdvancedInventory.length)} of {filteredAdvancedInventory.length} products
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                           disabled={currentPage === 1}
-                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white transition-colors"
+                          className="rounded border border-gray-300 px-2 py-1 text-xs font-medium transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Previous
                         </button>
-                        <span className="px-3 py-1.5 text-sm text-gray-700 font-medium">
+                        <span className="px-2 py-1 text-xs font-medium text-gray-700">
                           Page {currentPage} of {advancedTotalPages}
                         </span>
                         <button
                           onClick={() => setCurrentPage(p => Math.min(advancedTotalPages, p + 1))}
                           disabled={currentPage === advancedTotalPages}
-                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white transition-colors"
+                          className="rounded border border-gray-300 px-2 py-1 text-xs font-medium transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Next
                         </button>
@@ -2359,21 +2485,21 @@ export default function UnifiedProductsInventoryPage() {
 
             {/* ATTRIBUTES TAB */}
             {activeTab === 'attributes' && (
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 {/* Header Section */}
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 shadow-sm">
+                <div className="rounded border border-gray-200 bg-gray-50 p-2">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-gray-100 rounded-lg">
                       <FaPalette className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-semibold text-gray-900">Product Attributes</h2>
+                      <h2 className="text-sm font-semibold text-gray-900">Product Attributes</h2>
                     </div>
                   </div>
                 </div>
 
                 {/* Attributes Content */}
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="overflow-hidden rounded border border-gray-200 bg-white">
                   <ProductAttributesManager />
                 </div>
               </div>
@@ -2381,12 +2507,12 @@ export default function UnifiedProductsInventoryPage() {
 
             {/* VARIATIONS TAB */}
             {activeTab === 'variations' && (
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 {/* Header Section */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="mb-3 flex items-center justify-between">
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900">Variations</h2>
-                    <p className="text-sm text-gray-500 mt-1">Create and manage product variants</p>
+                    <h2 className="text-sm font-semibold text-gray-900">Variations</h2>
+                    <p className="mt-0.5 text-xs text-gray-500">Create and manage product variants</p>
                   </div>
                   {selectedProduct && (
                     <button
@@ -2394,7 +2520,7 @@ export default function UnifiedProductsInventoryPage() {
                         setSelectedProduct(null);
                         setSelectedProductId(null);
                       }}
-                      className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                      className="rounded px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
                     >
                       Change Product
                     </button>
@@ -2403,11 +2529,11 @@ export default function UnifiedProductsInventoryPage() {
 
                 {/* Product Selector */}
                 {!selectedProduct && (
-                  <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <div className="rounded border border-gray-200 bg-white p-3">
+                    <label className="mb-2 block text-xs font-medium text-gray-700">
                       Select a product
                     </label>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2">
                       <select
                         value={selectedProductId || ''}
                         onChange={(e) => {
@@ -2423,7 +2549,7 @@ export default function UnifiedProductsInventoryPage() {
                             }
                           }
                         }}
-                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                        className="flex-1 rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Choose a product...</option>
                         {(activeTab === 'variations' && variationsProductsData ? variationsProductsData : products).map((product) => (
@@ -2434,9 +2560,9 @@ export default function UnifiedProductsInventoryPage() {
                       </select>
                       <button
                         onClick={() => setActiveTab('products')}
-                        className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center gap-2"
+                        className="flex items-center gap-1 rounded bg-blue-600 px-2.5 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-700"
                       >
-                        <FaPlus className="w-4 h-4" />
+                        <FaPlus className="h-3.5 w-3.5" />
                         New Product
                       </button>
                     </div>
@@ -2450,7 +2576,7 @@ export default function UnifiedProductsInventoryPage() {
 
                 {/* Selected Product Info */}
                 {selectedProduct && (
-                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <div className="rounded border border-gray-200 bg-white p-2.5">
                     <div className="flex items-center justify-between mb-3">
                       <div>
                         <h3 className="text-base font-semibold text-gray-900">{selectedProduct.name}</h3>
@@ -2463,7 +2589,7 @@ export default function UnifiedProductsInventoryPage() {
                         View Details →
                       </button>
                     </div>
-                    <div className="flex gap-6 text-sm">
+                    <div className="flex flex-wrap gap-3 text-xs">
                       <div>
                         <span className="text-gray-500">Price:</span>
                         <span className="ml-1 font-medium text-gray-900">Ksh {selectedProduct.price.toFixed(2)}</span>
@@ -2500,11 +2626,11 @@ export default function UnifiedProductsInventoryPage() {
                     branchId={selectedBranchId}
                   />
                 ) : (
-                  <div className="bg-white rounded-lg border border-gray-200 p-12">
+                  <div className="rounded border border-gray-200 bg-white p-5">
                     <div className="text-center max-w-md mx-auto">
-                      <FaLayerGroup className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">Select a product to manage variations</h3>
-                      <p className="text-sm text-gray-500 mb-6">
+                      <FaLayerGroup className="mx-auto mb-2 h-8 w-8 text-gray-300" />
+                      <h3 className="mb-1 text-sm font-medium text-gray-900">Select a product to manage variations</h3>
+                      <p className="text-xs text-gray-500">
                         Choose a product from the dropdown above to create and manage its variations.
                       </p>
                     </div>
@@ -2518,7 +2644,7 @@ export default function UnifiedProductsInventoryPage() {
         {/* Stock Update Modal (Inventory Tab) */}
         {showStockModal && modalProduct && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-            <div className="bg-white p-4 rounded-xl shadow-2xl w-full max-w-xs mx-2 border border-gray-100 relative">
+            <div className="relative mx-2 w-full max-w-xs rounded-md border border-gray-200 bg-white p-3 shadow-lg">
               <button
                 onClick={() => setShowStockModal(false)}
                 className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"

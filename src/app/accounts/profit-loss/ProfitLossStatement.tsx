@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ChangeEvent } from "react";
 import { 
   FaChartLine, 
   FaCalendarAlt, 
@@ -12,6 +12,8 @@ import {
   FaCalculator
 } from "react-icons/fa";
 import { apiGet, apiPost } from "@/utils/api";
+import { useUser } from "@/components/UserContext";
+import { useBranches } from "@/hooks/useBranches";
 
 interface ProfitAndLossData {
   revenue: { name: string; amount: number }[];
@@ -25,6 +27,8 @@ interface ProfitAndLossData {
 }
 
 export default function ProfitLossStatement() {
+  const { user } = useUser();
+  const { data: branches = [] } = useBranches();
   const [data, setData] = useState<ProfitAndLossData | null>(null);
   const [loading, setLoading] = useState(true);
   const [accountsCount, setAccountsCount] = useState<number | null>(null);
@@ -34,15 +38,78 @@ export default function ProfitLossStatement() {
     new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]
   );
   const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
+
+  const normalizedRoles = Array.isArray(user?.roles)
+    ? user.roles
+        .map((role: any) =>
+          typeof role === "string"
+            ? role.toLowerCase()
+            : String(role?.name || "").toLowerCase(),
+        )
+        .filter(Boolean)
+    : [];
+  const primaryRole = String((user as any)?.role || "").toLowerCase();
+  const isBranchScopedUser =
+    normalizedRoles.includes("manager") ||
+    normalizedRoles.includes("cashier") ||
+    primaryRole === "manager" ||
+    primaryRole === "cashier";
+  const assignedBranchId = user?.branchId || "";
+  const canTenantSelectBranch =
+    !isBranchScopedUser &&
+    (normalizedRoles.includes("owner") ||
+      normalizedRoles.includes("admin") ||
+      Boolean(user?.isSuperadmin));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (isBranchScopedUser && assignedBranchId) {
+      setSelectedBranchId(assignedBranchId);
+      localStorage.setItem("selectedBranchId", assignedBranchId);
+      return;
+    }
+
+    if (canTenantSelectBranch) {
+      const storedBranch = localStorage.getItem("selectedBranchId") || "all";
+      const existsInBranches =
+        storedBranch === "all" || branches.some((branch) => branch.id === storedBranch);
+      const nextBranch = existsInBranches ? storedBranch : "all";
+      setSelectedBranchId(nextBranch);
+      localStorage.setItem("selectedBranchId", nextBranch);
+      return;
+    }
+
+    setSelectedBranchId(assignedBranchId || "all");
+  }, [assignedBranchId, branches, canTenantSelectBranch, isBranchScopedUser]);
+
+  const getBranchHeaders = () => {
+    if (!selectedBranchId || selectedBranchId === "all") return undefined;
+    return { "x-branch-id": selectedBranchId };
+  };
+
+  const handleBranchChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextBranchId = event.target.value;
+    setSelectedBranchId(nextBranchId);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("selectedBranchId", nextBranchId);
+    }
+  };
+
+  const activeBranchName =
+    selectedBranchId === "all"
+      ? "All Branches"
+      : branches.find((branch) => branch.id === selectedBranchId)?.name || "Assigned Branch";
 
   useEffect(() => {
     checkAccounts();
     fetchData();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedBranchId]);
 
   const checkAccounts = async () => {
     try {
-      const res = await apiGet("/ledger/accounts");
+      const res = await apiGet("/ledger/accounts", getBranchHeaders());
       setAccountsCount(res.length);
     } catch (error) {
       console.error("Error checking accounts:", error);
@@ -52,7 +119,10 @@ export default function ProfitLossStatement() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await apiGet(`/ledger/profit-loss?startDate=${startDate}&endDate=${endDate}`);
+      const res = await apiGet(
+        `/ledger/profit-loss?startDate=${startDate}&endDate=${endDate}`,
+        getBranchHeaders(),
+      );
       setData(res);
     } catch (error) {
       console.error("Error fetching P&L data:", error);
@@ -64,7 +134,7 @@ export default function ProfitLossStatement() {
   const handleInitCOA = async () => {
     setInitializing(true);
     try {
-      await apiPost("/ledger/init-coa", {});
+      await apiPost("/ledger/init-coa", {}, getBranchHeaders());
       await checkAccounts();
       await fetchData();
       alert("Chart of Accounts initialized! Your future sales and expenses will now be recorded here.");
@@ -79,7 +149,7 @@ export default function ProfitLossStatement() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const res = await apiPost("/ledger/sync", {});
+      const res = await apiPost("/ledger/sync", {}, getBranchHeaders());
       alert(`Sync complete! ${res.syncedSalesCount} past sales have been imported into the accounting system.`);
       fetchData();
     } catch (error) {
@@ -144,6 +214,25 @@ export default function ProfitLossStatement() {
         </div>
         
         <div className="flex flex-wrap items-center gap-4">
+          {canTenantSelectBranch ? (
+            <select
+              value={selectedBranchId}
+              onChange={handleBranchChange}
+              className="h-11 rounded-2xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20"
+            >
+              <option value="all">All Branches</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="h-11 rounded-2xl border border-gray-200 bg-gray-50 px-3 text-xs font-semibold text-gray-600 flex items-center">
+              Branch: {activeBranchName}
+            </div>
+          )}
+
           <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-2xl border border-gray-200">
             <div className="flex items-center gap-2 px-3">
               <FaCalendarAlt className="text-gray-400 text-xs" />

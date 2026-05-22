@@ -7,6 +7,8 @@ import {
   FaChevronRight
 } from "react-icons/fa";
 import { apiGet } from "@/utils/api";
+import { useUser } from "@/components/UserContext";
+import { useBranches } from "@/hooks/useBranches";
 
 interface Account {
   id: string;
@@ -28,21 +30,88 @@ interface LedgerEntry {
 }
 
 export default function GeneralLedgerExplorer() {
+  const { user } = useUser();
+  const { data: branches = [] } = useBranches();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
+
+  const normalizedRoles = Array.isArray(user?.roles)
+    ? user.roles
+        .map((role: any) =>
+          typeof role === "string"
+            ? role.toLowerCase()
+            : String(role?.name || "").toLowerCase(),
+        )
+        .filter(Boolean)
+    : [];
+  const primaryRole = String((user as any)?.role || "").toLowerCase();
+  const isBranchScopedUser =
+    normalizedRoles.includes("manager") ||
+    normalizedRoles.includes("cashier") ||
+    primaryRole === "manager" ||
+    primaryRole === "cashier";
+  const assignedBranchId = user?.branchId || "";
+  const canTenantSelectBranch =
+    !isBranchScopedUser &&
+    (normalizedRoles.includes("owner") ||
+      normalizedRoles.includes("admin") ||
+      Boolean(user?.isSuperadmin));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (isBranchScopedUser && assignedBranchId) {
+      setSelectedBranchId(assignedBranchId);
+      localStorage.setItem("selectedBranchId", assignedBranchId);
+      return;
+    }
+
+    if (canTenantSelectBranch) {
+      const storedBranch = localStorage.getItem("selectedBranchId") || "all";
+      const existsInBranches =
+        storedBranch === "all" || branches.some((branch) => branch.id === storedBranch);
+      const nextBranch = existsInBranches ? storedBranch : "all";
+      setSelectedBranchId(nextBranch);
+      localStorage.setItem("selectedBranchId", nextBranch);
+      return;
+    }
+
+    setSelectedBranchId(assignedBranchId || "all");
+  }, [assignedBranchId, branches, canTenantSelectBranch, isBranchScopedUser]);
+
+  const getBranchHeaders = () => {
+    if (!selectedBranchId || selectedBranchId === "all") return undefined;
+    return { "x-branch-id": selectedBranchId };
+  };
 
   useEffect(() => {
     fetchAccounts();
-  }, []);
+  }, [selectedBranchId]);
+
+  const handleBranchChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextBranchId = event.target.value;
+    setSelectedBranchId(nextBranchId);
+    setSelectedAccount(null);
+    setEntries([]);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("selectedBranchId", nextBranchId);
+    }
+  };
+
+  const activeBranchName =
+    selectedBranchId === "all"
+      ? "All Branches"
+      : branches.find((branch) => branch.id === selectedBranchId)?.name || "Assigned Branch";
 
   const fetchAccounts = async () => {
     setLoading(true);
     try {
-      const res = await apiGet("/ledger/accounts");
+      const res = await apiGet("/ledger/accounts", getBranchHeaders());
       setAccounts(res);
     } catch (error) {
       console.error("Error fetching accounts:", error);
@@ -55,7 +124,7 @@ export default function GeneralLedgerExplorer() {
     setSelectedAccount(account);
     setDetailsLoading(true);
     try {
-      const res = await apiGet(`/ledger/accounts/${account.id}/entries`);
+      const res = await apiGet(`/ledger/accounts/${account.id}/entries`, getBranchHeaders());
       setEntries(res);
     } catch (error) {
       console.error("Error fetching entries:", error);
@@ -86,7 +155,30 @@ export default function GeneralLedgerExplorer() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 text-sm lg:grid-cols-12">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700">
+        <span className="font-semibold">General Ledger</span>
+        {canTenantSelectBranch ? (
+          <select
+            value={selectedBranchId}
+            onChange={handleBranchChange}
+            className="h-8 border border-gray-200 bg-white px-2 text-xs text-gray-700 outline-none focus:border-blue-500"
+          >
+            <option value="all">All Branches</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="border border-gray-200 bg-gray-50 px-2 py-1 font-semibold text-gray-600">
+            Branch: {activeBranchName}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 text-sm lg:grid-cols-12">
       
       {/* Sidebar: Chart of Accounts */}
       <div className={`lg:col-span-4 ${selectedAccount ? "hidden lg:block" : "block"}`}>
@@ -231,6 +323,7 @@ export default function GeneralLedgerExplorer() {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

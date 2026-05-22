@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, type ChangeEvent } from "react";
 import {
   FaCalendarAlt,
   FaCheckCircle,
@@ -17,6 +17,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { apiGet, apiPost } from "@/utils/api";
+import { useUser } from "@/components/UserContext";
+import { useBranches } from "@/hooks/useBranches";
 
 interface TrialBalanceAccount {
   id: string;
@@ -68,6 +70,8 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 export default function TrialBalanceStatement() {
+  const { user } = useUser();
+  const { data: branches = [] } = useBranches();
   const [data, setData] = useState<TrialBalanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [accountsCount, setAccountsCount] = useState<number | null>(null);
@@ -77,15 +81,78 @@ export default function TrialBalanceStatement() {
   const [exporting, setExporting] = useState<"pdf" | "excel" | "csv" | null>(null);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
+
+  const normalizedRoles = Array.isArray(user?.roles)
+    ? user.roles
+        .map((role: any) =>
+          typeof role === "string"
+            ? role.toLowerCase()
+            : String(role?.name || "").toLowerCase(),
+        )
+        .filter(Boolean)
+    : [];
+  const primaryRole = String((user as any)?.role || "").toLowerCase();
+  const isBranchScopedUser =
+    normalizedRoles.includes("manager") ||
+    normalizedRoles.includes("cashier") ||
+    primaryRole === "manager" ||
+    primaryRole === "cashier";
+  const assignedBranchId = user?.branchId || "";
+  const canTenantSelectBranch =
+    !isBranchScopedUser &&
+    (normalizedRoles.includes("owner") ||
+      normalizedRoles.includes("admin") ||
+      Boolean(user?.isSuperadmin));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (isBranchScopedUser && assignedBranchId) {
+      setSelectedBranchId(assignedBranchId);
+      localStorage.setItem("selectedBranchId", assignedBranchId);
+      return;
+    }
+
+    if (canTenantSelectBranch) {
+      const storedBranch = localStorage.getItem("selectedBranchId") || "all";
+      const existsInBranches =
+        storedBranch === "all" || branches.some((branch) => branch.id === storedBranch);
+      const nextBranch = existsInBranches ? storedBranch : "all";
+      setSelectedBranchId(nextBranch);
+      localStorage.setItem("selectedBranchId", nextBranch);
+      return;
+    }
+
+    setSelectedBranchId(assignedBranchId || "all");
+  }, [assignedBranchId, branches, canTenantSelectBranch, isBranchScopedUser]);
+
+  const getBranchHeaders = () => {
+    if (!selectedBranchId || selectedBranchId === "all") return undefined;
+    return { "x-branch-id": selectedBranchId };
+  };
 
   useEffect(() => {
     checkAccounts();
     fetchData();
-  }, [date]);
+  }, [date, selectedBranchId]);
+
+  const handleBranchChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextBranchId = event.target.value;
+    setSelectedBranchId(nextBranchId);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("selectedBranchId", nextBranchId);
+    }
+  };
+
+  const activeBranchName =
+    selectedBranchId === "all"
+      ? "All Branches"
+      : branches.find((branch) => branch.id === selectedBranchId)?.name || "Assigned Branch";
 
   const checkAccounts = async () => {
     try {
-      const res = await apiGet<TrialBalanceAccount[]>("/ledger/accounts");
+      const res = await apiGet<TrialBalanceAccount[]>("/ledger/accounts", getBranchHeaders());
       setAccountsCount(res.length);
     } catch (error) {
       console.error("Error checking accounts:", error);
@@ -95,7 +162,10 @@ export default function TrialBalanceStatement() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await apiGet<TrialBalanceData>(`/ledger/trial-balance?date=${date}`);
+      const res = await apiGet<TrialBalanceData>(
+        `/ledger/trial-balance?date=${date}`,
+        getBranchHeaders(),
+      );
       setData(res);
     } catch (error) {
       console.error("Error fetching trial balance:", error);
@@ -107,7 +177,7 @@ export default function TrialBalanceStatement() {
   const handleInitCOA = async () => {
     setInitializing(true);
     try {
-      await apiPost("/ledger/init-coa", {});
+      await apiPost("/ledger/init-coa", {}, getBranchHeaders());
       await checkAccounts();
       await fetchData();
     } catch (error) {
@@ -120,7 +190,7 @@ export default function TrialBalanceStatement() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const res = await apiPost<SyncResponse>("/ledger/sync", {});
+      const res = await apiPost<SyncResponse>("/ledger/sync", {}, getBranchHeaders());
       const syncedExpenses = res.syncedExpensesCount || 0;
       alert(
         `Sync complete. Imported ${res.syncedSalesCount} historical sales and ${syncedExpenses} expenses.`,
@@ -137,7 +207,11 @@ export default function TrialBalanceStatement() {
   const handleReclassifyExpenses = async () => {
     setReclassifying(true);
     try {
-      const res = await apiPost<ReclassifyResponse>("/ledger/reclassify-expenses", {});
+      const res = await apiPost<ReclassifyResponse>(
+        "/ledger/reclassify-expenses",
+        {},
+        getBranchHeaders(),
+      );
       alert(
         `Reclassification complete. Scanned ${res.scanned} entries, reclassified ${res.reclassifiedCount}, unchanged ${res.unchangedCount}.`,
       );
@@ -148,7 +222,11 @@ export default function TrialBalanceStatement() {
       // Backward compatibility: older backend builds may not expose this route yet.
       if (message.includes("Cannot POST /ledger/reclassify-expenses") || message.includes("404")) {
         try {
-          const syncRes = await apiPost<SyncResponse>("/ledger/sync", {});
+          const syncRes = await apiPost<SyncResponse>(
+            "/ledger/sync",
+            {},
+            getBranchHeaders(),
+          );
           alert(
             `Your backend build does not expose /ledger/reclassify-expenses yet. Fallback sync completed: ${syncRes.syncedSalesCount} sales and ${syncRes.syncedExpensesCount || 0} expenses imported.`,
           );
@@ -389,6 +467,27 @@ export default function TrialBalanceStatement() {
               </button>
             )}
           </label>
+
+          {canTenantSelectBranch ? (
+            <label className="relative block lg:col-span-1">
+              <select
+                value={selectedBranchId}
+                onChange={handleBranchChange}
+                className="h-9 w-full border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none focus:border-slate-400"
+              >
+                <option value="all">All Branches</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <div className="flex h-9 items-center border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600">
+              Branch: {activeBranchName}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-1">
             <button

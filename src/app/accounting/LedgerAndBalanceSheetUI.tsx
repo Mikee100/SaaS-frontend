@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ChangeEvent } from "react";
 import { 
   FaFileExport, 
   FaFilter, 
@@ -13,10 +13,14 @@ import {
   FaCheckCircle,
   FaInfoCircle
 } from "react-icons/fa";
+import { useUser } from "@/components/UserContext";
+import { useBranches } from "@/hooks/useBranches";
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:7000").replace(/\/+$/, "");
 
 export default function LedgerAndBalanceSheetUI() {
+  const { user } = useUser();
+  const { data: branches = [] } = useBranches();
   const [activeTab, setActiveTab] = useState<"ledger" | "trial-balance" | "p-and-l" | "balance-sheet">("ledger");
   const [ledgerData, setLedgerData] = useState<any[]>([]);
   const [trialBalance, setTrialBalance] = useState<any>(null);
@@ -26,6 +30,75 @@ export default function LedgerAndBalanceSheetUI() {
   const [loading, setLoading] = useState(true);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [initializing, setInitializing] = useState(false);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
+
+  const normalizedRoles = Array.isArray(user?.roles)
+    ? user.roles
+        .map((role: any) =>
+          typeof role === "string"
+            ? role.toLowerCase()
+            : String(role?.name || "").toLowerCase(),
+        )
+        .filter(Boolean)
+    : [];
+  const primaryRole = String((user as any)?.role || "").toLowerCase();
+  const isBranchScopedUser =
+    normalizedRoles.includes("manager") ||
+    normalizedRoles.includes("cashier") ||
+    primaryRole === "manager" ||
+    primaryRole === "cashier";
+  const assignedBranchId = user?.branchId || "";
+  const canTenantSelectBranch =
+    !isBranchScopedUser &&
+    (normalizedRoles.includes("owner") ||
+      normalizedRoles.includes("admin") ||
+      Boolean(user?.isSuperadmin));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (isBranchScopedUser && assignedBranchId) {
+      setSelectedBranchId(assignedBranchId);
+      localStorage.setItem("selectedBranchId", assignedBranchId);
+      return;
+    }
+
+    if (canTenantSelectBranch) {
+      const storedBranch = localStorage.getItem("selectedBranchId") || "all";
+      const existsInBranches =
+        storedBranch === "all" || branches.some((branch) => branch.id === storedBranch);
+      const nextBranch = existsInBranches ? storedBranch : "all";
+      setSelectedBranchId(nextBranch);
+      localStorage.setItem("selectedBranchId", nextBranch);
+      return;
+    }
+
+    setSelectedBranchId(assignedBranchId || "all");
+  }, [assignedBranchId, branches, canTenantSelectBranch, isBranchScopedUser]);
+
+  const getBranchHeaders = () => {
+    if (typeof window === "undefined") return { "Content-Type": "application/json" };
+    if (!selectedBranchId || selectedBranchId === "all") {
+      return { "Content-Type": "application/json" };
+    }
+    return {
+      "Content-Type": "application/json",
+      "x-branch-id": selectedBranchId,
+    };
+  };
+
+  const handleBranchChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextBranchId = event.target.value;
+    setSelectedBranchId(nextBranchId);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("selectedBranchId", nextBranchId);
+    }
+  };
+
+  const activeBranchName =
+    selectedBranchId === "all"
+      ? "All Branches"
+      : branches.find((branch) => branch.id === selectedBranchId)?.name || "Assigned Branch";
 
   // Manual Journal Entry State
   const [entryDescription, setEntryDescription] = useState("");
@@ -38,12 +111,12 @@ export default function LedgerAndBalanceSheetUI() {
 
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+  }, [activeTab, selectedBranchId]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const headers = { "Content-Type": "application/json" };
+      const headers = getBranchHeaders();
       const options = { credentials: "include" as const, headers };
 
       // Fetch accounts if needed for modal
@@ -79,6 +152,7 @@ export default function LedgerAndBalanceSheetUI() {
       const res = await fetch(`${API_URL}/ledger/init-coa`, {
         method: "POST",
         credentials: "include",
+        headers: getBranchHeaders(),
       });
       if (res.ok) {
         alert("Chart of Accounts initialized successfully!");
@@ -114,7 +188,7 @@ export default function LedgerAndBalanceSheetUI() {
       const res = await fetch(`${API_URL}/ledger/journal`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: getBranchHeaders(),
         body: JSON.stringify({
           description: entryDescription,
           date: entryDate,
@@ -146,6 +220,25 @@ export default function LedgerAndBalanceSheetUI() {
             <p className="text-gray-500 mt-1">Manage your financial records and professional reports.</p>
           </div>
           <div className="flex gap-3">
+            {canTenantSelectBranch ? (
+              <select
+                value={selectedBranchId}
+                onChange={handleBranchChange}
+                className="px-3 py-2.5 bg-white text-gray-700 font-semibold rounded-xl border border-gray-200"
+              >
+                <option value="all">All Branches</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="px-3 py-2.5 bg-gray-50 text-gray-600 font-semibold rounded-xl border border-gray-200 text-sm">
+                Branch: {activeBranchName}
+              </div>
+            )}
+
             {accounts.length === 0 && (
               <button 
                 onClick={handleInitCOA}
