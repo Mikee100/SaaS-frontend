@@ -38,4 +38,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+# Ignore backup files
+backups/
 next-env.d.ts
