@@ -5,6 +5,20 @@ import { FaCalendarAlt, FaFileDownload, FaPrint, FaCalculator } from "react-icon
 import { apiGet, apiPost } from "@/utils/api";
 import { useUser } from "@/components/UserContext";
 import { useBranches } from "@/hooks/useBranches";
+import { useTenant } from "@/hooks/useTenant";
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  type PdfTemplate,
+  preparePdfWatermark,
+} from "@/utils/pdfTemplate";
+import { getFullAssetUrl } from "@/utils/logoUrl";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   CartesianGrid,
   Legend,
@@ -243,6 +257,7 @@ export default function ProfitLossStatement() {
 
   const { user } = useUser();
   const { data: branches = [] } = useBranches();
+  const { data: tenantData } = useTenant();
   const [data, setData] = useState<ProfitAndLossData | null>(null);
   const [loading, setLoading] = useState(true);
   const [accountsCount, setAccountsCount] = useState<number | null>(null);
@@ -461,6 +476,62 @@ export default function ProfitLossStatement() {
     window.print();
   };
 
+  const handleExportPdf = async () => {
+    if (!data) return;
+
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+
+    await preparePdfWatermark(doc, getFullAssetUrl(tenantData?.watermark as string | null | undefined));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
+
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || "#000000").replace("#", "") || "000000");
+    doc.text("Profit & Loss Statement", margin, yPosition + 8);
+    yPosition += 16;
+
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor("666666");
+    doc.text(
+      `${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`,
+      margin,
+      yPosition,
+    );
+    yPosition += 6;
+    doc.text(`Branch: ${activeBranchName}`, margin, yPosition);
+    yPosition += 8;
+
+    const rows = [
+      ...data.revenue.map((item) => ["Revenue", item.name, item.amount.toLocaleString()]),
+      ["Revenue", "Total Revenue", data.totalRevenue.toLocaleString()],
+      ...data.cogs.map((item) => ["COGS", item.name, item.amount.toLocaleString()]),
+      ["COGS", "Total COGS", data.totalCOGS.toLocaleString()],
+      ["Summary", "Gross Profit", data.grossProfit.toLocaleString()],
+      ...data.expenses.map((item) => ["Expenses", item.name, item.amount.toLocaleString()]),
+      ["Expenses", "Total Expenses", data.totalExpenses.toLocaleString()],
+      ["Summary", `Net ${data.netProfit >= 0 ? "Profit" : "Loss"}`, data.netProfit.toLocaleString()],
+    ];
+
+    autoTable(doc, {
+      startY: yPosition,
+      head: [["Section", "Item", "Amount (KES)"]],
+      body: rows,
+      styles: { fontSize: Math.max(8, fontSize - 2), cellPadding: 4 },
+      headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: secondaryRgb },
+      columnStyles: {
+        2: { halign: "right" },
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, "SaaS POS • Accounting");
+    doc.save(`profit-loss-${startDate}-to-${endDate}.pdf`);
+  };
+
   if (loading && !data) {
     return <div className="py-8 text-sm text-gray-600">Generating financial statement...</div>;
   }
@@ -633,7 +704,10 @@ export default function ProfitLossStatement() {
             <FaPrint /> Print
           </button>
 
-          <button className="flex h-9 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50">
+          <button
+            onClick={handleExportPdf}
+            className="flex h-9 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50"
+          >
             <FaFileDownload /> Export PDF
           </button>
         </div>

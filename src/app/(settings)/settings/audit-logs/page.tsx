@@ -24,6 +24,79 @@ interface AuditLog {
   details: AuditLogDetails | string;
 }
 
+const HIDDEN_ACTIONS = new Set(["api_request", "api_response"]);
+
+const FRIENDLY_AUDIT_ACTIONS: Record<string, string> = {
+  user_created: "User account created",
+  user_updated: "User profile updated",
+  user_deleted: "User account deleted",
+  role_changed: "Role changed",
+  branch_changed: "Branch changed",
+  login_success: "Successful sign in",
+  login_failed: "Failed sign in",
+  password_reset_required: "Password reset required",
+  password_reset_completed: "Password reset completed",
+  mfa_enabled: "MFA enabled",
+  mfa_disabled: "MFA disabled",
+  account_locked: "Account locked",
+  account_unlocked: "Account unlocked",
+};
+
+const TECHNICAL_DETAIL_KEYS = new Set([
+  "path",
+  "query",
+  "method",
+  "timestamp",
+  "useragent",
+  "userid",
+  "tenantid",
+  "requestid",
+  "traceid",
+  "headers",
+  "body",
+]);
+
+const toTitleCase = (value: string) =>
+  value
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const formatAuditAction = (action: string) => {
+  const normalized = (action || "").toLowerCase();
+  return FRIENDLY_AUDIT_ACTIONS[normalized] || toTitleCase(action || "Activity update");
+};
+
+const formatDetailValue = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join(", ");
+  return "[complex data]";
+};
+
+const getUserFacingDetailEntries = (details: AuditLog["details"]) => {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return [];
+  return Object.entries(details).filter(
+    ([key, value]) =>
+      !TECHNICAL_DETAIL_KEYS.has(key.toLowerCase()) && value !== null && value !== undefined && value !== "",
+  );
+};
+
+const getAuditSummary = (log: AuditLog) => {
+  if (typeof log.details === "string") return log.details || "No additional details";
+
+  const entries = getUserFacingDetailEntries(log.details);
+  if (entries.length === 0) return "No additional details";
+
+  return entries
+    .slice(0, 2)
+    .map(([key, value]) => `${toTitleCase(key)}: ${formatDetailValue(value)}`)
+    .join("; ");
+};
+
 export default function AuditLogsSettings() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,9 +124,14 @@ export default function AuditLogsSettings() {
     fetchLogs();
   }, []);
 
-  const filteredLogs = logs.filter(log => {
+  const visibleLogs = logs.filter((log) => !HIDDEN_ACTIONS.has((log.action || "").toLowerCase()));
+
+  const filteredLogs = visibleLogs.filter(log => {
+    const friendlyAction = formatAuditAction(log.action);
+    const summary = getAuditSummary(log);
     const matchesSearch = searchTerm === "" ||
-      log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      friendlyAction.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (log.user?.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (log.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -62,13 +140,13 @@ export default function AuditLogsSettings() {
     return matchesSearch && matchesFilter;
   });
 
-  const uniqueActions = [...new Set(logs.map(log => log.action))];
+  const uniqueActions = [...new Set(visibleLogs.map(log => log.action))];
 
   const exportLogs = () => {
     const csvContent = "data:text/csv;charset=utf-8," +
-      "Date,User,Action,Details\n" +
+      "Date,User,Event,Summary\n" +
       filteredLogs.map(log =>
-        `"${new Date(log.createdAt).toLocaleString()}","${log.user?.name || log.user?.email || '-'}","${log.action}","${typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}"`
+        `"${new Date(log.createdAt).toLocaleString()}","${log.user?.name || log.user?.email || '-'}","${formatAuditAction(log.action)}","${getAuditSummary(log)}"`
       ).join("\n");
 
     const encodedUri = encodeURI(csvContent);
@@ -155,8 +233,8 @@ export default function AuditLogsSettings() {
                 <tr className="border-b border-gray-200 bg-gray-50">
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">Date</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">User</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Action</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Details</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Event</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Summary</th>
                 </tr>
               </thead>
               <tbody>
@@ -170,11 +248,11 @@ export default function AuditLogsSettings() {
                     </td>
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {log.action}
+                        {formatAuditAction(log.action)}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-gray-600 text-sm max-w-xs truncate">
-                      {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
+                      {getAuditSummary(log)}
                     </td>
                   </tr>
                 ))}
@@ -185,7 +263,7 @@ export default function AuditLogsSettings() {
 
         {filteredLogs.length > 0 && (
           <div className="mt-4 text-sm text-gray-600">
-            Showing {filteredLogs.length} of {logs.length} audit logs
+            Showing {filteredLogs.length} of {visibleLogs.length} audit logs
           </div>
         )}
       </div>

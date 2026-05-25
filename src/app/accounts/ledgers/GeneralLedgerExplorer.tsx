@@ -4,11 +4,29 @@ import React, { useState, useEffect } from "react";
 import { 
   FaSearch, 
   FaArrowLeft, 
-  FaChevronRight
+  FaChevronRight,
+  FaFilePdf,
+  FaFileExcel,
+  FaUndo,
 } from "react-icons/fa";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 import { apiGet } from "@/utils/api";
 import { useUser } from "@/components/UserContext";
 import { useBranches } from "@/hooks/useBranches";
+import { useTenant } from "@/hooks/useTenant";
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  type PdfTemplate,
+  preparePdfWatermark,
+} from "@/utils/pdfTemplate";
+import { getFullAssetUrl } from "@/utils/logoUrl";
 
 interface Account {
   id: string;
@@ -29,9 +47,57 @@ interface LedgerEntry {
   meta: { journalEntryId: string };
 }
 
+type DateFilterMode = "all" | "date" | "week" | "month" | "year" | "range";
+
+const formatDateInput = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatWeekInput = (date: Date) => {
+  const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNumber = utcDate.getUTCDay() || 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayNumber);
+  const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${utcDate.getUTCFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
+};
+
+const parseIsoWeekRange = (weekValue: string) => {
+  const match = weekValue.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
+  const dow = simple.getUTCDay();
+  const mondayUtc = new Date(simple);
+
+  if (dow <= 4) {
+    mondayUtc.setUTCDate(simple.getUTCDate() - dow + 1);
+  } else {
+    mondayUtc.setUTCDate(simple.getUTCDate() + 8 - dow);
+  }
+
+  const start = new Date(mondayUtc.getUTCFullYear(), mondayUtc.getUTCMonth(), mondayUtc.getUTCDate(), 0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+};
+
+const normalizeToDay = (dateValue: string | Date) => {
+  const parsed = typeof dateValue === "string" ? new Date(dateValue) : dateValue;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
+};
+
 export default function GeneralLedgerExplorer() {
   const { user } = useUser();
   const { data: branches = [] } = useBranches();
+  const { data: tenantData } = useTenant();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
@@ -39,6 +105,13 @@ export default function GeneralLedgerExplorer() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("all");
+  const [selectedDate, setSelectedDate] = useState<string>(formatDateInput(new Date()));
+  const [selectedWeek, setSelectedWeek] = useState<string>(formatWeekInput(new Date()));
+  const [selectedMonth, setSelectedMonth] = useState<string>(formatDateInput(new Date()).slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
+  const [rangeStart, setRangeStart] = useState<string>("");
+  const [rangeEnd, setRangeEnd] = useState<string>("");
 
   const normalizedRoles = Array.isArray(user?.roles)
     ? user.roles
@@ -122,6 +195,9 @@ export default function GeneralLedgerExplorer() {
 
   const fetchEntries = async (account: Account) => {
     setSelectedAccount(account);
+    setDateFilterMode("all");
+    setRangeStart("");
+    setRangeEnd("");
     setDetailsLoading(true);
     try {
       const res = await apiGet(`/ledger/accounts/${account.id}/entries`, getBranchHeaders());
@@ -144,6 +220,152 @@ export default function GeneralLedgerExplorer() {
     acc[curr.type].push(curr);
     return acc;
   }, {} as Record<string, Account[]>);
+
+  const filteredEntries = entries.filter((entry) => {
+    if (dateFilterMode === "all") return true;
+
+    const entryDate = normalizeToDay(entry.date);
+
+    if (dateFilterMode === "date") {
+      if (!selectedDate) return true;
+      return formatDateInput(entryDate) === selectedDate;
+    }
+
+    if (dateFilterMode === "week") {
+      const weekRange = parseIsoWeekRange(selectedWeek);
+      if (!weekRange) return true;
+      const entryTime = entryDate.getTime();
+      return entryTime >= weekRange.start.getTime() && entryTime <= weekRange.end.getTime();
+    }
+
+    if (dateFilterMode === "month") {
+      if (!selectedMonth) return true;
+      const [yearText, monthText] = selectedMonth.split("-");
+      const year = Number(yearText);
+      const month = Number(monthText);
+      if (!year || !month) return true;
+      return entryDate.getFullYear() === year && entryDate.getMonth() + 1 === month;
+    }
+
+    if (dateFilterMode === "year") {
+      const year = Number(selectedYear);
+      if (!year) return true;
+      return entryDate.getFullYear() === year;
+    }
+
+    if (dateFilterMode === "range") {
+      const start = rangeStart ? normalizeToDay(rangeStart) : null;
+      const end = rangeEnd ? normalizeToDay(rangeEnd) : null;
+
+      if (start && end) {
+        return entryDate.getTime() >= start.getTime() && entryDate.getTime() <= end.getTime();
+      }
+
+      if (start) return entryDate.getTime() >= start.getTime();
+      if (end) return entryDate.getTime() <= end.getTime();
+      return true;
+    }
+
+    return true;
+  });
+
+  const totalDebit = filteredEntries.reduce((sum, entry) => sum + entry.debit, 0);
+  const totalCredit = filteredEntries.reduce((sum, entry) => sum + entry.credit, 0);
+
+  const getFilterLabel = () => {
+    if (dateFilterMode === "all") return "All dates";
+    if (dateFilterMode === "date") return selectedDate || "Date filter";
+    if (dateFilterMode === "week") return selectedWeek || "Week filter";
+    if (dateFilterMode === "month") return selectedMonth || "Month filter";
+    if (dateFilterMode === "year") return selectedYear || "Year filter";
+    return `${rangeStart || "Any"} to ${rangeEnd || "Any"}`;
+  };
+
+  const resetDateFilters = () => {
+    setDateFilterMode("all");
+    setRangeStart("");
+    setRangeEnd("");
+  };
+
+  const handleExportExcel = () => {
+    if (!selectedAccount || filteredEntries.length === 0) return;
+
+    const worksheet = XLSX.utils.json_to_sheet(
+      filteredEntries.map((entry) => ({
+        Date: new Date(entry.date).toLocaleDateString(),
+        Reference: entry.reference,
+        Description: entry.description,
+        Type: entry.type,
+        Debit: entry.debit,
+        Credit: entry.credit,
+      })),
+    );
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Ledger");
+    XLSX.writeFile(
+      workbook,
+      `ledger-${selectedAccount.code}-${Date.now()}.xlsx`,
+    );
+  };
+
+  const handleExportPdf = async () => {
+    if (!selectedAccount || filteredEntries.length === 0) return;
+
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const margin = getPdfMargin(pdfTemplate);
+    const fontSize = getPdfFontSize(pdfTemplate);
+    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
+
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    await preparePdfWatermark(doc, getFullAssetUrl(tenantData?.watermark as string | null | undefined));
+    let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
+
+    doc.setFontSize(fontSize + 4);
+    doc.setTextColor((pdfTemplate.primaryColor || "#000000").replace("#", "") || "000000");
+    doc.text("General Ledger", margin, yPosition + 8);
+    yPosition += 16;
+    doc.setFontSize(fontSize - 2);
+    doc.setTextColor("666666");
+    doc.text(`Account: ${selectedAccount.code} - ${selectedAccount.name}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Branch: ${activeBranchName}`, margin, yPosition);
+    yPosition += 6;
+    doc.text(`Filter: ${getFilterLabel()}`, margin, yPosition);
+    yPosition += 8;
+
+    autoTable(doc, {
+      startY: yPosition,
+      head: [["Date", "Reference", "Description", "Type", "Debit", "Credit"]],
+      body: filteredEntries.map((entry) => [
+        new Date(entry.date).toLocaleDateString(),
+        entry.reference || "-",
+        entry.description || "-",
+        entry.type || "-",
+        entry.debit > 0 ? entry.debit.toLocaleString() : "-",
+        entry.credit > 0 ? entry.credit.toLocaleString() : "-",
+      ]),
+      styles: { fontSize: Math.max(8, fontSize - 2), cellPadding: 4 },
+      headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: secondaryRgb },
+      columnStyles: {
+        4: { halign: "right" },
+        5: { halign: "right" },
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    const tableState = doc as jsPDF & { lastAutoTable?: { finalY: number } };
+    const finalY = (tableState.lastAutoTable?.finalY || yPosition) + 12;
+    doc.setFontSize(Math.max(8, fontSize - 1));
+    doc.setTextColor("333333");
+    doc.text(`Debit Total: ${totalDebit.toLocaleString()}`, margin, finalY);
+    doc.text(`Credit Total: ${totalCredit.toLocaleString()}`, margin + 60, finalY);
+    doc.text(`Rows: ${filteredEntries.length}`, margin + 120, finalY);
+
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, "SaaS POS • Accounting");
+    doc.save(`ledger-${selectedAccount.code}-${Date.now()}.pdf`);
+  };
 
   if (loading) {
     return (
@@ -257,6 +479,104 @@ export default function GeneralLedgerExplorer() {
                     </h1>
                   </div>
                 </div>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <select
+                    value={dateFilterMode}
+                    onChange={(event) => setDateFilterMode(event.target.value as DateFilterMode)}
+                    className="h-8 border border-gray-200 bg-white px-2 text-[11px] text-gray-700 outline-none focus:border-blue-500"
+                  >
+                    <option value="all">All Dates</option>
+                    <option value="date">Specific Date</option>
+                    <option value="week">Specific Week</option>
+                    <option value="month">Specific Month</option>
+                    <option value="year">Specific Year</option>
+                    <option value="range">Date Range</option>
+                  </select>
+
+                  {dateFilterMode === "date" && (
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(event) => setSelectedDate(event.target.value)}
+                      className="h-8 border border-gray-200 bg-white px-2 text-[11px] text-gray-700 outline-none focus:border-blue-500"
+                    />
+                  )}
+
+                  {dateFilterMode === "week" && (
+                    <input
+                      type="week"
+                      value={selectedWeek}
+                      onChange={(event) => setSelectedWeek(event.target.value)}
+                      className="h-8 border border-gray-200 bg-white px-2 text-[11px] text-gray-700 outline-none focus:border-blue-500"
+                    />
+                  )}
+
+                  {dateFilterMode === "month" && (
+                    <input
+                      type="month"
+                      value={selectedMonth}
+                      onChange={(event) => setSelectedMonth(event.target.value)}
+                      className="h-8 border border-gray-200 bg-white px-2 text-[11px] text-gray-700 outline-none focus:border-blue-500"
+                    />
+                  )}
+
+                  {dateFilterMode === "year" && (
+                    <input
+                      type="number"
+                      value={selectedYear}
+                      onChange={(event) => setSelectedYear(event.target.value)}
+                      min={2000}
+                      max={2100}
+                      className="h-8 w-24 border border-gray-200 bg-white px-2 text-[11px] text-gray-700 outline-none focus:border-blue-500"
+                    />
+                  )}
+
+                  {dateFilterMode === "range" && (
+                    <>
+                      <input
+                        type="date"
+                        value={rangeStart}
+                        onChange={(event) => setRangeStart(event.target.value)}
+                        className="h-8 border border-gray-200 bg-white px-2 text-[11px] text-gray-700 outline-none focus:border-blue-500"
+                      />
+                      <input
+                        type="date"
+                        value={rangeEnd}
+                        onChange={(event) => setRangeEnd(event.target.value)}
+                        className="h-8 border border-gray-200 bg-white px-2 text-[11px] text-gray-700 outline-none focus:border-blue-500"
+                      />
+                    </>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={resetDateFilters}
+                    className="inline-flex h-8 items-center gap-1 border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    <FaUndo className="text-[10px]" />
+                    Reset
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportPdf}
+                    disabled={filteredEntries.length === 0}
+                    className="inline-flex h-8 items-center gap-1 border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <FaFilePdf className="text-[10px]" />
+                    PDF
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportExcel}
+                    disabled={filteredEntries.length === 0}
+                    className="inline-flex h-8 items-center gap-1 border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <FaFileExcel className="text-[10px]" />
+                    Excel
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -271,6 +591,10 @@ export default function GeneralLedgerExplorer() {
                 <div className="py-8 text-center text-xs text-gray-500">
                   No transactions found for this account.
                 </div>
+              ) : filteredEntries.length === 0 ? (
+                <div className="py-8 text-center text-xs text-gray-500">
+                  No transactions found for the selected date filter.
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-left text-xs">
@@ -284,7 +608,7 @@ export default function GeneralLedgerExplorer() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {entries.map((entry) => (
+                      {filteredEntries.map((entry) => (
                         <tr key={entry.id} className="hover:bg-gray-50">
                           <td className="px-3 py-2 text-gray-700">
                             {new Date(entry.date).toLocaleDateString()}
@@ -316,9 +640,9 @@ export default function GeneralLedgerExplorer() {
               )}
             </div>
             <div className="mt-2 flex justify-end gap-4 text-[11px] text-gray-600">
-              <span>Debit: {entries.reduce((sum, e) => sum + e.debit, 0).toLocaleString()}</span>
-              <span>Credit: {entries.reduce((sum, e) => sum + e.credit, 0).toLocaleString()}</span>
-              <span>Rows: {entries.length}</span>
+              <span>Debit: {totalDebit.toLocaleString()}</span>
+              <span>Credit: {totalCredit.toLocaleString()}</span>
+              <span>Rows: {filteredEntries.length} / {entries.length}</span>
             </div>
           </div>
         )}

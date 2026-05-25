@@ -269,7 +269,7 @@ export default function CreditManagementPage() {
     y += 8;
     doc.text(`Overdue: ${credits.filter(credit => credit.status === 'overdue').length}`, margin, y);
 
-    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Credit');
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Accounting');
     doc.save('credit-report.pdf');
   };
 

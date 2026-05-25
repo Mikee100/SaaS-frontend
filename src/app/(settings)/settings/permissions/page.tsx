@@ -27,6 +27,8 @@ interface User {
   branchId?: string;
   userRoles: Array<{ role: { name: string } }>;
   permissions?: string[];
+  effectivePermissions?: string[];
+  inheritedPermissions?: string[];
 }
 
 interface Branch {
@@ -45,6 +47,7 @@ export default function PermissionsSettings() {
   const [success, setSuccess] = useState(false);
   const [showManagePermissions, setShowManagePermissions] = useState<User | null>(null);
   const [userPermissionsEdit, setUserPermissionsEdit] = useState<string[]>([]);
+  const [userInheritedPermissionsEdit, setUserInheritedPermissionsEdit] = useState<string[]>([]);
 
   // Role management
   const [showCreateRole, setShowCreateRole] = useState(false);
@@ -234,6 +237,24 @@ export default function PermissionsSettings() {
     "Billing": ["view_billing", "edit_billing"],
   };
 
+  const listPermissions = (u: User) => {
+    if (Array.isArray(u.effectivePermissions) && u.effectivePermissions.length > 0) {
+      return u.effectivePermissions;
+    }
+    if (Array.isArray(u.permissions) && u.permissions.length > 0) {
+      return u.permissions;
+    }
+    return [];
+  };
+
+  const isTenantPermissionLocked = (u: User | null) => {
+    if (!u || !Array.isArray(u.userRoles)) return false;
+    return u.userRoles.some((ur) => {
+      const roleName = ur?.role?.name?.toLowerCase();
+      return roleName === "owner" || roleName === "admin";
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[300px]">
@@ -288,11 +309,15 @@ export default function PermissionsSettings() {
       {/* Manage Permissions Modal */}
       {showManagePermissions && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[9999]">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 shadow-xl border border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Manage Permissions for {showManagePermissions.name}</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-8 w-full max-w-2xl mx-4 shadow-2xl border border-gray-200 dark:border-gray-700">
+            <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-gray-100">Manage Permissions for {showManagePermissions.name}</h3>
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                if (isTenantPermissionLocked(showManagePermissions)) {
+                  setError("This is the tenant and permissions cannot be edited.");
+                  return;
+                }
                 setLoading(true);
                 try {
                   await apiPut(`/user/${showManagePermissions.id}/permissions`, { permissions: userPermissionsEdit });
@@ -307,45 +332,82 @@ export default function PermissionsSettings() {
                 }
               }}
             >
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assign Permissions</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3">Direct Permissions</label>
+                  {isTenantPermissionLocked(showManagePermissions) && (
+                    <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                      This is the tenant and permissions cannot be edited.
+                    </p>
+                  )}
+                  {userInheritedPermissionsEdit.length > 0 && (
+                    <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                      Role-inherited permissions are checked and read-only.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto bg-gray-50 dark:bg-gray-900/30 rounded p-3">
                     {permissions.map((p) => (
-                      <label key={p.key} className="flex items-center gap-2 text-gray-800 dark:text-gray-200">
-                        <input
-                          type="checkbox"
-                          checked={userPermissionsEdit.includes(p.key)}
-                          onChange={(e) => {
-                            setUserPermissionsEdit((prev) =>
-                              e.target.checked
-                                ? p.key && !prev.includes(p.key)
-                                  ? [...prev, p.key]
-                                  : prev
-                                : prev.filter((pk) => pk !== p.key),
-                            );
-                          }}
-                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
-                        />
+                      <label key={p.key} className="flex items-center gap-2 text-gray-800 dark:text-gray-200 py-1">
+                        {(() => {
+                          const isInherited = userInheritedPermissionsEdit.includes(p.key);
+                          const isDirect = userPermissionsEdit.includes(p.key);
+                          const isTenantLocked = isTenantPermissionLocked(showManagePermissions);
+                          return (
+                            <input
+                              type="checkbox"
+                              checked={isDirect || isInherited}
+                              disabled={isInherited || isTenantLocked}
+                              onChange={(e) => {
+                                if (isInherited || isTenantLocked) return;
+                                setUserPermissionsEdit((prev) =>
+                                  e.target.checked
+                                    ? p.key && !prev.includes(p.key)
+                                      ? [...prev, p.key]
+                                      : prev
+                                    : prev.filter((pk) => pk !== p.key),
+                                );
+                              }}
+                              className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
+                            />
+                          );
+                        })()}
                         <span className="text-sm">{p.key}</span>
+                        {userInheritedPermissionsEdit.includes(p.key) && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200">role</span>
+                        )}
                         {p.description && <span className="text-xs text-gray-500 dark:text-gray-400">({p.description})</span>}
                       </label>
                     ))}
                   </div>
                 </div>
+                {userInheritedPermissionsEdit.length > 0 && (
+                  <div>
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-2">Inherited (read-only)</label>
+                    <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                      {userInheritedPermissionsEdit.map((perm) => (
+                        <span
+                          key={perm}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200"
+                        >
+                          {perm}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="flex gap-3 mt-6">
+              <div className="flex flex-col sm:flex-row gap-3 mt-8">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition"
-                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition text-base"
+                  disabled={loading || isTenantPermissionLocked(showManagePermissions)}
                 >
                   Save
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowManagePermissions(null)}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition text-base"
                   disabled={loading}
                 >
                   Cancel
@@ -396,8 +458,8 @@ export default function PermissionsSettings() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex flex-wrap gap-1">
-                        {Array.isArray(u.permissions) && u.permissions.length > 0 ? (
-                          u.permissions.map((perm, idx) => (
+                        {listPermissions(u).length > 0 ? (
+                          listPermissions(u).map((perm, idx) => (
                             <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200">
                               {perm}
                             </span>
@@ -421,12 +483,27 @@ export default function PermissionsSettings() {
                         </button>
                         <button
                           type="button"
-                          className="px-3 py-1.5 bg-gray-600 dark:bg-gray-500 text-white rounded hover:bg-gray-700 dark:hover:bg-gray-600 text-xs"
+                          className={`px-3 py-1.5 text-white rounded text-xs ${
+                            isTenantPermissionLocked(u)
+                              ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed opacity-70"
+                              : "bg-gray-600 dark:bg-gray-500 hover:bg-gray-700 dark:hover:bg-gray-600"
+                          }`}
+                          disabled={isTenantPermissionLocked(u)}
+                          title={
+                            isTenantPermissionLocked(u)
+                              ? "This is the tenant and permissions cannot be edited."
+                              : "Manage direct permissions"
+                          }
                           onClick={() => {
                             setShowManagePermissions(u);
                             setUserPermissionsEdit(
                               Array.isArray(u.permissions) && u.permissions.length > 0
                                 ? u.permissions.filter((pk) => typeof pk === "string" && pk.length > 0)
+                                : [],
+                            );
+                            setUserInheritedPermissionsEdit(
+                              Array.isArray(u.inheritedPermissions) && u.inheritedPermissions.length > 0
+                                ? u.inheritedPermissions.filter((pk) => typeof pk === "string" && pk.length > 0)
                                 : [],
                             );
                           }}
@@ -486,8 +563,8 @@ export default function PermissionsSettings() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex flex-wrap gap-1">
-                        {Array.isArray(u.permissions) && u.permissions.length > 0 ? (
-                          u.permissions.map((perm, idx) => (
+                        {listPermissions(u).length > 0 ? (
+                          listPermissions(u).map((perm, idx) => (
                             <span key={perm + idx} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200">
                               {perm}
                             </span>
@@ -511,12 +588,27 @@ export default function PermissionsSettings() {
                         </button>
                         <button
                           type="button"
-                          className="px-3 py-1.5 bg-gray-600 dark:bg-gray-500 text-white rounded hover:bg-gray-700 dark:hover:bg-gray-600 text-xs"
+                          className={`px-3 py-1.5 text-white rounded text-xs ${
+                            isTenantPermissionLocked(u)
+                              ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed opacity-70"
+                              : "bg-gray-600 dark:bg-gray-500 hover:bg-gray-700 dark:hover:bg-gray-600"
+                          }`}
+                          disabled={isTenantPermissionLocked(u)}
+                          title={
+                            isTenantPermissionLocked(u)
+                              ? "This is the tenant and permissions cannot be edited."
+                              : "Manage direct permissions"
+                          }
                           onClick={() => {
                             setShowManagePermissions(u);
                             setUserPermissionsEdit(
                               Array.isArray(u.permissions) && u.permissions.length > 0
                                 ? u.permissions.filter((pk) => typeof pk === "string" && pk.length > 0)
+                                : [],
+                            );
+                            setUserInheritedPermissionsEdit(
+                              Array.isArray(u.inheritedPermissions) && u.inheritedPermissions.length > 0
+                                ? u.inheritedPermissions.filter((pk) => typeof pk === "string" && pk.length > 0)
                                 : [],
                             );
                           }}
@@ -595,16 +687,18 @@ export default function PermissionsSettings() {
                   </div>
                   <div className="space-y-3 mt-3">
                     <h5 className="font-medium text-gray-700 dark:text-gray-300 text-sm">Permissions:</h5>
-                    <div className="space-y-2">
+                    <div>
                       {rolePerms(role).length === 0 ? (
                         <p className="text-gray-500 dark:text-gray-400 text-sm">No permissions assigned</p>
                       ) : (
-                        rolePerms(role).map((rp, index) => (
-                          <div key={index} className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full" />
-                            <span className="text-sm text-gray-600 dark:text-gray-300">{permKey(rp)}</span>
-                          </div>
-                        ))
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                          {rolePerms(role).map((rp, index) => (
+                            <div key={index} className="flex items-center gap-2 bg-green-50 dark:bg-green-900/30 rounded px-2 py-1">
+                              <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full" />
+                              <span className="text-xs text-gray-700 dark:text-gray-200">{permKey(rp)}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>

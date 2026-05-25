@@ -19,6 +19,18 @@ import * as XLSX from "xlsx";
 import { apiGet, apiPost } from "@/utils/api";
 import { useUser } from "@/components/UserContext";
 import { useBranches } from "@/hooks/useBranches";
+import { useTenant } from "@/hooks/useTenant";
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfFontSize,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  type PdfTemplate,
+  preparePdfWatermark,
+} from "@/utils/pdfTemplate";
+import { getFullAssetUrl } from "@/utils/logoUrl";
 
 interface TrialBalanceAccount {
   id: string;
@@ -72,6 +84,7 @@ function downloadBlob(blob: Blob, fileName: string) {
 export default function TrialBalanceStatement() {
   const { user } = useUser();
   const { data: branches = [] } = useBranches();
+  const { data: tenantData } = useTenant();
   const [data, setData] = useState<TrialBalanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [accountsCount, setAccountsCount] = useState<number | null>(null);
@@ -356,27 +369,36 @@ export default function TrialBalanceStatement() {
     }
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     setExporting("pdf");
     try {
-      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+      const margin = getPdfMargin(pdfTemplate);
+      const fontSize = getPdfFontSize(pdfTemplate);
+      const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
 
-      doc.setFillColor(15, 23, 42);
-      doc.rect(0, 0, doc.internal.pageSize.getWidth(), 96, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.text("Trial Balance", 44, 44);
-      doc.setFontSize(11);
-      doc.setTextColor(203, 213, 225);
-      doc.text(`As of ${reportDate.toLocaleDateString("en-KE", { dateStyle: "long" })}`, 44, 66);
+      const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+      await preparePdfWatermark(doc, getFullAssetUrl(tenantData?.watermark as string | null | undefined));
+      let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
+
+      doc.setFontSize(fontSize + 4);
+      doc.setTextColor((pdfTemplate.primaryColor || "#000000").replace("#", "") || "000000");
+      doc.text("Trial Balance", margin, yPosition + 8);
+      yPosition += 16;
+
+      doc.setFontSize(fontSize - 2);
+      doc.setTextColor("666666");
+      doc.text(`As of ${reportDate.toLocaleDateString("en-KE", { dateStyle: "long" })}`, margin, yPosition);
+      yPosition += 6;
       doc.text(
         `Status: ${isBalanced ? "Balanced" : `Unbalanced by ${formatCurrency(imbalance)}`}`,
-        44,
-        84,
+        margin,
+        yPosition,
       );
+      yPosition += 8;
 
       autoTable(doc, {
-        startY: 122,
+        startY: yPosition,
         head: [["Code", "Account Name", "Type", "Debit (KES)", "Credit (KES)"]],
         body: filteredAccounts.map((account) => [
           account.code,
@@ -387,17 +409,20 @@ export default function TrialBalanceStatement() {
         ]),
         foot: [["Total", "", "", formatCurrency(data.totalDebit), formatCurrency(data.totalCredit)]],
         styles: {
-          fontSize: 10,
+          fontSize: Math.max(8, fontSize - 2),
           cellPadding: 10,
           textColor: [15, 23, 42],
         },
         headStyles: {
-          fillColor: [241, 245, 249],
-          textColor: [71, 85, 105],
+          fillColor: primaryRgb,
+          textColor: [255, 255, 255],
           fontStyle: "bold",
         },
+        alternateRowStyles: {
+          fillColor: secondaryRgb,
+        },
         footStyles: {
-          fillColor: [15, 23, 42],
+          fillColor: [31, 41, 55],
           textColor: [255, 255, 255],
           fontStyle: "bold",
         },
@@ -405,8 +430,10 @@ export default function TrialBalanceStatement() {
           3: { halign: "right" },
           4: { halign: "right" },
         },
+        margin: { left: margin, right: margin },
       });
 
+      applyPdfFooterAndPageNumbers(doc, pdfTemplate, "SaaS POS • Accounting");
       doc.save(`trial-balance-${date}.pdf`);
     } finally {
       setExporting(null);

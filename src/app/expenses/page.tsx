@@ -535,7 +535,7 @@ export default function ExpensesPage() {
         }
       });
 
-      applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Expenses');
+      applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Accounting');
       doc.save(`expenses-report-${new Date().toISOString().split('T')[0]}.pdf`);
     }
 
