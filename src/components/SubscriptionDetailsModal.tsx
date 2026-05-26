@@ -162,7 +162,13 @@ export default function SubscriptionDetailsModal({
                   <div>
                     <p className="text-sm text-gray-500">Current Plan</p>
                     <p className="font-medium">{subscription.Plan.name}</p>
-                    <p className="text-sm text-gray-500">Ksh {subscription.Plan.price}/{subscription.Plan.interval === 'yearly' ? 'yr' : 'mo'}</p>
+                    <p className="text-sm text-gray-500">
+                      Ksh {subscription.Plan.price.toLocaleString('en-KE', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                      /{subscription.Plan.interval === 'yearly' ? 'yr' : 'mo'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Current Period</p>

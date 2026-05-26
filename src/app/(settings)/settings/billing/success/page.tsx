@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams } from 'next/navigation';
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { FaCrown, FaStar, FaCheck, FaCreditCard, FaDownload, FaHistory, FaArrowUp, FaArrowDown } from 'react-icons/fa';
 
@@ -43,6 +44,7 @@ const formatKsh = (amount: number) => {
 };
 
 export default function BillingSettings() {
+  const searchParams = useSearchParams();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -55,6 +57,16 @@ export default function BillingSettings() {
     const fetchData = async () => {
       try {
         setLoading(true);
+
+        const sessionId = searchParams?.get('session_id');
+        if (sessionId) {
+          try {
+            await apiPost('/billing/sync-checkout-session', { sessionId });
+          } catch (syncError) {
+            console.warn('Checkout sync fallback failed:', syncError);
+          }
+        }
+
         const [plansData, subscriptionData] = await Promise.all([
           apiGet('/billing/plans') as Promise<Plan[]>,
           apiGet('/billing/subscription-details').catch(() => null) as Promise<Subscription | null>,
@@ -72,7 +84,7 @@ export default function BillingSettings() {
     };
 
     fetchData();
-  }, []);
+  }, [searchParams]);
 
   const handleUpgrade = async (plan: Plan) => {
     try {

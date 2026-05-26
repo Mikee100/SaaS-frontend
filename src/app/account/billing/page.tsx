@@ -230,7 +230,7 @@ export default function BillingPage() {
             >
               <h3 className="font-medium text-gray-900">{plan.name}</h3>
               <p className="text-2xl font-bold text-gray-900 mt-2">
-                {formatKsh(plan.price / 100)}/month
+                {formatKsh(plan.price)}/month
               </p>
               <ul className="mt-4 space-y-2">
                 {plan.features.slice(0, 3).map((feature, index) => (

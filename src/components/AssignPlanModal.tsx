@@ -33,6 +33,12 @@ export default function AssignPlanModal({ isOpen, onClose, onSuccess }: AssignPl
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
 
+  const formatPrice = (amount: number) =>
+    amount.toLocaleString('en-KE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
   useEffect(() => {
     if (isOpen) {
       fetchData();
@@ -167,7 +173,7 @@ export default function AssignPlanModal({ isOpen, onClose, onSuccess }: AssignPl
                     <option value="">Choose a subscription plan</option>
                     {plans.map((plan) => (
                       <option key={plan.id} value={plan.id}>
-                        {plan.name} - Ksh {plan.price}/{plan.interval === 'yearly' ? 'yr' : 'mo'}
+                        {plan.name} - Ksh {formatPrice(plan.price)}/{plan.interval === 'yearly' ? 'yr' : 'mo'}
                       </option>
                     ))}
                   </select>
@@ -181,7 +187,7 @@ export default function AssignPlanModal({ isOpen, onClose, onSuccess }: AssignPl
                       <p><strong>Tenant:</strong> {tenants.find(t => t.id === selectedTenantId)?.name}</p>
                       <p><strong>Email:</strong> {tenants.find(t => t.id === selectedTenantId)?.contactEmail}</p>
                       <p><strong>Plan:</strong> {plans.find(p => p.id === selectedPlanId)?.name}</p>
-                      <p><strong>Price:</strong> Ksh {plans.find(p => p.id === selectedPlanId)?.price}/{plans.find(p => p.id === selectedPlanId)?.interval === 'yearly' ? 'yr' : 'mo'}</p>
+                      <p><strong>Price:</strong> Ksh {formatPrice(plans.find(p => p.id === selectedPlanId)?.price || 0)}/{plans.find(p => p.id === selectedPlanId)?.interval === 'yearly' ? 'yr' : 'mo'}</p>
                     </div>
                   </div>
                 )}

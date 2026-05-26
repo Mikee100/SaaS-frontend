@@ -6,10 +6,7 @@ import PaymentMethodForm from './PaymentMethodForm';
 import { apiGet } from '@/utils/api';
 import { FaChartLine, FaCreditCard, FaReceipt, FaDollarSign, FaUsers } from 'react-icons/fa';
 import { Elements } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
-
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
+import type { Stripe } from '@stripe/stripe-js';
 
 interface PaymentAnalytics {
   period: string;
@@ -36,12 +33,14 @@ interface PaymentHistory {
 
 interface BillingDashboardProps {
   tenantId: string;
+  stripePromise: Promise<Stripe | null>;
 }
 
 interface Plan {
   id: string;
   name: string;
   price: number;
+  interval?: string;
   currency: string;
   features: string[];
   stripePriceId?: string;
@@ -63,7 +62,7 @@ interface Invoice {
   createdAt: string;
 }
 
-export default function BillingDashboard({  }: BillingDashboardProps) {
+export default function BillingDashboard({ stripePromise }: BillingDashboardProps) {
   const [period, setPeriod] = useState<'month' | 'quarter' | 'year'>('month');
   const [selectedTab, setSelectedTab] = useState<'overview' | 'history' | 'methods' | 'plans'>('overview');
   // Define the expected shape of billingData
@@ -85,11 +84,17 @@ export default function BillingDashboard({  }: BillingDashboardProps) {
   const typedBillingData: BillingData | null = billingData as BillingData | null;
 
   const fetchBillingData = useCallback(async () => {
-    originalFetchBillingData();
-    // Fetch subscription history from backend API
-    const data = await apiGet('/subscriptions/history');
-    if (Array.isArray(data)) {
-      setHistory(data);
+    try {
+      await originalFetchBillingData();
+      // Fetch subscription history from backend API
+      const data = await apiGet('/subscription/history');
+      if (Array.isArray(data)) {
+        setHistory(data);
+      } else {
+        setHistory([]);
+      }
+    } catch {
+      setHistory([]);
     }
   }, [originalFetchBillingData]);
 
@@ -120,12 +125,13 @@ export default function BillingDashboard({  }: BillingDashboardProps) {
   const mapPlans = (plans: Plan[], currentPlanId?: string): BillingPlan[] => {
     if (!plans) return [];
     return plans.map((plan: Plan) => ({
-      id: plan.stripePriceId || plan.id || plan.name,
+      id: plan.id,
       name: plan.name,
       price: plan.price,
+      interval: plan.interval,
       currency: plan.currency || 'usd',
       features: plan.features || [],
-      isCurrent: currentPlanId ? (plan.id === currentPlanId || plan.stripePriceId === currentPlanId) : false,
+      isCurrent: currentPlanId ? plan.id === currentPlanId : false,
     }));
   };
 
@@ -183,8 +189,8 @@ export default function BillingDashboard({  }: BillingDashboardProps) {
         <BillingPlans
           plans={mapPlans(typedBillingData.plans, typedBillingData.subscription?.planId)}
           currentPlanId={typedBillingData.subscription?.planId}
-          onUpgrade={async () => {
-            const url = await createCheckoutSession();
+          onUpgrade={async (planId: string) => {
+            const url = await createCheckoutSession(planId);
             if (url) window.location.href = url;
           }}
     

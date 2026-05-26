@@ -85,15 +85,14 @@ export default function TenantBillingPage() {
   };
 
   const formatCurrency = (amount: number, currency: string = 'KES') => {
-    const actualAmount = amount / 100; // Convert from cents if needed
     // For KES/Ksh, use custom formatting
     if (currency.toUpperCase() === 'KES' || currency.toUpperCase() === 'KSH') {
-      return `Ksh ${actualAmount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
-    }).format(actualAmount);
+    }).format(amount);
   };
 
   const getStatusBadge = (status: string) => {

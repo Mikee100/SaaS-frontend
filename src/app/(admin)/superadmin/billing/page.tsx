@@ -121,8 +121,7 @@ export default function SuperAdminBillingPage() {
     (reconciliationSummary?.overdueTenants || 0);
 
   const formatCurrency = (amount: number) => {
-    const normalized = amount / 100;
-    return `Ksh ${normalized.toLocaleString('en-KE', {
+    return `Ksh ${amount.toLocaleString('en-KE', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;

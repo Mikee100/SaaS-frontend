@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useUser } from '@/components/UserContext';
 import { useRouter, usePathname } from 'next/navigation';
-import { FiCreditCard, FiSettings, FiUser, FiFileText } from 'react-icons/fi';
+import { FiCreditCard, FiSettings, FiUser, FiFileText, FiDollarSign } from 'react-icons/fi';
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useUser();
@@ -24,7 +24,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
-      <aside className="w-full md:w-64 bg-white shadow-sm border-r border-gray-200 flex-shrink-0">
+      <aside className="w-full md:w-64 bg-white shadow-sm border-r border-gray-200 shrink-0">
         <div className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Account</h2>
 
@@ -32,7 +32,11 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
             <Link
               href="/account"
               className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                isActive('/account') && !isActive('/account/billing') && !isActive('/account/settings')
+                isActive('/account') &&
+                !isActive('/account/billing') &&
+                !isActive('/account/invoices') &&
+                !isActive('/account/payments') &&
+                !isActive('/account/settings')
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
@@ -75,6 +79,18 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
             >
               <FiSettings className="mr-3 h-4 w-4" />
               Settings
+            </Link>
+
+            <Link
+              href="/account/payments"
+              className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                isActive('/account/payments')
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <FiDollarSign className="mr-3 h-4 w-4" />
+              Payments
             </Link>
           </nav>
         </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiGet, apiPost } from '@/utils/api';
+import { apiGet, apiPost, ApiError } from '@/utils/api';
 
 // Define types for Plan, Subscription, and Invoice
 type Plan = {
@@ -74,6 +74,11 @@ export function useBilling() {
 	}, [fetchBillingData]);
 
 	const createCheckoutSession = async (planId?: string) => {
+		if (!planId) {
+			setError('Please select a plan before checkout');
+			return null;
+		}
+
 		try {
 			const origin = typeof window !== 'undefined' ? window.location.origin : '';
 			const response = await apiPost<{ url: string }>('/billing/create-checkout-session', {
@@ -83,6 +88,23 @@ export function useBilling() {
 			});
 			return response?.url || null;
 		} catch (err) {
+			if (err instanceof ApiError && err.status === 404) {
+				try {
+					const fallbackResponse = await apiPost<{ url?: string }>(
+						'/billing/create-subscription',
+						{ planId },
+					);
+					return fallbackResponse?.url || null;
+				} catch (fallbackErr) {
+					setError(
+						fallbackErr instanceof Error
+							? fallbackErr.message
+							: 'Failed to create subscription checkout session',
+					);
+					return null;
+				}
+			}
+
 			setError(err instanceof Error ? err.message : 'Failed to create checkout session');
 			return null;
 		}

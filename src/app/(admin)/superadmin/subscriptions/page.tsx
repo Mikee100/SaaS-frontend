@@ -132,8 +132,12 @@ export default function SubscriptionsPage() {
   };
 
   const formatPrice = (price: number, interval: string) => {
-    if (interval === "yearly") return `Ksh ${price}/yr`;
-    return `Ksh ${price}/mo`;
+    const value = price.toLocaleString('en-KE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    if (interval === "yearly") return `Ksh ${value}/yr`;
+    return `Ksh ${value}/mo`;
   };
 
   const handleSuccess = () => {

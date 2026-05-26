@@ -172,8 +172,7 @@ export default function PlanManagementPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    const actualAmount = amount / 100; // Convert from cents if needed
-    return `Ksh ${actualAmount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   if (loading) {
@@ -467,7 +466,7 @@ function PlanModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Price (in cents)
+                  Price (Ksh)
                 </label>
                 <input
                   type="number"

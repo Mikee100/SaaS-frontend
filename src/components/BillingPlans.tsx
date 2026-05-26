@@ -5,6 +5,7 @@ export interface BillingPlan {
   name: string;
   price: number;
   currency: string;
+  interval?: string;
   features: string[];
   isCurrent?: boolean;
 }
@@ -16,6 +17,12 @@ interface BillingPlansProps {
 }
 
 const BillingPlans: React.FC<BillingPlansProps> = ({ plans, onUpgrade }) => {
+  const formatPrice = (amount: number) =>
+    `Ksh ${amount.toLocaleString('en-KE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
   return (
     <div className="space-y-8">
       <h3 className="text-xl font-bold text-gray-900 mb-4">Available Plans</h3>
@@ -25,7 +32,9 @@ const BillingPlans: React.FC<BillingPlansProps> = ({ plans, onUpgrade }) => {
             <div>
               <h4 className="text-lg font-semibold text-gray-800 mb-2">{plan.name}</h4>
               <p className="text-2xl font-bold text-gray-900 mb-2">
-                {plan.price === 0 ? 'Free' : `${plan.price} ${plan.currency.toUpperCase()}/mo`}
+                {plan.price === 0
+                  ? 'Free'
+                  : `${formatPrice(plan.price)}/${plan.interval === 'yearly' ? 'yr' : 'mo'}`}
               </p>
               <ul className="list-disc pl-5 text-gray-700 mb-4">
                 {plan.features.map((feature, idx) => (
