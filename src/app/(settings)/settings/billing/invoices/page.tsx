@@ -25,6 +25,13 @@ interface Invoice {
   // Add other invoice properties as needed
 }
 
+const formatKsh = (amount: number) => {
+	return `Ksh ${amount.toLocaleString('en-KE', {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	})}`;
+};
+
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +81,7 @@ export default function InvoicesPage() {
 						{invoices.map(inv => (
 							<tr key={inv.id} className="border-b">
 								<td className="py-2">{inv.number}</td>
-								<td className="py-2">${inv.amount}</td>
+								<td className="py-2">{formatKsh(inv.amount)}</td>
 								<td className="py-2">{inv.status}</td>
 								<td className="py-2">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "-"}</td>
 								<td className="py-2">{inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : "-"}</td>

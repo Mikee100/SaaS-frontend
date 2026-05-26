@@ -99,7 +99,7 @@ const fieldHelp: Record<string, string> = {
   etimsQrUrl: 'URL to your KRA eTIMS QR code image (optional)',
   businessLicense: 'Your business license number',
   taxId: 'Your tax identification number',
-  currency: 'Default currency for transactions (e.g., KES, USD)',
+  currency: 'Default currency for transactions (e.g., KES)',
   timezone: 'Your business timezone (e.g., Africa/Nairobi)',
   foundedYear: 'Year your business was established',
   employeeCount: 'Number of employees (e.g., 1-10, 11-50, 50+)',

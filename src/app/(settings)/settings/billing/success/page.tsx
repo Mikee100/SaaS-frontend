@@ -35,6 +35,13 @@ interface Invoice {
   createdAt: string;
 }
 
+const formatKsh = (amount: number) => {
+  return `Ksh ${amount.toLocaleString('en-KE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
 export default function BillingSettings() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
@@ -200,7 +207,7 @@ export default function BillingSettings() {
             <div>
               <p className="text-sm text-gray-600">Price</p>
               <p className="text-lg font-semibold text-gray-900">
-                ${currentSubscription.plan?.price || 0}/{currentSubscription.plan?.interval || 'monthly'}
+                {formatKsh(currentSubscription.plan?.price || 0)}/{currentSubscription.plan?.interval || 'monthly'}
               </p>
             </div>
             <div>
@@ -254,7 +261,7 @@ export default function BillingSettings() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Price</p>
-              <p className="text-lg font-semibold text-gray-900">$0/monthly</p>
+              <p className="text-lg font-semibold text-gray-900">Ksh 0.00/monthly</p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Next Billing</p>
@@ -308,7 +315,7 @@ export default function BillingSettings() {
 
               <h3 className="text-xl font-semibold text-gray-800 mb-2">{plan.name}</h3>
               <p className="text-3xl font-bold text-gray-900 mb-4">
-                ${plan.price}
+                {formatKsh(plan.price)}
                 <span className="text-sm font-normal text-gray-600">/{plan.interval}</span>
               </p>
 
@@ -424,7 +431,7 @@ export default function BillingSettings() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-gray-900">${invoice.amount}</p>
+                  <p className="font-semibold text-gray-900">{formatKsh(invoice.amount)}</p>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                     invoice.status === 'paid' 
                       ? 'bg-green-100 text-green-800'
@@ -469,7 +476,7 @@ export default function BillingSettings() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-gray-800">{plan.name}</p>
-                      <p className="text-sm text-gray-600">${plan.price}/{plan.interval}</p>
+                      <p className="text-sm text-gray-600">{formatKsh(plan.price)}/{plan.interval}</p>
                     </div>
                     {selectedPlan?.id === plan.id && (
                       <FaCheck className="w-5 h-5 text-blue-600" />

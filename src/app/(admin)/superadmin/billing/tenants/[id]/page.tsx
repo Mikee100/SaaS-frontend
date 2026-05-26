@@ -6,6 +6,8 @@ import { apiGet, apiPatch, apiPost } from '@/utils/api';
 import { FaChevronLeft, FaPlus, FaSync } from 'react-icons/fa';
 import { getFullAssetUrl } from '@/utils/logoUrl';
 import API_BASE_URL from '@/config/apiConfig';
+import { jsPDF } from 'jspdf';
+import JSZip from 'jszip';
 
 interface BillingOpsTenant {
   tenantId: string;
@@ -40,6 +42,24 @@ interface ManualPayment {
   notes: string | null;
   months: number;
   appliedToSubscription: boolean;
+  invoiceId?: string | null;
+  receiptUploadFailed?: boolean;
+  receiptUploadError?: string | null;
+}
+
+interface ManualInvoice {
+  id: string;
+  number: string;
+  amount: number;
+  status: 'draft' | 'issued' | 'paid' | 'void';
+  dueDate: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  linkedPaymentId: string | null;
+  linkedPaymentAmount: number | null;
+  linkedPaymentStatus: string | null;
+  linkedReceiptUrl: string | null;
+  linkedReferenceCode: string | null;
 }
 
 interface TimelineItem {
@@ -84,6 +104,7 @@ export default function TenantBillingDetailsPage({
   const [tenant, setTenant] = useState<BillingOpsTenant | null>(null);
   const [payments, setPayments] = useState<ManualPayment[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [invoices, setInvoices] = useState<ManualInvoice[]>([]);
 
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('KES');
@@ -95,6 +116,12 @@ export default function TenantBillingDetailsPage({
   const [applyNow, setApplyNow] = useState(true);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [invoiceAmount, setInvoiceAmount] = useState('');
+  const [invoiceDueDate, setInvoiceDueDate] = useState('');
+  const [invoiceStatus, setInvoiceStatus] = useState<'draft' | 'issued' | 'paid' | 'void'>('draft');
+  const [invoiceNotes, setInvoiceNotes] = useState('');
+  const [submittingInvoice, setSubmittingInvoice] = useState(false);
+  const [invoiceActionLoading, setInvoiceActionLoading] = useState<string | null>(null);
   const [actionModal, setActionModal] = useState<ActionKind>(null);
   const [actionDays, setActionDays] = useState(30);
   const [actionMonths, setActionMonths] = useState(1);
@@ -114,13 +141,16 @@ export default function TenantBillingDetailsPage({
       setLoading(true);
       setError('');
 
-      const [opsData, manualPayments, tenantTimeline] = await Promise.all([
+      const [opsData, manualPayments, tenantTimeline, manualInvoices] = await Promise.all([
         apiGet<BillingOpsTenant[]>('/admin/subscriptions/operations/tenants'),
         apiGet<ManualPayment[]>(
           `/admin/subscriptions/operations/tenants/${tenantId}/manual-payments`,
         ),
         apiGet<TimelineItem[]>(
           `/admin/subscriptions/operations/tenants/${tenantId}/timeline`,
+        ),
+        apiGet<ManualInvoice[]>(
+          `/admin/subscriptions/operations/tenants/${tenantId}/manual-invoices`,
         ),
       ]);
 
@@ -131,6 +161,7 @@ export default function TenantBillingDetailsPage({
       setTenant(foundTenant || null);
       setPayments(Array.isArray(manualPayments) ? manualPayments : []);
       setTimeline(Array.isArray(tenantTimeline) ? tenantTimeline : []);
+      setInvoices(Array.isArray(manualInvoices) ? manualInvoices : []);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to load tenant billing details',
@@ -289,7 +320,18 @@ export default function TenantBillingDetailsPage({
       setError('');
       setSuccess('');
 
-      const receiptUrl = receiptFile ? await uploadReceipt() : undefined;
+      let receiptUrl: string | undefined;
+      let receiptUploadFailed = false;
+      let receiptUploadError: string | undefined;
+      if (receiptFile) {
+        try {
+          receiptUrl = await uploadReceipt();
+        } catch (uploadErr) {
+          receiptUploadFailed = true;
+          receiptUploadError =
+            uploadErr instanceof Error ? uploadErr.message : 'Receipt upload failed';
+        }
+      }
 
       await apiPost(`/admin/subscriptions/operations/tenants/${tenantId}/manual-payments`, {
         amount: parsedAmount,
@@ -301,6 +343,8 @@ export default function TenantBillingDetailsPage({
         notes: notes || undefined,
         months: parsedMonths,
         applyNow,
+        receiptUploadFailed,
+        receiptUploadError,
         reason: notes || 'Manual payment register entry',
       });
 
@@ -311,9 +355,11 @@ export default function TenantBillingDetailsPage({
       setMonths('1');
       setReceiptFile(null);
       setSuccess(
-        applyNow
-          ? 'Manual payment recorded and applied now. Subscription renewed and invoice created.'
-          : 'Manual payment recorded successfully.',
+        receiptUploadFailed
+          ? 'Payment saved, but receipt upload failed. This is visible in reconciliation dashboard.'
+          : applyNow
+            ? 'Manual payment recorded and applied now. Subscription renewed and invoice created.'
+            : 'Manual payment recorded successfully.',
       );
       await refreshAll();
     } catch (err) {
@@ -340,6 +386,117 @@ export default function TenantBillingDetailsPage({
       await refreshAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to apply manual payment');
+    }
+  };
+
+  const createManualInvoice = async () => {
+    if (!tenantId) return;
+    const parsedAmount = Number(invoiceAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+      setError('Invoice amount must be 0 or a positive number');
+      return;
+    }
+
+    try {
+      setSubmittingInvoice(true);
+      setError('');
+      setSuccess('');
+      await apiPost(`/admin/subscriptions/operations/tenants/${tenantId}/manual-invoices`, {
+        amount: parsedAmount,
+        status: invoiceStatus,
+        dueDate: invoiceDueDate || undefined,
+        notes: invoiceNotes || undefined,
+      });
+
+      setInvoiceAmount('');
+      setInvoiceDueDate('');
+      setInvoiceStatus('draft');
+      setInvoiceNotes('');
+      setSuccess('Manual invoice created.');
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create manual invoice');
+    } finally {
+      setSubmittingInvoice(false);
+    }
+  };
+
+  const transitionInvoiceStatus = async (
+    invoice: ManualInvoice,
+    status: 'issued' | 'paid' | 'void',
+  ) => {
+    if (!tenantId) return;
+    try {
+      setInvoiceActionLoading(invoice.id);
+      setError('');
+      setSuccess('');
+
+      await apiPatch(
+        `/admin/subscriptions/operations/tenants/${tenantId}/manual-invoices/${invoice.id}/status`,
+        {
+          status,
+          reason: `Updated from UI to ${status}`,
+        },
+      );
+      setSuccess(`Invoice ${invoice.number} moved to ${status}.`);
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update invoice status');
+    } finally {
+      setInvoiceActionLoading(null);
+    }
+  };
+
+  const downloadInvoiceBundle = async (invoice: ManualInvoice) => {
+    try {
+      const pdf = new jsPDF();
+      pdf.setFontSize(14);
+      pdf.text('Manual Invoice', 15, 20);
+      pdf.setFontSize(11);
+      pdf.text(`Invoice Number: ${invoice.number}`, 15, 32);
+      pdf.text(`Tenant: ${tenant?.tenantName || '-'}`, 15, 40);
+      pdf.text(`Amount: Ksh ${invoice.amount.toLocaleString()}`, 15, 48);
+      pdf.text(`Status: ${invoice.status}`, 15, 56);
+      pdf.text(`Created: ${formatDate(invoice.createdAt)}`, 15, 64);
+      pdf.text(`Due Date: ${formatDate(invoice.dueDate)}`, 15, 72);
+      pdf.text(`Paid At: ${formatDate(invoice.paidAt)}`, 15, 80);
+      pdf.text(`Reference: ${invoice.linkedReferenceCode || '-'}`, 15, 88);
+
+      const invoicePdfBlob = pdf.output('blob');
+
+      const zip = new JSZip();
+      zip.file(`${invoice.number}.pdf`, invoicePdfBlob);
+
+      if (invoice.linkedReceiptUrl) {
+        const receiptUrl = getFullAssetUrl(invoice.linkedReceiptUrl);
+        const receiptRes = await fetch(receiptUrl, {
+          credentials: 'include',
+        });
+        if (receiptRes.ok) {
+          const receiptBlob = await receiptRes.blob();
+          const contentType = receiptBlob.type || '';
+          const ext = contentType.includes('pdf')
+            ? 'pdf'
+            : contentType.includes('png')
+              ? 'png'
+              : contentType.includes('jpeg') || contentType.includes('jpg')
+                ? 'jpg'
+                : 'bin';
+          zip.file(`receipt-${invoice.number}.${ext}`, receiptBlob);
+        }
+      }
+
+      const bundleBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(bundleBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice.number}-bundle.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download invoice bundle');
     }
   };
 
@@ -558,7 +715,10 @@ export default function TenantBillingDetailsPage({
                   <td className="px-2 py-2">{payment.method || '-'}</td>
                   <td className="px-2 py-2">{payment.referenceCode || '-'}</td>
                   <td className="px-2 py-2">
-                    {payment.appliedToSubscription ? 'applied' : payment.status}
+                    <div>{payment.appliedToSubscription ? 'applied' : payment.status}</div>
+                    {payment.receiptUploadFailed && (
+                      <div className="text-[11px] text-red-600">receipt_upload_failed</div>
+                    )}
                   </td>
                   <td className="px-2 py-2">
                     {payment.receiptUrl ? (
@@ -617,6 +777,140 @@ export default function TenantBillingDetailsPage({
               No timeline records found.
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="rounded border bg-white p-4">
+        <h2 className="text-sm font-semibold text-gray-900">Manual Invoice Lifecycle</h2>
+        <p className="text-xs text-gray-500">
+          Manage manual invoices through draft, issued, paid, and void states.
+        </p>
+
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+          <input
+            type="number"
+            value={invoiceAmount}
+            onChange={(e) => setInvoiceAmount(e.target.value)}
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Invoice amount"
+          />
+          <input
+            type="date"
+            value={invoiceDueDate}
+            onChange={(e) => setInvoiceDueDate(e.target.value)}
+            className="rounded border px-3 py-2 text-sm"
+          />
+          <select
+            value={invoiceStatus}
+            onChange={(e) => setInvoiceStatus(e.target.value as 'draft' | 'issued' | 'paid' | 'void')}
+            className="rounded border px-3 py-2 text-sm"
+          >
+            <option value="draft">draft</option>
+            <option value="issued">issued</option>
+            <option value="paid">paid</option>
+            <option value="void">void</option>
+          </select>
+          <input
+            value={invoiceNotes}
+            onChange={(e) => setInvoiceNotes(e.target.value)}
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Notes"
+          />
+        </div>
+
+        <div className="mt-3">
+          <button
+            onClick={createManualInvoice}
+            disabled={submittingInvoice}
+            className="inline-flex items-center rounded bg-gray-900 px-3 py-2 text-sm text-white hover:bg-black disabled:opacity-50"
+          >
+            {submittingInvoice ? 'Creating...' : 'Create Manual Invoice'}
+          </button>
+        </div>
+
+        <div className="mt-4 overflow-x-auto rounded border">
+          <table className="min-w-full text-xs">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-2 py-2 text-left">Invoice</th>
+                <th className="px-2 py-2 text-left">Amount</th>
+                <th className="px-2 py-2 text-left">Status</th>
+                <th className="px-2 py-2 text-left">Due/Paid</th>
+                <th className="px-2 py-2 text-left">Linked Payment</th>
+                <th className="px-2 py-2 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((invoice) => (
+                <tr key={invoice.id} className="border-t">
+                  <td className="px-2 py-2">
+                    <div className="font-medium">{invoice.number}</div>
+                    <div className="text-gray-500">{formatDate(invoice.createdAt)}</div>
+                  </td>
+                  <td className="px-2 py-2">{invoice.amount.toLocaleString()}</td>
+                  <td className="px-2 py-2">{invoice.status}</td>
+                  <td className="px-2 py-2">
+                    <div>Due: {formatDate(invoice.dueDate)}</div>
+                    <div className="text-gray-500">Paid: {formatDate(invoice.paidAt)}</div>
+                  </td>
+                  <td className="px-2 py-2">
+                    {invoice.linkedPaymentId ? (
+                      <>
+                        <div>{invoice.linkedPaymentAmount?.toLocaleString() || 0}</div>
+                        <div className="text-gray-500">{invoice.linkedPaymentStatus || '-'}</div>
+                      </>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td className="px-2 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {invoice.status === 'draft' && (
+                        <button
+                          onClick={() => transitionInvoiceStatus(invoice, 'issued')}
+                          disabled={invoiceActionLoading === invoice.id}
+                          className="rounded border px-2 py-1 text-[11px] bg-blue-50 text-blue-700"
+                        >
+                          Issue
+                        </button>
+                      )}
+                      {(invoice.status === 'draft' || invoice.status === 'issued') && (
+                        <button
+                          onClick={() => transitionInvoiceStatus(invoice, 'paid')}
+                          disabled={invoiceActionLoading === invoice.id}
+                          className="rounded border px-2 py-1 text-[11px] bg-green-50 text-green-700"
+                        >
+                          Mark Paid
+                        </button>
+                      )}
+                      {invoice.status !== 'void' && (
+                        <button
+                          onClick={() => transitionInvoiceStatus(invoice, 'void')}
+                          disabled={invoiceActionLoading === invoice.id}
+                          className="rounded border px-2 py-1 text-[11px] bg-red-50 text-red-700"
+                        >
+                          Void
+                        </button>
+                      )}
+                      <button
+                        onClick={() => downloadInvoiceBundle(invoice)}
+                        className="rounded border px-2 py-1 text-[11px] bg-gray-50 text-gray-700"
+                      >
+                        Download Bundle
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!invoices.length && (
+                <tr>
+                  <td colSpan={6} className="px-2 py-4 text-center text-gray-500">
+                    No manual invoices yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

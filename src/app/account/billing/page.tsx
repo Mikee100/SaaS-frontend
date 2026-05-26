@@ -19,6 +19,13 @@ interface Subscription {
   scheduledEffectiveDate?: string | null;
 }
 
+const formatKsh = (amount: number) => {
+  return `Ksh ${amount.toLocaleString('en-KE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
 export default function BillingPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -223,7 +230,7 @@ export default function BillingPage() {
             >
               <h3 className="font-medium text-gray-900">{plan.name}</h3>
               <p className="text-2xl font-bold text-gray-900 mt-2">
-                ${plan.price / 100}/month
+                {formatKsh(plan.price / 100)}/month
               </p>
               <ul className="mt-4 space-y-2">
                 {plan.features.slice(0, 3).map((feature, index) => (

@@ -35,7 +35,7 @@ export default function BillingSettingsPage() {
   const [success, setSuccess] = useState('');
   
   const [settings, setSettings] = useState<BillingSettings>({
-    currency: 'USD',
+    currency: 'KES',
     taxEnabled: false,
     taxRate: 0,
     invoicePrefix: 'INV',
@@ -302,7 +302,7 @@ export default function BillingSettingsPage() {
                   onChange={handleInputChange}
                   className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
                 >
-                  <option value="USD">USD - US Dollar</option>
+                  <option value="KES">KES - Kenyan Shilling</option>
                   <option value="EUR">EUR - Euro</option>
                   <option value="GBP">GBP - British Pound</option>
                   <option value="JPY">JPY - Japanese Yen</option>

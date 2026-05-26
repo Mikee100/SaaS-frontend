@@ -37,6 +37,18 @@ interface Subscription {
   cancelAtPeriodEnd: boolean;
 }
 
+interface ReconciliationSummary {
+  unappliedManualPayments: number;
+  failedReceiptUploads: number;
+  invoicePaymentMismatches: number;
+  overdueTenants: number;
+}
+
+interface ReconciliationDashboard {
+  generatedAt: string;
+  summary: ReconciliationSummary;
+}
+
 // Main Component
 export default function SuperAdminBillingPage() {
   const router = useRouter();
@@ -46,10 +58,15 @@ export default function SuperAdminBillingPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [subsLoading, setSubsLoading] = useState(true);
   const [subsError, setSubsError] = useState('');
+  const [reconciliationSummary, setReconciliationSummary] =
+    useState<ReconciliationSummary | null>(null);
+  const [reconLoading, setReconLoading] = useState(false);
+  const [reconError, setReconError] = useState('');
 
   useEffect(() => {
     fetchBillingData();
     fetchSubscriptions();
+    fetchReconciliationSummary();
   }, []);
 
  // ...existing code...
@@ -80,11 +97,35 @@ export default function SuperAdminBillingPage() {
     }
   };
 
+  const fetchReconciliationSummary = async () => {
+    try {
+      setReconLoading(true);
+      setReconError('');
+      const data = await apiGet<ReconciliationDashboard>(
+        '/admin/subscriptions/operations/reconciliation',
+      );
+      setReconciliationSummary(data?.summary || null);
+    } catch (err) {
+      setReconError(
+        err instanceof Error ? err.message : 'Failed to load reconciliation summary',
+      );
+    } finally {
+      setReconLoading(false);
+    }
+  };
+
+  const reconciliationRiskCount =
+    (reconciliationSummary?.unappliedManualPayments || 0) +
+    (reconciliationSummary?.failedReceiptUploads || 0) +
+    (reconciliationSummary?.invoicePaymentMismatches || 0) +
+    (reconciliationSummary?.overdueTenants || 0);
+
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount / 100);
+    const normalized = amount / 100;
+    return `Ksh ${normalized.toLocaleString('en-KE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   if (loading) {
@@ -140,6 +181,76 @@ export default function SuperAdminBillingPage() {
         />
       </div>
 
+      {/* Reconciliation Snapshot */}
+      <div className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Reconciliation Snapshot</h2>
+            <p className="text-xs text-gray-500">
+              Live billing risk counts from operations reconciliation.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                reconciliationRiskCount > 0
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-green-100 text-green-700'
+              }`}
+            >
+              {reconciliationRiskCount > 0
+                ? `${reconciliationRiskCount} open reconciliation issue(s)`
+                : 'No open reconciliation issues'}
+            </span>
+            <button
+              onClick={() => router.push('/superadmin/billing/operations')}
+              className="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Open Billing Operations
+            </button>
+            <button
+              onClick={fetchReconciliationSummary}
+              className="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              {reconLoading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {reconError && (
+          <div className="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+            {reconError}
+          </div>
+        )}
+
+        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4 text-xs">
+          <div className="rounded border p-2">
+            <div className="text-gray-500">Unapplied Payments</div>
+            <div className="font-semibold text-gray-900">
+              {reconciliationSummary?.unappliedManualPayments || 0}
+            </div>
+          </div>
+          <div className="rounded border p-2">
+            <div className="text-gray-500">Receipt Upload Failures</div>
+            <div className="font-semibold text-gray-900">
+              {reconciliationSummary?.failedReceiptUploads || 0}
+            </div>
+          </div>
+          <div className="rounded border p-2">
+            <div className="text-gray-500">Invoice Mismatches</div>
+            <div className="font-semibold text-gray-900">
+              {reconciliationSummary?.invoicePaymentMismatches || 0}
+            </div>
+          </div>
+          <div className="rounded border p-2">
+            <div className="text-gray-500">Overdue Tenants</div>
+            <div className="font-semibold text-gray-900">
+              {reconciliationSummary?.overdueTenants || 0}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Client Subscriptions Table */}
       <div className="bg-white rounded-lg shadow mb-8">
         <div className="px-6 py-5 border-b border-gray-200">
@@ -191,7 +302,9 @@ export default function SuperAdminBillingPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
             <button 
-              onClick={fetchBillingData}
+              onClick={async () => {
+                await Promise.all([fetchBillingData(), fetchReconciliationSummary()]);
+              }}
               className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <FaSync className="-ml-0.5 mr-2 h-4 w-4 text-gray-500" />

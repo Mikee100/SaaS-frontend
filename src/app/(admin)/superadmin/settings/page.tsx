@@ -186,10 +186,9 @@ export default function SuperadminSettingsPage() {
                 onChange={(e) => updateSetting("currency", e.target.value)}
                 style={{ width: "100%", padding: "0.75rem", borderRadius: "4px", border: "1px solid #d1d5db" }}
               >
-                <option value="USD">USD ($)</option>
+                <option value="KES">KES (KSh)</option>
                 <option value="EUR">EUR (€)</option>
                 <option value="GBP">GBP (£)</option>
-                <option value="KES">KES (KSh)</option>
               </select>
             </div>
             <div>

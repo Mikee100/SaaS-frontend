@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiPatch, apiPost } from '@/utils/api';
 import { FaChevronLeft, FaSearch, FaSync } from 'react-icons/fa';
+import API_BASE_URL from '@/config/apiConfig';
 
 interface BillingOpsTenant {
   tenantId: string;
@@ -27,6 +28,50 @@ interface BillingOpsTenant {
   isSuspended: boolean;
   linkedAccountsCount: number;
   accountActionLabel: string;
+}
+
+interface ReconciliationData {
+  generatedAt: string;
+  summary: {
+    unappliedManualPayments: number;
+    failedReceiptUploads: number;
+    invoicePaymentMismatches: number;
+    overdueTenants: number;
+  };
+  unappliedManualPayments: Array<{
+    id: string;
+    tenantId: string;
+    tenantName: string;
+    amount: number;
+    currency: string;
+    status: string;
+    createdAt: string;
+    referenceCode: string | null;
+  }>;
+  failedReceiptUploads: Array<{
+    id: string;
+    tenantId: string;
+    tenantName: string;
+    createdAt: string;
+    receiptUploadError: string | null;
+  }>;
+  invoicePaymentMismatches: Array<{
+    invoiceId: string;
+    invoiceNumber: string;
+    tenantName: string;
+    invoiceStatus: string;
+    invoiceAmount: number;
+    linkedPaymentAmount: number;
+    issue: string;
+    createdAt: string;
+  }>;
+  overdueTenants: Array<{
+    tenantId: string;
+    tenantName: string;
+    billingState: string;
+    daysSinceExpiry: number;
+    isSuspended: boolean;
+  }>;
 }
 
 type OpsModalAction = 'grace' | 'renew' | null;
@@ -54,6 +99,13 @@ export default function BillingOperationsPage() {
   const [graceDays, setGraceDays] = useState<number>(30);
   const [renewMonths, setRenewMonths] = useState<number>(1);
   const [actionReason, setActionReason] = useState('');
+  const [reconciliation, setReconciliation] = useState<ReconciliationData | null>(null);
+  const [reconLoading, setReconLoading] = useState(false);
+  const [reconError, setReconError] = useState('');
+  const [reconSearch, setReconSearch] = useState('');
+  const [reconTenantId, setReconTenantId] = useState('');
+  const [reconOverdueOnly, setReconOverdueOnly] = useState(false);
+  const [reconMismatchOnly, setReconMismatchOnly] = useState(false);
 
   const summary = useMemo(() => {
     const suspended = items.filter((x) => x.isSuspended).length;
@@ -86,8 +138,64 @@ export default function BillingOperationsPage() {
     }
   };
 
+  const fetchReconciliation = async () => {
+    try {
+      setReconLoading(true);
+      setReconError('');
+
+      const q = new URLSearchParams();
+      if (reconSearch.trim()) q.set('search', reconSearch.trim());
+      if (reconTenantId.trim()) q.set('tenantId', reconTenantId.trim());
+      if (reconOverdueOnly) q.set('overdueOnly', 'true');
+      if (reconMismatchOnly) q.set('mismatchOnly', 'true');
+
+      const endpoint = `/admin/subscriptions/operations/reconciliation${q.toString() ? `?${q.toString()}` : ''}`;
+      const data = await apiGet<ReconciliationData>(endpoint);
+      setReconciliation(data);
+    } catch (err) {
+      setReconError(
+        err instanceof Error ? err.message : 'Failed to load reconciliation dashboard',
+      );
+    } finally {
+      setReconLoading(false);
+    }
+  };
+
+  const exportReconciliationCsv = async () => {
+    try {
+      const q = new URLSearchParams();
+      if (reconSearch.trim()) q.set('search', reconSearch.trim());
+      if (reconTenantId.trim()) q.set('tenantId', reconTenantId.trim());
+      if (reconOverdueOnly) q.set('overdueOnly', 'true');
+      if (reconMismatchOnly) q.set('mismatchOnly', 'true');
+
+      const url = `${API_BASE_URL}/admin/subscriptions/operations/reconciliation/export-csv${q.toString() ? `?${q.toString()}` : ''}`;
+      const res = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to export reconciliation CSV');
+      }
+
+      const blob = await res.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `billing-reconciliation-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      setReconError(err instanceof Error ? err.message : 'CSV export failed');
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchReconciliation();
   }, []);
 
   const runTenantAction = async (tenantId: string, action: 'reactivate' | 'suspend') => {
@@ -322,6 +430,155 @@ export default function BillingOperationsPage() {
         >
           Suspend All Over-Grace
         </button>
+      </div>
+
+      <div className="rounded border bg-white p-3 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Reconciliation Dashboard</h2>
+            <p className="text-xs text-gray-500">
+              Tracks unapplied manual payments, failed receipt uploads, invoice-payment mismatches, and overdue tenants.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={fetchReconciliation}
+              className="px-3 py-2 border rounded text-xs bg-white hover:bg-gray-50"
+            >
+              Refresh Reconciliation
+            </button>
+            <button
+              onClick={exportReconciliationCsv}
+              className="px-3 py-2 border rounded text-xs bg-gray-900 text-white hover:bg-black"
+            >
+              Export CSV
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+          <input
+            value={reconSearch}
+            onChange={(e) => setReconSearch(e.target.value)}
+            className="rounded border px-2 py-2"
+            placeholder="Search tenant"
+          />
+          <input
+            value={reconTenantId}
+            onChange={(e) => setReconTenantId(e.target.value)}
+            className="rounded border px-2 py-2"
+            placeholder="Tenant ID (optional)"
+          />
+          <label className="inline-flex items-center gap-2 rounded border px-2 py-2">
+            <input
+              type="checkbox"
+              checked={reconOverdueOnly}
+              onChange={(e) => setReconOverdueOnly(e.target.checked)}
+            />
+            Overdue only
+          </label>
+          <label className="inline-flex items-center gap-2 rounded border px-2 py-2">
+            <input
+              type="checkbox"
+              checked={reconMismatchOnly}
+              onChange={(e) => setReconMismatchOnly(e.target.checked)}
+            />
+            Mismatches only
+          </label>
+        </div>
+
+        <div>
+          <button
+            onClick={fetchReconciliation}
+            className="px-3 py-2 border rounded text-xs bg-blue-50 text-blue-700 hover:bg-blue-100"
+          >
+            Apply Reconciliation Filters
+          </button>
+        </div>
+
+        {reconError && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+            {reconError}
+          </div>
+        )}
+
+        {reconciliation && (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+              <div className="border rounded p-2 bg-white">Unapplied: <span className="font-semibold">{reconciliation.summary.unappliedManualPayments}</span></div>
+              <div className="border rounded p-2 bg-white">Receipt Failures: <span className="font-semibold">{reconciliation.summary.failedReceiptUploads}</span></div>
+              <div className="border rounded p-2 bg-white">Mismatches: <span className="font-semibold">{reconciliation.summary.invoicePaymentMismatches}</span></div>
+              <div className="border rounded p-2 bg-white">Overdue Tenants: <span className="font-semibold">{reconciliation.summary.overdueTenants}</span></div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
+              <div className="border rounded p-2">
+                <div className="font-semibold text-gray-800 mb-2">Unapplied Manual Payments</div>
+                <div className="space-y-1 max-h-44 overflow-y-auto">
+                  {reconciliation.unappliedManualPayments.slice(0, 20).map((row) => (
+                    <div key={row.id} className="flex items-center justify-between border rounded p-2">
+                      <div>
+                        <div className="font-medium">{row.tenantName}</div>
+                        <div className="text-gray-500">{row.referenceCode || row.id}</div>
+                      </div>
+                      <div className="text-right">
+                        <div>{row.amount.toLocaleString()} {row.currency}</div>
+                        <div className="text-gray-500">{new Date(row.createdAt).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {!reconciliation.unappliedManualPayments.length && <div className="text-gray-500">No unapplied payments.</div>}
+                </div>
+              </div>
+
+              <div className="border rounded p-2">
+                <div className="font-semibold text-gray-800 mb-2">Failed Receipt Uploads</div>
+                <div className="space-y-1 max-h-44 overflow-y-auto">
+                  {reconciliation.failedReceiptUploads.slice(0, 20).map((row) => (
+                    <div key={row.id} className="border rounded p-2">
+                      <div className="font-medium">{row.tenantName}</div>
+                      <div className="text-gray-500">{row.receiptUploadError || 'Receipt upload failed'}</div>
+                    </div>
+                  ))}
+                  {!reconciliation.failedReceiptUploads.length && <div className="text-gray-500">No receipt upload failures.</div>}
+                </div>
+              </div>
+
+              <div className="border rounded p-2">
+                <div className="font-semibold text-gray-800 mb-2">Invoice-Payment Mismatches</div>
+                <div className="space-y-1 max-h-44 overflow-y-auto">
+                  {reconciliation.invoicePaymentMismatches.slice(0, 20).map((row) => (
+                    <div key={row.invoiceId} className="border rounded p-2">
+                      <div className="font-medium">{row.tenantName} - {row.invoiceNumber}</div>
+                      <div className="text-gray-500">{row.issue}</div>
+                    </div>
+                  ))}
+                  {!reconciliation.invoicePaymentMismatches.length && <div className="text-gray-500">No mismatches.</div>}
+                </div>
+              </div>
+
+              <div className="border rounded p-2">
+                <div className="font-semibold text-gray-800 mb-2">Overdue Tenants</div>
+                <div className="space-y-1 max-h-44 overflow-y-auto">
+                  {reconciliation.overdueTenants.slice(0, 20).map((row) => (
+                    <div key={row.tenantId} className="flex items-center justify-between border rounded p-2">
+                      <div>
+                        <div className="font-medium">{row.tenantName}</div>
+                        <div className="text-gray-500">Overdue {row.daysSinceExpiry} day(s)</div>
+                      </div>
+                      <div className={`text-[11px] ${row.isSuspended ? 'text-red-700' : 'text-amber-700'}`}>
+                        {row.isSuspended ? 'Suspended' : 'Not suspended'}
+                      </div>
+                    </div>
+                  ))}
+                  {!reconciliation.overdueTenants.length && <div className="text-gray-500">No overdue tenants.</div>}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {reconLoading && <div className="text-xs text-gray-500">Loading reconciliation data...</div>}
       </div>
 
       {success && <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded p-2">{success}</div>}

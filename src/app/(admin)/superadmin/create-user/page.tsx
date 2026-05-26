@@ -645,7 +645,6 @@ const CreateTenantPage = () => {
                       style={inputStyle}
                     >
                       <option value="KES">KES</option>
-                      <option value="USD">USD</option>
                       <option value="GBP">GBP</option>
                       <option value="EUR">EUR</option>
                     </select>

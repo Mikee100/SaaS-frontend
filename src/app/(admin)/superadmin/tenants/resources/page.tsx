@@ -301,7 +301,7 @@ export default function ResourceAllocationPage() {
                   </div>
                   
                   <div style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "1rem" }}>
-                    ${plan.cost}/month
+                    Ksh {plan.cost}/month
                   </div>
                   
                   <div style={{ display: "grid", gap: "0.5rem", fontSize: "14px", marginBottom: "1rem" }}>
@@ -361,7 +361,7 @@ export default function ResourceAllocationPage() {
                         {allocation.tenantName}
                       </h4>
                       <p style={{ margin: "0", fontSize: "14px", color: "#6b7280" }}>
-                        {allocation.plan.name} - ${allocation.plan.cost}/month
+                        {allocation.plan.name} - Ksh {allocation.plan.cost}/month
                       </p>
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -530,7 +530,7 @@ export default function ResourceAllocationPage() {
                 <option value="">Choose a plan...</option>
                 {plans.map((plan) => (
                   <option key={plan.id} value={plan.id}>
-                    {plan.name} - ${plan.cost}/month
+                    {plan.name} - Ksh {plan.cost}/month
                   </option>
                 ))}
               </select>

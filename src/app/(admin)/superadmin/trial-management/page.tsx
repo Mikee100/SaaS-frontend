@@ -355,7 +355,7 @@ export default function TrialManagementPage() {
                         >
                           <span className="text-gray-900">{plan.name}</span>
                           <Badge variant="outline" className="ml-2 text-[10px] bg-gray-100 border-gray-200">
-                            ${plan.price}/mo
+                            Ksh {plan.price}/mo
                           </Badge>
                         </SelectItem>
                       ))}

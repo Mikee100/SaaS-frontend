@@ -39,6 +39,13 @@ interface Invoice {
   url?: string;
 }
 
+const formatKsh = (amount: number) => {
+  return `Ksh ${amount.toLocaleString('en-KE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
 
 
 export default function SubscriptionPage() {
@@ -134,7 +141,7 @@ export default function SubscriptionPage() {
                       <ul className="list-disc ml-4">
                         {sub.invoices?.map((inv: Invoice) => (
                           <li key={inv.id}>
-                            #{inv.number} - ${inv.amount} ({new Date(inv.createdAt).toLocaleDateString()})
+                            #{inv.number} - {formatKsh(inv.amount)} ({new Date(inv.createdAt).toLocaleDateString()})
                           </li>
                         ))}
                       </ul>
@@ -154,7 +161,7 @@ export default function SubscriptionPage() {
       <div className="bg-white rounded-xl shadow p-6 mb-8">
         <h3 className="font-semibold mb-4">Current Plan</h3>
         <div className="mb-2 text-lg font-bold text-blue-700">{subscription?.plan?.name || "None"}</div>
-        <div className="mb-1"><span className="font-semibold">Price:</span> ${subscription?.plan?.price}/{subscription?.plan?.interval}</div>
+        <div className="mb-1"><span className="font-semibold">Price:</span> {formatKsh(subscription?.plan?.price || 0)}/{subscription?.plan?.interval}</div>
         <div className="mb-1"><span className="font-semibold">Status:</span> {subscription?.status || "Unknown"}</div>
         <div className="mb-1"><span className="font-semibold">Renewal:</span> {subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : "-"}</div>
         <div className="mb-1"><span className="font-semibold">Cancel at Period End:</span> {subscription?.cancelAtPeriodEnd ? "Yes" : "No"}</div>
@@ -201,7 +208,7 @@ export default function SubscriptionPage() {
               {plans.map(plan => (
                 <tr key={plan.id} className={plan.id === subscription?.plan?.id ? "bg-blue-50" : ""}>
                   <td className="py-2 px-4 font-bold">{plan.name}</td>
-                  <td className="py-2 px-4">${plan.price}</td>
+                  <td className="py-2 px-4">{formatKsh(plan.price)}</td>
                   <td className="py-2 px-4">{plan.interval}</td>
                   <td className="py-2 px-4">{plan.maxUsers}</td>
                   <td className="py-2 px-4">{plan.maxProducts}</td>

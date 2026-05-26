@@ -385,7 +385,7 @@ export default function SystemAnalyticsPage() {
                   />
                   <YAxis
                     tick={{ fontSize: 10, fill: "#6b7280" }}
-                    tickFormatter={(v) => `$${v}`}
+                    tickFormatter={(v) => `Ksh ${v}`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -394,7 +394,7 @@ export default function SystemAnalyticsPage() {
                       borderRadius: 6,
                     }}
                     formatter={(value: number, name) => [
-                      `$${value.toFixed(2)}`,
+                      `Ksh ${value.toFixed(2)}`,
                       name === "revenue" ? "Revenue" : "MRR",
                     ]}
                   />
@@ -419,7 +419,7 @@ export default function SystemAnalyticsPage() {
                 </AreaChart>
               </ResponsiveContainer>
               <p className="mt-2 text-xs text-gray-500">
-                Total revenue shown: ${totalRevenue.toFixed(2)}
+                Total revenue shown: Ksh {totalRevenue.toFixed(2)}
               </p>
             </div>
 
