@@ -154,6 +154,9 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
               <NavLink href="/superadmin/subscriptions" icon={<FiBarChart2 />} active={isActive("/superadmin/subscriptions")} collapsed={collapsed}>
                 Subscriptions
               </NavLink>
+              <NavLink href="/superadmin/subscriptions/scheduled-changes" icon={<FiBarChart2 />} active={isActive("/superadmin/subscriptions/scheduled-changes")} collapsed={collapsed}>
+                Scheduled Plan Changes
+              </NavLink>
             </div>
 
             <div className="space-y-1">

@@ -23,10 +23,10 @@ export default function UsageWarning({ isNearLimit, limits }: UsageWarningProps)
       <div className="flex items-center gap-3">
         <FaExclamationTriangle className="text-amber-600 w-5 h-5" />
         <div>
-          <h4 className="font-medium text-amber-800">Approaching Product Limit</h4>
+          <h4 className="font-medium text-amber-800">Approaching Physical Item Limit</h4>
           <p className="text-sm text-amber-700">
-            You&apos;ve used {limits?.usage.products.current} of {limits?.usage.products.limit} products.
-            Consider upgrading to add more products.
+            You&apos;ve used {limits?.usage.products.current} of {limits?.usage.products.limit} physical items.
+            Consider upgrading to add more physical items.
           </p>
         </div>
       </div>

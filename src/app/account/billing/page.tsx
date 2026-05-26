@@ -76,13 +76,34 @@ export default function BillingPage() {
 
     try {
       if (subscription) {
-        // Existing subscription - upgrade
-        setMessage('Processing upgrade...');
+        const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
+        const currentPlanPrice = Number(subscription.plan?.price ?? 0);
+        const selectedPlanPrice = Number(selectedPlan?.price ?? 0);
+        const isUpgrade = selectedPlanPrice > currentPlanPrice;
+
+        if (isUpgrade && !schedulingDate) {
+          setMessage('Redirecting to secure checkout...');
+          const origin = window.location.origin;
+          const result = await apiPost<{ url?: string }>('/billing/create-checkout-session', {
+            planId: selectedPlanId,
+            successUrl: `${origin}/settings/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancelUrl: `${origin}/account/billing?checkout=cancelled`,
+          });
+
+          if (result?.url) {
+            window.location.href = result.url;
+            return;
+          }
+
+          throw new Error('Checkout URL was not returned');
+        }
+
+        setMessage('Scheduling plan change...');
         await apiPost('/subscription/upgrade', {
           planId: selectedPlanId,
           effectiveDate: schedulingDate || null,
         });
-        setMessage('Upgrade scheduled successfully!');
+        setMessage('Plan change scheduled successfully!');
       } else {
         // No subscription - create via billing endpoint (paid plans redirect to Stripe checkout)
         setMessage('Creating subscription...');
@@ -101,8 +122,21 @@ export default function BillingPage() {
         setMessage('Subscription created successfully!');
       }
       fetchSubscription();
-    } catch {
-      setMessage(subscription ? 'Failed to upgrade subscription' : 'Failed to create subscription');
+    } catch (err: unknown) {
+      const backendMessage =
+        typeof err === 'object' &&
+        err !== null &&
+        'message' in err &&
+        typeof (err as { message?: string }).message === 'string'
+          ? (err as { message: string }).message
+          : null;
+
+      setMessage(
+        backendMessage ||
+          (subscription
+            ? 'Failed to change subscription plan'
+            : 'Failed to create subscription'),
+      );
     }
   };
 
@@ -135,6 +169,12 @@ export default function BillingPage() {
       </div>
     );
   }
+
+  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
+  const isUpgradeSelection =
+    !!subscription &&
+    !!selectedPlan &&
+    Number(selectedPlan.price ?? 0) > Number(subscription.plan?.price ?? 0);
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -263,7 +303,11 @@ export default function BillingPage() {
             className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {subscription
-              ? (schedulingDate ? 'Schedule Change' : 'Change Plan Now')
+              ? (schedulingDate
+                  ? 'Schedule Change'
+                  : isUpgradeSelection
+                    ? 'Proceed to Payment'
+                    : 'Change Plan Now')
               : 'Subscribe Now'
             }
           </button>

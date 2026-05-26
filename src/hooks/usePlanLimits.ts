@@ -41,7 +41,7 @@ export function usePlanLimits(options?: UsePlanLimitsOptions) {
     (options?.enabled ?? true);
 
   const query = useQuery({
-    queryKey: ['plan-limits', user?.id],
+    queryKey: ['plan-limits', user?.id, 'physical-items-v1'],
     queryFn: () => apiGet<PlanLimitsData>('/user/me/plan-limits'),
     enabled: queryEnabled,
     retry: (failureCount, error) => {

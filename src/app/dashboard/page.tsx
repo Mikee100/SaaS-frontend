@@ -540,7 +540,7 @@ export default function DashboardPage() {
     },
     {
       id: 'usage-products',
-      label: 'Products',
+      label: 'Physical Items',
       current: planLimits?.usage?.products?.current ?? 0,
       limit: planLimits?.usage?.products?.limit ?? 0,
     },

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiGet } from "@/utils/api";
+import { apiGet, apiPost } from "@/utils/api";
 
 interface SubscriptionPlan {
   id: string;
@@ -12,6 +12,11 @@ interface Subscription {
   id: string;
   plan?: SubscriptionPlan;
   // Add other subscription properties as needed
+}
+
+interface CurrentSubscription {
+	id: string;
+	plan?: SubscriptionPlan;
 }
 
 interface Invoice {
@@ -34,13 +39,28 @@ const formatKsh = (amount: number) => {
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+	const [fallbackPlanName, setFallbackPlanName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchInvoices = async () => {
       try {
-        const data = await apiGet<Invoice[]>("/account/invoices");
+				try {
+					await apiPost('/billing/sync-records', {});
+				} catch (syncError) {
+					console.warn('Billing sync before invoices load failed:', syncError);
+				}
+
+				const [data, currentSubscription] = await Promise.all([
+					apiGet<Invoice[]>("/account/invoices"),
+					apiGet<CurrentSubscription>("/subscription/current").catch(() => null),
+				]);
+
+				if (currentSubscription?.plan?.name) {
+					setFallbackPlanName(currentSubscription.plan.name);
+				}
+
         if (Array.isArray(data)) {
           setInvoices(data);
         } else {
@@ -85,7 +105,7 @@ export default function InvoicesPage() {
 								<td className="py-2">{inv.status}</td>
 								<td className="py-2">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "-"}</td>
 								<td className="py-2">{inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : "-"}</td>
-								<td className="py-2">{inv.subscription?.plan?.name || "-"}</td>
+								<td className="py-2">{inv.subscription?.plan?.name || fallbackPlanName || "-"}</td>
 							</tr>
 						))}
 					</tbody>

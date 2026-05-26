@@ -538,7 +538,7 @@ export default function SuperadminTenantsPage() {
                 </p>
                 <div className="mt-1 flex gap-3 text-[11px] text-slate-500 md:text-xs">
                   <span>{tenant.userCount} users</span>
-                  <span>{tenant.productCount} products</span>
+                  <span>{tenant.productCount} physical items</span>
                   <span>{tenant.salesCount} sales</span>
                 </div>
                 {getTenantSpaceUsage(tenant.id) && (

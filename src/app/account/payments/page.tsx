@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { apiGet } from '@/utils/api';
+import { apiGet, apiPost } from '@/utils/api';
 
 type PaymentHistoryItem = {
   id: string;
@@ -41,6 +41,12 @@ export default function PaymentsPage() {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
+        try {
+          await apiPost('/billing/sync-records', {});
+        } catch (syncError) {
+          console.warn('Billing sync before payment history load failed:', syncError);
+        }
+
         const data = await apiGet<PaymentHistoryResponse>('/payments/history');
 
         if (data?.success && Array.isArray(data.history)) {

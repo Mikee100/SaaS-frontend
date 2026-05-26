@@ -45,6 +45,8 @@ interface Product {
   price: number;
   cost: number;
   stock: number;
+  hasVariations?: boolean;
+  variations?: ProductVariation[];
   description?: string;
   category?: string;
   unitAbbreviation?: string;
@@ -53,6 +55,31 @@ interface Product {
     id: string;
     name: string;
   };
+}
+
+interface ProductVariation {
+  id: string;
+  sku: string;
+  price?: number;
+  cost?: number;
+  stock: number;
+  attributes?: Record<string, string>;
+}
+
+interface ProductListRow {
+  id: string;
+  sourceType: 'product' | 'variation';
+  productId: string;
+  variationId?: string;
+  name: string;
+  parentName?: string;
+  sku: string;
+  price: number;
+  cost: number;
+  stock: number;
+  category?: string;
+  description?: string;
+  attributeSummary?: string;
 }
 
 interface InventoryItem {
@@ -364,7 +391,7 @@ export default function UnifiedProductsInventoryPage() {
     queryFn: async () => {
       if (!selectedBranchId) return { products: [], pagination: null };
       const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
-      const data = await apiGet(`/products?page=${currentPage}&limit=${itemsPerPage}&branchId=${selectedBranchId}${searchParam}`, { 'x-branch-id': selectedBranchId }) as { products: Product[]; pagination: { total: number; page: number; limit: number; pageCount: number } };
+      const data = await apiGet(`/products?page=${currentPage}&limit=${itemsPerPage}&branchId=${selectedBranchId}&includeVariations=true${searchParam}`, { 'x-branch-id': selectedBranchId }) as { products: Product[]; pagination: { total: number; page: number; limit: number; pageCount: number } };
       return data;
     },
     enabled: !!selectedBranchId && activeTab === 'products',
@@ -757,11 +784,77 @@ export default function UnifiedProductsInventoryPage() {
     });
   }, [activeTab, advancedInventoryData, advancedProductsData, products, search, locationFilter, stockFilter, variationStockMap]);
 
+  const formatVariationAttributes = useCallback((attributes?: Record<string, string>) => {
+    if (!attributes) return '';
+    const entries = Object.entries(attributes).filter(([, value]) => value != null && String(value).trim() !== '');
+    if (entries.length === 0) return '';
+    return entries.map(([key, value]) => `${key}: ${value}`).join(' • ');
+  }, []);
+
+  // Variation-first list: physical variations are listed directly, non-variation products remain as single rows.
+  const displayProducts = useMemo<ProductListRow[]>(() => {
+    const rows: ProductListRow[] = [];
+
+    products.forEach((product) => {
+      const productVariations = Array.isArray(product.variations) ? product.variations : [];
+      if (productVariations.length === 0) {
+        rows.push({
+          id: product.id,
+          sourceType: 'product',
+          productId: product.id,
+          name: product.name,
+          sku: product.sku,
+          price: Number(product.price) || 0,
+          cost: Number(product.cost) || 0,
+          stock: Number(product.stock) || 0,
+          category: product.category,
+          description: product.description,
+        });
+        return;
+      }
+
+      productVariations.forEach((variation) => {
+        rows.push({
+          id: `variation-${variation.id}`,
+          sourceType: 'variation',
+          productId: product.id,
+          variationId: variation.id,
+          name: product.name,
+          parentName: product.name,
+          sku: variation.sku || product.sku,
+          price: Number(variation.price ?? product.price) || 0,
+          cost: Number(variation.cost ?? product.cost) || 0,
+          stock: Number(variation.stock) || 0,
+          category: product.category,
+          description: product.description,
+          attributeSummary: formatVariationAttributes(variation.attributes),
+        });
+      });
+    });
+
+    const normalizedSearch = search.trim().toLowerCase();
+    if (!normalizedSearch) return rows;
+
+    return rows.filter((row) => {
+      return (
+        row.name.toLowerCase().includes(normalizedSearch) ||
+        row.sku.toLowerCase().includes(normalizedSearch) ||
+        (row.attributeSummary || '').toLowerCase().includes(normalizedSearch)
+      );
+    });
+  }, [products, formatVariationAttributes, search]);
+
   // Sort products
   const sortedProducts = useMemo(() => {
-    return [...products].sort((a, b) => {
-      const aValue = a[sortField as keyof Product] || '';
-      const bValue = b[sortField as keyof Product] || '';
+    return [...displayProducts].sort((a, b) => {
+      if (sortField === 'margin') {
+        const aMargin = a.price > 0 ? ((a.price - a.cost) / a.price) * 100 : -1;
+        const bMargin = b.price > 0 ? ((b.price - b.cost) / b.price) * 100 : -1;
+        return sortDirection === 'asc' ? aMargin - bMargin : bMargin - aMargin;
+      }
+
+      const aValue = a[sortField as keyof ProductListRow] || '';
+      const bValue = b[sortField as keyof ProductListRow] || '';
 
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         return sortDirection === 'asc'
@@ -773,7 +866,11 @@ export default function UnifiedProductsInventoryPage() {
         ? (aValue as number) - (bValue as number)
         : (bValue as number) - (aValue as number);
     });
-  }, [products, sortField, sortDirection]);
+  }, [displayProducts, sortField, sortDirection]);
+
+  const productsById = useMemo(() => {
+    return new Map(products.map((product) => [product.id, product]));
+  }, [products]);
 
   // Virtualization for table view of products
   const tableParentRef = useRef<HTMLDivElement | null>(null);
@@ -900,7 +997,7 @@ export default function UnifiedProductsInventoryPage() {
     try {
       const nextPage = Math.floor(products.length / itemsPerPage) + 1;
       const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
-      const data = await apiGet(`/products?page=${nextPage}&limit=${itemsPerPage}&branchId=${selectedBranchId}${searchParam}`) as { products: Product[]; pagination: unknown };
+      const data = await apiGet(`/products?page=${nextPage}&limit=${itemsPerPage}&branchId=${selectedBranchId}&includeVariations=true${searchParam}`) as { products: Product[]; pagination: unknown };
 
       if (data.products && data.products.length > 0) {
         setProducts(prev => [...prev, ...data.products]);
@@ -1118,29 +1215,6 @@ export default function UnifiedProductsInventoryPage() {
     }
   };
 
-  // Helper to flatten product fields for table display
-  function flattenProduct(product: Product): { [key: string]: string | number | boolean | undefined; margin: string } {
-    const { customFields, supplier, ...rest } = product;
-    const flat: { [key: string]: string | number | boolean | undefined; margin: string } = { ...rest, ...(customFields || {}), margin: '' };
-
-    if (supplier) {
-      flat.supplier = supplier.name;
-    }
-
-    // Calculate margin - handle NaN cases
-    if (product.price > 0 && product.cost != null && !isNaN(product.cost)) {
-      const margin = ((product.price - product.cost) / product.price * 100);
-      flat.margin = isNaN(margin) ? 'N/A' : margin.toFixed(1);
-    } else {
-      flat.margin = 'N/A';
-    }
-
-    return flat;
-  }
-
-  // Fixed column order - only show essential columns
-  const tableColumns = ['name', 'sku', 'price', 'cost', 'stock', 'margin'] as const;
-
   // Check permissions
   if (!canViewProducts && activeTab === 'products') {
     return (
@@ -1199,9 +1273,9 @@ export default function UnifiedProductsInventoryPage() {
                   <FaExclamationTriangle className="h-4 w-4 text-amber-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-amber-900">Approaching Product Limit</p>
+                  <p className="text-xs font-semibold text-amber-900">Approaching Physical Item Limit</p>
                   <p className="mt-0.5 text-xs text-amber-700">
-                    {limits?.usage.products.current} of {limits?.usage.products.limit} products used
+                    {limits?.usage.products.current} of {limits?.usage.products.limit} physical items used
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -1269,7 +1343,7 @@ export default function UnifiedProductsInventoryPage() {
             <div className="border-b border-gray-200 bg-gray-50/50">
               <nav className="flex overflow-x-auto scrollbar-hide -mb-px" role="tablist">
                 {[
-                  { id: 'products', label: 'Products', icon: FaBox, count: products.length },
+                  { id: 'products', label: 'Products', icon: FaBox, count: sortedProducts.length },
                   { id: 'inventory', label: 'Inventory', icon: FaWarehouse, count: filteredInventoryProducts.length },
                   { id: 'advanced', label: 'Advanced', icon: FaChartLine },
                   { id: 'attributes', label: 'Attributes', icon: FaPalette },
@@ -1322,7 +1396,7 @@ export default function UnifiedProductsInventoryPage() {
                                 Loading...
                               </span>
                             ) : (
-                              `${products.length} Product${products.length !== 1 ? 's' : ''}`
+                              `${sortedProducts.length} Physical Item${sortedProducts.length !== 1 ? 's' : ''}`
                             )}
                           </span>
                         </div>
@@ -1350,7 +1424,7 @@ export default function UnifiedProductsInventoryPage() {
                           type="text"
                           value={search}
                           onChange={e => setSearch(e.target.value)}
-                          placeholder="Search products by name, SKU, or description..."
+                          placeholder="Search by product, variation SKU, or attributes..."
                           className="w-full rounded border border-gray-300 bg-white py-2 pl-9 pr-3 text-xs text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                           aria-label="Search products"
                         />
@@ -1727,12 +1801,13 @@ export default function UnifiedProductsInventoryPage() {
                   <>
                     {viewMode === 'grid' ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {sortedProducts.map((product) => {
-                          const margin = product.price > 0 ? ((product.price - (product.cost || 0)) / product.price * 100) : 0;
-                          const stockStatus = product.stock > 10 ? 'good' : product.stock > 0 ? 'low' : 'out';
+                        {sortedProducts.map((productRow) => {
+                          const parentProduct = productsById.get(productRow.productId);
+                          const margin = productRow.price > 0 ? ((productRow.price - (productRow.cost || 0)) / productRow.price * 100) : 0;
+                          const stockStatus = productRow.stock > 10 ? 'good' : productRow.stock > 0 ? 'low' : 'out';
                           return (
                             <div 
-                              key={product.id} 
+                              key={productRow.id} 
                               className="group rounded-md border border-gray-200 bg-white p-3 transition-colors hover:border-blue-300"
                             >
                               {/* Header */}
@@ -1743,14 +1818,22 @@ export default function UnifiedProductsInventoryPage() {
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <h3 className="mb-0.5 line-clamp-2 text-sm font-semibold text-gray-900 group-hover:text-blue-600">
-                                      {product.name}
+                                      {productRow.name}
                                     </h3>
+                                    {productRow.attributeSummary && (
+                                      <p className="mb-1 line-clamp-1 text-[11px] text-blue-700">
+                                        {productRow.attributeSummary}
+                                      </p>
+                                    )}
                                     <div className="flex items-center gap-2">
                                       <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-                                        {product.sku}
+                                        {productRow.sku}
                                       </span>
-                                      {product.category && (
-                                        <span className="text-xs text-gray-400 truncate">{product.category}</span>
+                                      {productRow.sourceType === 'variation' && (
+                                        <span className="text-[10px] font-semibold text-blue-600">VARIATION</span>
+                                      )}
+                                      {productRow.category && (
+                                        <span className="text-xs text-gray-400 truncate">{productRow.category}</span>
                                       )}
                                     </div>
                                   </div>
@@ -1760,7 +1843,7 @@ export default function UnifiedProductsInventoryPage() {
                                   stockStatus === 'low' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
                                   'bg-red-100 text-red-700 border border-red-200'
                                 }`}>
-                                  {product.stock} units
+                                  {productRow.stock} units
                                 </div>
                               </div>
 
@@ -1768,11 +1851,11 @@ export default function UnifiedProductsInventoryPage() {
                               <div className="mb-2.5 grid grid-cols-2 gap-2 rounded border border-gray-200 bg-gray-50 p-2">
                                 <div>
                                   <p className="text-xs font-medium text-gray-500 mb-1">Selling Price</p>
-                                  <p className="text-sm font-semibold text-gray-900">Ksh {product.price.toFixed(2)}</p>
+                                  <p className="text-sm font-semibold text-gray-900">Ksh {productRow.price.toFixed(2)}</p>
                                 </div>
                                 <div>
                                   <p className="text-xs font-medium text-gray-500 mb-1">Buying Price</p>
-                                  <p className="text-sm font-semibold text-gray-700">Ksh {(product.cost || 0).toFixed(2)}</p>
+                                  <p className="text-sm font-semibold text-gray-700">Ksh {(productRow.cost || 0).toFixed(2)}</p>
                                 </div>
                                 <div className="col-span-2 pt-2 border-t border-gray-200">
                                   <div className="flex items-center justify-between">
@@ -1800,14 +1883,14 @@ export default function UnifiedProductsInventoryPage() {
 
                               {/* Actions */}
                               <div className="flex gap-1.5 border-t border-gray-200 pt-2">
-                                {canEditProducts && (
+                                {canEditProducts && parentProduct && (
                                   <button
-                                    onClick={() => openEditModal(product)}
+                                    onClick={() => openEditModal(parentProduct)}
                                     className="flex flex-1 items-center justify-center gap-1 px-2.5 py-1.5 rounded border border-gray-200 bg-gray-100 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-200"
-                                    aria-label={`Edit ${product.name}`}
+                                    aria-label={`Edit ${productRow.name}`}
                                   >
                                     <FaEdit className="w-3.5 h-3.5" />
-                                    <span className="hidden sm:inline">Edit</span>
+                                    <span className="hidden sm:inline">{productRow.sourceType === 'variation' ? 'Parent' : 'Edit'}</span>
                                   </button>
                                 )}
                                 <FeatureGuard requiredFeature="api_access" showUpgradePrompt={false} fallback={
@@ -1820,30 +1903,32 @@ export default function UnifiedProductsInventoryPage() {
                                   </button>
                                 }>
                                   <button
-                                    onClick={() => setQrCodeProductId(product.id)}
+                                    onClick={() => setQrCodeProductId(productRow.productId)}
                                     className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-green-200 bg-green-50 text-xs font-medium text-green-700 transition-colors hover:bg-green-100"
-                                    aria-label={`Generate QR code for ${product.name}`}
+                                    aria-label={`Generate QR code for ${productRow.name}`}
                                   >
                                     <FaQrcode className="w-3.5 h-3.5" />
                                   </button>
                                 </FeatureGuard>
                                 <button
                                   onClick={() => {
-                                    setSelectedProduct(product);
-                                    setSelectedProductId(product.id);
+                                    if (parentProduct) {
+                                      setSelectedProduct(parentProduct);
+                                      setSelectedProductId(parentProduct.id);
+                                    }
                                     setActiveTab('variations');
                                   }}
                                   className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-blue-200 bg-blue-50 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
                                   title="Manage Variations"
-                                  aria-label={`Manage variations for ${product.name}`}
+                                  aria-label={`Manage variations for ${productRow.name}`}
                                 >
                                   <FaLayerGroup className="w-3.5 h-3.5" />
                                 </button>
-                                {canDeleteProducts && (
+                                {canDeleteProducts && productRow.sourceType === 'product' && (
                                   <button
-                                    onClick={() => handleDelete(product.id)}
+                                    onClick={() => handleDelete(productRow.productId)}
                                     className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-red-200 bg-red-50 text-xs font-medium text-red-700 transition-colors hover:bg-red-100"
-                                    aria-label={`Delete ${product.name}`}
+                                    aria-label={`Delete ${productRow.name}`}
                                   >
                                     <FaTrash className="w-3.5 h-3.5" />
                                   </button>
@@ -1939,7 +2024,7 @@ export default function UnifiedProductsInventoryPage() {
                                   <td colSpan={7} className="px-3 py-7 text-center">
                                     <div className="flex flex-col items-center">
                                       <FaBox className="w-12 h-12 text-gray-300 mb-3" />
-                                      <p className="text-sm font-medium text-gray-900 mb-1">No products found</p>
+                                      <p className="text-sm font-medium text-gray-900 mb-1">No physical items found</p>
                                       <p className="text-xs text-gray-500">
                                         {search ? 'Try adjusting your search' : 'Add your first product to get started'}
                                       </p>
@@ -1947,27 +2032,29 @@ export default function UnifiedProductsInventoryPage() {
                                   </td>
                                 </tr>
                               ) : (
-                                sortedProducts.map((product) => {
-                                  const flat = flattenProduct(product);
-                                  const price = typeof product.price === 'number' ? product.price : 0;
-                                  const cost = typeof product.cost === 'number' ? product.cost : 0;
-                                  const stock = typeof product.stock === 'number' ? product.stock : 0;
-                                  const marginStr = flat.margin as string;
-                                  const margin = marginStr !== 'N/A' && marginStr !== 'NaN' ? parseFloat(marginStr) : null;
+                                sortedProducts.map((productRow) => {
+                                  const parentProduct = productsById.get(productRow.productId);
+                                  const price = typeof productRow.price === 'number' ? productRow.price : 0;
+                                  const cost = typeof productRow.cost === 'number' ? productRow.cost : 0;
+                                  const stock = typeof productRow.stock === 'number' ? productRow.stock : 0;
+                                  const margin = price > 0 ? ((price - cost) / price) * 100 : null;
 
                                   return (
                                     <tr
-                                      key={product.id}
+                                      key={productRow.id}
                                       className="hover:bg-gray-50 transition-colors"
                                     >
                                       {/* Product Name */}
                                       <td className="whitespace-nowrap px-3 py-2.5">
-                                        <div className="font-medium text-gray-900">{product.name || '-'}</div>
+                                        <div className="font-medium text-gray-900">{productRow.name || '-'}</div>
+                                        {productRow.attributeSummary && (
+                                          <div className="text-[11px] text-blue-700">{productRow.attributeSummary}</div>
+                                        )}
                                       </td>
 
                                       {/* SKU */}
                                       <td className="whitespace-nowrap px-3 py-2.5">
-                                        <div className="text-sm font-mono text-gray-600">{product.sku || '-'}</div>
+                                        <div className="text-sm font-mono text-gray-600">{productRow.sku || '-'}</div>
                                       </td>
 
                                       {/* Selling Price */}
@@ -1993,7 +2080,7 @@ export default function UnifiedProductsInventoryPage() {
 
                                       {/* Margin */}
                                       <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                                        {margin !== null && !isNaN(margin) ? (
+                                        {margin !== null ? (
                                           <div className={`text-sm font-semibold ${
                                             margin >= 30 ? 'text-green-600' 
                                               : margin >= 20 ? 'text-amber-600' 
@@ -2010,19 +2097,21 @@ export default function UnifiedProductsInventoryPage() {
                                       {/* Actions */}
                                       <td className="whitespace-nowrap px-3 py-2.5 text-right">
                                         <div className="flex items-center justify-end gap-2">
-                                          {canEditProducts && (
+                                          {canEditProducts && parentProduct && (
                                             <button
-                                              onClick={() => openEditModal(product)}
+                                              onClick={() => openEditModal(parentProduct)}
                                               className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                              title="Edit"
+                                              title={productRow.sourceType === 'variation' ? 'Edit Parent Product' : 'Edit'}
                                             >
                                               <FaEdit className="w-4 h-4" />
                                             </button>
                                           )}
                                           <button
                                             onClick={() => {
-                                              setSelectedProduct(product);
-                                              setSelectedProductId(product.id);
+                                              if (parentProduct) {
+                                                setSelectedProduct(parentProduct);
+                                                setSelectedProductId(parentProduct.id);
+                                              }
                                               setActiveTab('variations');
                                             }}
                                             className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
@@ -2036,16 +2125,16 @@ export default function UnifiedProductsInventoryPage() {
                                             </button>
                                           }>
                                             <button
-                                              onClick={() => setQrCodeProductId(product.id)}
+                                              onClick={() => setQrCodeProductId(productRow.productId)}
                                               className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                                               title="QR Code"
                                             >
                                               <FaQrcode className="w-4 h-4" />
                                             </button>
                                           </FeatureGuard>
-                                          {canDeleteProducts && (
+                                          {canDeleteProducts && productRow.sourceType === 'product' && (
                                             <button
-                                              onClick={() => handleDelete(product.id)}
+                                              onClick={() => handleDelete(productRow.productId)}
                                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                               title="Delete"
                                             >

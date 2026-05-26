@@ -438,7 +438,7 @@ export default function TenantAnalyticsPage() {
                         </div>
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                            <span>Products</span>
+                            <span>Physical Items</span>
                             <span>{tenant.productCount ?? 0}</span>
                           </div>
                         </div>

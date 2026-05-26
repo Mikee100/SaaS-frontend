@@ -811,7 +811,7 @@ export default function DashboardPage() {
                 <div className="space-y-1.5">
                   {[
                     { id: 'usage-users', label: 'Users', current: planLimits?.usage?.users?.current ?? 0, limit: planLimits?.usage?.users?.limit ?? 0 },
-                    { id: 'usage-products', label: 'Products', current: planLimits?.usage?.products?.current ?? 0, limit: planLimits?.usage?.products?.limit ?? 0 },
+                    { id: 'usage-products', label: 'Physical Items', current: planLimits?.usage?.products?.current ?? 0, limit: planLimits?.usage?.products?.limit ?? 0 },
                     { id: 'usage-sales', label: 'Sales', current: planLimits?.usage?.sales?.current ?? 0, limit: planLimits?.usage?.sales?.limit ?? 0 },
                   ].map((row) => {
                     const percentage = row.limit > 0 ? Math.min(100, (row.current / row.limit) * 100) : 0;

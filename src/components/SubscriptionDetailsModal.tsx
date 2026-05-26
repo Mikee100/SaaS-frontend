@@ -193,7 +193,7 @@ export default function SubscriptionDetailsModal({
                   </div>
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <div className="text-xl font-semibold">{usage?.productCount ?? 0}</div>
-                    <div className="text-sm text-gray-500">Products{subscription.Plan.maxProducts != null ? ` / ${subscription.Plan.maxProducts}` : ''}</div>
+                    <div className="text-sm text-gray-500">Physical Items{subscription.Plan.maxProducts != null ? ` / ${subscription.Plan.maxProducts}` : ''}</div>
                   </div>
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <div className="text-xl font-semibold">{usage?.salesCount ?? 0}</div>

@@ -383,7 +383,7 @@ const fetchMpesaConfig = useCallback(async () => {
         <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
             <FaStore style={{ color: "#059669", fontSize: "13px" }} />
-            <span style={{ fontSize: "11px", color: "#64748b" }}>Products</span>
+            <span style={{ fontSize: "11px", color: "#64748b" }}>Physical Items</span>
           </div>
           <div style={{ fontSize: 15, fontWeight: "bold", color: "#1e293b" }}>{tenant.productCount}</div>
         </div>
