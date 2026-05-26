@@ -120,15 +120,7 @@ export default function PlanBasedNav() {
           subItems: [
             { name: 'Product Sales', href: '/products/reports/product-sales', requiredPermission: 'view_sales', icon: FaFileInvoiceDollar },
             { name: 'Inventory Levels', href: '/products/reports/inventory-levels', requiredPermission: 'view_inventory', icon: MdOutlineInventory2 },
-            { name: 'Low Stock Alerts', href: '/products/reports/low-stock-alerts', requiredPermission: 'view_inventory', icon: FaBullseye },
-            { name: 'Product Performance', href: '/products/reports/product-performance', requiredPermission: 'view_analytics', icon: FaChartBar },
-            { name: 'Inventory Turnover', href: '/products/reports/inventory-turnover', requiredPermission: 'view_inventory', icon: FaHistory },
-            { name: 'Supplier Performance', href: '/products/reports/supplier-performance', requiredPermission: 'view_inventory', icon: FaUsers },
-            { name: 'Product Category Analysis', href: '/products/reports/product-category-analysis', requiredPermission: 'view_analytics', icon: FaLayerGroup },
-            { name: 'Inventory Movement', href: '/products/reports/inventory-movement', requiredPermission: 'view_inventory', icon: FaBoxOpen },
-            { name: 'Inventory Aging', href: '/products/reports/inventory-aging', requiredPermission: 'view_inventory', icon: FaHistory },
-            { name: 'Stockout & Lost Sales', href: '/products/reports/stockout-lost-sales', requiredPermission: 'view_inventory', icon: FaMoneyBillWave },
-            { name: 'Inventory Valuation', href: '/products/reports/inventory-valuation', requiredPermission: 'view_inventory', icon: FaCreditCard }
+            { name: 'Low Stock Alerts', href: '/products/reports/low-stock-alerts', requiredPermission: 'view_inventory', icon: FaBullseye }
           ]
         }
       ]

@@ -176,7 +176,7 @@ export default function StockoutLostSalesReportPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[300px]">
+      <div className="flex justify-center items-center min-h-75">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
@@ -194,41 +194,78 @@ export default function StockoutLostSalesReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-10">
-          <div>
-            <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Stockout & Lost Sales Report</h1>
-            <p className="mt-2 text-lg text-gray-500">Shows products that went out of stock and estimates potential lost sales.</p>
-          </div>
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-4">
+      <div className="mx-auto max-w-7xl space-y-4">
+        <header className="rounded-md border border-gray-200 bg-white p-3">
+          <h1 className="text-lg font-semibold text-gray-900">Stockout & Lost Sales Report</h1>
+          <p className="mt-1 text-xs text-gray-600">Products that are out of stock and estimated lost sales impact.</p>
         </header>
 
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Key Metrics</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow p-6 flex flex-col items-center border border-red-200">
-              <span className="text-red-600 text-sm mb-1 font-medium">Total Stockouts</span>
-              <span className="text-3xl font-bold text-red-700">{filteredItems.length}</span>
+        <section className="rounded-md border border-gray-200 bg-white p-3">
+          <h2 className="mb-2 text-sm font-semibold text-gray-800">Summary</h2>
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+            <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+              <p className="text-[11px] text-gray-500">Total Stockouts</p>
+              <p className="font-semibold text-gray-900">{filteredItems.length}</p>
             </div>
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl shadow p-6 flex flex-col items-center border border-orange-200">
-              <span className="text-orange-600 text-sm mb-1 font-medium">Total Lost Sales</span>
-              <span className="text-3xl font-bold text-orange-700">Ksh {totalLostSales.toLocaleString()}</span>
+            <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+              <p className="text-[11px] text-gray-500">Lost Sales</p>
+              <p className="font-semibold text-gray-900">Ksh {totalLostSales.toLocaleString()}</p>
             </div>
-            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl shadow p-6 flex flex-col items-center border border-yellow-200">
-              <span className="text-yellow-600 text-sm mb-1 font-medium">Avg Days Out</span>
-              <span className="text-3xl font-bold text-yellow-700">{averageDaysOutOfStock.toFixed(1)}</span>
+            <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+              <p className="text-[11px] text-gray-500">Avg Days Out</p>
+              <p className="font-semibold text-gray-900">{averageDaysOutOfStock.toFixed(1)}</p>
             </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow p-6 flex flex-col items-center border border-purple-200">
-              <span className="text-purple-600 text-sm mb-1 font-medium">Critical Stockouts</span>
-              <span className="text-3xl font-bold text-purple-700">{criticalStockouts.length}</span>
+            <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
+              <p className="text-[11px] text-gray-500">Critical</p>
+              <p className="font-semibold text-gray-900">{criticalStockouts.length}</p>
             </div>
           </div>
         </section>
 
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Lost Sales by Product (Top 10)</h2>
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="h-64">
+        <section className="rounded-md border border-gray-200 bg-white p-3">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold text-gray-800">Filters</h2>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setFilterType('all')}
+                className={`rounded border px-2 py-1 text-xs transition-colors ${filterType === 'all' ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilterType('recent')}
+                className={`rounded border px-2 py-1 text-xs transition-colors ${filterType === 'recent' ? 'border-green-600 bg-green-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                Recent ({'<='}7d)
+              </button>
+              <button
+                onClick={() => setFilterType('critical')}
+                className={`rounded border px-2 py-1 text-xs transition-colors ${filterType === 'critical' ? 'border-red-600 bg-red-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                Critical ({'>'}14d)
+              </button>
+            </div>
+            <div className="ml-auto flex gap-1.5">
+              <button
+                onClick={exportToPDF}
+                className="inline-flex items-center gap-1 rounded border border-red-600 bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
+              >
+                <FaFilePdf /> PDF
+              </button>
+              <button
+                onClick={exportToExcel}
+                className="inline-flex items-center gap-1 rounded border border-green-600 bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
+              >
+                <FaFileExcel /> Excel
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-md border border-gray-200 bg-white p-3">
+          <h2 className="mb-2 text-sm font-semibold text-gray-800">Lost Sales by Product (Top 10)</h2>
+          <div className="h-56">
               <Bar
                 data={stockoutData}
                 options={{
@@ -260,83 +297,38 @@ export default function StockoutLostSalesReportPage() {
                   }
                 }}
               />
-            </div>
           </div>
         </section>
 
-        <section className="mb-10">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Filters</h2>
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex flex-wrap gap-4">
-                <button
-                  onClick={() => setFilterType('all')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${filterType === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                >
-                  All Stockouts
-                </button>
-                <button
-                  onClick={() => setFilterType('recent')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${filterType === 'recent' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                >
-                  Recent (≤7 days)
-                </button>
-                <button
-                  onClick={() => setFilterType('critical')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${filterType === 'critical' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                >
-                  Critical ({'>'}14 days)
-                </button>
-              </div>
-              <div className="flex gap-2 ml-auto">
-                <button
-                  onClick={exportToPDF}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
-                >
-                  <FaFilePdf />
-                  Export PDF
-                </button>
-                <button
-                  onClick={exportToExcel}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-                >
-                  <FaFileExcel />
-                  Export Excel
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Detailed Stockout Analysis ({filteredItems.length} items)</h2>
-          <div className="bg-white rounded-xl shadow p-6">
+        <section className="rounded-md border border-gray-200 bg-white p-3">
+          <h2 className="mb-2 text-sm font-semibold text-gray-800">Detailed Stockout Analysis ({filteredItems.length})</h2>
+          <div>
             <div className="overflow-x-auto">
-              <table className="min-w-full">
+              <table className="min-w-full text-xs">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="py-2 px-4 text-left font-semibold text-gray-600">Product</th>
-                    <th className="py-2 px-4 text-left font-semibold text-gray-600">Stockout Date</th>
-                    <th className="py-2 px-4 text-left font-semibold text-gray-600">Days Out of Stock</th>
-                    <th className="py-2 px-4 text-left font-semibold text-gray-600">Estimated Lost Sales</th>
-                    <th className="py-2 px-4 text-left font-semibold text-gray-600">Last Sale Price</th>
-                    <th className="py-2 px-4 text-left font-semibold text-gray-600">Reorder Point</th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-gray-600">Product</th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-gray-600">Stockout Date</th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-gray-600">Days Out</th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-gray-600">Lost Sales</th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-gray-600">Last Price</th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-gray-600">Reorder</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredItems.map((item) => (
                     <tr key={item.id} className="border-b">
-                      <td className="py-2 px-4">{item.productName}</td>
-                      <td className="py-2 px-4">{new Date(item.stockoutDate).toLocaleDateString()}</td>
-                      <td className={`py-2 px-4 font-medium ${
+                      <td className="px-2 py-1.5">{item.productName}</td>
+                      <td className="px-2 py-1.5">{new Date(item.stockoutDate).toLocaleDateString()}</td>
+                      <td className={`px-2 py-1.5 font-medium ${
                         item.daysOutOfStock <= 7 ? 'text-green-600' :
                         item.daysOutOfStock <= 14 ? 'text-yellow-600' : 'text-red-600'
                       }`}>
                         {item.daysOutOfStock}
                       </td>
-                      <td className="py-2 px-4">Ksh {item.estimatedLostSales.toLocaleString()}</td>
-                      <td className="py-2 px-4">Ksh {item.lastSalePrice.toLocaleString()}</td>
-                      <td className="py-2 px-4">{item.reorderPoint}</td>
+                      <td className="px-2 py-1.5">Ksh {item.estimatedLostSales.toLocaleString()}</td>
+                      <td className="px-2 py-1.5">Ksh {item.lastSalePrice.toLocaleString()}</td>
+                      <td className="px-2 py-1.5">{item.reorderPoint}</td>
                     </tr>
                   ))}
                 </tbody>

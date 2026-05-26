@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaFileAlt, FaChartBar, FaExclamationTriangle, FaBox, FaShoppingCart, FaUsers, FaFilePdf, FaFileExcel, FaTh, FaList } from "react-icons/fa";
+import { FaExclamationTriangle, FaBox, FaShoppingCart, FaFilePdf, FaFileExcel, FaTh, FaList } from "react-icons/fa";
 import { hasPermission } from "@/utils/permissions";
 import { useUser } from "@/components/UserContext";
 
@@ -12,6 +12,13 @@ interface Report {
   icon: React.ComponentType<{ className?: string }>;
   category: 'products' | 'inventory';
   requiredPermission: string;
+}
+
+interface HiddenReportStatus {
+  id: string;
+  title: string;
+  reason: string;
+  endpoint: string;
 }
 
 const reports: Report[] = [
@@ -38,71 +45,52 @@ const reports: Report[] = [
     icon: FaExclamationTriangle,
     category: 'inventory',
     requiredPermission: 'view_inventory'
-  },
-  {
-    id: 'product-performance',
-    title: 'Product Performance Analysis',
-    description: 'Comprehensive analysis of product profitability, margins, and performance metrics.',
-    icon: FaChartBar,
-    category: 'products',
-    requiredPermission: 'view_analytics'
-  },
+  }
+];
+
+const hiddenReports: HiddenReportStatus[] = [
   {
     id: 'inventory-turnover',
-    title: 'Inventory Turnover Report',
-    description: 'Analysis of how quickly inventory is sold and replaced over a period.',
-    icon: FaBox,
-    category: 'inventory',
-    requiredPermission: 'view_inventory'
+    title: 'Inventory Turnover',
+    reason: 'Uses simulated/random values in frontend.',
+    endpoint: 'GET /analytics/inventory-turnover',
   },
   {
     id: 'supplier-performance',
-    title: 'Supplier Performance Report',
-    description: 'Performance metrics for suppliers including delivery times and quality.',
-    icon: FaUsers,
-    category: 'inventory',
-    requiredPermission: 'view_inventory'
+    title: 'Supplier Performance',
+    reason: 'Uses hardcoded mock supplier records.',
+    endpoint: 'GET /analytics/supplier-performance',
   },
   {
     id: 'product-category-analysis',
     title: 'Product Category Analysis',
-    description: 'Sales and performance breakdown by product categories and subcategories.',
-    icon: FaFileAlt,
-    category: 'products',
-    requiredPermission: 'view_analytics'
+    reason: 'No valid report page is currently implemented.',
+    endpoint: 'GET /analytics/product-category-analysis',
   },
   {
     id: 'inventory-movement',
-    title: 'Inventory Movement Report',
-    description: 'Track inventory movements including receipts, issues, and adjustments.',
-    icon: FaBox,
-    category: 'inventory',
-    requiredPermission: 'view_inventory'
+    title: 'Inventory Movement',
+    reason: 'Uses static fake movement data.',
+    endpoint: 'GET /analytics/inventory-movement',
   },
   {
     id: 'inventory-aging',
-    title: 'Inventory Aging Report',
-    description: 'Shows how long products have been in stock (age buckets: 0-30, 31-60, 61-90, 90+ days).',
-    icon: FaBox,
-    category: 'inventory',
-    requiredPermission: 'view_inventory'
+    title: 'Inventory Aging',
+    reason: 'Backend endpoint missing and value assumptions in frontend.',
+    endpoint: 'GET /analytics/inventory-aging',
   },
   {
     id: 'stockout-lost-sales',
     title: 'Stockout & Lost Sales',
-    description: 'Shows products that went out of stock and estimates potential lost sales.',
-    icon: FaBox,
-    category: 'inventory',
-    requiredPermission: 'view_inventory'
+    reason: 'Frontend expects endpoint that is not implemented.',
+    endpoint: 'GET /analytics/stockout-lost-sales',
   },
   {
     id: 'inventory-valuation',
     title: 'Inventory Valuation',
-    description: 'Calculates total inventory value by cost and by retail price.',
-    icon: FaChartBar,
-    category: 'inventory',
-    requiredPermission: 'view_inventory'
-  }
+    reason: 'Frontend expects endpoint that is not implemented.',
+    endpoint: 'GET /analytics/inventory-valuation',
+  },
 ];
 
 export default function ProductReportsPage() {
@@ -110,6 +98,16 @@ export default function ProductReportsPage() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'products' | 'inventory'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const canViewHiddenReportsStatus = Boolean(
+    user &&
+      (
+        user.isSuperadmin ||
+        user.roles?.includes('superadmin') ||
+        user.roles?.includes('owner') ||
+        user.roles?.includes('admin') ||
+        hasPermission(user, 'manage_settings')
+      ),
+  );
 
   const filteredReports = reports.filter(report => {
     if (selectedCategory === 'all') return true;
@@ -323,6 +321,43 @@ export default function ProductReportsPage() {
               );
             })}
           </div>
+
+          {canViewHiddenReportsStatus && (
+            <section className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-amber-900">Hidden Reports Awaiting Backend</h2>
+                <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                  Internal
+                </span>
+              </div>
+              <p className="mb-3 text-xs text-amber-800">
+                These reports are intentionally hidden from normal users until backend endpoints are production-ready.
+              </p>
+              <div className="overflow-x-auto rounded border border-amber-200 bg-white">
+                <table className="min-w-full divide-y divide-amber-100 text-xs">
+                  <thead className="bg-amber-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold text-amber-900">Report</th>
+                      <th className="px-3 py-2 text-left font-semibold text-amber-900">Why Hidden</th>
+                      <th className="px-3 py-2 text-left font-semibold text-amber-900">Required Endpoint</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100">
+                    {hiddenReports.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-2 font-medium text-gray-900">{item.title}</td>
+                        <td className="px-3 py-2 text-gray-700">{item.reason}</td>
+                        <td className="px-3 py-2 text-gray-700">{item.endpoint}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-xs text-amber-800">
+                Reference: docs/PRODUCT_INVENTORY_REPORTS_BACKEND_TODO.md
+              </p>
+            </section>
+          )}
         )}
 
         {filteredReports.length === 0 && (

@@ -29,6 +29,7 @@ import {
 } from "chart.js";
 import { FaFilePdf, FaFileExcel, FaBox, FaExclamationTriangle, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 import { useBranch } from "@/contexts/BranchContext";
+import { productVariationsApi } from '@/lib/api/product-variations';
 
 ChartJS.register(
   CategoryScale,
@@ -53,13 +54,19 @@ export default function InventoryLevelsReportPage() {
   useEffect(() => {
     const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
     apiGet("/products", headers)
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setProducts(data as Product[]);
-        } else {
-          const productsFromResponse = (data as { products?: Product[] })?.products || [];
-          setProducts(productsFromResponse);
-        }
+      .then(async (data) => {
+        const productsFromResponse = Array.isArray(data) ? data : (data as { products?: Product[] })?.products || [];
+        const variations = await Promise.all(
+          productsFromResponse.map((product) => productVariationsApi.getByProduct(product.id))
+        );
+        const variationData = variations.flat().map((variation) => ({
+          id: variation.id,
+          name: `${variation.attributes?.Color || ''} ${variation.attributes?.Size || ''}`.trim() || variation.sku,
+          stock: variation.stock,
+          minStock: 10, // Default or fetched value
+          price: variation.price,
+        }));
+        setProducts(variationData);
       })
       .catch((err: unknown) =>
         setError((err as Error).message || "An error occurred while fetching data.")

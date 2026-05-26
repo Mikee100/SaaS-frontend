@@ -166,6 +166,19 @@ type PriorityItem = {
   severity?: 'low' | 'medium' | 'high';
   href?: string;
 };
+
+type CreditItem = {
+  id: string;
+  status?: string;
+  balance?: number;
+};
+
+type SalesTargets = {
+  daily: number;
+  weekly: number;
+  monthly: number;
+};
+
 function StatCard({ icon, label, value, trend, trendDirection, loading = false, color = 'indigo' }: {
   icon: React.ReactNode;
   label: string;
@@ -355,6 +368,56 @@ export default function DashboardPage() {
     gcTime: 10 * 60 * 1000, // React Query v5: gcTime replaces cacheTime
   });
 
+  const { data: creditSnapshot } = useQuery({
+    queryKey: ['dashboard', 'home-credit-snapshot', selectedBranchId],
+    enabled: Boolean(selectedBranchId),
+    queryFn: async () => {
+      try {
+        const credits = await apiGet<CreditItem[]>('/sales/credits/all', { 'x-branch-id': selectedBranchId || undefined });
+        if (!Array.isArray(credits)) {
+          return { outstanding: 0, overdue: 0, openCredits: 0 };
+        }
+
+        const outstanding = credits.reduce((sum, credit) => sum + Number(credit.balance || 0), 0);
+        const overdue = credits.filter((credit) => {
+          const status = String(credit.status || '').toLowerCase();
+          return status === 'overdue' && Number(credit.balance || 0) > 0;
+        }).length;
+        const openCredits = credits.filter((credit) => Number(credit.balance || 0) > 0).length;
+
+        return { outstanding, overdue, openCredits };
+      } catch {
+        return { outstanding: 0, overdue: 0, openCredits: 0 };
+      }
+    },
+    staleTime: 60 * 1000,
+    gcTime: 3 * 60 * 1000,
+  });
+
+  const { data: salesTargetsSnapshot } = useQuery({
+    queryKey: ['dashboard', 'home-sales-target-snapshot', selectedBranchId],
+    enabled: Boolean(selectedBranchId),
+    queryFn: async () => {
+      try {
+        const [targets, dailySales] = await Promise.all([
+          apiGet<SalesTargets>('/sales-targets').catch(() => ({ daily: 0, weekly: 0, monthly: 0 })),
+          apiGet<Record<string, number>>('/analytics/sales/daily', { 'x-branch-id': selectedBranchId || undefined }).catch(() => ({})),
+        ]);
+
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const todayRevenue = Number(dailySales[todayKey] || 0);
+        const dailyTarget = Number(targets.daily || 0);
+        const dailyProgress = dailyTarget > 0 ? Math.min(100, (todayRevenue / dailyTarget) * 100) : 0;
+
+        return { todayRevenue, dailyTarget, dailyProgress };
+      } catch {
+        return { todayRevenue: 0, dailyTarget: 0, dailyProgress: 0 };
+      }
+    },
+    staleTime: 60 * 1000,
+    gcTime: 3 * 60 * 1000,
+  });
+
   // Compute derived data
   const salesByDay = analyticsData?.salesByDay || {};
   const salesByWeek = analyticsData?.salesByWeek || {};
@@ -445,10 +508,18 @@ export default function DashboardPage() {
     const stockoutRatePercent = Math.round(
       analyticsData.inventoryAnalytics.stockoutRate * 100
     );
+    const totalProducts = analyticsData?.totalProducts || 0;
+    const estimatedOutOfStock =
+      totalProducts > 0
+        ? Math.round((analyticsData.inventoryAnalytics.stockoutRate || 0) * totalProducts)
+        : 0;
     priorities.push({
       id: 'stockouts',
       title: 'Reduce stockouts',
-      description: `${stockoutRatePercent}% stockout rate over recent period`,
+      description:
+        totalProducts > 0
+          ? `${stockoutRatePercent}% of catalog is out of stock (${estimatedOutOfStock}/${totalProducts} items)`
+          : `${stockoutRatePercent}% of catalog is out of stock`,
       severity: 'medium',
       href: '/products/reports/stockout-lost-sales',
     });
@@ -657,6 +728,86 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/60">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">Cross-Module Snapshot</h2>
+              <span className="text-xs text-gray-500 dark:text-slate-400">Credit, targets, and usage in one place</span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Credit Snapshot</p>
+                  <a href="/credit" className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">Open</a>
+                </div>
+                <p className="text-sm text-gray-700 dark:text-slate-300">
+                  Outstanding: <span className="font-semibold">Ksh {(creditSnapshot?.outstanding || 0).toLocaleString()}</span>
+                </p>
+                <p className="text-sm text-gray-700 dark:text-slate-300">
+                  Overdue: <span className="font-semibold">{(creditSnapshot?.overdue || 0).toLocaleString()}</span>
+                </p>
+                <p className="text-sm text-gray-700 dark:text-slate-300">
+                  Open Accounts: <span className="font-semibold">{(creditSnapshot?.openCredits || 0).toLocaleString()}</span>
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Sales Target Progress</p>
+                  <a href="/sales/targets" className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">Open</a>
+                </div>
+                <p className="text-sm text-gray-700 dark:text-slate-300">
+                  Today Revenue: <span className="font-semibold">Ksh {(salesTargetsSnapshot?.todayRevenue || 0).toLocaleString()}</span>
+                </p>
+                <p className="text-sm text-gray-700 dark:text-slate-300">
+                  Daily Target: <span className="font-semibold">Ksh {(salesTargetsSnapshot?.dailyTarget || 0).toLocaleString()}</span>
+                </p>
+                <div className="mt-2">
+                  <div className="mb-1 flex items-center justify-between text-[11px] text-gray-600 dark:text-slate-400">
+                    <span>Progress</span>
+                    <span>{(salesTargetsSnapshot?.dailyProgress || 0).toFixed(1)}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-200 dark:bg-slate-700">
+                    <div
+                      className="h-2 rounded-full bg-indigo-500"
+                      style={{ width: `${Math.min(100, salesTargetsSnapshot?.dailyProgress || 0)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Usage Limits</p>
+                  <a href="/account/billing" className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">Open</a>
+                </div>
+                <div className="space-y-1.5">
+                  {[
+                    { id: 'usage-users', label: 'Users', current: planLimits?.usage?.users?.current ?? 0, limit: planLimits?.usage?.users?.limit ?? 0 },
+                    { id: 'usage-products', label: 'Products', current: planLimits?.usage?.products?.current ?? 0, limit: planLimits?.usage?.products?.limit ?? 0 },
+                    { id: 'usage-sales', label: 'Sales', current: planLimits?.usage?.sales?.current ?? 0, limit: planLimits?.usage?.sales?.limit ?? 0 },
+                  ].map((row) => {
+                    const percentage = row.limit > 0 ? Math.min(100, (row.current / row.limit) * 100) : 0;
+                    return (
+                      <div key={row.id}>
+                        <div className="flex items-center justify-between text-xs text-gray-700 dark:text-slate-300">
+                          <span>{row.label}</span>
+                          <span className="font-medium">{row.current.toLocaleString()} / {row.limit.toLocaleString()}</span>
+                        </div>
+                        <div className="mt-0.5 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700">
+                          <div
+                            className={`h-1.5 rounded-full ${percentage >= 90 ? 'bg-rose-500' : percentage >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Quick Actions */}
           <div className="mb-4 space-y-2">
