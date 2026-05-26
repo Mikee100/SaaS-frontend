@@ -66,6 +66,11 @@ interface Transaction {
   createdAt: string;
 }
 
+interface Subscription {
+  planName: string;
+  status: string;
+}
+
 export default function TenantDetailsPage() {
   const { user, loading, refreshUser } = useUser();
   const router = useRouter();
@@ -95,6 +100,10 @@ export default function TenantDetailsPage() {
   const [savingMpesa, setSavingMpesa] = useState(false);
   const [testingMpesa, setTestingMpesa] = useState(false);
   const [mpesaStatus, setMpesaStatus] = useState<'disconnected' | 'connected'>('disconnected');
+
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [assigningSubscription, setAssigningSubscription] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
@@ -247,6 +256,43 @@ const fetchMpesaConfig = useCallback(async () => {
   const formatCurrency = (amount: number) => {
     return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
+
+  const fetchSubscription = async () => {
+    try {
+      setLoadingData(true);
+      const result = await apiGet<Subscription>(`/billing/subscription/${tenantId}`);
+      setSubscription(result);
+    } catch (error) {
+      console.error('Failed to fetch subscription:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const assignSubscription = async (planId: string) => {
+    try {
+      setAssigningSubscription(true);
+      setSubscriptionError(null);
+      const result = await apiPost<{ subscription: Subscription }>(
+        '/billing/superadmin/assign-subscription',
+        {
+          tenantId,
+          planId,
+        }
+      );
+      setSubscription(result.subscription);
+    } catch (error) {
+      setSubscriptionError(
+        error instanceof Error ? error.message : 'Failed to assign subscription.'
+      );
+    } finally {
+      setAssigningSubscription(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchSubscription();
+  }, [tenantId]);
 
   if (loading || !user) return null;
 
@@ -920,6 +966,42 @@ const fetchMpesaConfig = useCallback(async () => {
           </div>
         </div>
       )}
+
+      <div className="subscription-management">
+        <h2>Subscription Management</h2>
+        {subscription ? (
+          <div>
+            <p>Current Plan: {subscription.planName}</p>
+            <p>Status: {subscription.status}</p>
+          </div>
+        ) : (
+          <p>No subscription assigned.</p>
+        )}
+
+        <div>
+          <h3>Assign Subscription</h3>
+          <button
+            onClick={() => assignSubscription('plan_basic')}
+            disabled={assigningSubscription}
+          >
+            Assign Basic Plan
+          </button>
+          <button
+            onClick={() => assignSubscription('plan_pro')}
+            disabled={assigningSubscription}
+          >
+            Assign Pro Plan
+          </button>
+          <button
+            onClick={() => assignSubscription('plan_enterprise')}
+            disabled={assigningSubscription}
+          >
+            Assign Enterprise Plan
+          </button>
+        </div>
+
+        {subscriptionError && <p className="error">{subscriptionError}</p>}
+      </div>
     </main>
   );
 }

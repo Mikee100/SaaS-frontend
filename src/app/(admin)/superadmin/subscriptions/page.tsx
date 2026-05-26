@@ -52,6 +52,8 @@ export default function SubscriptionsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"all" | "no-subscription">("all");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchSubscriptions = useCallback(async () => {
     try {
@@ -132,6 +134,10 @@ export default function SubscriptionsPage() {
   const formatPrice = (price: number, interval: string) => {
     if (interval === "yearly") return `Ksh ${price}/yr`;
     return `Ksh ${price}/mo`;
+  };
+
+  const handleSuccess = () => {
+    setRefreshKey((prev) => prev + 1);
   };
 
   if (loading || !user) return null;
@@ -352,10 +358,7 @@ export default function SubscriptionsPage() {
       <AssignPlanModal
         isOpen={assignModalOpen}
         onClose={() => setAssignModalOpen(false)}
-        onSuccess={() => {
-          fetchSubscriptions();
-          fetchTenants();
-        }}
+        onSuccess={handleSuccess}
       />
     </main>
   );

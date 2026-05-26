@@ -22,7 +22,7 @@ function NavLink({ href, icon, children, active, collapsed }: { href: string; ic
           : "text-slate-300 hover:bg-slate-600 hover:text-white"
       }`}
     >
-      <span className="text-base flex-shrink-0">{icon}</span>
+      <span className="text-base shrink-0">{icon}</span>
       {!collapsed && <span className="ml-3 text-sm font-medium truncate">{children}</span>}
     </Link>
   );
@@ -100,13 +100,13 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
 
       {/* Sidebar - narrower, collapsible, slate color */}
       <aside
-        className={`${mobileMenuOpen ? "block" : "hidden"} md:block flex-shrink-0 md:h-screen md:sticky md:top-0 bg-slate-800 text-white border-r border-slate-700/50 transition-all duration-300 ease-in-out ${
-          collapsed ? "md:w-[72px]" : "md:w-52"
+        className={`${mobileMenuOpen ? "block" : "hidden"} md:block shrink-0 md:h-screen md:sticky md:top-0 bg-slate-800 text-white border-r border-slate-700/50 transition-all duration-300 ease-in-out ${
+          collapsed ? "md:w-18" : "md:w-52"
         } w-full`}
       >
         <div className="h-full flex flex-col">
           {/* Header with collapse toggle */}
-          <div className={`flex items-center flex-shrink-0 border-b border-slate-700/50 ${collapsed ? "justify-center py-4 px-2" : "justify-between py-4 px-4"}`}>
+          <div className={`flex items-center shrink-0 border-b border-slate-700/50 ${collapsed ? "justify-center py-4 px-2" : "justify-between py-4 px-4"}`}>
             {!collapsed && <h2 className="text-lg font-bold truncate">Superadmin</h2>}
             <button
               onClick={toggleCollapsed}
@@ -132,6 +132,9 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
               </NavLink>
               <NavLink href="/superadmin/billing" icon={<FiBarChart2 />} active={isActive("/superadmin/billing")} collapsed={collapsed}>
                 Billing
+              </NavLink>
+              <NavLink href="/superadmin/billing/operations" icon={<FiBarChart2 />} active={isActive("/superadmin/billing/operations")} collapsed={collapsed}>
+                Billing Operations
               </NavLink>
               <NavLink href="/superadmin/users" icon={<FiUsers />} active={isActive("/superadmin/users")} collapsed={collapsed}>
                 Users
@@ -188,9 +191,9 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
           </nav>
 
           {/* User profile and logout at bottom */}
-          <div className="mt-auto pt-3 pb-4 px-2 border-t border-slate-700/50 flex-shrink-0 space-y-2">
+          <div className="mt-auto pt-3 pb-4 px-2 border-t border-slate-700/50 shrink-0 space-y-2">
             <div className={`flex items-center ${collapsed ? "justify-center" : ""}`}>
-              <div className="h-9 w-9 rounded-full bg-slate-600 flex items-center justify-center text-white font-medium flex-shrink-0">
+              <div className="h-9 w-9 rounded-full bg-slate-600 flex items-center justify-center text-white font-medium shrink-0">
                 {user.name?.charAt(0).toUpperCase() || "U"}
               </div>
               {!collapsed && (
@@ -207,7 +210,7 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
                 collapsed ? "justify-center px-2 py-2" : "px-3 py-2"
               }`}
             >
-              <FiLogOut className="text-base flex-shrink-0" />
+              <FiLogOut className="text-base shrink-0" />
               {!collapsed && <span className="ml-3 text-sm font-medium">Logout</span>}
             </button>
           </div>

@@ -75,7 +75,12 @@ export function useBilling() {
 
 	const createCheckoutSession = async (planId?: string) => {
 		try {
-			const response = await apiPost<{ url: string }>('/billing/create-checkout-session', { planId });
+			const origin = typeof window !== 'undefined' ? window.location.origin : '';
+			const response = await apiPost<{ url: string }>('/billing/create-checkout-session', {
+				planId,
+				successUrl: `${origin}/settings/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+				cancelUrl: `${origin}/settings/billing/subscription?checkout=cancelled`,
+			});
 			return response?.url || null;
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to create checkout session');
@@ -85,7 +90,10 @@ export function useBilling() {
 
 	const createPortalSession = async () => {
 		try {
-			const response = await apiPost<{ url: string }>('/billing/create-portal-session', {});
+			const origin = typeof window !== 'undefined' ? window.location.origin : '';
+			const response = await apiPost<{ url: string }>('/billing/create-portal-session', {
+				returnUrl: `${origin}/settings/billing/subscription`,
+			});
 			return response?.url || null;
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to create portal session');

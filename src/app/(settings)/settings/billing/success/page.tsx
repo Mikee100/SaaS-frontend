@@ -50,7 +50,7 @@ export default function BillingSettings() {
         setLoading(true);
         const [plansData, subscriptionData] = await Promise.all([
           apiGet('/billing/plans') as Promise<Plan[]>,
-          apiGet('/billing/subscription').catch(() => null) as Promise<Subscription | null>,
+          apiGet('/billing/subscription-details').catch(() => null) as Promise<Subscription | null>,
         ]);
         
         setPlans(plansData);
@@ -70,10 +70,17 @@ export default function BillingSettings() {
   const handleUpgrade = async (plan: Plan) => {
     try {
       setUpgrading(true);
-      await apiPost('/billing/create-subscription', { planId: plan.id });
+      const result = await apiPost<{ url?: string }>('/billing/create-subscription', {
+        planId: plan.id,
+      });
+
+      if (result?.url) {
+        window.location.href = result.url;
+        return;
+      }
       
       // Refresh subscription data
-      const subscriptionData = await apiGet('/billing/subscription') as Subscription;
+      const subscriptionData = await apiGet('/billing/subscription-details') as Subscription;
       setCurrentSubscription(subscriptionData);
       setShowUpgradeModal(false);
       setSelectedPlan(null);
@@ -111,7 +118,7 @@ export default function BillingSettings() {
       await apiDelete('/billing/subscription');
       alert('Subscription cancelled successfully.');
       // Refresh data
-      const subscriptionData = await apiGet('/billing/subscription') as Subscription;
+      const subscriptionData = await apiGet('/billing/subscription-details') as Subscription;
       setCurrentSubscription(subscriptionData);
     } catch (error) {
       console.error('Error cancelling subscription:', error);

@@ -77,11 +77,20 @@ export default function BillingPage() {
         });
         setMessage('Upgrade scheduled successfully!');
       } else {
-        // No subscription - create new one
+        // No subscription - create via billing endpoint (paid plans redirect to Stripe checkout)
         setMessage('Creating subscription...');
-        await apiPost('/subscription/create', {
+        const result = await apiPost<{ url?: string; requiresCheckout?: boolean }>(
+          '/billing/create-subscription',
+          {
           planId: selectedPlanId,
-        });
+          },
+        );
+
+        if (result?.url) {
+          window.location.href = result.url;
+          return;
+        }
+
         setMessage('Subscription created successfully!');
       }
       fetchSubscription();

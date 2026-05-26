@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useTenant } from '@/hooks/useTenant';
+import { useBillingAccessStatus } from '@/hooks/useBillingAccessStatus';
 import { useUser } from '@/components/UserContext';
 import BranchSwitcher from '@/components/BranchSwitcher';
 import QuickActions from './QuickActions';
@@ -324,11 +325,15 @@ export default function DashboardPage() {
   const { data: planLimits, loading: limitsLoading } = usePlanLimits();
   const { user } = useUser();
   const { selectedBranchId } = useBranch();
+  const { data: accessStatus, isLoading: accessStatusLoading } =
+    useBillingAccessStatus();
+  const isRestricted = accessStatus.restricted;
 
   // Fetch stock threshold configuration
   const { data: stockConfig } = useQuery({
     queryKey: ['stockThreshold'],
     queryFn: () => apiGet<{ value?: number | string }>('/tenant/configurations/stockThreshold'),
+    enabled: !isRestricted,
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
 
@@ -353,7 +358,7 @@ export default function DashboardPage() {
     },
     staleTime: 2 * 60 * 1000, // 2 minutes - analytics change frequently
     gcTime: 5 * 60 * 1000, // React Query v5: gcTime replaces cacheTime
-    enabled: !!selectedBranchId,
+    enabled: !isRestricted && !!selectedBranchId,
   });
 
   // Fetch branch monthly comparison
@@ -366,11 +371,12 @@ export default function DashboardPage() {
     }>,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000, // React Query v5: gcTime replaces cacheTime
+    enabled: !isRestricted,
   });
 
   const { data: creditSnapshot } = useQuery({
     queryKey: ['dashboard', 'home-credit-snapshot', selectedBranchId],
-    enabled: Boolean(selectedBranchId),
+    enabled: !isRestricted && Boolean(selectedBranchId),
     queryFn: async () => {
       try {
         const credits = await apiGet<CreditItem[]>('/sales/credits/all', { 'x-branch-id': selectedBranchId || undefined });
@@ -396,7 +402,7 @@ export default function DashboardPage() {
 
   const { data: salesTargetsSnapshot } = useQuery({
     queryKey: ['dashboard', 'home-sales-target-snapshot', selectedBranchId],
-    enabled: Boolean(selectedBranchId),
+    enabled: !isRestricted && Boolean(selectedBranchId),
     queryFn: async () => {
       try {
         const [targets, dailySales] = await Promise.all([
@@ -532,7 +538,8 @@ export default function DashboardPage() {
     user?.roles?.includes('owner') ||
     user?.roles?.includes('manager');
 
-  const loading = tenantLoading || analyticsLoading || limitsLoading;
+  const loading =
+    accessStatusLoading || tenantLoading || analyticsLoading || limitsLoading;
 
   if (loading || limitsLoading) {
     return (
@@ -548,14 +555,33 @@ export default function DashboardPage() {
     );
   }
 
-  // DEBUG: Show selectedBranchId and query state
-  if (process.env.NODE_ENV !== 'production') {
-    // eslint-disable-next-line no-console
-    console.log('[Dashboard] selectedBranchId:', selectedBranchId);
-    // eslint-disable-next-line no-console
-    console.log('[Dashboard] analyticsData:', analyticsData);
-    // eslint-disable-next-line no-console
-    console.log('[Dashboard] analyticsLoading:', analyticsLoading);
+  if (isRestricted) {
+    return (
+      <div className="min-h-screen bg-gray-50 px-3 py-6 dark:bg-slate-900">
+        <div className="mx-auto max-w-3xl">
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
+            <h1 className="text-xl font-semibold text-amber-900">Subscription Access Restricted</h1>
+            <p className="mt-2 text-sm text-amber-800">
+              {accessStatus.reason ||
+                'Your subscription is inactive. You can still log in, but business operations are paused until renewal.'}
+            </p>
+            {accessStatus.graceEndsAt && (
+              <p className="mt-1 text-sm text-amber-800">
+                Grace window ended: {new Date(accessStatus.graceEndsAt).toLocaleString()}
+              </p>
+            )}
+            <div className="mt-4">
+              <a
+                href={accessStatus.renewalPath || '/account/billing'}
+                className="inline-flex items-center rounded-md border border-amber-500 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+              >
+                Renew Subscription
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

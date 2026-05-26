@@ -2,6 +2,28 @@
 import API_BASE_URL from '../config/apiConfig';
 import { refreshAuth } from '../lib/auth-client';
 
+export class ApiError extends Error {
+  status?: number;
+  code?: string;
+
+  constructor(message: string, status?: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export function isAccessRestrictedError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return error.code === 'ACCESS_RESTRICTED' || error.status === 403;
+  }
+  if (error instanceof Error) {
+    return error.message.toLowerCase().includes('access is restricted until renewal');
+  }
+  return false;
+}
+
 // Request deduplication: prevent concurrent identical requests
 interface PendingRequest {
   promise: Promise<unknown>;
@@ -12,6 +34,17 @@ class EnhancedAPI {
   private isOnline = true;
   private pendingRequests = new Map<string, PendingRequest>();
   private readonly REQUEST_DEDUP_TIMEOUT = 5000; // 5 seconds
+  private readonly ACCESS_RESTRICTED_TEXT =
+    'Subscription has expired. Access is restricted until renewal. You can still access billing.';
+  private readonly RESTRICTED_MODE_ENDPOINTS = [
+    '/analytics',
+    '/branches',
+    '/sales-targets',
+    '/tenant/configurations',
+    '/tenant/me',
+    '/user/me/plan-limits',
+    '/sales/credits/all',
+  ];
 
   /** Cookie-based auth: no Authorization header; cookies sent via credentials: 'include'. */
   private getAuthHeaders(extra?: Record<string, string>): Record<string, string> {
@@ -41,6 +74,12 @@ class EnhancedAPI {
         this.pendingRequests.delete(key);
       }
     }
+  }
+
+  private isRestrictedModeEndpoint(endpoint: string): boolean {
+    return this.RESTRICTED_MODE_ENDPOINTS.some((prefix) =>
+      endpoint.startsWith(prefix),
+    );
   }
 
   private async makeRequest<T = unknown>(
@@ -98,6 +137,12 @@ class EnhancedAPI {
           const errorMessage = responseData?.message ||
                               response.statusText ||
                               `HTTP error! status: ${response.status}`;
+          const isAccessRestricted =
+            response.status === 403 &&
+            typeof errorMessage === 'string' &&
+            errorMessage.toLowerCase().includes('access is restricted until renewal');
+          const isRestrictedByEndpoint =
+            response.status === 403 && this.isRestrictedModeEndpoint(endpoint);
 
           // Handle 401: try silent refresh once, then retry this request
           if (response.status === 401 && attempt === 0) {
@@ -124,7 +169,15 @@ class EnhancedAPI {
             if (typeof window !== 'undefined') {
               localStorage.removeItem('token');
             }
-            throw new Error(errorMessage);
+            throw new ApiError(errorMessage, response.status, 'UNAUTHORIZED');
+          }
+
+          if (isAccessRestricted || isRestrictedByEndpoint) {
+            throw new ApiError(
+              this.ACCESS_RESTRICTED_TEXT,
+              response.status,
+              'ACCESS_RESTRICTED',
+            );
           }
 
           // Handle 429 Too Many Requests with retry
@@ -156,11 +209,19 @@ class EnhancedAPI {
             });
           }
 
-          throw new Error(errorMessage);
+          throw new ApiError(errorMessage, response.status, 'REQUEST_FAILED');
         }
 
         return responseData as T;
       } catch (error) {
+        if (isAccessRestrictedError(error)) {
+          throw error;
+        }
+
+        if (error instanceof ApiError && error.status && error.status >= 400 && error.status < 500) {
+          throw error;
+        }
+
         // Don't retry 401 errors - they've already been handled above
         if (error instanceof Error && error.message.includes('401')) {
           throw error;

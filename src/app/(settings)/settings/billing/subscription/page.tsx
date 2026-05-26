@@ -54,7 +54,7 @@ export default function SubscriptionPage() {
     Promise.all([
       apiGet<Subscription>("/billing/subscription-details"),
       apiGet<Plan[]>("/billing/plans"),
-      apiGet<Subscription[]>("/subscriptions/history")
+      apiGet<Subscription[]>("/subscription/history")
     ])
       .then(([sub, plans, history]) => {
         if (sub) setSubscription(sub);
@@ -71,7 +71,15 @@ export default function SubscriptionPage() {
     setChanging(true);
     setError("");
     try {
-      await apiPost("/billing/create-subscription", { planId: selectedPlan });
+      const result = await apiPost<{ url?: string }>("/billing/create-subscription", {
+        planId: selectedPlan,
+      });
+
+      if (result?.url) {
+        window.location.href = result.url;
+        return;
+      }
+
       window.location.reload();
     } catch (err: unknown) {
       const error = err as { message?: string };

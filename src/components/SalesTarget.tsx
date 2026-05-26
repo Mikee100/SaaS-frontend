@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { TagIcon, PencilIcon, CheckIcon, XMarkIcon, ChartBarIcon, CalendarDaysIcon } from '@heroicons/react/24/outline';
-import { apiGet, apiPut } from '@/utils/api';
+import { apiGet, apiPut, isAccessRestrictedError } from '@/utils/api';
+import { useBillingAccessStatus } from '@/hooks/useBillingAccessStatus';
 
 interface SalesTarget {
   daily: number;
@@ -23,19 +24,39 @@ interface SalesTargetProps {
 }
 
 export default function SalesTargetComponent({ currentRevenue, totalSales, filteredSales }: SalesTargetProps) {
+  const { data: accessStatus, isLoading: accessStatusLoading } = useBillingAccessStatus();
   const [targets, setTargets] = useState<SalesTarget>({ daily: 0, weekly: 0, monthly: 0 });
   const [editing, setEditing] = useState<string | null>(null);
   const [tempTargets, setTempTargets] = useState<SalesTarget>({ daily: 0, weekly: 0, monthly: 0 });
+  const [restrictedMessage, setRestrictedMessage] = useState<string | null>(null);
 
   // Load targets from API on mount
   useEffect(() => {
+    if (accessStatusLoading) {
+      return;
+    }
+
+    if (accessStatus.restricted) {
+      setRestrictedMessage(
+        accessStatus.reason ||
+          'Sales targets are locked because your subscription access is restricted. Renew in Billing to continue.',
+      );
+      return;
+    }
+
     const loadTargets = async () => {
       try {
         const data = await apiGet<SalesTarget>('/sales-targets');
         setTargets(data);
         setTempTargets(data);
+        setRestrictedMessage(null);
       } catch (error) {
-        console.error('Error loading sales targets:', error);
+        if (isAccessRestrictedError(error)) {
+          setRestrictedMessage(
+            'Sales targets are locked because your subscription access is restricted. Renew in Billing to continue.',
+          );
+          return;
+        }
         // Fallback to localStorage if API fails
         const savedTargets = localStorage.getItem('salesTargets');
         if (savedTargets) {
@@ -43,30 +64,52 @@ export default function SalesTargetComponent({ currentRevenue, totalSales, filte
             const parsed = JSON.parse(savedTargets);
             setTargets(parsed);
             setTempTargets(parsed);
-          } catch (localError) {
-            console.error('Error parsing localStorage targets:', localError);
+          } catch {
+            // Ignore malformed local fallback for a silent UX.
           }
         }
       }
     };
 
     loadTargets();
-  }, []);
+  }, [accessStatus.restricted, accessStatus.reason, accessStatusLoading]);
 
   // Save targets to API whenever they change
   const saveTargets = async (newTargets: SalesTarget) => {
+    if (accessStatus.restricted) {
+      setRestrictedMessage(
+        accessStatus.reason ||
+          'Sales targets are currently read-only due to restricted subscription access.',
+      );
+      return;
+    }
+
     try {
       await apiPut('/sales-targets', newTargets);
       setTargets(newTargets);
       // Also save to localStorage as backup
       localStorage.setItem('salesTargets', JSON.stringify(newTargets));
     } catch (error) {
-      console.error('Error saving sales targets:', error);
+      if (isAccessRestrictedError(error)) {
+        setRestrictedMessage(
+          'Sales targets are currently read-only due to restricted subscription access.',
+        );
+        return;
+      }
       // Fallback to localStorage
       localStorage.setItem('salesTargets', JSON.stringify(newTargets));
       setTargets(newTargets);
     }
   };
+
+  if (restrictedMessage) {
+    return (
+      <div className="bg-amber-50 rounded-lg border border-amber-200 p-4 mb-6">
+        <h2 className="text-sm font-semibold text-amber-800 mb-1">Access Restricted</h2>
+        <p className="text-sm text-amber-700">{restrictedMessage}</p>
+      </div>
+    );
+  }
 
   // Calculate current period values
   const getCurrentPeriodRevenue = (period: 'daily' | 'weekly' | 'monthly') => {

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { apiGet } from '@/utils/api';
+import { apiGet, isAccessRestrictedError } from '@/utils/api';
 import { useUser } from '@/components/UserContext';
+import { useBillingAccessStatus } from '@/hooks/useBillingAccessStatus';
 
 export interface PlanLimitsData {
   currentPlan: string;
@@ -21,17 +22,32 @@ export interface PlanLimitsData {
   };
 }
 
+interface UsePlanLimitsOptions {
+  enabled?: boolean;
+}
+
 /**
  * Hook for fetching plan limits with React Query caching
  * Plan limits rarely change, so we cache for 10-15 minutes
  */
-export function usePlanLimits() {
+export function usePlanLimits(options?: UsePlanLimitsOptions) {
   const { user } = useUser();
+  const { data: accessStatus, isLoading: accessStatusLoading } =
+    useBillingAccessStatus();
+  const queryEnabled =
+    !!user &&
+    !accessStatusLoading &&
+    !accessStatus.restricted &&
+    (options?.enabled ?? true);
 
   const query = useQuery({
     queryKey: ['plan-limits', user?.id],
     queryFn: () => apiGet<PlanLimitsData>('/user/me/plan-limits'),
-    enabled: !!user,
+    enabled: queryEnabled,
+    retry: (failureCount, error) => {
+      if (isAccessRestrictedError(error)) return false;
+      return failureCount < 1;
+    },
     staleTime: 10 * 60 * 1000, // 10 minutes - plan limits rarely change
     gcTime: 15 * 60 * 1000, // 15 minutes cache
   });
@@ -39,7 +55,13 @@ export function usePlanLimits() {
   return {
     data: query.data ?? null,
     loading: query.isLoading,
-    error: query.error ? (query.error instanceof Error ? query.error.message : 'Failed to fetch plan limits') : null,
+    error: query.error
+      ? isAccessRestrictedError(query.error)
+        ? 'Plan details are unavailable while subscription access is restricted. Renew in Billing to continue.'
+        : query.error instanceof Error
+          ? query.error.message
+          : 'Failed to fetch plan limits'
+      : null,
     refetch: query.refetch,
   };
 }

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useUser } from './UserContext';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useTenant } from '@/hooks/useTenant';
+import { useBillingAccessStatus } from '@/hooks/useBillingAccessStatus';
 import { useSidebar } from './SidebarContext';
 import Tooltip from './Tooltip';
 import {
@@ -23,6 +24,7 @@ export default function PlanBasedNav() {
   const userContext = useUser();
   const { data: limits, loading: limitsLoading } = usePlanLimits();
   const { data: tenantData, isLoading: tenantLoading } = useTenant();
+  const { data: accessStatus, isLoading: accessStatusLoading } = useBillingAccessStatus();
   const { sidebarCollapsed, setSidebarCollapsed } = useSidebar();
   const { theme, setTheme, isDark } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -183,6 +185,12 @@ export default function PlanBasedNav() {
 
 
   const accessibleItems = React.useMemo(() => {
+    if (accessStatus.restricted) {
+      return navigationItems.filter(
+        (item) => item.name === 'Dashboard' || item.name === 'Billing & Subscription',
+      );
+    }
+
     // If no active subscription, only show Dashboard
     if (!hasActiveSubscription) {
       return navigationItems.filter(item => item.name === 'Dashboard');
@@ -219,7 +227,14 @@ export default function PlanBasedNav() {
         return true;
       }) : undefined
     }));
-  }, [userContext.user, currentLevel, navigationItems, planHierarchy, hasActiveSubscription]);
+  }, [
+    userContext.user,
+    currentLevel,
+    navigationItems,
+    planHierarchy,
+    hasActiveSubscription,
+    accessStatus.restricted,
+  ]);
 
   // Hide sidebar on settings pages
   const isSettingsPage = pathname?.startsWith('/settings');
@@ -229,7 +244,8 @@ export default function PlanBasedNav() {
 
   // Only block rendering while the *user* is unresolved.
   // Plan/tenant data can load in the background so the nav appears immediately after login.
-  const isUserLoading = userContext?.loading || !userContext?.user;
+  const isUserLoading =
+    userContext?.loading || !userContext?.user || accessStatusLoading;
   if (isUserLoading) {
     return (
       <div className={`fixed top-0 left-0 h-full bg-white shadow-lg border-r z-50 transition-all duration-300 ${

@@ -9,7 +9,8 @@ import {
   FaCalendarAlt,
   FaExchangeAlt,
   FaCog,
-  FaSync
+  FaSync,
+  FaShieldAlt,
 } from 'react-icons/fa';
 
 // Types
@@ -88,7 +89,7 @@ export default function SuperAdminBillingPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-100">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
@@ -206,6 +207,12 @@ export default function SuperAdminBillingPage() {
               icon={<FaUsers className="h-5 w-5" />}
               onClick={() => router.push('/superadmin/billing/tenants')}
             />
+            <ActionCard
+              title="Billing Operations"
+              description="Suspensions, grace extensions, and monthly billing controls"
+              icon={<FaShieldAlt className="h-5 w-5" />}
+              onClick={() => router.push('/superadmin/billing/operations')}
+            />
             <ActionCard 
               title="Billing Settings"
               description="Configure payment providers and settings"
@@ -237,7 +244,7 @@ function MetricCard({ icon, title, value, color }: {
     <div className="bg-white overflow-hidden shadow rounded-lg">
       <div className="p-5">
         <div className="flex items-center">
-          <div className={`flex-shrink-0 rounded-md p-3 ${colorMap[color].bg} ${colorMap[color].text}`}>
+          <div className={`shrink-0 rounded-md p-3 ${colorMap[color].bg} ${colorMap[color].text}`}>
             {icon}
           </div>
           <div className="ml-5 w-0 flex-1">
@@ -270,7 +277,7 @@ function ActionCard({
       onClick={onClick}
       className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 cursor-pointer transition-colors"
     >
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <div className="h-10 w-10 rounded-md bg-gray-100 flex items-center justify-center text-gray-600">
           {icon}
         </div>
