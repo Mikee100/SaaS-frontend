@@ -66,9 +66,20 @@ interface Transaction {
   createdAt: string;
 }
 
-interface Subscription {
-  planName: string;
-  status: string;
+interface Branch {
+  id: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  manager?: string | null;
+  isMainBranch?: boolean;
+  status?: string | null;
+  createdAt: string;
+  deletedAt?: string | null;
 }
 
 export default function TenantDetailsPage() {
@@ -80,8 +91,9 @@ export default function TenantDetailsPage() {
   const [tenant, setTenant] = useState<TenantDetails | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions' | 'analytics' | 'integrations' | 'business-kra'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions' | 'branches' | 'analytics' | 'integrations' | 'business-kra'>('overview');
 
   // Business & KRA (admin-editable)
   const [businessKra, setBusinessKra] = useState<Partial<TenantDetails>>({});
@@ -101,10 +113,6 @@ export default function TenantDetailsPage() {
   const [testingMpesa, setTestingMpesa] = useState(false);
   const [mpesaStatus, setMpesaStatus] = useState<'disconnected' | 'connected'>('disconnected');
 
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [assigningSubscription, setAssigningSubscription] = useState(false);
-  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
-
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
       router.replace("/");
@@ -114,10 +122,11 @@ export default function TenantDetailsPage() {
   const fetchTenantData = useCallback(async () => {
     try {
       setLoadingData(true);
-      const [tenantDetails, tenantProducts, tenantTransactions] = await Promise.all([
+      const [tenantDetails, tenantProducts, tenantTransactions, tenantBranches] = await Promise.all([
         apiGet<TenantDetails>(`/admin/tenants/${tenantId}`),
         apiGet<Product[]>(`/admin/tenants/${tenantId}/products`),
         apiGet<Transaction[]>(`/admin/tenants/${tenantId}/transactions`),
+        apiGet<Branch[]>(`/admin/tenants/${tenantId}/branches`),
       ]);
 
       setTenant(tenantDetails);
@@ -135,6 +144,7 @@ export default function TenantDetailsPage() {
       });
       setProducts(tenantProducts);
       setTransactions(tenantTransactions);
+      setBranches(tenantBranches);
     } catch (error) {
       console.error("Failed to fetch tenant data:", error);
       alert("Failed to load tenant data");
@@ -256,43 +266,6 @@ const fetchMpesaConfig = useCallback(async () => {
   const formatCurrency = (amount: number) => {
     return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
-
-  const fetchSubscription = async () => {
-    try {
-      setLoadingData(true);
-      const result = await apiGet<Subscription>(`/billing/subscription/${tenantId}`);
-      setSubscription(result);
-    } catch (error) {
-      console.error('Failed to fetch subscription:', error);
-    } finally {
-      setLoadingData(false);
-    }
-  };
-
-  const assignSubscription = async (planId: string) => {
-    try {
-      setAssigningSubscription(true);
-      setSubscriptionError(null);
-      const result = await apiPost<{ subscription: Subscription }>(
-        '/billing/superadmin/assign-subscription',
-        {
-          tenantId,
-          planId,
-        }
-      );
-      setSubscription(result.subscription);
-    } catch (error) {
-      setSubscriptionError(
-        error instanceof Error ? error.message : 'Failed to assign subscription.'
-      );
-    } finally {
-      setAssigningSubscription(false);
-    }
-  };
-
-  React.useEffect(() => {
-    fetchSubscription();
-  }, [tenantId]);
 
   if (loading || !user) return null;
 
@@ -469,6 +442,21 @@ const fetchMpesaConfig = useCallback(async () => {
             }}
           >
             Transactions ({transactions.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('branches')}
+            style={{
+              padding: "0.5rem 0",
+              border: "none",
+              background: "none",
+              borderBottom: activeTab === 'branches' ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === 'branches' ? "#2563eb" : "#64748b",
+              fontWeight: activeTab === 'branches' ? "600" : "500",
+              fontSize: "12px",
+              cursor: "pointer"
+            }}
+          >
+            Branches ({branches.length})
           </button>
           <button
             onClick={() => setActiveTab('analytics')}
@@ -651,6 +639,60 @@ const fetchMpesaConfig = useCallback(async () => {
           {transactions.length === 0 && (
             <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
               No transactions found
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'branches' && (
+        <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+          <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
+            <h3 style={{ fontSize: 13, fontWeight: "bold", margin: 0, color: "#334155" }}>Tenant Branches</h3>
+          </div>
+          {branches.map(branch => {
+            const locationParts = [branch.city, branch.state, branch.country].filter(Boolean).join(', ');
+            const statusLabel = branch.deletedAt ? 'Deleted' : (branch.status || 'active');
+            const statusColor = branch.deletedAt
+              ? '#dc2626'
+              : statusLabel.toLowerCase() === 'active'
+                ? '#059669'
+                : '#d97706';
+
+            return (
+              <div key={branch.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.7rem" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.2rem" }}>
+                      <span style={{ fontWeight: "600", color: "#1e293b" }}>{branch.name}</span>
+                      {branch.isMainBranch && (
+                        <span style={{ fontSize: "10px", fontWeight: 600, color: "#1d4ed8", background: "#dbeafe", padding: "0.1rem 0.35rem", borderRadius: "999px" }}>
+                          MAIN
+                        </span>
+                      )}
+                      <span style={{ fontSize: "10px", fontWeight: 600, color: statusColor, background: `${statusColor}1A`, padding: "0.1rem 0.35rem", borderRadius: "999px", textTransform: "capitalize" }}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <div style={{ color: "#64748b" }}>
+                      {branch.address || 'No address provided'}
+                    </div>
+                    <div style={{ color: "#64748b" }}>
+                      {locationParts || 'No location details'}
+                    </div>
+                    <div style={{ color: "#64748b" }}>
+                      Manager: {branch.manager || 'N/A'} • Phone: {branch.phone || 'N/A'} • Email: {branch.email || 'N/A'}
+                    </div>
+                  </div>
+                  <div style={{ color: "#64748b", whiteSpace: "nowrap" }}>
+                    Created: {formatDate(branch.createdAt)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {branches.length === 0 && (
+            <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
+              No branches found for this tenant
             </div>
           )}
         </div>
@@ -967,41 +1009,6 @@ const fetchMpesaConfig = useCallback(async () => {
         </div>
       )}
 
-      <div className="subscription-management">
-        <h2>Subscription Management</h2>
-        {subscription ? (
-          <div>
-            <p>Current Plan: {subscription.planName}</p>
-            <p>Status: {subscription.status}</p>
-          </div>
-        ) : (
-          <p>No subscription assigned.</p>
-        )}
-
-        <div>
-          <h3>Assign Subscription</h3>
-          <button
-            onClick={() => assignSubscription('plan_basic')}
-            disabled={assigningSubscription}
-          >
-            Assign Basic Plan
-          </button>
-          <button
-            onClick={() => assignSubscription('plan_pro')}
-            disabled={assigningSubscription}
-          >
-            Assign Pro Plan
-          </button>
-          <button
-            onClick={() => assignSubscription('plan_enterprise')}
-            disabled={assigningSubscription}
-          >
-            Assign Enterprise Plan
-          </button>
-        </div>
-
-        {subscriptionError && <p className="error">{subscriptionError}</p>}
-      </div>
     </main>
   );
 }
