@@ -47,6 +47,20 @@ interface Role {
   description?: string;
 }
 
+interface ClassificationOption {
+  id: string;
+  name: string;
+  slug: string;
+  isActive?: boolean;
+}
+
+interface TenantProvisionDetails {
+  id: string;
+  name: string;
+  businessType?: string;
+  classificationId?: string | null;
+}
+
 type Notice = {
   type: "success" | "error";
   message: string;
@@ -98,7 +112,18 @@ export default function SuperadminUsersPage() {
 
   const [pendingRoleByUser, setPendingRoleByUser] = useState<Record<string, string>>({});
   const [actionByUser, setActionByUser] = useState<Record<string, string>>({});
+  const [provisioningByTenant, setProvisioningByTenant] = useState<Record<string, boolean>>({});
+  const [classifications, setClassifications] = useState<ClassificationOption[]>([]);
+  const [loadingClassifications, setLoadingClassifications] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const [provisionModal, setProvisionModal] = useState<{
+    tenantId: string;
+    tenantName: string;
+    businessType?: string;
+    selectedClassificationId: string;
+  } | null>(null);
+  const [loadingProvisionContext, setLoadingProvisionContext] = useState(false);
 
   const [confirmAction, setConfirmAction] = useState<
     | {
@@ -142,7 +167,7 @@ export default function SuperadminUsersPage() {
   const refreshData = async () => {
     try {
       setRefreshing(true);
-      await Promise.all([fetchUsers(), fetchRoles()]);
+      await Promise.all([fetchUsers(), fetchRoles(), fetchClassifications()]);
     } finally {
       setRefreshing(false);
     }
@@ -170,6 +195,49 @@ export default function SuperadminUsersPage() {
     } catch (error) {
       console.error("Failed to fetch roles:", error);
       setRoles([]);
+    }
+  };
+
+  const normalizeBusinessToken = (input?: string | null) =>
+    (input ?? "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
+
+  const resolveClassificationByBusinessType = (
+    businessType: string | undefined,
+    options: ClassificationOption[],
+  ) => {
+    const normalized = normalizeBusinessToken(businessType);
+    if (!normalized) return "";
+
+    const exact = options.find(
+      (c) => normalizeBusinessToken(c.slug) === normalized || normalizeBusinessToken(c.name) === normalized,
+    );
+    if (exact) return exact.id;
+
+    const partial = options.find((c) => {
+      const slug = normalizeBusinessToken(c.slug);
+      const name = normalizeBusinessToken(c.name);
+      return normalized.includes(slug) || slug.includes(normalized) || normalized.includes(name);
+    });
+
+    return partial?.id || "";
+  };
+
+  const fetchClassifications = async () => {
+    try {
+      setLoadingClassifications(true);
+      const data = (await apiGet("/admin/classifications")) as ClassificationOption[];
+      const active = Array.isArray(data) ? data.filter((c) => c.isActive !== false) : [];
+      setClassifications(active);
+    } catch (error) {
+      console.error("Failed to fetch classifications:", error);
+      setClassifications([]);
+    } finally {
+      setLoadingClassifications(false);
     }
   };
 
@@ -240,6 +308,101 @@ export default function SuperadminUsersPage() {
       setNotice({ type: "error", message: "Failed to fetch user activity." });
     } finally {
       setLoadingActivity(false);
+    }
+  };
+
+  const setTenantProvisioning = (tenantId: string, status: boolean) => {
+    setProvisioningByTenant((prev) => {
+      if (!status) {
+        const { [tenantId]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [tenantId]: true };
+    });
+  };
+
+  const openProvisionModal = async (tenantId: string, tenantName: string) => {
+    try {
+      setLoadingProvisionContext(true);
+
+      let options = classifications;
+      if (!options.length) {
+        const fetched = (await apiGet("/admin/classifications")) as ClassificationOption[];
+        options = (Array.isArray(fetched) ? fetched : []).filter((c) => c.isActive !== false);
+        setClassifications(options);
+      }
+
+      const tenant = (await apiGet(`/admin/tenants/${tenantId}`)) as TenantProvisionDetails;
+      const matchedClassificationId =
+        tenant?.classificationId || resolveClassificationByBusinessType(tenant?.businessType, options);
+
+      setProvisionModal({
+        tenantId,
+        tenantName,
+        businessType: tenant?.businessType,
+        selectedClassificationId: matchedClassificationId || "",
+      });
+    } catch (error: any) {
+      console.error("Failed to open provisioning modal:", error);
+      setNotice({
+        type: "error",
+        message: error?.message || `Failed to load classification context for ${tenantName}.`,
+      });
+    } finally {
+      setLoadingProvisionContext(false);
+    }
+  };
+
+  const provisionTenantMetrics = async () => {
+    if (!provisionModal) return;
+    const { tenantId, tenantName, selectedClassificationId } = provisionModal;
+
+    if (!selectedClassificationId) {
+      setNotice({
+        type: "error",
+        message: `Select a classification for ${tenantName} before provisioning.`,
+      });
+      return;
+    }
+
+    try {
+      setTenantProvisioning(tenantId, true);
+
+      const result = (await apiPost(`/admin/tenants/${tenantId}/classification`, {
+        classificationId: selectedClassificationId,
+        provisionDefaults: true,
+      })) as {
+        defaultsProvisioning?: {
+          provisionedAttributes?: string[];
+          allowedUnits?: string[];
+          defaultUnit?: string | null;
+        };
+      };
+
+      const defaults = result?.defaultsProvisioning;
+      const attrs = defaults?.provisionedAttributes?.length
+        ? defaults.provisionedAttributes.join(", ")
+        : "none";
+      const units = defaults?.allowedUnits?.length ? defaults.allowedUnits.join(", ") : "none";
+      const defaultUnit = defaults?.defaultUnit || "not set";
+
+      setNotice({
+        type: "success",
+        message: `${tenantName}: metric defaults provisioned. Attrs: ${attrs}. Units: ${units}. Default: ${defaultUnit}.`,
+      });
+      setProvisionModal(null);
+    } catch (error: any) {
+      console.error("Failed to provision tenant metrics:", error);
+      const rawMessage = String(error?.message || "").toLowerCase();
+      const friendlyMessage = rawMessage.includes("no active classification matches tenant business type")
+        ? `${tenantName}: set a primary classification first (or create a matching active classification for this business type), then retry provisioning.`
+        : error?.message || `Failed to provision metric defaults for ${tenantName}.`;
+      setNotice({
+        type: "error",
+        message: friendlyMessage,
+      });
+    } finally {
+      setTenantProvisioning(tenantId, false);
     }
   };
 
@@ -474,6 +637,7 @@ export default function SuperadminUsersPage() {
           <section className="space-y-3">
             {groupedUsers.map((group) => {
               const isCollapsed = !!collapsedGroups[group.key];
+              const tenantProvisioning = group.tenantId ? !!provisioningByTenant[group.tenantId] : false;
               return (
                 <div key={group.key} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                   <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
@@ -490,6 +654,15 @@ export default function SuperadminUsersPage() {
                       <span>{group.name}</span>
                     </button>
                     <div className="flex items-center gap-2">
+                      {group.tenantId && (
+                        <button
+                          onClick={() => void openProvisionModal(group.tenantId!, group.name)}
+                          disabled={tenantProvisioning || loadingProvisionContext}
+                          className="rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {tenantProvisioning ? "Provisioning..." : loadingProvisionContext ? "Loading..." : "Provision Metrics"}
+                        </button>
+                      )}
                       {group.tenantId && (
                         <Link
                           href={`/superadmin/tenants/${group.tenantId}`}
@@ -783,6 +956,73 @@ export default function SuperadminUsersPage() {
                 className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
               >
                 {confirmAction.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provision Metrics Modal */}
+      {provisionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-900">Provision Tenant Metrics</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Choose the classification to apply for <span className="font-medium">{provisionModal.tenantName}</span>, then provision default units and variant attributes.
+            </p>
+
+            <div className="mt-4 space-y-2">
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                Business Type: <span className="font-medium">{provisionModal.businessType || "Unknown"}</span>
+              </div>
+
+              <label className="block text-xs font-medium text-slate-700" htmlFor="classification-select">
+                Classification
+              </label>
+              <select
+                id="classification-select"
+                value={provisionModal.selectedClassificationId}
+                onChange={(e) =>
+                  setProvisionModal((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          selectedClassificationId: e.target.value,
+                        }
+                      : prev,
+                  )
+                }
+                className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+              >
+                <option value="">Select classification</option>
+                {classifications.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              {classifications.length === 0 && (
+                <p className="text-xs text-rose-700">No active classifications available. Create/activate one first.</p>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setProvisionModal(null)}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void provisionTenantMetrics()}
+                disabled={
+                  !provisionModal.selectedClassificationId ||
+                  !provisionModal.tenantId ||
+                  !!provisioningByTenant[provisionModal.tenantId]
+                }
+                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {!!provisioningByTenant[provisionModal.tenantId] ? "Provisioning..." : "Assign + Provision"}
               </button>
             </div>
           </div>
