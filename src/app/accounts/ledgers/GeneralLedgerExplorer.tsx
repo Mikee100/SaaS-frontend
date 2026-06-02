@@ -1,6 +1,9 @@
+
+
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { apiGet, apiPatch } from "@/utils/api";
 import { 
   FaSearch, 
   FaArrowLeft, 
@@ -12,7 +15,7 @@ import {
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
-import { apiGet } from "@/utils/api";
+import { io, Socket } from "socket.io-client";
 import { useUser } from "@/components/UserContext";
 import { useBranches } from "@/hooks/useBranches";
 import { useTenant } from "@/hooks/useTenant";
@@ -27,6 +30,7 @@ import {
   preparePdfWatermark,
 } from "@/utils/pdfTemplate";
 import { getFullAssetUrl } from "@/utils/logoUrl";
+
 
 interface Account {
   id: string;
@@ -45,9 +49,35 @@ interface LedgerEntry {
   credit: number;
   user?: string;
   meta: { journalEntryId: string };
+  tag?: string;
+  source?: {
+    type: "invoice" | "payment" | "expense" | "credit_note" | "sale" | "return" | "manual" | "stock";
+    id?: string;
+    paymentId?: string;
+    url: string;
+    label: string;
+  };
 }
 
+interface LedgerEntriesResponse {
+  items: LedgerEntry[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+const TAG_OPTIONS = [
+  { value: "general", label: "General" },
+  { value: "tax", label: "Tax" },
+  { value: "refund", label: "Refund" },
+  { value: "adjustment", label: "Adjustment" },
+  { value: "expense", label: "Expense" },
+  { value: "income", label: "Income" },
+  { value: "other", label: "Other" },
+];
+
 type DateFilterMode = "all" | "date" | "week" | "month" | "year" | "range";
+
+const PAGE_SIZE = 60;
 
 const formatDateInput = (date: Date) => {
   const year = date.getFullYear();
@@ -112,6 +142,10 @@ export default function GeneralLedgerExplorer() {
   const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
   const [rangeStart, setRangeStart] = useState<string>("");
   const [rangeEnd, setRangeEnd] = useState<string>("");
+  const [drillEntry, setDrillEntry] = useState<LedgerEntry | null>(null);
+  const [entriesCursor, setEntriesCursor] = useState<string | null>(null);
+  const [hasMoreEntries, setHasMoreEntries] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
 
   const normalizedRoles = Array.isArray(user?.roles)
     ? user.roles
@@ -157,9 +191,108 @@ export default function GeneralLedgerExplorer() {
     setSelectedBranchId(assignedBranchId || "all");
   }, [assignedBranchId, branches, canTenantSelectBranch, isBranchScopedUser]);
 
+  useEffect(() => {
+    if (!user?.tenantId) return;
+
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:7000";
+    const socket = io(socketUrl, {
+      transports: ["websocket"],
+      autoConnect: true,
+    });
+
+    socketRef.current = socket;
+
+    const handleLedgerUpdate = (payload: {
+      tenantId?: string;
+      branchId?: string;
+      accountId?: string;
+    }) => {
+      if (payload?.tenantId && payload.tenantId !== user.tenantId) return;
+      if (
+        payload?.branchId &&
+        selectedBranchId !== "all" &&
+        payload.branchId !== selectedBranchId
+      ) {
+        return;
+      }
+
+      void fetchAccounts();
+
+      if (selectedAccount) void fetchEntries(selectedAccount);
+    };
+
+    socket.on("ledgerUpdate", handleLedgerUpdate);
+
+    return () => {
+      socket.off("ledgerUpdate", handleLedgerUpdate);
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [user?.tenantId, selectedAccount, selectedBranchId]);
+
   const getBranchHeaders = () => {
     if (!selectedBranchId || selectedBranchId === "all") return undefined;
     return { "x-branch-id": selectedBranchId };
+  };
+
+  const getServerDateRange = () => {
+    if (dateFilterMode === "all") return { startDate: undefined as string | undefined, endDate: undefined as string | undefined };
+
+    if (dateFilterMode === "date" && selectedDate) {
+      return { startDate: selectedDate, endDate: selectedDate };
+    }
+
+    if (dateFilterMode === "week") {
+      const weekRange = parseIsoWeekRange(selectedWeek);
+      if (!weekRange) return { startDate: undefined, endDate: undefined };
+      return {
+        startDate: formatDateInput(weekRange.start),
+        endDate: formatDateInput(weekRange.end),
+      };
+    }
+
+    if (dateFilterMode === "month" && selectedMonth) {
+      const [yearText, monthText] = selectedMonth.split("-");
+      const year = Number(yearText);
+      const month = Number(monthText);
+      if (!year || !month) return { startDate: undefined, endDate: undefined };
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month, 0);
+      return {
+        startDate: formatDateInput(start),
+        endDate: formatDateInput(end),
+      };
+    }
+
+    if (dateFilterMode === "year" && selectedYear) {
+      const year = Number(selectedYear);
+      if (!year) return { startDate: undefined, endDate: undefined };
+      return {
+        startDate: `${year}-01-01`,
+        endDate: `${year}-12-31`,
+      };
+    }
+
+    if (dateFilterMode === "range") {
+      return {
+        startDate: rangeStart || undefined,
+        endDate: rangeEnd || undefined,
+      };
+    }
+
+    return { startDate: undefined, endDate: undefined };
+  };
+
+  const buildEntriesEndpoint = (accountId: string, cursor?: string | null) => {
+    const params = new URLSearchParams();
+    params.set("limit", String(PAGE_SIZE));
+    if (cursor) params.set("cursor", cursor);
+
+    const { startDate, endDate } = getServerDateRange();
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+
+    return `/ledger/accounts/${accountId}/entries?${params.toString()}`;
   };
 
   useEffect(() => {
@@ -171,6 +304,8 @@ export default function GeneralLedgerExplorer() {
     setSelectedBranchId(nextBranchId);
     setSelectedAccount(null);
     setEntries([]);
+    setEntriesCursor(null);
+    setHasMoreEntries(false);
     if (typeof window !== "undefined") {
       localStorage.setItem("selectedBranchId", nextBranchId);
     }
@@ -185,7 +320,7 @@ export default function GeneralLedgerExplorer() {
     setLoading(true);
     try {
       const res = await apiGet("/ledger/accounts", getBranchHeaders());
-      setAccounts(res);
+      setAccounts(res as Account[]);
     } catch (error) {
       console.error("Error fetching accounts:", error);
     } finally {
@@ -195,19 +330,50 @@ export default function GeneralLedgerExplorer() {
 
   const fetchEntries = async (account: Account) => {
     setSelectedAccount(account);
-    setDateFilterMode("all");
-    setRangeStart("");
-    setRangeEnd("");
     setDetailsLoading(true);
     try {
-      const res = await apiGet(`/ledger/accounts/${account.id}/entries`, getBranchHeaders());
-      setEntries(res);
+      const res = await apiGet<LedgerEntriesResponse>(
+        buildEntriesEndpoint(account.id),
+        getBranchHeaders(),
+      );
+      setEntries(res.items || []);
+      setEntriesCursor(res.nextCursor);
+      setHasMoreEntries(Boolean(res.hasMore));
     } catch (error) {
       console.error("Error fetching entries:", error);
     } finally {
       setDetailsLoading(false);
     }
   };
+
+  const loadMoreEntries = async () => {
+    if (!selectedAccount || !entriesCursor || !hasMoreEntries) return;
+
+    try {
+      const res = await apiGet<LedgerEntriesResponse>(
+        buildEntriesEndpoint(selectedAccount.id, entriesCursor),
+        getBranchHeaders(),
+      );
+      setEntries((prev) => [...prev, ...(res.items || [])]);
+      setEntriesCursor(res.nextCursor);
+      setHasMoreEntries(Boolean(res.hasMore));
+    } catch (error) {
+      console.error("Error loading more entries:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedAccount) return;
+    void fetchEntries(selectedAccount);
+  }, [
+    dateFilterMode,
+    selectedDate,
+    selectedWeek,
+    selectedMonth,
+    selectedYear,
+    rangeStart,
+    rangeEnd,
+  ]);
 
   const filteredAccounts = accounts.filter(acc => 
     acc.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -221,53 +387,7 @@ export default function GeneralLedgerExplorer() {
     return acc;
   }, {} as Record<string, Account[]>);
 
-  const filteredEntries = entries.filter((entry) => {
-    if (dateFilterMode === "all") return true;
-
-    const entryDate = normalizeToDay(entry.date);
-
-    if (dateFilterMode === "date") {
-      if (!selectedDate) return true;
-      return formatDateInput(entryDate) === selectedDate;
-    }
-
-    if (dateFilterMode === "week") {
-      const weekRange = parseIsoWeekRange(selectedWeek);
-      if (!weekRange) return true;
-      const entryTime = entryDate.getTime();
-      return entryTime >= weekRange.start.getTime() && entryTime <= weekRange.end.getTime();
-    }
-
-    if (dateFilterMode === "month") {
-      if (!selectedMonth) return true;
-      const [yearText, monthText] = selectedMonth.split("-");
-      const year = Number(yearText);
-      const month = Number(monthText);
-      if (!year || !month) return true;
-      return entryDate.getFullYear() === year && entryDate.getMonth() + 1 === month;
-    }
-
-    if (dateFilterMode === "year") {
-      const year = Number(selectedYear);
-      if (!year) return true;
-      return entryDate.getFullYear() === year;
-    }
-
-    if (dateFilterMode === "range") {
-      const start = rangeStart ? normalizeToDay(rangeStart) : null;
-      const end = rangeEnd ? normalizeToDay(rangeEnd) : null;
-
-      if (start && end) {
-        return entryDate.getTime() >= start.getTime() && entryDate.getTime() <= end.getTime();
-      }
-
-      if (start) return entryDate.getTime() >= start.getTime();
-      if (end) return entryDate.getTime() <= end.getTime();
-      return true;
-    }
-
-    return true;
-  });
+  const filteredEntries = entries;
 
   const totalDebit = filteredEntries.reduce((sum, entry) => sum + entry.debit, 0);
   const totalCredit = filteredEntries.reduce((sum, entry) => sum + entry.credit, 0);
@@ -279,6 +399,33 @@ export default function GeneralLedgerExplorer() {
     if (dateFilterMode === "month") return selectedMonth || "Month filter";
     if (dateFilterMode === "year") return selectedYear || "Year filter";
     return `${rangeStart || "Any"} to ${rangeEnd || "Any"}`;
+  };
+
+  const applyDatePreset = (preset: "today" | "thisWeek" | "thisMonth" | "lastMonth") => {
+    const now = new Date();
+
+    if (preset === "today") {
+      const today = formatDateInput(now);
+      setDateFilterMode("date");
+      setSelectedDate(today);
+      return;
+    }
+
+    if (preset === "thisWeek") {
+      setDateFilterMode("week");
+      setSelectedWeek(formatWeekInput(now));
+      return;
+    }
+
+    if (preset === "thisMonth") {
+      setDateFilterMode("month");
+      setSelectedMonth(formatDateInput(now).slice(0, 7));
+      return;
+    }
+
+    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    setDateFilterMode("month");
+    setSelectedMonth(formatDateInput(lastMonthDate).slice(0, 7));
   };
 
   const resetDateFilters = () => {
@@ -493,6 +640,35 @@ export default function GeneralLedgerExplorer() {
                     <option value="range">Date Range</option>
                   </select>
 
+                  <button
+                    type="button"
+                    onClick={() => applyDatePreset("today")}
+                    className="inline-flex h-8 items-center border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDatePreset("thisWeek")}
+                    className="inline-flex h-8 items-center border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    This Week
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDatePreset("thisMonth")}
+                    className="inline-flex h-8 items-center border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    This Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDatePreset("lastMonth")}
+                    className="inline-flex h-8 items-center border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Last Month
+                  </button>
+
                   {dateFilterMode === "date" && (
                     <input
                       type="date"
@@ -603,13 +779,18 @@ export default function GeneralLedgerExplorer() {
                         <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-600">Date</th>
                         <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-600">Reference</th>
                         <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-600">Description</th>
+                        <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-600">Tag</th>
                         <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-600">Debit</th>
                         <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-600">Credit</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {filteredEntries.map((entry) => (
-                        <tr key={entry.id} className="hover:bg-gray-50">
+                      {filteredEntries.map((entry, idx) => (
+                        <tr
+                          key={entry.id}
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => setDrillEntry(entry)}
+                        >
                           <td className="px-3 py-2 text-gray-700">
                             {new Date(entry.date).toLocaleDateString()}
                           </td>
@@ -617,6 +798,25 @@ export default function GeneralLedgerExplorer() {
                           <td className="px-3 py-2">
                             <div className="max-w-[320px] truncate text-gray-800">{entry.description}</div>
                             <div className="text-[10px] text-gray-500">{entry.type}</div>
+                          </td>
+                          <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                            <select
+                              value={entry.tag || "general"}
+                              onChange={async (e) => {
+                                const newTag = e.target.value;
+                                try {
+                                  await apiPatch(`/ledger/entry/${entry.id}/tag`, { tag: newTag });
+                                  setEntries((prev) => prev.map((en, i) => i === idx ? { ...en, tag: newTag } : en));
+                                } catch (err) {
+                                  alert("Failed to update tag");
+                                }
+                              }}
+                              className="border border-gray-200 bg-white px-1 py-0.5 text-xs text-gray-700 rounded"
+                            >
+                              {TAG_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-3 py-2 text-right">
                             {entry.debit > 0 ? (
@@ -634,6 +834,54 @@ export default function GeneralLedgerExplorer() {
                           </td>
                         </tr>
                       ))}
+                          {/* Drill-down Modal */}
+                          {drillEntry && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+                              <div className="bg-white rounded shadow-lg max-w-md w-full p-6 relative">
+                                <button
+                                  className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
+                                  onClick={() => setDrillEntry(null)}
+                                >
+                                  ×
+                                </button>
+                                <h2 className="text-lg font-semibold mb-2">Ledger Entry Details</h2>
+                                <div className="space-y-1 text-sm">
+                                  <div><span className="font-semibold">Date:</span> {new Date(drillEntry.date).toLocaleString()}</div>
+                                  <div><span className="font-semibold">Reference:</span> {drillEntry.reference}</div>
+                                  <div><span className="font-semibold">Type:</span> {drillEntry.type}</div>
+                                  <div><span className="font-semibold">Description:</span> {drillEntry.description}</div>
+                                  <div><span className="font-semibold">Tag:</span> {drillEntry.tag || "general"}</div>
+                                  <div><span className="font-semibold">Debit:</span> {drillEntry.debit}</div>
+                                  <div><span className="font-semibold">Credit:</span> {drillEntry.credit}</div>
+                                  {drillEntry.user && <div><span className="font-semibold">User:</span> {drillEntry.user}</div>}
+                                  {drillEntry.meta && (
+                                    <div><span className="font-semibold">Meta:</span> <pre className="bg-gray-50 rounded p-2 text-xs overflow-x-auto">{JSON.stringify(drillEntry.meta, null, 2)}</pre></div>
+                                  )}
+                                </div>
+                                {drillEntry.source && (
+                                  <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-700">
+                                    <div className="font-semibold">Related Source</div>
+                                    <div className="mt-1 flex items-center gap-2">
+                                      <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-gray-600">
+                                        {drillEntry.source.type.replace("_", " ")}
+                                      </span>
+                                      {drillEntry.source.id && (
+                                        <span className="text-[10px] text-gray-500">ID: {drillEntry.source.id}</span>
+                                      )}
+                                    </div>
+                                    <a
+                                      href={drillEntry.source.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="mt-2 inline-flex items-center border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+                                    >
+                                      {drillEntry.source.label}
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                     </tbody>
                   </table>
                 </div>
@@ -642,8 +890,19 @@ export default function GeneralLedgerExplorer() {
             <div className="mt-2 flex justify-end gap-4 text-[11px] text-gray-600">
               <span>Debit: {totalDebit.toLocaleString()}</span>
               <span>Credit: {totalCredit.toLocaleString()}</span>
-              <span>Rows: {filteredEntries.length} / {entries.length}</span>
+              <span>Rows: {filteredEntries.length}</span>
             </div>
+            {hasMoreEntries && (
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={loadMoreEntries}
+                  className="inline-flex h-8 items-center border border-gray-200 bg-white px-3 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Load More
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUser } from "@/components/UserContext";
 import { useRouter, usePathname } from "next/navigation";
-import { FiHome, FiUsers, FiServer, FiSettings, FiMonitor, FiLifeBuoy, FiBarChart2, FiFileText, FiChevronLeft, FiChevronRight, FiLogOut } from "react-icons/fi";
+import { FiHome, FiUsers, FiServer, FiSettings, FiMonitor, FiLifeBuoy, FiBarChart2, FiFileText, FiChevronLeft, FiChevronRight, FiLogOut, FiUserPlus, FiCreditCard, FiActivity, FiClock, FiSliders, FiTool } from "react-icons/fi";
 
 const SIDEBAR_COLLAPSED_KEY = "superadmin-sidebar-collapsed";
 
@@ -27,6 +27,17 @@ function NavLink({ href, icon, children, active, collapsed }: { href: string; ic
     </Link>
   );
 }
+
+type SidebarItem = {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+};
+
+type SidebarSection = {
+  title: string;
+  items: SidebarItem[];
+};
 
 export default function SuperadminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useUser();
@@ -55,8 +66,63 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
 
   if (loading || !user) return null;
 
-  const isActive = (href: string) =>
-    pathname !== null && (pathname === href || pathname.startsWith(`${href}/`));
+  const isActive = (href: string) => {
+    if (pathname === null) return false;
+    if (href === "/superadmin") return pathname === "/superadmin";
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
+  const sidebarSections: SidebarSection[] = [
+    {
+      title: "Overview",
+      items: [
+        { href: "/superadmin", label: "Dashboard", icon: <FiHome /> },
+        { href: "/superadmin/analytics", label: "Analytics", icon: <FiActivity /> },
+      ],
+    },
+    {
+      title: "Tenant & Access",
+      items: [
+        { href: "/superadmin/tenants", label: "Tenants", icon: <FiServer /> },
+        { href: "/superadmin/users", label: "Users", icon: <FiUsers /> },
+        { href: "/superadmin/create-user", label: "Create Users", icon: <FiUserPlus /> },
+        { href: "/superadmin/classifications", label: "Classifications", icon: <FiFileText /> },
+      ],
+    },
+    {
+      title: "Billing & Plans",
+      items: [
+        { href: "/superadmin/billing", label: "Billing", icon: <FiCreditCard /> },
+        { href: "/superadmin/billing/operations", label: "Billing Operations", icon: <FiActivity /> },
+        { href: "/superadmin/subscriptions", label: "Subscriptions", icon: <FiBarChart2 /> },
+        { href: "/superadmin/subscriptions/scheduled-changes", label: "Scheduled Plan Changes", icon: <FiClock /> },
+        { href: "/superadmin/trial-management", label: "Trial Management", icon: <FiLifeBuoy /> },
+        { href: "/superadmin/plan-management", label: "Plan Management", icon: <FiSliders /> },
+      ],
+    },
+    {
+      title: "Operations",
+      items: [
+        { href: "/superadmin/support", label: "Support Tickets", icon: <FiLifeBuoy /> },
+        { href: "/superadmin/bulk", label: "Bulk Operations", icon: <FiTool /> },
+      ],
+    },
+    {
+      title: "Monitoring",
+      items: [
+        { href: "/superadmin/health", label: "System Health", icon: <FiMonitor /> },
+        { href: "/superadmin/monitoring", label: "Monitoring", icon: <FiMonitor /> },
+        { href: "/superadmin/logs", label: "Audit Logs", icon: <FiFileText /> },
+      ],
+    },
+    {
+      title: "Platform",
+      items: [
+        { href: "/superadmin/settings", label: "Platform Settings", icon: <FiSettings /> },
+        { href: "/superadmin/configurations", label: "Configurations", icon: <FiSliders /> },
+      ],
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
@@ -118,79 +184,26 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
           </div>
 
           <nav className="flex-1 overflow-y-auto min-h-0 py-3 px-2 custom-scrollbar space-y-4">
-            <div className="space-y-1">
-              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Overview</h3>}
-              <NavLink href="/superadmin" icon={<FiHome />} active={isActive("/superadmin")} collapsed={collapsed}>
-                Dashboard
-              </NavLink>
-            </div>
-
-            <div className="space-y-1">
-              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Management</h3>}
-              <NavLink href="/superadmin/tenants" icon={<FiServer />} active={isActive("/superadmin/tenants")} collapsed={collapsed}>
-                Tenants
-              </NavLink>
-              <NavLink href="/superadmin/billing" icon={<FiBarChart2 />} active={isActive("/superadmin/billing")} collapsed={collapsed}>
-                Billing
-              </NavLink>
-              <NavLink href="/superadmin/billing/operations" icon={<FiBarChart2 />} active={isActive("/superadmin/billing/operations")} collapsed={collapsed}>
-                Billing Operations
-              </NavLink>
-              <NavLink href="/superadmin/users" icon={<FiUsers />} active={isActive("/superadmin/users")} collapsed={collapsed}>
-                Users
-              </NavLink>
-              <NavLink href="/superadmin/create-user" icon={<FiUsers />} active={isActive("/superadmin/create-user")} collapsed={collapsed}>
-                Create Users
-              </NavLink>
-              <NavLink href="/superadmin/trial-management" icon={<FiLifeBuoy />} active={isActive("/superadmin/trial-management")} collapsed={collapsed}>
-                Trial Management
-              </NavLink>
-              <NavLink href="/superadmin/plan-management" icon={<FiSettings />} active={isActive("/superadmin/plan-management")} collapsed={collapsed}>
-                Plan Management
-              </NavLink>
-              <NavLink href="/superadmin/classifications" icon={<FiFileText />} active={isActive("/superadmin/classifications")} collapsed={collapsed}>
-                Classifications
-              </NavLink>
-              <NavLink href="/superadmin/subscriptions" icon={<FiBarChart2 />} active={isActive("/superadmin/subscriptions")} collapsed={collapsed}>
-                Subscriptions
-              </NavLink>
-              <NavLink href="/superadmin/subscriptions/scheduled-changes" icon={<FiBarChart2 />} active={isActive("/superadmin/subscriptions/scheduled-changes")} collapsed={collapsed}>
-                Scheduled Plan Changes
-              </NavLink>
-            </div>
-
-            <div className="space-y-1">
-              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Support</h3>}
-              <NavLink href="/superadmin/support" icon={<FiLifeBuoy />} active={isActive("/superadmin/support")} collapsed={collapsed}>
-                Support Tickets
-              </NavLink>
-              <NavLink href="/superadmin/bulk" icon={<FiFileText />} active={isActive("/superadmin/bulk")} collapsed={collapsed}>
-                Bulk Operations
-              </NavLink>
-            </div>
-
-            <div className="space-y-1">
-              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Monitoring</h3>}
-              <NavLink href="/superadmin/health" icon={<FiMonitor />} active={isActive("/superadmin/health")} collapsed={collapsed}>
-                System Health
-              </NavLink>
-              <NavLink href="/superadmin/monitoring" icon={<FiMonitor />} active={isActive("/superadmin/monitoring")} collapsed={collapsed}>
-                Monitoring
-              </NavLink>
-              <NavLink href="/superadmin/logs" icon={<FiFileText />} active={isActive("/superadmin/logs")} collapsed={collapsed}>
-                Audit Logs
-              </NavLink>
-            </div>
-
-            <div className="space-y-1">
-              {!collapsed && <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">Settings</h3>}
-              <NavLink href="/superadmin/settings" icon={<FiSettings />} active={isActive("/superadmin/settings")} collapsed={collapsed}>
-                Platform Settings
-              </NavLink>
-              <NavLink href="/superadmin/configurations" icon={<FiSettings />} active={isActive("/superadmin/configurations")} collapsed={collapsed}>
-                Configurations
-              </NavLink>
-            </div>
+            {sidebarSections.map((section) => (
+              <div key={section.title} className="space-y-1">
+                {!collapsed && (
+                  <h3 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">
+                    {section.title}
+                  </h3>
+                )}
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    href={item.href}
+                    icon={item.icon}
+                    active={isActive(item.href)}
+                    collapsed={collapsed}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            ))}
           </nav>
 
           {/* User profile and logout at bottom */}
