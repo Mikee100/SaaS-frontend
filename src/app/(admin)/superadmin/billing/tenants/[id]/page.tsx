@@ -14,6 +14,7 @@ interface BillingOpsTenant {
   tenantName: string;
   tenantEmail: string;
   planName: string | null;
+  subscriptionId?: string | null;
   subscriptionStatus: string | null;
   currentPeriodEnd: string | null;
   graceEndsAt: string | null;
@@ -27,6 +28,13 @@ interface BillingOpsTenant {
     | 'expired_over_grace'
     | 'expired'
     | 'no_subscription';
+}
+
+interface PlanOption {
+  id: string;
+  name: string;
+  interval?: string;
+  isActive?: boolean;
 }
 
 interface ManualPayment {
@@ -125,6 +133,11 @@ export default function TenantBillingDetailsPage({
   const [actionModal, setActionModal] = useState<ActionKind>(null);
   const [actionDays, setActionDays] = useState(30);
   const [actionMonths, setActionMonths] = useState(1);
+  const [actionPlanId, setActionPlanId] = useState('');
+  const [plans, setPlans] = useState<PlanOption[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [initialPlanId, setInitialPlanId] = useState('');
+  const [assigningInitialPlan, setAssigningInitialPlan] = useState(false);
   const [actionReason, setActionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [preview, setPreview] = useState<ActionPreview | null>(null);
@@ -215,18 +228,75 @@ export default function TenantBillingDetailsPage({
     return tenant.isSuspended ? 'Access restricted' : 'Full access';
   }, [tenant]);
 
+  const needsInitialPlan =
+    tenant?.billingState === 'no_subscription' || !tenant?.subscriptionId;
+
+  const loadPlans = useCallback(async () => {
+    try {
+      setPlansLoading(true);
+      const response = await apiGet<PlanOption[]>('/admin/plans');
+      const activePlans = Array.isArray(response)
+        ? response.filter((p) => p?.isActive !== false)
+        : [];
+      setPlans(activePlans);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load plans');
+      setPlans([]);
+    } finally {
+      setPlansLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (needsInitialPlan) {
+      void loadPlans();
+    }
+  }, [needsInitialPlan, loadPlans]);
+
   const openAction = (kind: ActionKind) => {
     setActionModal(kind);
     setActionDays(30);
     setActionMonths(1);
+    setActionPlanId('');
     setActionReason('');
     setError('');
     setSuccess('');
+
+    if (kind === 'renew' && needsInitialPlan) {
+      void loadPlans();
+    }
+  };
+
+  const assignInitialPlan = async () => {
+    if (!tenantId || !initialPlanId) {
+      setError('Select a plan first');
+      return;
+    }
+
+    try {
+      setAssigningInitialPlan(true);
+      setError('');
+      setSuccess('');
+
+      await apiPost('/billing/superadmin/assign-subscription', {
+        tenantId,
+        planId: initialPlanId,
+      });
+
+      setSuccess('Initial subscription plan assigned successfully.');
+      setInitialPlanId('');
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to assign initial plan');
+    } finally {
+      setAssigningInitialPlan(false);
+    }
   };
 
   const closeAction = () => {
     setActionModal(null);
     setPreview(null);
+    setActionPlanId('');
     setActionReason('');
   };
 
@@ -248,11 +318,18 @@ export default function TenantBillingDetailsPage({
         );
         setSuccess('Grace extension applied successfully.');
       } else if (actionModal === 'renew') {
+        const requiresPlan = tenant.billingState === 'no_subscription' || !tenant.subscriptionId;
+        if (requiresPlan && !actionPlanId) {
+          setError('Select a plan to create the first subscription for this tenant');
+          return;
+        }
+
         await apiPost(
           `/admin/subscriptions/operations/tenants/${tenantId}/manual-renewal`,
           {
             months: actionMonths,
             reason: actionReason,
+            planId: requiresPlan ? actionPlanId : undefined,
           },
         );
         setSuccess('Manual renewal applied. Internal invoice generated.');
@@ -577,6 +654,42 @@ export default function TenantBillingDetailsPage({
 
       <div className="rounded border bg-white p-4">
         <h2 className="text-sm font-semibold text-gray-900">Billing Actions with Preview</h2>
+
+        {needsInitialPlan && (
+          <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3">
+            <div className="text-xs font-semibold text-amber-900">No existing subscription</div>
+            <div className="mt-1 text-xs text-amber-800">
+              Assign an initial plan first, or choose one in Manual Renew.
+            </div>
+
+            <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
+              <select
+                value={initialPlanId}
+                onChange={(e) => setInitialPlanId(e.target.value)}
+                className="w-full rounded border border-amber-300 px-3 py-2 text-sm md:max-w-sm"
+              >
+                <option value="">Select initial plan</option>
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name}
+                    {plan.interval ? ` (${plan.interval})` : ''}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={assignInitialPlan}
+                disabled={assigningInitialPlan || plansLoading}
+                className="rounded border border-amber-300 bg-white px-3 py-2 text-xs text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {assigningInitialPlan ? 'Assigning...' : 'Assign Initial Plan'}
+              </button>
+
+              {plansLoading && <span className="text-xs text-amber-800">Loading plans...</span>}
+            </div>
+          </div>
+        )}
+
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             onClick={() => openAction('grace')}
@@ -934,15 +1047,41 @@ export default function TenantBillingDetailsPage({
               )}
 
               {actionModal === 'renew' && (
-                <input
-                  type="number"
-                  min={1}
-                  max={24}
-                  value={actionMonths}
-                  onChange={(e) => setActionMonths(Number(e.target.value || 0))}
-                  className="w-full rounded border px-3 py-2 text-sm"
-                  placeholder="Renew months"
-                />
+                <>
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={actionMonths}
+                    onChange={(e) => setActionMonths(Number(e.target.value || 0))}
+                    className="w-full rounded border px-3 py-2 text-sm"
+                    placeholder="Renew months"
+                  />
+
+                  {(tenant.billingState === 'no_subscription' || !tenant.subscriptionId) && (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Select plan for initial subscription
+                      </label>
+                      <select
+                        value={actionPlanId}
+                        onChange={(e) => setActionPlanId(e.target.value)}
+                        className="w-full rounded border px-3 py-2 text-sm"
+                      >
+                        <option value="">Choose a plan</option>
+                        {plans.map((plan) => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.name}
+                            {plan.interval ? ` (${plan.interval})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {plansLoading && (
+                        <div className="mt-1 text-xs text-gray-500">Loading plans...</div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
 
               <textarea

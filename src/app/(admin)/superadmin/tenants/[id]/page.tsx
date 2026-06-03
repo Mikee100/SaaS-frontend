@@ -24,6 +24,8 @@ interface TenantDetails {
   id: string;
   name: string;
   businessType: string;
+  classificationId?: string | null;
+  restaurantFeaturesEnabled?: boolean;
   contactEmail: string;
   contactPhone: string;
   address?: string;
@@ -39,6 +41,13 @@ interface TenantDetails {
   branchCount: number;
   spaceUsedMB: string;
   resourceSpaceUsage?: Record<string, number>;
+}
+
+interface ClassificationOption {
+  id: string;
+  name: string;
+  slug: string;
+  isActive?: boolean;
 }
 
 interface MpesaConfigApiResponse {
@@ -98,6 +107,15 @@ export default function TenantDetailsPage() {
   // Business & KRA (admin-editable)
   const [businessKra, setBusinessKra] = useState<Partial<TenantDetails>>({});
   const [savingBusinessKra, setSavingBusinessKra] = useState(false);
+  const [restaurantAddonEnabled, setRestaurantAddonEnabled] = useState(false);
+  const [savingRestaurantAddon, setSavingRestaurantAddon] = useState(false);
+
+  // Classification assign + provision modal
+  const [showProvisionModal, setShowProvisionModal] = useState(false);
+  const [classificationOptions, setClassificationOptions] = useState<ClassificationOption[]>([]);
+  const [loadingClassifications, setLoadingClassifications] = useState(false);
+  const [selectedClassificationId, setSelectedClassificationId] = useState('');
+  const [savingProvisioning, setSavingProvisioning] = useState(false);
 
   // M-Pesa integration state
   const [mpesaConfig, setMpesaConfig] = useState({
@@ -130,6 +148,7 @@ export default function TenantDetailsPage() {
       ]);
 
       setTenant(tenantDetails);
+      setRestaurantAddonEnabled(!!tenantDetails.restaurantFeaturesEnabled);
       setBusinessKra({
         name: tenantDetails.name,
         businessType: tenantDetails.businessType,
@@ -173,6 +192,84 @@ const fetchMpesaConfig = useCallback(async () => {
     // Keep default disconnected status
   }
 }, [tenantId]);
+
+  const normalizeBusinessToken = (input?: string | null) =>
+    (input ?? '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+
+  const resolveClassificationByBusinessType = (
+    businessType: string | undefined,
+    options: ClassificationOption[],
+  ) => {
+    const normalized = normalizeBusinessToken(businessType);
+    if (!normalized) return '';
+
+    const exact = options.find(
+      (c) => normalizeBusinessToken(c.slug) === normalized || normalizeBusinessToken(c.name) === normalized,
+    );
+    if (exact) return exact.id;
+
+    const partial = options.find((c) => {
+      const slug = normalizeBusinessToken(c.slug);
+      const name = normalizeBusinessToken(c.name);
+      return normalized.includes(slug) || slug.includes(normalized) || normalized.includes(name);
+    });
+
+    return partial?.id || '';
+  };
+
+  const openProvisionModal = async () => {
+    if (!tenant) return;
+
+    try {
+      setLoadingClassifications(true);
+      const data = await apiGet<ClassificationOption[]>('/admin/classifications');
+      const active = Array.isArray(data) ? data.filter((c) => c.isActive !== false) : [];
+      setClassificationOptions(active);
+
+      const preselected = tenant.classificationId || resolveClassificationByBusinessType(tenant.businessType, active);
+      setSelectedClassificationId(preselected || '');
+      setShowProvisionModal(true);
+    } catch (error) {
+      console.error('Failed to load classifications:', error);
+      alert('Failed to load classifications');
+    } finally {
+      setLoadingClassifications(false);
+    }
+  };
+
+  const assignAndProvisionMetrics = async () => {
+    if (!tenant || !selectedClassificationId) return;
+
+    try {
+      setSavingProvisioning(true);
+      const result = await apiPost<{ defaultsProvisioning?: { provisionedAttributes?: string[]; allowedUnits?: string[]; defaultUnit?: string | null } }>(
+        `/admin/tenants/${tenant.id}/classification`,
+        {
+          classificationId: selectedClassificationId,
+          provisionDefaults: true,
+        },
+      );
+
+      const defaults = result?.defaultsProvisioning;
+      const attrs = defaults?.provisionedAttributes?.length ? defaults.provisionedAttributes.join(', ') : 'none';
+      const units = defaults?.allowedUnits?.length ? defaults.allowedUnits.join(', ') : 'none';
+      const defaultUnit = defaults?.defaultUnit || 'not set';
+
+      alert(`Metrics provisioned. Attrs: ${attrs}. Units: ${units}. Default: ${defaultUnit}.`);
+      setShowProvisionModal(false);
+      await fetchTenantData();
+    } catch (error: any) {
+      console.error('Failed to assign and provision metrics:', error);
+      alert(error?.message || 'Failed to provision metrics');
+    } finally {
+      setSavingProvisioning(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.isSuperadmin && tenantId) {
@@ -259,6 +356,23 @@ const fetchMpesaConfig = useCallback(async () => {
     }
   };
 
+  const saveRestaurantAddon = async () => {
+    if (!tenantId) return;
+    try {
+      setSavingRestaurantAddon(true);
+      await apiPut(`/admin/tenants/${tenantId}`, {
+        restaurantFeaturesEnabled: restaurantAddonEnabled,
+      });
+      await fetchTenantData();
+      alert(`Restaurant add-on ${restaurantAddonEnabled ? 'enabled' : 'disabled'} for this tenant.`);
+    } catch (error) {
+      console.error('Failed to update restaurant add-on setting:', error);
+      alert('Failed to update restaurant add-on setting');
+    } finally {
+      setSavingRestaurantAddon(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
@@ -335,6 +449,26 @@ const fetchMpesaConfig = useCallback(async () => {
             }}
           >
             <FaArrowRight /> Impersonate
+          </button>
+        </div>
+
+        <div style={{ marginTop: '0.6rem' }}>
+          <button
+            onClick={openProvisionModal}
+            disabled={loadingClassifications}
+            style={{
+              background: '#f5f3ff',
+              color: '#5b21b6',
+              padding: '0.28rem 0.75rem',
+              borderRadius: '5px',
+              border: '1px solid #c4b5fd',
+              cursor: loadingClassifications ? 'not-allowed' : 'pointer',
+              fontWeight: 500,
+              fontSize: '12px',
+              opacity: loadingClassifications ? 0.65 : 1,
+            }}
+          >
+            {loadingClassifications ? 'Loading classifications...' : 'Assign + Provision Metrics'}
           </button>
         </div>
       </div>
@@ -913,6 +1047,22 @@ const fetchMpesaConfig = useCallback(async () => {
                   </div>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#64748b" }}>Restaurant Add-on</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
+                    {restaurantAddonEnabled ? (
+                      <>
+                        <FaCheckCircle style={{ color: "#059669", fontSize: "13px" }} />
+                        <span style={{ color: "#059669", fontWeight: "500" }}>Enabled</span>
+                      </>
+                    ) : (
+                      <>
+                        <FaSpinner style={{ color: "#f59e0b", fontSize: "13px" }} />
+                        <span style={{ color: "#f59e0b", fontWeight: "500" }}>Disabled</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: "#64748b" }}>Webhook Status</span>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
                     <FaCheckCircle style={{ color: "#059669", fontSize: "13px" }} />
@@ -922,6 +1072,38 @@ const fetchMpesaConfig = useCallback(async () => {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: "#64748b" }}>Last Sync</span>
                   <span style={{ color: "#1e293b", fontWeight: "500" }}>2 hours ago</span>
+                </div>
+
+                <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "0.6rem" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "12px", marginBottom: "0.5rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={restaurantAddonEnabled}
+                      onChange={(e) => setRestaurantAddonEnabled(e.target.checked)}
+                      style={{ width: "14px", height: "14px" }}
+                    />
+                    <span style={{ fontWeight: "500", color: "#334155" }}>
+                      Enable Restaurant POS add-on for this tenant
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={saveRestaurantAddon}
+                    disabled={savingRestaurantAddon}
+                    style={{
+                      background: "#0f172a",
+                      color: "#fff",
+                      padding: "0.3rem 0.8rem",
+                      borderRadius: "5px",
+                      border: "none",
+                      cursor: savingRestaurantAddon ? "not-allowed" : "pointer",
+                      fontWeight: "500",
+                      fontSize: "12px",
+                      opacity: savingRestaurantAddon ? 0.6 : 1,
+                    }}
+                  >
+                    {savingRestaurantAddon ? "Saving..." : "Save Add-on Setting"}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1005,6 +1187,104 @@ const fetchMpesaConfig = useCallback(async () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showProvisionModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(15, 23, 42, 0.45)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 60,
+          padding: '1rem',
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '520px',
+            background: '#fff',
+            borderRadius: '10px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 10px 30px rgba(2, 6, 23, 0.2)',
+            padding: '1rem',
+          }}>
+            <h3 style={{ margin: 0, fontSize: '15px', color: '#0f172a' }}>Assign + Provision Metrics</h3>
+            <p style={{ marginTop: '0.35rem', marginBottom: '0.75rem', fontSize: '12px', color: '#64748b' }}>
+              Pick the classification for this tenant, then provision default units and variant attributes.
+            </p>
+
+            <div style={{ marginBottom: '0.6rem', fontSize: '12px', color: '#334155' }}>
+              <strong>Tenant:</strong> {tenant.name}
+            </div>
+            <div style={{ marginBottom: '0.6rem', fontSize: '12px', color: '#334155' }}>
+              <strong>Business Type:</strong> {tenant.businessType || 'Unknown'}
+            </div>
+
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '0.2rem' }}>
+              Classification
+            </label>
+            <select
+              value={selectedClassificationId}
+              onChange={(e) => setSelectedClassificationId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.35rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                fontSize: '12px',
+                marginBottom: '0.4rem',
+              }}
+            >
+              <option value="">Select classification</option>
+              {classificationOptions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+
+            {classificationOptions.length === 0 && (
+              <p style={{ marginTop: '0.25rem', marginBottom: '0.5rem', color: '#b91c1c', fontSize: '12px' }}>
+                No active classifications available. Create or activate one first.
+              </p>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.45rem', marginTop: '0.9rem' }}>
+              <button
+                onClick={() => setShowProvisionModal(false)}
+                style={{
+                  background: '#fff',
+                  color: '#334155',
+                  padding: '0.3rem 0.75rem',
+                  borderRadius: '5px',
+                  border: '1px solid #cbd5e1',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={assignAndProvisionMetrics}
+                disabled={!selectedClassificationId || savingProvisioning}
+                style={{
+                  background: '#0f172a',
+                  color: '#fff',
+                  padding: '0.3rem 0.75rem',
+                  borderRadius: '5px',
+                  border: 'none',
+                  cursor: !selectedClassificationId || savingProvisioning ? 'not-allowed' : 'pointer',
+                  fontSize: '12px',
+                  opacity: !selectedClassificationId || savingProvisioning ? 0.6 : 1,
+                  fontWeight: 500,
+                }}
+              >
+                {savingProvisioning ? 'Provisioning...' : 'Assign + Provision'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -30,6 +30,13 @@ interface BillingOpsTenant {
   accountActionLabel: string;
 }
 
+interface PlanOption {
+  id: string;
+  name: string;
+  interval?: string;
+  isActive?: boolean;
+}
+
 interface ReconciliationData {
   generatedAt: string;
   summary: {
@@ -98,6 +105,9 @@ export default function BillingOperationsPage() {
   const [selectedTenant, setSelectedTenant] = useState<BillingOpsTenant | null>(null);
   const [graceDays, setGraceDays] = useState<number>(30);
   const [renewMonths, setRenewMonths] = useState<number>(1);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [plans, setPlans] = useState<PlanOption[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
   const [actionReason, setActionReason] = useState('');
   const [reconciliation, setReconciliation] = useState<ReconciliationData | null>(null);
   const [reconLoading, setReconLoading] = useState(false);
@@ -223,6 +233,23 @@ export default function BillingOperationsPage() {
     setActionReason('');
     setGraceDays(30);
     setRenewMonths(1);
+    setSelectedPlanId('');
+  };
+
+  const loadPlansForManualRenew = async () => {
+    try {
+      setPlansLoading(true);
+      const response = await apiGet<PlanOption[]>('/admin/plans');
+      const activePlans = Array.isArray(response)
+        ? response.filter((p) => p?.isActive !== false)
+        : [];
+      setPlans(activePlans);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load plans');
+      setPlans([]);
+    } finally {
+      setPlansLoading(false);
+    }
   };
 
   const openGraceModal = (tenant: BillingOpsTenant) => {
@@ -241,6 +268,11 @@ export default function BillingOperationsPage() {
     setModalAction('renew');
     setActionReason('');
     setRenewMonths(1);
+    setSelectedPlanId('');
+
+    if (tenant.billingState === 'no_subscription' || !tenant.subscriptionId) {
+      loadPlansForManualRenew();
+    }
   };
 
   const submitModalAction = async () => {
@@ -279,6 +311,13 @@ export default function BillingOperationsPage() {
           return;
         }
 
+        const requiresPlan =
+          selectedTenant.billingState === 'no_subscription' || !selectedTenant.subscriptionId;
+        if (requiresPlan && !selectedPlanId) {
+          setError('Select a plan to create the first subscription for this tenant');
+          return;
+        }
+
         const result = await apiPost<{
           renewedMonths: number;
           currentPeriodEnd: string | null;
@@ -287,6 +326,7 @@ export default function BillingOperationsPage() {
           {
             months: renewMonths,
             reason: actionReason,
+            planId: requiresPlan ? selectedPlanId : undefined,
           },
         );
 
@@ -723,6 +763,30 @@ export default function BillingOperationsPage() {
                     onChange={(e) => setRenewMonths(Number(e.target.value || 0))}
                     className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
                   />
+
+                  {(selectedTenant.billingState === 'no_subscription' || !selectedTenant.subscriptionId) && (
+                    <div className="mt-3">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Select plan for initial subscription
+                      </label>
+                      <select
+                        value={selectedPlanId}
+                        onChange={(e) => setSelectedPlanId(e.target.value)}
+                        className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        <option value="">Choose a plan</option>
+                        {plans.map((plan) => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.name}
+                            {plan.interval ? ` (${plan.interval})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {plansLoading && (
+                        <div className="mt-1 text-xs text-gray-500">Loading plans...</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

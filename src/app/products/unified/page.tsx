@@ -146,6 +146,19 @@ interface ForecastData {
   confidence: number;
 }
 
+const RESTAURANT_MENU_CATEGORIES = [
+  'Meals',
+  'Desserts',
+  'Beer',
+  'Wines',
+  'Spirits',
+  'Cocktails',
+  'Sodas',
+  'Water & Juices',
+  'Hot Drinks',
+  'Bar Snacks',
+];
+
 type TabType = 'products' | 'inventory' | 'advanced' | 'attributes' | 'variations';
 type AdvancedSubTab = 'overview' | 'movements' | 'alerts' | 'forecasting' | 'locations';
 
@@ -154,19 +167,27 @@ export default function UnifiedProductsInventoryPage() {
   const { data: tenant, isLoading: tenantLoading } = useTenant();
   // State for classification units
   const [classificationUnits, setClassificationUnits] = useState<any[]>([]);
+  const [classificationMeta, setClassificationMeta] = useState<{ slug?: string; name?: string } | null>(null);
 
   // Fetch classification units when tenant changes
   useEffect(() => {
     async function fetchUnits() {
       if (tenant?.classificationId) {
         try {
-          const classification = (await apiGet(`/admin/classifications/${tenant.classificationId}`)) as { units?: any[] };
+          const classification = (await apiGet(`/admin/classifications/${tenant.classificationId}`)) as {
+            units?: any[];
+            slug?: string;
+            name?: string;
+          };
           setClassificationUnits(classification.units || []);
+          setClassificationMeta({ slug: classification.slug, name: classification.name });
         } catch (e) {
           setClassificationUnits([]);
+          setClassificationMeta(null);
         }
       } else {
         setClassificationUnits([]);
+        setClassificationMeta(null);
       }
     }
     fetchUnits();
@@ -206,6 +227,7 @@ export default function UnifiedProductsInventoryPage() {
   const [showDeletedProducts, setShowDeletedProducts] = useState(false);
   const [productType, setProductType] = useState<'simple' | 'withVariations'>('simple');
   const [redirectToVariations, setRedirectToVariations] = useState(false);
+  const [productCategoryInput, setProductCategoryInput] = useState('');
 
   // Inventory tab states
   const [stockFilter, setStockFilter] = useState("all");
@@ -886,6 +908,36 @@ export default function UnifiedProductsInventoryPage() {
   const hasCreatedProduct = (products.length > 0) || ((inventoryProductsData?.length || 0) > 0);
   const hasAttributes = (attributesSetupData?.length || 0) > 0;
   const hasPickedVariationProduct = !!selectedProductId;
+  const isRestaurantTenant = useMemo(() => {
+    const tenantData = (tenant || {}) as Record<string, unknown>;
+    const businessType = String(tenantData.businessType || '').toLowerCase();
+    const hasRestaurantAddon = Boolean(tenantData.restaurantFeaturesEnabled);
+    const classificationSlug = String(classificationMeta?.slug || '').toLowerCase();
+    const classificationName = String(classificationMeta?.name || '').toLowerCase();
+
+    return (
+      hasRestaurantAddon ||
+      businessType.includes('restaurant') ||
+      businessType.includes('hospitality') ||
+      classificationSlug.includes('restaurant') ||
+      classificationSlug.includes('hospitality') ||
+      classificationName.includes('restaurant') ||
+      classificationName.includes('hospitality')
+    );
+  }, [tenant, classificationMeta]);
+
+  const categoryOptions = useMemo(() => {
+    const fromCatalog = categories.filter((cat): cat is string => Boolean(cat && String(cat).trim()));
+    if (!isRestaurantTenant) return fromCatalog;
+    return Array.from(new Set([...RESTAURANT_MENU_CATEGORIES, ...fromCatalog]));
+  }, [categories, isRestaurantTenant]);
+
+  useEffect(() => {
+    if (!showAddForm || editProduct) return;
+    if (isRestaurantTenant && !productCategoryInput.trim()) {
+      setProductCategoryInput('Meals');
+    }
+  }, [showAddForm, editProduct, isRestaurantTenant, productCategoryInput]);
 
   // Product handlers
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -914,6 +966,7 @@ export default function UnifiedProductsInventoryPage() {
         cost: parseFloat(formData.get("cost") as string) || 0,
         stock: productType === 'withVariations' ? 0 : 0, // Stock managed per variation or set to 0 for simple products
         description: formData.get("description"),
+        category: String(formData.get('category') || '').trim() || undefined,
         supplier: formData.get("supplier"),
         branchId: selectedBranchId,
       }, { 'x-branch-id': selectedBranchId || '' }) as Product;
@@ -949,6 +1002,7 @@ export default function UnifiedProductsInventoryPage() {
           cost: parseFloat(formData.get("cost") as string) || 0,
           stock: editProduct.stock || 0, // Preserve existing stock (managed per variation for variation products)
           description: formData.get("description"),
+          category: String(formData.get('category') || '').trim() || undefined,
           supplier: formData.get("supplier"),
         }, { 'x-branch-id': selectedBranchId || '' });
         setEditProduct(null);
@@ -966,11 +1020,13 @@ export default function UnifiedProductsInventoryPage() {
 
   const resetForm = () => {
     setEditProduct(null);
+    setProductCategoryInput('');
     setShowAddForm(false);
   };
 
   function openEditModal(product: Product) {
     setEditProduct(product);
+    setProductCategoryInput(product.category || '');
     setShowAddForm(true);
   }
 
@@ -1246,6 +1302,17 @@ export default function UnifiedProductsInventoryPage() {
 
   const usagePercentage = getUsagePercentage();
   const isNearLimit = usagePercentage >= 80;
+  const topTitle = isRestaurantTenant ? 'Menu & Inventory' : 'Products & Inventory';
+  const productsTabLabel = isRestaurantTenant ? 'Menu' : 'Products';
+  const productsCountLabel = isRestaurantTenant ? 'Menu Item' : 'Physical Item';
+  const addPrimaryLabel = isRestaurantTenant ? 'Add Menu Item' : 'Add Product';
+  const createPrimaryLabel = isRestaurantTenant ? 'Create Menu Item' : 'Create Product';
+  const noItemsTitle = isRestaurantTenant ? 'No menu items found' : 'No products found';
+  const noItemsDescription = search
+    ? 'Try adjusting your search criteria'
+    : isRestaurantTenant
+      ? 'Get started by adding your first menu item'
+      : 'Get started by adding your first product';
 
   // Pagination for inventory
   const inventoryItemsPerPage = 12;
@@ -1273,9 +1340,11 @@ export default function UnifiedProductsInventoryPage() {
                   <FaExclamationTriangle className="h-4 w-4 text-amber-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-amber-900">Approaching Physical Item Limit</p>
+                  <p className="text-xs font-semibold text-amber-900">
+                    {isRestaurantTenant ? 'Approaching Menu Item Limit' : 'Approaching Physical Item Limit'}
+                  </p>
                   <p className="mt-0.5 text-xs text-amber-700">
-                    {limits?.usage.products.current} of {limits?.usage.products.limit} physical items used
+                    {limits?.usage.products.current} of {limits?.usage.products.limit} {isRestaurantTenant ? 'menu items' : 'physical items'} used
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -1307,7 +1376,7 @@ export default function UnifiedProductsInventoryPage() {
                     <FaBox className="h-3.5 w-3.5 text-white" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h1 className="text-sm font-semibold text-gray-900">Products & Inventory</h1>
+                    <h1 className="text-sm font-semibold text-gray-900">{topTitle}</h1>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -1343,7 +1412,7 @@ export default function UnifiedProductsInventoryPage() {
             <div className="border-b border-gray-200 bg-gray-50/50">
               <nav className="flex overflow-x-auto scrollbar-hide -mb-px" role="tablist">
                 {[
-                  { id: 'products', label: 'Products', icon: FaBox, count: sortedProducts.length },
+                  { id: 'products', label: productsTabLabel, icon: FaBox, count: sortedProducts.length },
                   { id: 'inventory', label: 'Inventory', icon: FaWarehouse, count: filteredInventoryProducts.length },
                   { id: 'advanced', label: 'Advanced', icon: FaChartLine },
                   { id: 'attributes', label: 'Attributes', icon: FaPalette },
@@ -1396,7 +1465,7 @@ export default function UnifiedProductsInventoryPage() {
                                 Loading...
                               </span>
                             ) : (
-                              `${sortedProducts.length} Physical Item${sortedProducts.length !== 1 ? 's' : ''}`
+                              `${sortedProducts.length} ${productsCountLabel}${sortedProducts.length !== 1 ? 's' : ''}`
                             )}
                           </span>
                         </div>
@@ -1424,7 +1493,7 @@ export default function UnifiedProductsInventoryPage() {
                           type="text"
                           value={search}
                           onChange={e => setSearch(e.target.value)}
-                          placeholder="Search by product, variation SKU, or attributes..."
+                          placeholder={isRestaurantTenant ? 'Search menu item, SKU, or attributes...' : 'Search by product, variation SKU, or attributes...'}
                           className="w-full rounded border border-gray-300 bg-white py-2 pl-9 pr-3 text-xs text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                           aria-label="Search products"
                         />
@@ -1467,7 +1536,7 @@ export default function UnifiedProductsInventoryPage() {
                           aria-label="Add new product"
                         >
                           <FaPlus className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Add Product</span>
+                          <span className="hidden sm:inline">{addPrimaryLabel}</span>
                           <span className="sm:hidden">Add</span>
                         </button>
                       )}
@@ -1479,7 +1548,11 @@ export default function UnifiedProductsInventoryPage() {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-xs font-semibold text-blue-800">New here? Follow this order:</p>
-                        <p className="text-[11px] text-blue-700">1. Create Product, 2. Add Attributes (optional), 3. Add Variations, 4. Update Variation Stock</p>
+                        <p className="text-[11px] text-blue-700">
+                          {isRestaurantTenant
+                            ? '1. Add Menu Item, 2. Set Category, 3. Add Variations (optional), 4. Update stock for tracked items'
+                            : '1. Create Product, 2. Add Attributes (optional), 3. Add Variations, 4. Update Variation Stock'}
+                        </p>
                         <div className="mt-1 flex flex-wrap gap-1.5">
                           <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${hasCreatedProduct ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-gray-600 border border-blue-200'}`}>
                             {hasCreatedProduct ? 'Step 1 complete' : 'Step 1 pending'}
@@ -1497,7 +1570,7 @@ export default function UnifiedProductsInventoryPage() {
                           onClick={() => setShowAddForm(true)}
                           className="rounded border border-blue-300 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
                         >
-                          Create Product
+                          {createPrimaryLabel}
                         </button>
                         <button
                           onClick={() => setActiveTab('attributes')}
@@ -1531,14 +1604,18 @@ export default function UnifiedProductsInventoryPage() {
                           </div>
                           <div>
                             <h2 className="text-base font-semibold text-gray-900">
-                              {editProduct ? 'Edit Product' : 'Add New Product'}
+                              {editProduct ? (isRestaurantTenant ? 'Edit Menu Item' : 'Edit Product') : (isRestaurantTenant ? 'Add New Menu Item' : 'Add New Product')}
                             </h2>
                             <p className="mt-0.5 text-xs text-gray-500">
                               {editProduct
-                                ? 'Update product information'
+                                ? isRestaurantTenant ? 'Update menu item information' : 'Update product information'
                                 : productType === 'withVariations'
-                                  ? 'Step 1 of 2 — basic details. We will help you add variations next.'
-                                  : 'Create a new product in your catalog'}
+                                  ? isRestaurantTenant
+                                    ? 'Step 1 of 2 — basic menu item details. We will help you add variations next.'
+                                    : 'Step 1 of 2 — basic details. We will help you add variations next.'
+                                  : isRestaurantTenant
+                                    ? 'Create a new menu item in your catalog'
+                                    : 'Create a new product in your catalog'}
                             </p>
                           </div>
                         </div>
@@ -1568,7 +1645,7 @@ export default function UnifiedProductsInventoryPage() {
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Product Name <span className="text-red-500">*</span>
+                              {isRestaurantTenant ? 'Menu Item Name' : 'Product Name'} <span className="text-red-500">*</span>
                             </label>
                             <input
                               type="text"
@@ -1576,7 +1653,7 @@ export default function UnifiedProductsInventoryPage() {
                               defaultValue={editProduct?.name || ''}
                               required
                               className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                              placeholder="Enter product name"
+                              placeholder={isRestaurantTenant ? 'Enter menu item name' : 'Enter product name'}
                             />
                           </div>
                           <div>
@@ -1676,6 +1753,47 @@ export default function UnifiedProductsInventoryPage() {
                             placeholder="Enter product description (optional)"
                           />
                         </div>
+                        <div>
+                          <div className="mb-2 flex items-center justify-between">
+                            <label className="block text-sm font-semibold text-gray-700">Category</label>
+                            {isRestaurantTenant && (
+                              <span className="text-[11px] font-medium text-emerald-700">Restaurant menu groups</span>
+                            )}
+                          </div>
+                          <input
+                            type="text"
+                            name="category"
+                            value={productCategoryInput}
+                            onChange={(e) => setProductCategoryInput(e.target.value)}
+                            list="product-category-options"
+                            className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                            placeholder={isRestaurantTenant ? 'Meals, Desserts, Beer, Cocktails...' : 'Enter category'}
+                          />
+                          <datalist id="product-category-options">
+                            {categoryOptions.map((cat) => (
+                              <option key={cat} value={cat} />
+                            ))}
+                          </datalist>
+
+                          {isRestaurantTenant && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {RESTAURANT_MENU_CATEGORIES.map((cat) => (
+                                <button
+                                  key={cat}
+                                  type="button"
+                                  onClick={() => setProductCategoryInput(cat)}
+                                  className={`rounded-full border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                                    productCategoryInput === cat
+                                      ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {cat}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 border-t border-gray-200 pt-2.5">
                           <button
                             type="submit"
@@ -1697,7 +1815,7 @@ export default function UnifiedProductsInventoryPage() {
                                 ) : (
                                   <>
                                     <FaPlus className="w-4 h-4" />
-                                    <span>Create Product</span>
+                                    <span>{createPrimaryLabel}</span>
                                   </>
                                 )}
                               </>
@@ -1782,9 +1900,9 @@ export default function UnifiedProductsInventoryPage() {
                         <div className="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
                           <FaBox className="h-5 w-5 text-gray-400" />
                         </div>
-                        <h3 className="mb-1 text-sm font-semibold text-gray-900">No products found</h3>
+                        <h3 className="mb-1 text-sm font-semibold text-gray-900">{noItemsTitle}</h3>
                         <p className="mb-3 text-xs text-gray-600">
-                          {search ? 'Try adjusting your search criteria' : 'Get started by adding your first product'}
+                          {noItemsDescription}
                         </p>
                         {canCreateProducts && !search && (
                           <button
@@ -1792,7 +1910,7 @@ export default function UnifiedProductsInventoryPage() {
                             className="inline-flex items-center gap-1.5 rounded bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
                           >
                             <FaPlus className="w-4 h-4" />
-                            Add Your First Product
+                            {isRestaurantTenant ? 'Add Your First Menu Item' : 'Add Your First Product'}
                           </button>
                         )}
                       </div>
@@ -2024,9 +2142,15 @@ export default function UnifiedProductsInventoryPage() {
                                   <td colSpan={7} className="px-3 py-7 text-center">
                                     <div className="flex flex-col items-center">
                                       <FaBox className="w-12 h-12 text-gray-300 mb-3" />
-                                      <p className="text-sm font-medium text-gray-900 mb-1">No physical items found</p>
+                                      <p className="text-sm font-medium text-gray-900 mb-1">
+                                        {isRestaurantTenant ? 'No menu items found' : 'No physical items found'}
+                                      </p>
                                       <p className="text-xs text-gray-500">
-                                        {search ? 'Try adjusting your search' : 'Add your first product to get started'}
+                                        {search
+                                          ? 'Try adjusting your search'
+                                          : isRestaurantTenant
+                                            ? 'Add your first menu item to get started'
+                                            : 'Add your first product to get started'}
                                       </p>
                                     </div>
                                   </td>
@@ -2166,11 +2290,11 @@ export default function UnifiedProductsInventoryPage() {
                       {loadingMore ? (
                         <>
                           <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                          Loading Products...
+                          {isRestaurantTenant ? 'Loading Menu Items...' : 'Loading Products...'}
                         </>
                       ) : (
                         <>
-                          Load More Products
+                          {isRestaurantTenant ? 'Load More Menu Items' : 'Load More Products'}
                           <FaChevronRight className="h-3.5 w-3.5" />
                         </>
                       )}
@@ -2182,14 +2306,20 @@ export default function UnifiedProductsInventoryPage() {
                 {products.length === 0 && !loading && !isSearching && (
                   <div className="text-center py-8 bg-white rounded border border-gray-200">
                     <FaBox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <h3 className="text-base font-medium text-gray-900 mb-1">No products yet</h3>
-                    <p className="text-xs text-gray-500 mb-2">Get started by adding your first product.</p>
+                    <h3 className="text-base font-medium text-gray-900 mb-1">
+                      {isRestaurantTenant ? 'No menu items yet' : 'No products yet'}
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-2">
+                      {isRestaurantTenant
+                        ? 'Get started by adding your first menu item.'
+                        : 'Get started by adding your first product.'}
+                    </p>
                     {canCreateProducts && (
                       <button
                         onClick={() => setShowAddForm(true)}
                         className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
                       >
-                        Add Your First Product
+                        {isRestaurantTenant ? 'Add Your First Menu Item' : 'Add Your First Product'}
                       </button>
                     )}
                   </div>
@@ -2213,7 +2343,7 @@ export default function UnifiedProductsInventoryPage() {
                     {inventoryStats && (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
                         <div className="bg-blue-50 rounded-lg p-2 border border-blue-100">
-                          <p className="text-[11px] font-semibold text-gray-500">Total Products</p>
+                          <p className="text-[11px] font-semibold text-gray-500">{isRestaurantTenant ? 'Total Menu Items' : 'Total Products'}</p>
                           <p className="text-base font-bold text-blue-600">{inventoryStats.totalProducts}</p>
                         </div>
                         <div className="bg-green-50 rounded-lg p-2 border border-green-100">
@@ -2240,7 +2370,7 @@ export default function UnifiedProductsInventoryPage() {
                             type="text"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder="Search products..."
+                            placeholder={isRestaurantTenant ? 'Search menu items...' : 'Search products...'}
                             className="w-full pl-7 pr-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs"
                           />
                         </div>
@@ -2254,20 +2384,38 @@ export default function UnifiedProductsInventoryPage() {
                           <option value="out">Out of Stock</option>
                           <option value="low">Low Stock</option>
                         </select>
-                        {categories.length > 0 && (
+                        {categoryOptions.length > 0 && (
                           <select
                             value={categoryFilter}
                             onChange={e => setCategoryFilter(e.target.value)}
                             className="px-2 py-1 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 text-xs font-semibold"
                           >
                             <option value="all">All Categories</option>
-                            {categories.map(cat => (
+                            {categoryOptions.map(cat => (
                               <option key={cat} value={cat}>{cat}</option>
                             ))}
                           </select>
                         )}
                       </div>
                       <div className="flex gap-1">
+                        {isRestaurantTenant && (
+                          <div className="hidden xl:flex items-center gap-1 mr-1">
+                            {RESTAURANT_MENU_CATEGORIES.slice(0, 5).map((cat) => (
+                              <button
+                                key={`filter-${cat}`}
+                                type="button"
+                                onClick={() => setCategoryFilter(cat)}
+                                className={`rounded px-2 py-1 text-[11px] font-semibold border ${
+                                  categoryFilter === cat
+                                    ? 'bg-emerald-600 text-white border-emerald-600'
+                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                }`}
+                              >
+                                {cat}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <button
                           onClick={exportInventory}
                           className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-semibold shadow"
@@ -2282,10 +2430,14 @@ export default function UnifiedProductsInventoryPage() {
                     {currentInventoryProducts.length === 0 ? (
                       <div className="text-center py-8">
                         <FaBox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                        <h3 className="text-base font-semibold text-gray-900 mb-1">No products found</h3>
+                        <h3 className="text-base font-semibold text-gray-900 mb-1">
+                          {isRestaurantTenant ? 'No menu items found' : 'No products found'}
+                        </h3>
                         <p className="text-xs text-gray-500">
                           {inventoryData && inventoryData.length === 0
-                            ? "No inventory items found. Products need to have inventory entries to appear here."
+                            ? isRestaurantTenant
+                              ? 'No tracked inventory found yet. Menu items appear here when inventory is enabled for them.'
+                              : 'No inventory items found. Products need to have inventory entries to appear here.'
                             : "Try adjusting your search or filters"}
                         </p>
                       </div>
@@ -2409,7 +2561,7 @@ export default function UnifiedProductsInventoryPage() {
                         <div className="rounded border border-gray-200 bg-white p-3">
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="text-xs font-medium text-gray-500 mb-1">Total Products</p>
+                              <p className="text-xs font-medium text-gray-500 mb-1">{isRestaurantTenant ? 'Total Menu Items' : 'Total Products'}</p>
                               <p className="text-lg font-semibold text-gray-900">{advancedStats.totalProducts}</p>
                             </div>
                             <div className="rounded bg-blue-50 p-2">
@@ -2454,7 +2606,7 @@ export default function UnifiedProductsInventoryPage() {
                             type="text"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder="Search products..."
+                            placeholder={isRestaurantTenant ? 'Search menu items...' : 'Search products...'}
                             className="w-full rounded border border-gray-300 py-1.5 pl-8 pr-2 text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
@@ -2475,7 +2627,7 @@ export default function UnifiedProductsInventoryPage() {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-600">Product</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-600">{isRestaurantTenant ? 'Menu Item' : 'Product'}</th>
                           <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-600">Stock</th>
                           <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-600">Status</th>
                           <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-600">Actions</th>
@@ -2487,7 +2639,9 @@ export default function UnifiedProductsInventoryPage() {
                             <td colSpan={4} className="px-4 py-12 text-center">
                               <div className="flex flex-col items-center">
                                 <FaBox className="w-12 h-12 text-gray-300 mb-3" />
-                                <p className="text-sm font-medium text-gray-900 mb-1">No products found</p>
+                                <p className="text-sm font-medium text-gray-900 mb-1">
+                                  {isRestaurantTenant ? 'No menu items found' : 'No products found'}
+                                </p>
                                 <p className="text-xs text-gray-500">Try adjusting your search or filters</p>
                               </div>
                             </td>
