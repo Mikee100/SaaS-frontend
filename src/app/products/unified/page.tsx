@@ -146,6 +146,13 @@ interface ForecastData {
   confidence: number;
 }
 
+interface ProductCategory {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+}
+
 const RESTAURANT_MENU_CATEGORIES = [
   'Meals',
   'Desserts',
@@ -228,6 +235,12 @@ export default function UnifiedProductsInventoryPage() {
   const [productType, setProductType] = useState<'simple' | 'withVariations'>('simple');
   const [redirectToVariations, setRedirectToVariations] = useState(false);
   const [productCategoryInput, setProductCategoryInput] = useState('');
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState('');
 
   // Inventory tab states
   const [stockFilter, setStockFilter] = useState("all");
@@ -926,18 +939,47 @@ export default function UnifiedProductsInventoryPage() {
     );
   }, [tenant, classificationMeta]);
 
+  const {
+    data: managedCategories = [],
+    refetch: refetchManagedCategories,
+  } = useQuery({
+    queryKey: ['products', 'categories', user?.tenantId],
+    queryFn: async () => {
+      const response = (await apiGet('/products/categories')) as ProductCategory[];
+      return Array.isArray(response) ? response : [];
+    },
+    enabled: !!user?.tenantId,
+    staleTime: 60 * 1000,
+  });
+
+  const managedCategoryNames = useMemo(
+    () => managedCategories.map((item) => item.name).filter(Boolean),
+    [managedCategories],
+  );
+
+  const quickCategoryChips = useMemo(
+    () => (managedCategoryNames.length > 0 ? managedCategoryNames : RESTAURANT_MENU_CATEGORIES),
+    [managedCategoryNames],
+  );
+
   const categoryOptions = useMemo(() => {
     const fromCatalog = categories.filter((cat): cat is string => Boolean(cat && String(cat).trim()));
-    if (!isRestaurantTenant) return fromCatalog;
-    return Array.from(new Set([...RESTAURANT_MENU_CATEGORIES, ...fromCatalog]));
-  }, [categories, isRestaurantTenant]);
+    if (!isRestaurantTenant) return Array.from(new Set([...managedCategoryNames, ...fromCatalog]));
+    return Array.from(new Set([...(managedCategoryNames.length ? managedCategoryNames : RESTAURANT_MENU_CATEGORIES), ...fromCatalog]));
+  }, [categories, isRestaurantTenant, managedCategoryNames]);
 
   useEffect(() => {
     if (!showAddForm || editProduct) return;
     if (isRestaurantTenant && !productCategoryInput.trim()) {
-      setProductCategoryInput('Meals');
+      setProductCategoryInput((managedCategoryNames[0] || 'Meals'));
     }
-  }, [showAddForm, editProduct, isRestaurantTenant, productCategoryInput]);
+  }, [showAddForm, editProduct, isRestaurantTenant, productCategoryInput, managedCategoryNames]);
+
+  useEffect(() => {
+    if (categoryFilter !== 'all' && !categoryOptions.includes(categoryFilter)) {
+      setCategoryFilter('all');
+    }
+  }, [categoryFilter, categoryOptions]);
 
   // Product handlers
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -1034,6 +1076,61 @@ export default function UnifiedProductsInventoryPage() {
     if (!confirm("Delete this product?")) return;
     await apiDelete(`/products/${id}`, { 'x-branch-id': selectedBranchId || '' });
     queryClient.invalidateQueries({ queryKey: ['products', selectedBranchId] });
+  }
+
+  async function handleCreateCategory() {
+    const name = newCategoryName.trim();
+    if (!name) return;
+
+    setCategorySaving(true);
+    setCategoryError('');
+    try {
+      await apiPost('/products/categories', { name });
+      setNewCategoryName('');
+      await refetchManagedCategories();
+    } catch (err: any) {
+      setCategoryError(err?.message || 'Failed to create category');
+    } finally {
+      setCategorySaving(false);
+    }
+  }
+
+  async function handleUpdateCategory() {
+    if (!editingCategoryId) return;
+    const name = editingCategoryName.trim();
+    if (!name) return;
+
+    setCategorySaving(true);
+    setCategoryError('');
+    try {
+      await apiPut(`/products/categories/${editingCategoryId}`, { name });
+      setEditingCategoryId(null);
+      setEditingCategoryName('');
+      await refetchManagedCategories();
+    } catch (err: any) {
+      setCategoryError(err?.message || 'Failed to update category');
+    } finally {
+      setCategorySaving(false);
+    }
+  }
+
+  async function handleDeleteCategory(categoryId: string) {
+    if (!confirm('Delete this category?')) return;
+
+    setCategorySaving(true);
+    setCategoryError('');
+    try {
+      await apiDelete(`/products/categories/${categoryId}`);
+      if (editingCategoryId === categoryId) {
+        setEditingCategoryId(null);
+        setEditingCategoryName('');
+      }
+      await refetchManagedCategories();
+    } catch (err: any) {
+      setCategoryError(err?.message || 'Failed to delete category');
+    } finally {
+      setCategorySaving(false);
+    }
   }
 
   const handleSort = (field: string) => {
@@ -1529,6 +1626,16 @@ export default function UnifiedProductsInventoryPage() {
                         {viewMode === 'grid' ? <FaSortAmountDown className="h-3.5 w-3.5" /> : <FaLayerGroup className="h-3.5 w-3.5" />}
                         <span className="hidden sm:inline">{viewMode === 'grid' ? 'Table' : 'Grid'}</span>
                       </button>
+                      {isRestaurantTenant && canEditProducts && (
+                        <button
+                          onClick={() => setShowCategoryManager(true)}
+                          className="flex items-center gap-1.5 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 transition-colors hover:bg-emerald-100"
+                        >
+                          <FaCog className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Manage Categories</span>
+                          <span className="sm:hidden">Categories</span>
+                        </button>
+                      )}
                       {canCreateProducts && (
                         <button
                           onClick={() => setShowAddForm(true)}
@@ -1777,7 +1884,7 @@ export default function UnifiedProductsInventoryPage() {
 
                           {isRestaurantTenant && (
                             <div className="mt-2 flex flex-wrap gap-1.5">
-                              {RESTAURANT_MENU_CATEGORIES.map((cat) => (
+                              {quickCategoryChips.map((cat) => (
                                 <button
                                   key={cat}
                                   type="button"
@@ -2400,7 +2507,7 @@ export default function UnifiedProductsInventoryPage() {
                       <div className="flex gap-1">
                         {isRestaurantTenant && (
                           <div className="hidden xl:flex items-center gap-1 mr-1">
-                            {RESTAURANT_MENU_CATEGORIES.slice(0, 5).map((cat) => (
+                            {quickCategoryChips.slice(0, 6).map((cat) => (
                               <button
                                 key={`filter-${cat}`}
                                 type="button"
@@ -2883,6 +2990,122 @@ export default function UnifiedProductsInventoryPage() {
             )}
           </div>
         </div>
+
+        {showCategoryManager && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3">
+            <div className="w-full max-w-lg rounded-md border border-gray-200 bg-white p-4 shadow-lg">
+              <div className="mb-3 flex items-center justify-between border-b border-gray-200 pb-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Manage Menu Categories</h3>
+                  <p className="text-xs text-gray-500">Create categories that staff will use in menu management.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCategoryManager(false);
+                    setCategoryError('');
+                    setEditingCategoryId(null);
+                    setEditingCategoryName('');
+                  }}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <FaTimes className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mb-3 flex gap-2">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="New category name"
+                  className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateCategory}
+                  disabled={categorySaving || !newCategoryName.trim()}
+                  className="rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  Add
+                </button>
+              </div>
+
+              {categoryError && (
+                <div className="mb-3 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+                  {categoryError}
+                </div>
+              )}
+
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {managedCategories.length === 0 ? (
+                  <p className="text-xs text-gray-500">No categories yet. Add your first one above.</p>
+                ) : (
+                  managedCategories.map((cat) => (
+                    <div
+                      key={cat.id}
+                      className="flex items-center gap-2 rounded border border-gray-200 bg-gray-50 p-2"
+                    >
+                      {editingCategoryId === cat.id ? (
+                        <input
+                          type="text"
+                          value={editingCategoryName}
+                          onChange={(e) => setEditingCategoryName(e.target.value)}
+                          className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
+                        />
+                      ) : (
+                        <div className="flex-1 text-xs font-medium text-gray-800">{cat.name}</div>
+                      )}
+
+                      {editingCategoryId === cat.id ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleUpdateCategory}
+                            disabled={categorySaving || !editingCategoryName.trim()}
+                            className="rounded bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-60"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCategoryId(null);
+                              setEditingCategoryName('');
+                            }}
+                            className="rounded border border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-700"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCategoryId(cat.id);
+                              setEditingCategoryName(cat.name);
+                            }}
+                            className="rounded border border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            disabled={categorySaving}
+                            className="rounded border border-red-300 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 disabled:opacity-60"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stock Update Modal (Inventory Tab) */}
         {showStockModal && modalProduct && (
