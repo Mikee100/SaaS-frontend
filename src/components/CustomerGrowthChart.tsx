@@ -216,7 +216,7 @@ export default function CustomerGrowthChart({
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                 <YAxis tickFormatter={formatNumber} tick={{ fontSize: 12 }} />
                 <CartesianGrid strokeDasharray="3 3" />
-                <Tooltip formatter={(value: number) => formatNumber(value)} />
+                <Tooltip formatter={(value) => formatNumber(Number(value ?? 0))} />
                 <Area type="monotone" dataKey="value" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorValue)" />
               </AreaChart>
             ) : (
@@ -224,7 +224,7 @@ export default function CustomerGrowthChart({
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                 <YAxis tickFormatter={formatNumber} tick={{ fontSize: 12 }} />
                 <CartesianGrid strokeDasharray="3 3" />
-                <Tooltip formatter={(value: number) => formatNumber(value)} />
+                <Tooltip formatter={(value) => formatNumber(Number(value ?? 0))} />
                 <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
               </LineChart>
             )}

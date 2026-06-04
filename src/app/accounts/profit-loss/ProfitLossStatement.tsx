@@ -384,7 +384,7 @@ export default function ProfitLossStatement() {
 
   const checkAccounts = async () => {
     try {
-      const res = await apiGet("/ledger/accounts", getBranchHeaders());
+      const res = await apiGet<Array<unknown>>("/ledger/accounts", getBranchHeaders());
       setAccountsCount(res.length);
     } catch (error) {
       console.error("Error checking accounts:", error);
@@ -394,7 +394,7 @@ export default function ProfitLossStatement() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await apiGet(
+      const res = await apiGet<ProfitAndLossData>(
         `/ledger/profit-loss?startDate=${startDate}&endDate=${endDate}`,
         getBranchHeaders(),
       );
@@ -417,7 +417,7 @@ export default function ProfitLossStatement() {
     try {
       const values = await Promise.all(
         periods.map(async (period) => {
-          const res = await apiGet(
+          const res = await apiGet<ProfitAndLossData>(
             `/ledger/profit-loss?startDate=${period.startDate}&endDate=${period.endDate}`,
             getBranchHeaders(),
           );
@@ -461,7 +461,7 @@ export default function ProfitLossStatement() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const res = await apiPost("/ledger/sync", {}, getBranchHeaders());
+      const res = await apiPost<{ syncedSalesCount: number }>("/ledger/sync", {}, getBranchHeaders());
       alert(`Sync complete! ${res.syncedSalesCount} records imported.`);
       fetchData();
     } catch (error) {
@@ -768,13 +768,13 @@ export default function ProfitLossStatement() {
                     tickFormatter={compactAmount}
                   />
                   <Tooltip
-                    formatter={(value: number, key: string) => [
-                      `KES ${Number(value).toLocaleString()}`,
-                      key === "revenue"
+                    formatter={(value, key) => [
+                      `KES ${Number(value ?? 0).toLocaleString()}`,
+                      String(key) === "revenue"
                         ? "Revenue"
-                        : key === "cogs"
+                        : String(key) === "cogs"
                           ? "COGS"
-                          : key === "expenses"
+                          : String(key) === "expenses"
                             ? "Expenses"
                             : "Net Profit",
                     ]}

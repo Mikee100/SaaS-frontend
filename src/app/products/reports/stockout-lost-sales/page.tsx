@@ -276,7 +276,7 @@ export default function StockoutLostSalesReportPage() {
                     tooltip: {
                       callbacks: {
                         label: function(context) {
-                          return `Lost Sales: Ksh ${context.parsed.y.toLocaleString()}`;
+                          return `Lost Sales: Ksh ${Number(context.parsed.y ?? 0).toLocaleString()}`;
                         }
                       }
                     }

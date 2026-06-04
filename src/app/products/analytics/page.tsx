@@ -257,7 +257,11 @@ export default function ProductAnalyticsPage() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ range, percentage }) => `${range}: ${typeof percentage === 'number' ? percentage.toFixed(1) : percentage}%`}
+                    label={({ payload, percent }) => {
+                      const range = String((payload as { range?: string } | undefined)?.range || 'N/A');
+                      const pct = typeof percent === 'number' ? (percent * 100).toFixed(1) : '0.0';
+                      return `${range}: ${pct}%`;
+                    }}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="count"

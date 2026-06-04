@@ -243,7 +243,7 @@ export default function InventoryValuationReportPage() {
                     tooltip: {
                       callbacks: {
                         label: function(context) {
-                          return `Stock Value: Ksh ${context.parsed.y.toLocaleString()}`;
+                          return `Stock Value: Ksh ${Number(context.parsed.y ?? 0).toLocaleString()}`;
                         }
                       }
                     }

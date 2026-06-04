@@ -338,12 +338,16 @@ export default function DashboardPage() {
   });
 
   const stockThreshold = stockConfig?.value ? Number(stockConfig.value) : 15;
+  const branchHeaders =
+    selectedBranchId && selectedBranchId !== "all"
+      ? { "x-branch-id": selectedBranchId }
+      : undefined;
 
   // Fetch dashboard analytics data (branch-aware)
   const { data: analyticsData, isLoading: analyticsLoading } = useQuery({
     queryKey: ['analytics', 'dashboard', selectedBranchId],
     queryFn: async () => {
-      const stats = await apiGet('/analytics/dashboard', { 'x-branch-id': selectedBranchId || undefined }) as AnalyticsData;
+      const stats = await apiGet('/analytics/dashboard', branchHeaders) as AnalyticsData;
       return {
         ...stats,
         topProducts: stats.topProducts?.map((p: { name: string; sales: number; revenue: number; margin?: number; cost?: number }) => ({
@@ -379,7 +383,7 @@ export default function DashboardPage() {
     enabled: !isRestricted && Boolean(selectedBranchId),
     queryFn: async () => {
       try {
-        const credits = await apiGet<CreditItem[]>('/sales/credits/all', { 'x-branch-id': selectedBranchId || undefined });
+        const credits = await apiGet<CreditItem[]>('/sales/credits/all', branchHeaders);
         if (!Array.isArray(credits)) {
           return { outstanding: 0, overdue: 0, openCredits: 0 };
         }
@@ -407,7 +411,7 @@ export default function DashboardPage() {
       try {
         const [targets, dailySales] = await Promise.all([
           apiGet<SalesTargets>('/sales-targets').catch(() => ({ daily: 0, weekly: 0, monthly: 0 })),
-          apiGet<Record<string, number>>('/analytics/sales/daily', { 'x-branch-id': selectedBranchId || undefined }).catch(() => ({})),
+          apiGet<Record<string, number>>('/analytics/sales/daily', branchHeaders).catch(() => ({} as Record<string, number>)),
         ]);
 
         const todayKey = new Date().toISOString().slice(0, 10);

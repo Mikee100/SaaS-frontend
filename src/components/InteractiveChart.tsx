@@ -25,7 +25,7 @@ interface InteractiveChartProps {
   yKey: string | string[];
   colors?: string[];
   height?: number;
-  onDrillDown?: (data: Record<string, unknown>) => void;
+  onDrillDown?: (data: unknown) => void;
 }
 
 const DEFAULT_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff00'];
@@ -152,7 +152,13 @@ export default function InteractiveChart({
               outerRadius={80}
               fill="#8884d8"
               dataKey={Array.isArray(yKey) ? yKey[0] : yKey}
-              onClick={onDrillDown}
+              onClick={
+                onDrillDown
+                  ? (data) => {
+                      onDrillDown(data);
+                    }
+                  : undefined
+              }
             >
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />

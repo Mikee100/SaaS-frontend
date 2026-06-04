@@ -59,7 +59,7 @@ export default function BranchComparisonGraph({ branches, branchSalesByPeriod, p
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: "#6b7280" }} minTickGap={18} />
             <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} />
-            <Tooltip formatter={(value: number) => [`KES ${Number(value).toLocaleString()}`, "Revenue"]} />
+            <Tooltip formatter={(value) => [`KES ${Number(value ?? 0).toLocaleString()}`, "Revenue"]} />
             <Legend />
             {branches.map((branch, idx) => (
               <Line

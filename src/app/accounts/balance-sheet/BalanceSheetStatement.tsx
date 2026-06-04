@@ -121,7 +121,7 @@ export default function BalanceSheetStatement() {
 
   const checkAccounts = async () => {
     try {
-      const res = await apiGet("/ledger/accounts", getBranchHeaders());
+      const res = await apiGet<Array<unknown>>("/ledger/accounts", getBranchHeaders());
       setAccountsCount(res.length);
     } catch (error) {
       console.error("Error checking accounts:", error);
@@ -131,7 +131,7 @@ export default function BalanceSheetStatement() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await apiGet(`/ledger/balance-sheet?date=${date}`, getBranchHeaders());
+      const res = await apiGet<BalanceSheetData>(`/ledger/balance-sheet?date=${date}`, getBranchHeaders());
       setData(res);
     } catch (error) {
       console.error("Error fetching balance sheet:", error);
@@ -156,7 +156,7 @@ export default function BalanceSheetStatement() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const res = await apiPost("/ledger/sync", {}, getBranchHeaders());
+      const res = await apiPost<{ syncedSalesCount: number }>("/ledger/sync", {}, getBranchHeaders());
       alert(`Sync complete! ${res.syncedSalesCount} records imported.`);
       fetchData();
     } catch (error) {

@@ -207,7 +207,7 @@ export default function SalesRevenueChart({
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                 <YAxis tickFormatter={formatCurrency} tick={{ fontSize: 12 }} />
                 <CartesianGrid strokeDasharray="3 3" />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
                 <Area type="monotone" dataKey="amount" stroke="#6366f1" fillOpacity={1} fill="url(#colorAmount)" />
               </AreaChart>
             ) : (
@@ -215,7 +215,7 @@ export default function SalesRevenueChart({
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                 <YAxis tickFormatter={formatCurrency} tick={{ fontSize: 12 }} />
                 <CartesianGrid strokeDasharray="3 3" />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
                 <Line type="monotone" dataKey="amount" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
               </LineChart>
             )}

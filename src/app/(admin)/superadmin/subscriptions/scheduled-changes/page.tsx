@@ -21,7 +21,7 @@ export default function ScheduledPlanChangesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiGet("/admin/subscriptions/scheduled")
+    apiGet<ScheduledPlanChange[]>("/admin/subscriptions/scheduled")
       .then(setData)
       .catch((e) => setError(e.message || "Failed to load"))
       .finally(() => setLoading(false));

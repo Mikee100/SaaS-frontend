@@ -302,6 +302,10 @@ export default function TenantBillingDetailsPage({
 
   const submitAction = async () => {
     if (!tenantId || !actionModal) return;
+    if (!tenant) {
+      setError('Tenant data is not loaded yet');
+      return;
+    }
 
     try {
       setActionLoading(true);

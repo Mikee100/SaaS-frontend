@@ -29,6 +29,14 @@ interface AnalyticsData {
   cogs?: number;
 }
 
+interface RevenueDashboardData {
+  branches?: Array<{ id: string; name: string }>;
+  branchSalesByDay?: Record<string, Record<string, number>>;
+  branchSalesByWeek?: Record<string, Record<string, number>>;
+  branchSalesByMonth?: Record<string, Record<string, number>>;
+  branchSalesByYear?: Record<string, Record<string, number>>;
+}
+
 interface ChartPoint {
   label: string;
   revenue: number;
@@ -221,9 +229,9 @@ export default function RevenuePage() {
       normalizedRoles.includes("admin") ||
       Boolean(user?.isSuperadmin));
   // Fetch dashboard analytics for branch comparison (all periods)
-  const { data: dashboardData } = useQuery({
+  const { data: dashboardData } = useQuery<RevenueDashboardData>({
     queryKey: ["revenue", "dashboard", selectedBranchId],
-    queryFn: () => apiGet("/analytics/dashboard", branchHeaders),
+    queryFn: () => apiGet<RevenueDashboardData>("/analytics/dashboard", branchHeaders),
     enabled: isTenantUser,
     staleTime: 2 * 60 * 1000,
   });
@@ -361,7 +369,7 @@ export default function RevenuePage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} minTickGap={18} />
                   <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} tickFormatter={compactAmount} width={70} />
-                  <Tooltip formatter={(value: number) => [`KES ${Number(value).toLocaleString()}`, "Revenue"]} />
+                  <Tooltip formatter={(value) => [`KES ${Number(value ?? 0).toLocaleString()}`, "Revenue"]} />
                   <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={2.2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
@@ -470,7 +478,7 @@ export default function RevenuePage() {
           />
           <RevenueBranchComparison
             branches={dashboardData.branches}
-            branchSalesByMonth={dashboardData.branchSalesByMonth}
+            branchSalesByMonth={dashboardData.branchSalesByMonth || {}}
           />
         </>
       )}

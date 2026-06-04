@@ -1103,7 +1103,7 @@ export default function PayrollPage() {
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             {loading ? (
               <div className="p-4 flex items-center justify-center">
-                <Spinner size="small" />
+                <Spinner />
               </div>
             ) : (
               <div className="max-h-135 overflow-auto">

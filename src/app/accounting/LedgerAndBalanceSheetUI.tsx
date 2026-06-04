@@ -76,15 +76,12 @@ export default function LedgerAndBalanceSheetUI() {
     setSelectedBranchId(assignedBranchId || "all");
   }, [assignedBranchId, branches, canTenantSelectBranch, isBranchScopedUser]);
 
-  const getBranchHeaders = () => {
-    if (typeof window === "undefined") return { "Content-Type": "application/json" };
-    if (!selectedBranchId || selectedBranchId === "all") {
-      return { "Content-Type": "application/json" };
+  const getBranchHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (typeof window !== "undefined" && selectedBranchId && selectedBranchId !== "all") {
+      headers["x-branch-id"] = selectedBranchId;
     }
-    return {
-      "Content-Type": "application/json",
-      "x-branch-id": selectedBranchId,
-    };
+    return headers;
   };
 
   const handleBranchChange = (event: ChangeEvent<HTMLSelectElement>) => {

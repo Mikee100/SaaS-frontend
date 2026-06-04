@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaExclamationTriangle, FaBox, FaShoppingCart, FaFilePdf, FaFileExcel, FaTh, FaList } from "react-icons/fa";
+import { FaExclamationTriangle, FaBox, FaShoppingCart, FaFilePdf, FaFileExcel, FaTh, FaList, FaFileAlt } from "react-icons/fa";
 import { hasPermission } from "@/utils/permissions";
 import { useUser } from "@/components/UserContext";
 
@@ -261,7 +261,8 @@ export default function ProductReportsPage() {
             })}
           </div>
         ) : (
-          <div className="space-y-3">
+          <>
+            <div className="space-y-3">
             {filteredReports.map((report) => {
               const Icon = report.icon;
               const categoryColor = report.category === 'products'
@@ -322,8 +323,8 @@ export default function ProductReportsPage() {
             })}
           </div>
 
-          {canViewHiddenReportsStatus && (
-            <section className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            {canViewHiddenReportsStatus && (
+              <section className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-amber-900">Hidden Reports Awaiting Backend</h2>
                 <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
@@ -356,8 +357,9 @@ export default function ProductReportsPage() {
               <p className="mt-2 text-xs text-amber-800">
                 Reference: docs/PRODUCT_INVENTORY_REPORTS_BACKEND_TODO.md
               </p>
-            </section>
-          )}
+              </section>
+            )}
+          </>
         )}
 
         {filteredReports.length === 0 && (

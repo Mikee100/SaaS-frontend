@@ -249,7 +249,7 @@ export default function DashboardPage() {
       try {
         const [targets, dailySales] = await Promise.all([
           apiGet<SalesTargets>('/sales-targets').catch(() => ({ daily: 0, weekly: 0, monthly: 0 })),
-          apiGet<Record<string, number>>('/analytics/sales/daily').catch(() => ({})),
+          apiGet<Record<string, number>>('/analytics/sales/daily').catch(() => ({} as Record<string, number>)),
         ]);
 
         const todayKey = new Date().toISOString().slice(0, 10);

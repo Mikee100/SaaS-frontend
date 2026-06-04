@@ -199,7 +199,7 @@ export default function SuperadminDashboard() {
                       borderRadius: "8px",
                       fontSize: "13px",
                     }}
-                    formatter={(value: number) => [formatKsh(value), "MRR"]}
+                    formatter={(value) => [formatKsh(Number(value ?? 0)), "MRR"]}
                     labelStyle={{ color: "#71717a" }}
                   />
                   <Area

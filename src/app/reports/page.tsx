@@ -1009,7 +1009,7 @@ export default function ReportsPage() {
                           bodyColor: '#ffffff',
                           callbacks: {
                             label: function(context) {
-                              return `${context.dataset.label}: Ksh ${context.parsed.y.toLocaleString()}`;
+                              return `${context.dataset.label}: Ksh ${Number(context.parsed.y ?? 0).toLocaleString()}`;
                             }
                           }
                         }

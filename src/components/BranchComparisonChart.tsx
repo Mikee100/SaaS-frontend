@@ -93,8 +93,8 @@ export default function BranchComparisonChart({ branchData, height = 300 }: Bran
                 borderRadius: '8px',
                 boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
               }}
-              formatter={(value: number) => [
-                `Ksh ${value.toLocaleString()}`,
+              formatter={(value) => [
+                `Ksh ${Number(value ?? 0).toLocaleString()}`,
                 `${viewMode.charAt(0).toUpperCase() + viewMode.slice(1)} Sales`
               ]}
               labelFormatter={(label) => `Branch: ${label}`}

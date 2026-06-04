@@ -351,8 +351,8 @@ export default function SystemAnalyticsPage() {
                       border: "1px solid #e5e7eb",
                       borderRadius: 6,
                     }}
-                    formatter={(value: number) => [
-                      formatSpace(value),
+                    formatter={(value) => [
+                      formatSpace(Number(value ?? 0)),
                       "Space Used",
                     ]}
                   />
@@ -393,9 +393,9 @@ export default function SystemAnalyticsPage() {
                       border: "1px solid #e5e7eb",
                       borderRadius: 6,
                     }}
-                    formatter={(value: number, name) => [
-                      `Ksh ${value.toFixed(2)}`,
-                      name === "revenue" ? "Revenue" : "MRR",
+                    formatter={(value, name) => [
+                      `Ksh ${Number(value ?? 0).toFixed(2)}`,
+                      String(name) === "revenue" ? "Revenue" : "MRR",
                     ]}
                   />
                   <Legend />
@@ -448,8 +448,8 @@ export default function SystemAnalyticsPage() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => [
-                      formatSpace(value),
+                    formatter={(value) => [
+                      formatSpace(Number(value ?? 0)),
                       "Space Used",
                     ]}
                   />

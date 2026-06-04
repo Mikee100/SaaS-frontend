@@ -12,6 +12,7 @@ import {
   FaLayerGroup, FaUpload, FaHistory, FaUsers, FaMoneyBillWave, FaFileInvoiceDollar, /* FaBuilding, */ FaBullseye,
   FaSun, FaMoon
 } from 'react-icons/fa';
+import type { IconType } from 'react-icons';
 import { MdOutlineInventory2, MdOutlineAnalytics, MdOutlineReport, MdOutlineSettings } from 'react-icons/md';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -19,6 +20,24 @@ import { hasPermission } from '@/utils/permissions';
 import { getFullAssetUrl } from '@/utils/logoUrl';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AppModuleKey, CrmCapabilityKey, isCrmCapabilityEnabled, isModuleEnabled } from '@/utils/moduleAccess';
+
+type PlanName = 'Basic' | 'Pro' | 'Enterprise';
+
+interface NavSubItem {
+  name: string;
+  href: string;
+  icon?: IconType;
+  requiredPermission?: string | null;
+  subItems?: NavSubItem[];
+}
+
+interface NavItem extends NavSubItem {
+  icon: IconType;
+  requiredPlan?: PlanName | null;
+  requiredModule?: AppModuleKey;
+  requiredCrmCapability?: CrmCapabilityKey;
+  subItems?: NavSubItem[];
+}
 
 
 export default function PlanBasedNav() {
@@ -81,7 +100,7 @@ export default function PlanBasedNav() {
   } : null;
 
   // Improved icon mapping for main and sub items
-  const navigationItems = React.useMemo(() => [
+  const navigationItems: NavItem[] = React.useMemo(() => [
     { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null, requiredModule: 'dashboard' as AppModuleKey },
     {
       name: 'AI Assistant',
@@ -195,8 +214,6 @@ export default function PlanBasedNav() {
     { name: 'Settings', href: '/settings', icon: MdOutlineSettings, requiredPlan: null, requiredPermission: null, requiredModule: 'settings' as AppModuleKey },
     { name: 'Billing & Subscription', href: '/account/billing', icon: FaFileInvoiceDollar, requiredPlan: null, requiredPermission: null, requiredModule: 'billing' as AppModuleKey },
   ], []);
-
-  type PlanName = 'Basic' | 'Pro' | 'Enterprise';
 
   const planHierarchy: Record<PlanName, number> = React.useMemo(() => ({
     'Basic': 1,
@@ -461,7 +478,8 @@ export default function PlanBasedNav() {
                           {item.subItems?.map((subItem) => {
                             const SubIcon = subItem.icon || FaChevronRight;
                             const isSubActive = pathname === subItem.href;
-                            const hasNested = subItem.subItems && subItem.subItems.length > 0;
+                            const nestedItems = subItem.subItems || [];
+                            const hasNested = nestedItems.length > 0;
                             const submenuKey = subItem.href || subItem.name;
                             const openNested = !!openSubmenus[submenuKey];
                             return (
@@ -508,7 +526,7 @@ export default function PlanBasedNav() {
                                 {/* Nested subitems */}
                                 {hasNested && openSubmenus[submenuKey] && (
                                   <div className="ml-4">
-                                    {subItem.subItems.map((nested) => {
+                                    {nestedItems.map((nested) => {
                                       const NestedIcon = nested.icon || FaChevronRight;
                                       const isNestedActive = pathname === nested.href;
                                       return (
@@ -587,7 +605,8 @@ export default function PlanBasedNav() {
                           {item.subItems?.map((subItem) => {
                             const isSubActive = pathname === subItem.href;
                             const SubIcon = subItem.icon || FaChevronRight;
-                            const hasNested = subItem.subItems && subItem.subItems.length > 0;
+                            const nestedItems = subItem.subItems || [];
+                            const hasNested = nestedItems.length > 0;
                             const submenuKey = subItem.href || subItem.name;
                             const open = !!openSubmenus[submenuKey];
                             return (
@@ -628,7 +647,7 @@ export default function PlanBasedNav() {
                                 {/* Nested subitems */}
                                 {hasNested && open && (
                                   <div className="ml-4">
-                                    {subItem.subItems.map((nested) => {
+                                    {nestedItems.map((nested) => {
                                       const NestedIcon = nested.icon || FaChevronRight;
                                       const isNestedActive = pathname === nested.href;
                                       return (

@@ -1519,7 +1519,7 @@ export default function ExpensesPage() {
                         <Tooltip
                           contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '6px', fontSize: '12px' }}
                           itemStyle={{ color: '#f3f4f6' }}
-                          formatter={(value: number) => [`Ksh ${value}`, 'Amount']}
+                          formatter={(value) => [`Ksh ${Number(value ?? 0)}`, 'Amount']}
                         />
                         <Bar dataKey="totalAmount" fill="#64748b" radius={[4, 4, 0, 0]} name="Total Amount" />
                       </BarChart>
@@ -1590,7 +1590,7 @@ export default function ExpensesPage() {
                         <Tooltip
                           contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '6px', fontSize: '12px' }}
                           itemStyle={{ color: '#f3f4f6' }}
-                          formatter={(value: number) => [`Ksh ${value}`, 'Amount']}
+                          formatter={(value) => [`Ksh ${Number(value ?? 0)}`, 'Amount']}
                         />
                         <Line type="monotone" dataKey="totalAmount" stroke="#64748b" strokeWidth={2} dot={{ r: 2 }} name="Total Amount" />
                       </LineChart>
