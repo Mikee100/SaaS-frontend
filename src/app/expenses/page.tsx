@@ -555,63 +555,7 @@ export default function ExpensesPage() {
       const response = await apiGet(url);
       const data = (response as { data?: unknown })?.data || response || [];
       const expenseData = Array.isArray(data) ? data : [];
-      try {
-        let salaryUrl = '/salary-schemes';
-        const salaryParams = new URLSearchParams();
-        if (effectiveBranchFilter) {
-          salaryParams.append('branchId', effectiveBranchFilter);
-        }
-        if (salaryParams.toString()) {
-          salaryUrl += `?${salaryParams.toString()}`;
-        }
-
-        const salaryResponse = await apiGet(salaryUrl);
-        const salaryData = (salaryResponse as { data?: unknown })?.data || salaryResponse || [];
-        const salaryExpenses: Expense[] = Array.isArray(salaryData)
-          ? salaryData.map((scheme: unknown) => {
-              const s = scheme as {
-                id: string;
-                salaryAmount: number;
-                employeeName: string;
-                frequency: string;
-                nextDueDate?: string;
-                branchId?: string;
-                notes?: string;
-                isActive: boolean;
-                startDate: string;
-                updatedAt: string;
-                user: { id: string; name: string };
-                branch?: { id: string; name: string };
-              };
-              // Cast frequency to the correct union type
-            const allowedFrequencies = ['daily', 'weekly', 'monthly', 'yearly'] as const;
-type AllowedFrequency = typeof allowedFrequencies[number];
-const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
-  ? (s.frequency as AllowedFrequency)
-  : undefined;
-              return {
-                id: 'salary-' + s.id,
-                amount: s.salaryAmount,
-                description: 'Salary for ' + s.employeeName,
-                categoryId: 'salary',
-                category: { id: 'salary', name: 'salary' },
-                expenseType: 'recurring' as const,
-                frequency,
-                nextDueDate: s.nextDueDate,
-                branchId: s.branchId,
-                notes: s.notes,
-                isActive: s.isActive,
-                createdAt: s.startDate,
-                updatedAt: s.updatedAt,
-                user: s.user,
-                branch: s.branch,
-              };
-            })
-          : [];
-        setExpenses([...expenseData, ...salaryExpenses]);
-      } catch {
-        setExpenses(expenseData);
-      }
+      setExpenses(expenseData);
     } catch {
       setError('Failed to load expenses');
       setExpenses([]);
@@ -821,7 +765,6 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
     }
     return acc;
   }, {} as Record<string, number>) : {};
-  const salaryTotal = currentMonthSalaryTotal?.totalAmount || 0;
 
   if (loading) {
     return (
@@ -950,17 +893,6 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
           >
             <FaHistory className="w-3 h-3" />
             Current
-          </button>
-          <button
-            onClick={() => setActiveTab('salaries')}
-            className={`px-3 py-1.5 rounded-t text-xs font-medium transition-colors flex items-center gap-1.5 ${
-              activeTab === 'salaries'
-                ? 'bg-slate-700 text-white border-b-2 border-slate-700'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900'
-            }`}
-          >
-            <FaRedo className="w-3 h-3" />
-            Salaries
           </button>
           <button
             onClick={() => setActiveTab('comparison')}
@@ -1098,8 +1030,8 @@ const frequency = allowedFrequencies.includes(s.frequency as AllowedFrequency)
                 <div className="text-sm font-semibold text-gray-900 dark:text-white">Ksh {totalAmount.toFixed(2)}</div>
               </div>
               <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
-                <div className="text-[11px] text-gray-500 dark:text-gray-400">Salary Expenses</div>
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Ksh {salaryTotal.toFixed(2)}</div>
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">Expense Records</div>
+                <div className="text-sm font-semibold text-gray-900 dark:text-white">{expenses.length}</div>
               </div>
               <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
                 <div className="text-[11px] text-gray-500 dark:text-gray-400">This Month</div>

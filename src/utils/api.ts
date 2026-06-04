@@ -103,6 +103,10 @@ class EnhancedAPI {
       ...this.getAuthHeaders(),
       ...options.headers,
     };
+    const suppressErrorLog = String((headers as Record<string, string>)['x-suppress-error-log'] || '') === 'true';
+    if ((headers as Record<string, string>)['x-suppress-error-log']) {
+      delete (headers as Record<string, string>)['x-suppress-error-log'];
+    }
 
     const maxRetries = 5;
     let attempt = 0;
@@ -156,7 +160,7 @@ class EnhancedAPI {
             }
             // Don't log 401 as error for auth endpoints – "not logged in" is expected
             const isAuthEndpoint = url.includes('/user/me') || url.includes('/auth/refresh') || url.includes('/auth/me');
-            if (!isAuthEndpoint) {
+            if (!isAuthEndpoint && !suppressErrorLog) {
               console.error(`[API] Request failed with status ${response.status}`, {
                 status: response.status,
                 url,
@@ -199,7 +203,11 @@ class EnhancedAPI {
           }
 
           // Only log errors that are not retried rate limits
-          if ((response.status !== 429 && !errorMessage.includes('Too Many Requests')) || attempt >= maxRetries) {
+          if (
+            !suppressErrorLog &&
+            ((response.status !== 429 && !errorMessage.includes('Too Many Requests')) ||
+              attempt >= maxRetries)
+          ) {
             console.error(`[API] Request failed with status ${response.status}`, {
               status: response.status,
               statusText: response.statusText,
