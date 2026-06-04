@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { hasPermission } from '@/utils/permissions';
 import { getFullAssetUrl } from '@/utils/logoUrl';
 import { useTheme } from '@/contexts/ThemeContext';
+import { AppModuleKey, CrmCapabilityKey, isCrmCapabilityEnabled, isModuleEnabled } from '@/utils/moduleAccess';
 
 
 export default function PlanBasedNav() {
@@ -81,13 +82,14 @@ export default function PlanBasedNav() {
 
   // Improved icon mapping for main and sub items
   const navigationItems = React.useMemo(() => [
-    { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null },
+    { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null, requiredModule: 'dashboard' as AppModuleKey },
     {
       name: 'AI Assistant',
       href: '/ai-assistant',
       icon: FaRobot,
       requiredPlan: null,
-      requiredPermission: null
+      requiredPermission: null,
+      requiredModule: 'ai' as AppModuleKey,
     },
     {
       name: 'Accounts',
@@ -95,6 +97,7 @@ export default function PlanBasedNav() {
       icon: FaFileInvoiceDollar,
       requiredPlan: null,
       requiredPermission: null,
+      requiredModule: 'accounts' as AppModuleKey,
       subItems: [
         { name: 'Ledgers', href: '/accounts/ledgers', icon: FaHistory },
         { name: 'Balance Sheet', href: '/accounts/balance-sheet', icon: MdOutlineAnalytics },
@@ -111,6 +114,7 @@ export default function PlanBasedNav() {
       icon: FaBoxOpen,
       requiredPlan: null,
       requiredPermission: 'view_products',
+      requiredModule: 'inventory' as AppModuleKey,
       subItems: [
         { name: 'Unified Management', href: '/products/unified', requiredPermission: 'view_products', icon: FaLayerGroup },
         { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory', icon: FaUsers },
@@ -133,6 +137,7 @@ export default function PlanBasedNav() {
       icon: FaShoppingBasket,
       requiredPlan: null,
       requiredPermission: 'view_sales',
+      requiredModule: 'sales' as AppModuleKey,
       subItems: [
         // { name: 'Sales', href: '/sales', requiredPermission: 'view_sales', icon: FaShoppingBasket }, // Sales page commented out
         { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales', icon: FaHistory },
@@ -141,22 +146,54 @@ export default function PlanBasedNav() {
       ]
     },
     {
-      name: 'Reports & Analytics',
+      name: 'CRM Pipeline',
+      href: '/crm/pipeline',
+      icon: FaLayerGroup,
+      requiredPlan: null,
+      requiredPermission: 'view_sales',
+      requiredModule: 'crm' as AppModuleKey,
+      requiredCrmCapability: 'crm.pipeline' as CrmCapabilityKey,
+    },
+    {
+      name: 'CRM Tasks',
+      href: '/crm/tasks',
+      icon: FaHistory,
+      requiredPlan: null,
+      requiredPermission: 'view_sales',
+      requiredModule: 'crm' as AppModuleKey,
+      requiredCrmCapability: 'crm.tasks' as CrmCapabilityKey,
+    },
+    {
+      name: 'CRM Reports',
+      href: '/crm/reports',
+      icon: MdOutlineReport,
+      requiredPlan: null,
+      requiredPermission: 'view_sales',
+      requiredModule: 'crm' as AppModuleKey,
+      requiredCrmCapability: 'crm.reporting' as CrmCapabilityKey,
+    },
+    {
+      name: 'Analytics',
       href: '/analytics',
       icon: MdOutlineAnalytics,
       requiredPlan: null,
       requiredPermission: 'view_analytics',
-      subItems: [
-        { name: 'Analytics', href: '/analytics', requiredPermission: 'view_analytics', icon: MdOutlineAnalytics },
-        { name: 'Reports', href: '/reports', requiredPermission: 'view_reports', icon: MdOutlineReport }
-      ]
+      requiredModule: 'analytics' as AppModuleKey,
     },
-    { name: 'Credit', href: '/credit', icon: FaCreditCard, requiredPlan: null, requiredPermission: 'view_users' },
-    { name: 'HR Employees', href: '/hr/employees', icon: FaUsers, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'Payroll', href: '/payroll', icon: FaMoneyBillWave, requiredPlan: null, requiredPermission: 'view_sales' },
-    { name: 'Expenses', href: '/expenses', icon: FaHistory, requiredPlan: null, requiredPermission: 'view_users' },
-    { name: 'Settings', href: '/settings', icon: MdOutlineSettings, requiredPlan: null, requiredPermission: null },
-    { name: 'Billing & Subscription', href: '/account/billing', icon: FaFileInvoiceDollar, requiredPlan: null, requiredPermission: null },
+    {
+      name: 'Reports',
+      href: '/reports',
+      icon: MdOutlineReport,
+      requiredPlan: null,
+      requiredPermission: 'view_reports',
+      requiredModule: 'reports' as AppModuleKey,
+    },
+    { name: 'Credit', href: '/credit', icon: FaCreditCard, requiredPlan: null, requiredPermission: 'view_users', requiredModule: 'credits' as AppModuleKey },
+    { name: 'HR Employees', href: '/hr/employees', icon: FaUsers, requiredPlan: null, requiredPermission: 'view_sales', requiredModule: 'payroll' as AppModuleKey },
+    { name: 'Payroll', href: '/payroll', icon: FaMoneyBillWave, requiredPlan: null, requiredPermission: 'view_sales', requiredModule: 'payroll' as AppModuleKey },
+    { name: 'Expenses', href: '/expenses', icon: FaHistory, requiredPlan: null, requiredPermission: 'view_users', requiredModule: 'expenses' as AppModuleKey },
+    { name: 'Settings', href: '/settings', icon: MdOutlineSettings, requiredPlan: null, requiredPermission: null, requiredModule: 'settings' as AppModuleKey },
+    { name: 'Billing & Subscription', href: '/account/billing', icon: FaFileInvoiceDollar, requiredPlan: null, requiredPermission: null, requiredModule: 'billing' as AppModuleKey },
   ], []);
 
   type PlanName = 'Basic' | 'Pro' | 'Enterprise';
@@ -199,6 +236,14 @@ export default function PlanBasedNav() {
     }
 
     return navigationItems.filter((item) => {
+      if (!isModuleEnabled(userContext.user?.enabledModules, item.requiredModule)) {
+        return false;
+      }
+
+      if (!isCrmCapabilityEnabled(userContext.user?.crmEntitlements, (item as { requiredCrmCapability?: CrmCapabilityKey }).requiredCrmCapability)) {
+        return false;
+      }
+
       // Check plan requirements
       if (item.requiredPlan) {
         const requiredLevel = planHierarchy[item.requiredPlan as PlanName] || 0;
@@ -400,10 +445,10 @@ export default function PlanBasedNav() {
                         }`}
                       >
                         <span className="flex items-center gap-2 min-w-0">
-                          <Icon className="w-4 h-4 flex-shrink-0" />
+                          <Icon className="w-4 h-4 shrink-0" />
                           <span className="truncate text-xs">{item.name}</span>
                         </span>
-                        <span className="flex-shrink-0">
+                        <span className="shrink-0">
                           {open ? (
                             <FaChevronUp className="w-3.5 h-3.5" />
                           ) : (
@@ -431,7 +476,7 @@ export default function PlanBasedNav() {
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4 flex-shrink-0" />
+                                    <SubIcon className="w-4 h-4 shrink-0" />
                                     <span>{subItem.name}</span>
                                     <span className="ml-auto">
                                       {openNested ? (
@@ -456,7 +501,7 @@ export default function PlanBasedNav() {
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4 flex-shrink-0" />
+                                    <SubIcon className="w-4 h-4 shrink-0" />
                                     <span>{subItem.name}</span>
                                   </Link>
                                 )}
@@ -482,7 +527,7 @@ export default function PlanBasedNav() {
                                               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                           }`}
                                         >
-                                          <NestedIcon className="w-4 h-4 flex-shrink-0" />
+                                          <NestedIcon className="w-4 h-4 shrink-0" />
                                           <span>{nested.name}</span>
                                         </Link>
                                       );
@@ -522,13 +567,13 @@ export default function PlanBasedNav() {
                         }`}
                       >
                         <div className="flex items-center space-x-2 min-w-0">
-                          <Icon className="w-4 h-4 flex-shrink-0" />
+                          <Icon className="w-4 h-4 shrink-0" />
                           {!sidebarCollapsed && (
                             <span className="truncate text-xs">{item.name}</span>
                           )}
                         </div>
                         {!sidebarCollapsed && (
-                          <div className="flex-shrink-0">
+                          <div className="shrink-0">
                             {isDropdownOpen ? (
                               <FaChevronUp className="w-3.5 h-3.5" />
                             ) : (
@@ -557,7 +602,7 @@ export default function PlanBasedNav() {
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4 flex-shrink-0" />
+                                    <SubIcon className="w-4 h-4 shrink-0" />
                                     <span>{subItem.name}</span>
                                     <span className="ml-auto">
                                       {open ? (
@@ -576,7 +621,7 @@ export default function PlanBasedNav() {
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4 flex-shrink-0" />
+                                    <SubIcon className="w-4 h-4 shrink-0" />
                                     <span>{subItem.name}</span>
                                   </a>
                                 )}
@@ -596,7 +641,7 @@ export default function PlanBasedNav() {
                                               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                           }`}
                                         >
-                                          <NestedIcon className="w-4 h-4 flex-shrink-0" />
+                                          <NestedIcon className="w-4 h-4 shrink-0" />
                                           <span>{nested.name}</span>
                                         </a>
                                       );
@@ -622,7 +667,7 @@ export default function PlanBasedNav() {
                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                         }`}
                       >
-                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        <Icon className="w-4 h-4 shrink-0" />
                       </a>
                     </Tooltip>
                   ) : (
@@ -642,7 +687,7 @@ export default function PlanBasedNav() {
                           : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                       }`}
                     >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <Icon className="w-4 h-4 shrink-0" />
                       {!sidebarCollapsed && (
                         <span className="truncate text-xs">{item.name}</span>
                       )}
@@ -678,10 +723,10 @@ export default function PlanBasedNav() {
                   <div className="w-full block">
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center justify-center py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-95"
+                      className="w-full flex items-center justify-center py-3 bg-linear-to-r from-red-500 to-red-600 text-white font-medium shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-95"
                       title="Log out"
                     >
-                      <FaSignOutAlt className="w-4 h-4 flex-shrink-0" />
+                      <FaSignOutAlt className="w-4 h-4 shrink-0" />
                     </button>
                   </div>
                 </Tooltip>
@@ -703,7 +748,7 @@ export default function PlanBasedNav() {
                 {/* User Info */}
                 {userContext?.user && (
                   <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-xs shrink-0">
                       {userContext.user.name?.[0]?.toUpperCase() || 'U'}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -719,9 +764,9 @@ export default function PlanBasedNav() {
                 {/* Logout Button */}
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs font-medium rounded-lg shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-[0.98] group"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-linear-to-r from-red-500 to-red-600 text-white text-xs font-medium rounded-lg shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-[0.98] group"
                 >
-                  <FaSignOutAlt className="w-4 h-4 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                  <FaSignOutAlt className="w-4 h-4 shrink-0 group-hover:translate-x-0.5 transition-transform" />
                   <span>Log out</span>
                 </button>
               </div>
@@ -746,4 +791,5 @@ export default function PlanBasedNav() {
     </>
   );
 }
+
 

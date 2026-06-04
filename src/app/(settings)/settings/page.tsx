@@ -124,6 +124,14 @@ export default function SettingsPage() {
           color: 'pink',
           permission: 'view_settings'
         },
+        {
+          href: '/settings/modules',
+          label: 'Modules',
+          icon: FaCogs,
+          description: 'Enable or disable modules for this tenant',
+          color: 'purple',
+          permission: 'view_settings'
+        },
         { 
           href: '/settings/logo', 
           label: 'Logo & Branding', 

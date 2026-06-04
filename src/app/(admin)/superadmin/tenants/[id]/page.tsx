@@ -6,6 +6,110 @@ import { useRouter, useParams } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "@/utils/api";
 import { FaArrowLeft, FaStore, FaReceipt, FaArrowRight, FaUsers, FaBuilding, FaPlug, FaSpinner, FaCheckCircle, FaFileInvoice } from 'react-icons/fa';
 
+type AppModuleKey =
+  | 'dashboard'
+  | 'payroll'
+  | 'sales'
+  | 'credits'
+  | 'inventory'
+  | 'accounts'
+  | 'analytics'
+  | 'reports'
+  | 'expenses'
+  | 'crm'
+  | 'ai'
+  | 'settings'
+  | 'billing';
+
+interface TenantModulesResponse {
+  tenantId: string;
+  key: string;
+  enabledModules: AppModuleKey[];
+  availableModules: AppModuleKey[];
+}
+
+interface ModulePresetDefinition {
+  key: string;
+  label: string;
+  description: string;
+  enabledModules: AppModuleKey[];
+}
+
+interface ModulePresetsResponse {
+  presets: ModulePresetDefinition[];
+}
+
+type CrmPackageKey = 'starter' | 'growth' | 'pro' | 'enterprise';
+
+type CrmCapabilityKey =
+  | 'crm.pipeline'
+  | 'crm.tasks'
+  | 'crm.documents'
+  | 'crm.calendar_integration'
+  | 'crm.meeting_scheduler'
+  | 'crm.email_integration'
+  | 'crm.reporting'
+  | 'crm.workflow_automation'
+  | 'crm.lead_scoring'
+  | 'crm.telephony'
+  | 'crm.proposal_management'
+  | 'crm.contract_management'
+  | 'crm.third_party_integrations';
+
+interface CrmLimits {
+  pipelines: number | null;
+  automationRules: number | null;
+  documentStorageGb: number | null;
+  integrationConnections: number | null;
+  telephonyMinutesMonthly: number | null;
+  proposalsMonthly: number | null;
+  contractsMonthly: number | null;
+}
+
+interface CrmAllowedProviders {
+  calendar: string[];
+  email: string[];
+  telephony: string[];
+  integrations: string[];
+}
+
+interface CrmEntitlements {
+  packageKey: CrmPackageKey;
+  enabledCapabilities: CrmCapabilityKey[];
+  limits: CrmLimits;
+  allowedProviders: CrmAllowedProviders;
+}
+
+interface TenantCrmEntitlementsResponse {
+  tenantId: string;
+  key: string;
+  entitlements: CrmEntitlements;
+  availablePackages: CrmPackageKey[];
+  availableCapabilities: CrmCapabilityKey[];
+}
+
+interface TenantCrmEntitlementTimelineEntry {
+  id: string;
+  action: string;
+  createdAt: string;
+  ip?: string | null;
+  actor?: {
+    id: string;
+    name?: string;
+    email?: string;
+  } | null;
+  source?: string | null;
+  reason?: string | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+}
+
+interface TenantCrmEntitlementTimelineResponse {
+  tenantId: string;
+  total: number;
+  items: TenantCrmEntitlementTimelineEntry[];
+}
+
 const EAST_AFRICAN_COUNTRIES = [
   "Kenya",
   "Tanzania",
@@ -19,6 +123,13 @@ const EAST_AFRICAN_COUNTRIES = [
   "Eritrea",
   "Djibouti",
 ] as const;
+
+const CRM_PROVIDER_OPTIONS: CrmAllowedProviders = {
+  calendar: ['google', 'microsoft'],
+  email: ['gmail', 'outlook'],
+  telephony: ['twilio', 'africa_talking'],
+  integrations: ['zapier', 'zoom', 'slack', 'shopify'],
+};
 
 interface TenantDetails {
   id: string;
@@ -102,7 +213,35 @@ export default function TenantDetailsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions' | 'branches' | 'analytics' | 'integrations' | 'business-kra'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions' | 'branches' | 'analytics' | 'integrations' | 'business-kra' | 'modules' | 'crm-entitlements'>('overview');
+  const [availableModules, setAvailableModules] = useState<AppModuleKey[]>([]);
+  const [enabledModules, setEnabledModules] = useState<AppModuleKey[]>([]);
+  const [savingModules, setSavingModules] = useState(false);
+  const [modulePresets, setModulePresets] = useState<ModulePresetDefinition[]>([]);
+  const [selectedModulePreset, setSelectedModulePreset] = useState('');
+  const [applyingModulePreset, setApplyingModulePreset] = useState(false);
+  const [availableCrmPackages, setAvailableCrmPackages] = useState<CrmPackageKey[]>(['starter', 'growth', 'pro', 'enterprise']);
+  const [availableCrmCapabilities, setAvailableCrmCapabilities] = useState<CrmCapabilityKey[]>([]);
+  const [crmPackageKey, setCrmPackageKey] = useState<CrmPackageKey>('starter');
+  const [crmCapabilities, setCrmCapabilities] = useState<CrmCapabilityKey[]>([]);
+  const [crmLimits, setCrmLimits] = useState<CrmLimits>({
+    pipelines: 1,
+    automationRules: 0,
+    documentStorageGb: 2,
+    integrationConnections: 2,
+    telephonyMinutesMonthly: 0,
+    proposalsMonthly: 0,
+    contractsMonthly: 0,
+  });
+  const [crmProviders, setCrmProviders] = useState<CrmAllowedProviders>({
+    calendar: [],
+    email: [],
+    telephony: [],
+    integrations: [],
+  });
+  const [savingCrmEntitlements, setSavingCrmEntitlements] = useState(false);
+  const [crmTimeline, setCrmTimeline] = useState<TenantCrmEntitlementTimelineEntry[]>([]);
+  const [loadingCrmTimeline, setLoadingCrmTimeline] = useState(false);
 
   // Business & KRA (admin-editable)
   const [businessKra, setBusinessKra] = useState<Partial<TenantDetails>>({});
@@ -164,6 +303,53 @@ export default function TenantDetailsPage() {
       setProducts(tenantProducts);
       setTransactions(tenantTransactions);
       setBranches(tenantBranches);
+
+      const modules = await apiGet<TenantModulesResponse>(
+        `/admin/tenants/${tenantId}/modules?t=${Date.now()}`,
+      );
+      setAvailableModules(Array.isArray(modules?.availableModules) ? modules.availableModules : []);
+      setEnabledModules(Array.isArray(modules?.enabledModules) ? modules.enabledModules : []);
+
+      try {
+        const presets = await apiGet<ModulePresetsResponse>('/admin/module-presets');
+        setModulePresets(Array.isArray(presets?.presets) ? presets.presets : []);
+      } catch (presetError) {
+        console.warn('Failed to load module presets:', presetError);
+        setModulePresets([]);
+      }
+
+      const crm = await apiGet<TenantCrmEntitlementsResponse>(`/admin/tenants/${tenantId}/crm-entitlements`);
+      if (crm?.entitlements) {
+        setAvailableCrmPackages(Array.isArray(crm.availablePackages) ? crm.availablePackages : ['starter', 'growth', 'pro', 'enterprise']);
+        setAvailableCrmCapabilities(Array.isArray(crm.availableCapabilities) ? crm.availableCapabilities : []);
+        setCrmPackageKey(crm.entitlements.packageKey || 'starter');
+        setCrmCapabilities(Array.isArray(crm.entitlements.enabledCapabilities) ? crm.entitlements.enabledCapabilities : []);
+        setCrmLimits(crm.entitlements.limits || {
+          pipelines: 1,
+          automationRules: 0,
+          documentStorageGb: 2,
+          integrationConnections: 2,
+          telephonyMinutesMonthly: 0,
+          proposalsMonthly: 0,
+          contractsMonthly: 0,
+        });
+        setCrmProviders(crm.entitlements.allowedProviders || {
+          calendar: [],
+          email: [],
+          telephony: [],
+          integrations: [],
+        });
+      }
+
+      setLoadingCrmTimeline(true);
+      try {
+        const timeline = await apiGet<TenantCrmEntitlementTimelineResponse>(
+          `/admin/tenants/${tenantId}/crm-entitlements/timeline?limit=20`,
+        );
+        setCrmTimeline(Array.isArray(timeline?.items) ? timeline.items : []);
+      } finally {
+        setLoadingCrmTimeline(false);
+      }
     } catch (error) {
       console.error("Failed to fetch tenant data:", error);
       alert("Failed to load tenant data");
@@ -171,6 +357,140 @@ export default function TenantDetailsPage() {
       setLoadingData(false);
     }
   }, [tenantId]);
+
+  const toggleModule = (moduleKey: AppModuleKey) => {
+    setEnabledModules((prev) =>
+      prev.includes(moduleKey)
+        ? prev.filter((entry) => entry !== moduleKey)
+        : [...prev, moduleKey],
+    );
+  };
+
+  const saveTenantModules = async () => {
+    try {
+      setSavingModules(true);
+      await apiPut(`/admin/tenants/${tenantId}/modules`, { enabledModules });
+      const latestModules = await apiGet<TenantModulesResponse>(
+        `/admin/tenants/${tenantId}/modules?t=${Date.now()}`,
+      );
+      setAvailableModules(Array.isArray(latestModules?.availableModules) ? latestModules.availableModules : []);
+      setEnabledModules(Array.isArray(latestModules?.enabledModules) ? latestModules.enabledModules : []);
+      alert('Tenant modules updated successfully.');
+    } catch (error) {
+      console.error('Failed to update tenant modules:', error);
+      alert('Failed to update tenant modules');
+    } finally {
+      setSavingModules(false);
+    }
+  };
+
+  const applyModulePreset = async () => {
+    if (!selectedModulePreset) {
+      alert('Select a module preset first.');
+      return;
+    }
+
+    try {
+      setApplyingModulePreset(true);
+      await apiPut<TenantModulesResponse & { preset?: ModulePresetDefinition }>(
+        `/admin/tenants/${tenantId}/modules/preset`,
+        { presetKey: selectedModulePreset },
+      );
+      const latestModules = await apiGet<TenantModulesResponse>(
+        `/admin/tenants/${tenantId}/modules?t=${Date.now()}`,
+      );
+      setAvailableModules(Array.isArray(latestModules?.availableModules) ? latestModules.availableModules : []);
+      setEnabledModules(Array.isArray(latestModules?.enabledModules) ? latestModules.enabledModules : []);
+      setSelectedModulePreset('');
+      alert('Module preset applied successfully.');
+    } catch (error) {
+      console.error('Failed to apply module preset:', error);
+      alert('Failed to apply module preset');
+    } finally {
+      setApplyingModulePreset(false);
+    }
+  };
+
+  const toggleCrmCapability = (capability: CrmCapabilityKey) => {
+    setCrmCapabilities((prev) =>
+      prev.includes(capability)
+        ? prev.filter((entry) => entry !== capability)
+        : [...prev, capability],
+    );
+  };
+
+  const updateCrmLimit = (key: keyof CrmLimits, rawValue: string) => {
+    const parsed = rawValue.trim() === '' ? null : Number(rawValue);
+    setCrmLimits((prev) => ({
+      ...prev,
+      [key]: parsed !== null && Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null,
+    }));
+  };
+
+  const toggleCrmProvider = (group: keyof CrmAllowedProviders, provider: string) => {
+    setCrmProviders((prev) => {
+      const groupProviders = prev[group] || [];
+      const updated = groupProviders.includes(provider)
+        ? groupProviders.filter((entry) => entry !== provider)
+        : [...groupProviders, provider];
+      return { ...prev, [group]: updated };
+    });
+  };
+
+  const crmDependencyErrors = React.useMemo(() => {
+    const set = new Set(crmCapabilities);
+    const errors: string[] = [];
+    if (set.has('crm.meeting_scheduler') && !set.has('crm.calendar_integration')) {
+      errors.push('Meeting scheduler requires calendar integration.');
+    }
+    if (set.has('crm.lead_scoring') && !set.has('crm.pipeline')) {
+      errors.push('Lead scoring requires visual pipeline.');
+    }
+    if (set.has('crm.proposal_management') && !set.has('crm.documents')) {
+      errors.push('Proposal management requires document management.');
+    }
+    if (set.has('crm.contract_management') && !set.has('crm.documents')) {
+      errors.push('Contract management requires document management.');
+    }
+    if (set.has('crm.telephony') && !set.has('crm.third_party_integrations')) {
+      errors.push('Built-in telephony requires third-party integrations.');
+    }
+    return errors;
+  }, [crmCapabilities]);
+
+  const saveCrmEntitlements = async () => {
+    if (crmDependencyErrors.length > 0) {
+      alert(`Please fix dependency issues before saving:\n- ${crmDependencyErrors.join('\n- ')}`);
+      return;
+    }
+
+    try {
+      setSavingCrmEntitlements(true);
+      await apiPut(`/admin/tenants/${tenantId}/crm-entitlements`, {
+        packageKey: crmPackageKey,
+        enabledCapabilities: crmCapabilities,
+        limits: crmLimits,
+        allowedProviders: crmProviders,
+        source: 'manual_override',
+        reason: 'superadmin ui update',
+      });
+      try {
+        setLoadingCrmTimeline(true);
+        const timeline = await apiGet<TenantCrmEntitlementTimelineResponse>(
+          `/admin/tenants/${tenantId}/crm-entitlements/timeline?limit=20`,
+        );
+        setCrmTimeline(Array.isArray(timeline?.items) ? timeline.items : []);
+      } finally {
+        setLoadingCrmTimeline(false);
+      }
+      alert('CRM entitlements updated successfully.');
+    } catch (error: any) {
+      console.error('Failed to update CRM entitlements:', error);
+      alert(error?.message || 'Failed to update CRM entitlements');
+    } finally {
+      setSavingCrmEntitlements(false);
+    }
+  };
 
 const fetchMpesaConfig = useCallback(async () => {
   try {
@@ -636,6 +956,36 @@ const fetchMpesaConfig = useCallback(async () => {
             }}
           >
             Business & KRA
+          </button>
+          <button
+            onClick={() => setActiveTab('modules')}
+            style={{
+              padding: "0.5rem 0",
+              border: "none",
+              background: "none",
+              borderBottom: activeTab === 'modules' ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === 'modules' ? "#2563eb" : "#64748b",
+              fontWeight: activeTab === 'modules' ? "600" : "500",
+              fontSize: "12px",
+              cursor: "pointer"
+            }}
+          >
+            Modules
+          </button>
+          <button
+            onClick={() => setActiveTab('crm-entitlements')}
+            style={{
+              padding: "0.5rem 0",
+              border: "none",
+              background: "none",
+              borderBottom: activeTab === 'crm-entitlements' ? "2px solid #2563eb" : "2px solid transparent",
+              color: activeTab === 'crm-entitlements' ? "#2563eb" : "#64748b",
+              fontWeight: activeTab === 'crm-entitlements' ? "600" : "500",
+              fontSize: "12px",
+              cursor: "pointer"
+            }}
+          >
+            CRM Entitlements
           </button>
         </nav>
       </div>
@@ -1105,6 +1455,327 @@ const fetchMpesaConfig = useCallback(async () => {
                     {savingRestaurantAddon ? "Saving..." : "Save Add-on Setting"}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'modules' && (
+        <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+          <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
+            <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
+              Tenant Module Entitlements
+            </h3>
+            <p style={{ marginTop: '0.2rem', fontSize: '12px', color: '#64748b' }}>
+              Toggle which modules this tenant can access. Changes apply immediately.
+            </p>
+          </div>
+
+          <div style={{ padding: '0.8rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem' }}>
+            <div style={{ gridColumn: '1 / -1', border: '1px solid #dbeafe', background: '#eff6ff', borderRadius: '6px', padding: '0.6rem', marginBottom: '0.2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#1e3a8a', fontWeight: 600, marginBottom: '0.25rem' }}>
+                    Quick Module Presets
+                  </label>
+                  <select
+                    value={selectedModulePreset}
+                    onChange={(e) => setSelectedModulePreset(e.target.value)}
+                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #bfdbfe', borderRadius: '4px', fontSize: '12px' }}
+                  >
+                    <option value="">Select preset...</option>
+                    {modulePresets.map((preset) => (
+                      <option key={preset.key} value={preset.key}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={applyModulePreset}
+                  disabled={applyingModulePreset || !selectedModulePreset}
+                  style={{
+                    background: '#1d4ed8',
+                    color: '#fff',
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '5px',
+                    border: 'none',
+                    cursor: applyingModulePreset || !selectedModulePreset ? 'not-allowed' : 'pointer',
+                    fontWeight: 500,
+                    fontSize: '12px',
+                    opacity: applyingModulePreset || !selectedModulePreset ? 0.7 : 1,
+                    marginTop: '1.2rem',
+                  }}
+                >
+                  {applyingModulePreset ? 'Applying...' : 'Apply Preset'}
+                </button>
+              </div>
+              {selectedModulePreset && (
+                <p style={{ marginTop: '0.35rem', marginBottom: 0, fontSize: '11px', color: '#1e40af' }}>
+                  {modulePresets.find((preset) => preset.key === selectedModulePreset)?.description || 'Preset applies a recommended module bundle.'}
+                </p>
+              )}
+            </div>
+
+            {availableModules.map((moduleKey) => {
+              const checked = enabledModules.includes(moduleKey);
+              return (
+                <label
+                  key={moduleKey}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '6px',
+                    padding: '0.55rem 0.65rem',
+                    fontSize: '12px',
+                    color: '#1e293b',
+                    background: checked ? '#eff6ff' : '#fff',
+                  }}
+                >
+                  <span style={{ fontWeight: 500 }}>{moduleKey}</span>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleModule(moduleKey)}
+                  />
+                </label>
+              );
+            })}
+          </div>
+
+          <div style={{ padding: '0.8rem', borderTop: '1px solid #e5e7eb' }}>
+            <button
+              onClick={saveTenantModules}
+              disabled={savingModules}
+              style={{
+                background: '#2563eb',
+                color: '#fff',
+                padding: '0.35rem 0.85rem',
+                borderRadius: '5px',
+                border: 'none',
+                cursor: savingModules ? 'not-allowed' : 'pointer',
+                fontWeight: 500,
+                fontSize: '12px',
+                opacity: savingModules ? 0.7 : 1,
+              }}
+            >
+              {savingModules ? 'Saving...' : 'Save Modules'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'crm-entitlements' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '0.8rem' }}>
+          <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+            <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
+              <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
+                CRM Package and Capabilities
+              </h3>
+              <p style={{ marginTop: '0.2rem', fontSize: '12px', color: '#64748b' }}>
+                Assign package and fine tune CRM features for this tenant.
+              </p>
+            </div>
+
+            <div style={{ padding: '0.75rem' }}>
+              <div style={{ marginBottom: '0.7rem' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#334155', fontWeight: 600, marginBottom: '0.25rem' }}>
+                  Package
+                </label>
+                <select
+                  value={crmPackageKey}
+                  onChange={(e) => setCrmPackageKey(e.target.value as CrmPackageKey)}
+                  style={{ width: '100%', padding: '0.35rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                >
+                  {availableCrmPackages.map((pkg) => (
+                    <option key={pkg} value={pkg}>{pkg}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '0.4rem', fontSize: '12px', color: '#334155', fontWeight: 600 }}>
+                Capabilities
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.45rem' }}>
+                {availableCrmCapabilities.map((capability) => {
+                  const checked = crmCapabilities.includes(capability);
+                  return (
+                    <label
+                      key={capability}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '5px',
+                        padding: '0.45rem 0.55rem',
+                        fontSize: '12px',
+                        background: checked ? '#eff6ff' : '#fff',
+                        color: '#1e293b',
+                      }}
+                    >
+                      <span>{capability}</span>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCrmCapability(capability)}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+
+              {crmDependencyErrors.length > 0 && (
+                <div style={{ marginTop: '0.6rem', border: '1px solid #fecaca', background: '#fef2f2', borderRadius: '5px', padding: '0.55rem' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#991b1b', marginBottom: '0.2rem' }}>
+                    Dependency issues
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: '1rem', color: '#7f1d1d', fontSize: '12px' }}>
+                    {crmDependencyErrors.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateRows: 'auto auto auto', gap: '0.8rem' }}>
+            <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+              <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
+                  CRM Limits
+                </h3>
+              </div>
+              <div style={{ padding: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.55rem' }}>
+                {([
+                  ['pipelines', 'Pipelines'],
+                  ['automationRules', 'Automation Rules'],
+                  ['documentStorageGb', 'Storage (GB)'],
+                  ['integrationConnections', 'Integrations'],
+                  ['telephonyMinutesMonthly', 'Telephony Minutes'],
+                  ['proposalsMonthly', 'Proposals / Month'],
+                  ['contractsMonthly', 'Contracts / Month'],
+                ] as [keyof CrmLimits, string][]).map(([key, label]) => (
+                  <div key={key}>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#334155', marginBottom: '0.2rem' }}>{label}</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={crmLimits[key] ?? ''}
+                      onChange={(e) => updateCrmLimit(key, e.target.value)}
+                      placeholder="unlimited"
+                      style={{ width: '100%', padding: '0.32rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+              <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
+                  Allowed Providers
+                </h3>
+              </div>
+              <div style={{ padding: '0.75rem', display: 'grid', gap: '0.65rem' }}>
+                {(Object.keys(CRM_PROVIDER_OPTIONS) as (keyof CrmAllowedProviders)[]).map((group) => (
+                  <div key={group}>
+                    <div style={{ fontSize: '12px', color: '#334155', fontWeight: 600, marginBottom: '0.25rem', textTransform: 'capitalize' }}>
+                      {group}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {CRM_PROVIDER_OPTIONS[group].map((provider) => {
+                        const checked = (crmProviders[group] || []).includes(provider);
+                        return (
+                          <label
+                            key={`${group}-${provider}`}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '999px',
+                              padding: '0.2rem 0.45rem',
+                              fontSize: '12px',
+                              background: checked ? '#eff6ff' : '#fff',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleCrmProvider(group, provider)}
+                            />
+                            <span>{provider}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                <div>
+                  <button
+                    type="button"
+                    onClick={saveCrmEntitlements}
+                    disabled={savingCrmEntitlements}
+                    style={{
+                      background: '#2563eb',
+                      color: '#fff',
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '5px',
+                      border: 'none',
+                      cursor: savingCrmEntitlements ? 'not-allowed' : 'pointer',
+                      fontWeight: 500,
+                      fontSize: '12px',
+                      opacity: savingCrmEntitlements ? 0.7 : 1,
+                    }}
+                  >
+                    {savingCrmEntitlements ? 'Saving...' : 'Save CRM Entitlements'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+              <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
+                  Entitlement Timeline
+                </h3>
+              </div>
+              <div style={{ padding: '0.75rem' }}>
+                {loadingCrmTimeline ? (
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>Loading timeline...</div>
+                ) : crmTimeline.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>No CRM entitlement changes recorded yet.</div>
+                ) : (
+                  <div style={{ display: 'grid', gap: '0.45rem' }}>
+                    {crmTimeline.map((item) => (
+                      <div
+                        key={item.id}
+                        style={{
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '5px',
+                          padding: '0.45rem 0.55rem',
+                          fontSize: '12px',
+                          background: '#f8fafc',
+                        }}
+                      >
+                        <div style={{ color: '#0f172a', fontWeight: 600 }}>
+                          {item.source || 'manual_override'}
+                        </div>
+                        <div style={{ color: '#334155' }}>{item.reason || 'No reason provided'}</div>
+                        <div style={{ color: '#64748b' }}>
+                          {new Date(item.createdAt).toLocaleString()} • {item.actor?.email || item.actor?.name || 'unknown actor'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

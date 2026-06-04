@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode, Dispa
 import { useRouter, usePathname } from "next/navigation";
 import { apiGet, apiPost } from "@/utils/api";
 import { login as authLogin, logout as authLogout } from "@/lib/auth-client";
+import { AppModuleKey, CrmEntitlements, normalizeCrmEntitlements, normalizeEnabledModules } from '@/utils/moduleAccess';
 
 export interface User {
   id: string;
@@ -16,6 +17,8 @@ export interface User {
   branchId?: string;
   impersonating?: boolean;
   impersonatingAsTenantName?: string | null;
+  enabledModules?: AppModuleKey[];
+  crmEntitlements?: CrmEntitlements;
   // Add more fields as needed
 }
 
@@ -143,6 +146,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         receiptLogo: userData.receiptLogo,
         impersonating: userData.impersonating ?? false,
         impersonatingAsTenantName: userData.impersonatingAsTenantName ?? null,
+        enabledModules: normalizeEnabledModules((userData as { enabledModules?: unknown }).enabledModules),
+        crmEntitlements: normalizeCrmEntitlements((userData as { crmEntitlements?: unknown }).crmEntitlements),
       };
 
       if (userData.branchId && typeof window !== 'undefined') {
@@ -273,7 +278,9 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         isSuperadmin: loginUser.isSuperadmin || (Array.isArray(roles) && (roles.includes('superadmin') || roles.includes('admin'))),
         tenantId: loginUser.tenantId ?? undefined,
         branchId: loginUser.branchId ?? undefined,
-        receiptLogo: (loginUser as User).receiptLogo
+        receiptLogo: (loginUser as User).receiptLogo,
+        enabledModules: normalizeEnabledModules((loginUser as { enabledModules?: unknown }).enabledModules),
+        crmEntitlements: normalizeCrmEntitlements((loginUser as { crmEntitlements?: unknown }).crmEntitlements),
       };
 
       if (loginUser.branchId && typeof window !== 'undefined') {

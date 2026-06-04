@@ -32,6 +32,7 @@ export default function SettingsSidebar({ collapsed = false, onToggle }: Setting
         { href: "/settings/billing", label: "Billing", icon: FaCreditCard },
         { href: "/settings/notifications", label: "Notifications", icon: FaBell },
         { href: "/settings/integrations", label: "Integrations", icon: FaPlug },
+        { href: "/settings/modules", label: "Modules", icon: FaCogs },
       ]
     },
     {
@@ -59,7 +60,7 @@ export default function SettingsSidebar({ collapsed = false, onToggle }: Setting
   const iconClass = isCollapsed ? 'w-4 h-4' : 'w-4 h-4 mr-3';
 
   return (
-    <nav className={`h-screen fixed top-0 left-0 z-30 bg-gradient-to-b from-blue-50 to-white dark:from-slate-800 dark:to-slate-900 dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-60'}`}>
+    <nav className={`h-screen fixed top-0 left-0 z-30 bg-linear-to-b from-blue-50 to-white dark:from-slate-800 dark:to-slate-900 dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-60'}`}>
       <div className={`flex items-center justify-between ${isCollapsed ? 'px-3 py-4' : 'px-4 py-6'} border-b border-gray-200 dark:border-slate-700`}>
         {!isCollapsed && <div className="text-lg font-bold text-blue-700 dark:text-blue-300">Settings</div>}
         <button
@@ -100,7 +101,7 @@ export default function SettingsSidebar({ collapsed = false, onToggle }: Setting
                       `}
                       title={isCollapsed ? s.label : undefined}
                     >
-                      <s.icon className={`${iconClass} flex-shrink-0 transition-colors ${active ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-slate-400 group-hover:text-blue-700 dark:group-hover:text-blue-300'}`} />
+                      <s.icon className={`${iconClass} shrink-0 transition-colors ${active ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-slate-400 group-hover:text-blue-700 dark:group-hover:text-blue-300'}`} />
                       {!isCollapsed && <span className="whitespace-nowrap ml-1">{s.label}</span>}
                       {isCollapsed && (
                         <span className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-slate-700 text-white dark:text-slate-100 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50 border border-slate-600">
@@ -118,3 +119,4 @@ export default function SettingsSidebar({ collapsed = false, onToggle }: Setting
     </nav>
   );
 }
+

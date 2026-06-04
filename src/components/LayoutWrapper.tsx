@@ -5,6 +5,7 @@ import PlanBasedNav from "@/components/PlanBasedNav";
 import ImpersonationBanner from "@/components/ImpersonationBanner";
 import { useUser } from "@/components/UserContext";
 import { useBillingAccessStatus } from "@/hooks/useBillingAccessStatus";
+import { inferCrmCapabilityFromPath, inferCrmProviderFromPath, inferModuleFromPath, isCrmCapabilityEnabled, isCrmProviderAllowed, isModuleEnabled } from '@/utils/moduleAccess';
 
 import { SidebarProvider, useSidebar } from "@/components/SidebarContext";
 
@@ -35,6 +36,38 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
     accessStatus.restricted;
 
   const isAIAssistant = pathname === '/ai-assistant';
+  const requiredModule = inferModuleFromPath(pathname || '');
+  const requiredCrmCapability = inferCrmCapabilityFromPath(pathname || '');
+  const requiredCrmProvider = inferCrmProviderFromPath(pathname || '');
+  const allowModuleSettingsRoute = pathname?.startsWith('/settings/modules');
+  const moduleBlocked =
+    !!user &&
+    !allowModuleSettingsRoute &&
+    !isModuleEnabled(user.enabledModules, requiredModule);
+  const crmCapabilityBlocked =
+    !!user &&
+    !user.isSuperadmin &&
+    !allowModuleSettingsRoute &&
+    requiredModule === 'crm' &&
+    !isCrmCapabilityEnabled(user.crmEntitlements, requiredCrmCapability);
+  const crmProviderBlocked =
+    !!user &&
+    !user.isSuperadmin &&
+    !allowModuleSettingsRoute &&
+    !!requiredCrmProvider &&
+    !isCrmProviderAllowed(
+      user.crmEntitlements,
+      requiredCrmProvider.group,
+      requiredCrmProvider.provider,
+    );
+
+  const blockedModuleLabel = requiredModule
+    ? requiredModule.charAt(0).toUpperCase() + requiredModule.slice(1)
+    : 'This';
+  const blockedCrmCapabilityLabel = requiredCrmCapability
+    ? requiredCrmCapability.replace('crm.', '').replaceAll('_', ' ')
+    : 'requested CRM capability';
+  const blockedCrmProviderLabel = requiredCrmProvider?.provider || 'requested provider';
 
   return (
     <>
@@ -65,7 +98,42 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
           : 'lg:ml-64'
         : ''
         }`}>
-        {children}
+        {moduleBlocked || crmCapabilityBlocked || crmProviderBlocked ? (
+          <div className="mx-auto max-w-3xl p-6">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+              <h1 className="text-xl font-semibold text-amber-900">Access Disabled</h1>
+              {moduleBlocked ? (
+                <p className="mt-2 text-sm text-amber-800">
+                  {blockedModuleLabel} module is currently disabled for your tenant. Contact your admin to enable it.
+                </p>
+              ) : crmProviderBlocked ? (
+                <p className="mt-2 text-sm text-amber-800">
+                  CRM integration provider "{blockedCrmProviderLabel}" is not enabled for your tenant package.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-amber-800">
+                  CRM capability "{blockedCrmCapabilityLabel}" is currently disabled for your tenant. Contact your admin to enable it.
+                </p>
+              )}
+              <div className="mt-4 flex items-center gap-2">
+                <a
+                  href="/settings/modules"
+                  className="rounded bg-amber-700 px-3 py-2 text-sm font-medium text-white hover:bg-amber-800"
+                >
+                  Open Module Settings
+                </a>
+                <a
+                  href="/account/billing"
+                  className="rounded border border-amber-400 bg-white px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100"
+                >
+                  Open Billing
+                </a>
+              </div>
+            </div>
+          </div>
+        ) : (
+          children
+        )}
       </main>
       {!isAIAssistant && (
         <footer className="bg-white border-t border-gray-200 py-2 px-4 text-center text-xs text-gray-600">

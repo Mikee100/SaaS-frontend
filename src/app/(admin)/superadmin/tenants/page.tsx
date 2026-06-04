@@ -64,6 +64,7 @@ type CreateTenantForm = {
   ownerName: string;
   ownerEmail: string;
   ownerPassword: string;
+  crmPackageKey: "starter" | "growth" | "pro" | "enterprise";
 };
 
 const emptyCreateForm: CreateTenantForm = {
@@ -74,6 +75,7 @@ const emptyCreateForm: CreateTenantForm = {
   ownerName: "",
   ownerEmail: "",
   ownerPassword: "",
+  crmPackageKey: "starter",
 };
 
 const STORAGE_WARNING_MB = 750;
@@ -281,7 +283,14 @@ export default function SuperadminTenantsPage() {
   const createTenant = async () => {
     try {
       setCreatingTenant(true);
-      await apiPost("/admin/tenants", createForm);
+      await apiPost("/admin/tenants", {
+        ...createForm,
+        crmEntitlements: {
+          packageKey: createForm.crmPackageKey,
+          source: "tenant_create",
+          reason: "initial package assignment",
+        },
+      });
       setNotice({ type: "success", text: `${createForm.name} created.` });
       setShowCreateModal(false);
       setCreateForm(emptyCreateForm);
@@ -740,6 +749,24 @@ export default function SuperadminTenantsPage() {
                 type="password"
                 className="rounded-md border border-slate-300 px-2 py-2 text-sm"
               />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">CRM Package</label>
+                <select
+                  value={createForm.crmPackageKey}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      crmPackageKey: e.target.value as CreateTenantForm["crmPackageKey"],
+                    }))
+                  }
+                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                >
+                  <option value="starter">Starter</option>
+                  <option value="growth">Growth</option>
+                  <option value="pro">Pro</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </div>
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
