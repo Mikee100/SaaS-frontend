@@ -64,7 +64,18 @@ type CreateTenantForm = {
   ownerName: string;
   ownerEmail: string;
   ownerPassword: string;
+  modulePresetKey: string;
   crmPackageKey: "starter" | "growth" | "pro" | "enterprise";
+};
+
+type ModulePresetDefinition = {
+  key: string;
+  label: string;
+  description: string;
+};
+
+type ModulePresetsResponse = {
+  presets: ModulePresetDefinition[];
 };
 
 const emptyCreateForm: CreateTenantForm = {
@@ -75,6 +86,7 @@ const emptyCreateForm: CreateTenantForm = {
   ownerName: "",
   ownerEmail: "",
   ownerPassword: "",
+  modulePresetKey: "full_suite",
   crmPackageKey: "starter",
 };
 
@@ -96,6 +108,7 @@ export default function SuperadminTenantsPage() {
   const [loadingClassifications, setLoadingClassifications] = useState(false);
 
   const [notice, setNotice] = useState<Notice>(null);
+  const [modulePresets, setModulePresets] = useState<ModulePresetDefinition[]>([]);
 
   const [showDeleted, setShowDeleted] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -225,10 +238,26 @@ export default function SuperadminTenantsPage() {
     }
   };
 
+  const fetchModulePresets = async () => {
+    try {
+      const data = (await apiGet('/admin/module-presets')) as ModulePresetsResponse;
+      const presets = Array.isArray(data?.presets) ? data.presets : [];
+      setModulePresets(presets);
+    } catch (error) {
+      console.error('Failed to fetch module presets:', error);
+      setModulePresets([]);
+    }
+  };
+
   const refreshData = async (initial = false) => {
     try {
       if (!initial) setRefreshing(true);
-      await Promise.all([fetchTenants(), fetchSpaceUsage(), fetchClassifications()]);
+      await Promise.all([
+        fetchTenants(),
+        fetchSpaceUsage(),
+        fetchClassifications(),
+        fetchModulePresets(),
+      ]);
     } finally {
       if (!initial) setRefreshing(false);
     }
@@ -285,6 +314,7 @@ export default function SuperadminTenantsPage() {
       setCreatingTenant(true);
       await apiPost("/admin/tenants", {
         ...createForm,
+        modulePresetKey: createForm.modulePresetKey,
         crmEntitlements: {
           packageKey: createForm.crmPackageKey,
           source: "tenant_create",
@@ -749,6 +779,29 @@ export default function SuperadminTenantsPage() {
                 type="password"
                 className="rounded-md border border-slate-300 px-2 py-2 text-sm"
               />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">Module Preset</label>
+                <select
+                  value={createForm.modulePresetKey}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      modulePresetKey: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                >
+                  {modulePresets.length === 0 ? (
+                    <option value="full_suite">Full Suite</option>
+                  ) : (
+                    modulePresets.map((preset) => (
+                      <option key={preset.key} value={preset.key}>
+                        {preset.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-700">CRM Package</label>
                 <select

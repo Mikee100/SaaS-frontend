@@ -39,6 +39,26 @@ interface ModulePresetsResponse {
   presets: ModulePresetDefinition[];
 }
 
+interface ModulePermissionRoleCheck {
+  roleName: string;
+  allowed: boolean;
+  missing: string[];
+}
+
+interface ModulePermissionMatrixEntry {
+  module: AppModuleKey;
+  enabled: boolean;
+  requiredPermissions: string[];
+  roleChecks: ModulePermissionRoleCheck[];
+}
+
+interface ModulePermissionMatrixResponse {
+  tenantId: string;
+  enabledModules: AppModuleKey[];
+  roles: string[];
+  matrix: ModulePermissionMatrixEntry[];
+}
+
 type CrmPackageKey = 'starter' | 'growth' | 'pro' | 'enterprise';
 
 type CrmCapabilityKey =
@@ -220,6 +240,9 @@ export default function TenantDetailsPage() {
   const [modulePresets, setModulePresets] = useState<ModulePresetDefinition[]>([]);
   const [selectedModulePreset, setSelectedModulePreset] = useState('');
   const [applyingModulePreset, setApplyingModulePreset] = useState(false);
+  const [modulePermissionMatrix, setModulePermissionMatrix] = useState<ModulePermissionMatrixEntry[]>([]);
+  const [moduleMatrixRoles, setModuleMatrixRoles] = useState<string[]>([]);
+  const [loadingModuleMatrix, setLoadingModuleMatrix] = useState(false);
   const [availableCrmPackages, setAvailableCrmPackages] = useState<CrmPackageKey[]>(['starter', 'growth', 'pro', 'enterprise']);
   const [availableCrmCapabilities, setAvailableCrmCapabilities] = useState<CrmCapabilityKey[]>([]);
   const [crmPackageKey, setCrmPackageKey] = useState<CrmPackageKey>('starter');
@@ -310,6 +333,17 @@ export default function TenantDetailsPage() {
       setAvailableModules(Array.isArray(modules?.availableModules) ? modules.availableModules : []);
       setEnabledModules(Array.isArray(modules?.enabledModules) ? modules.enabledModules : []);
 
+      setLoadingModuleMatrix(true);
+      try {
+        const matrix = await apiGet<ModulePermissionMatrixResponse>(
+          `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
+        );
+        setModulePermissionMatrix(Array.isArray(matrix?.matrix) ? matrix.matrix : []);
+        setModuleMatrixRoles(Array.isArray(matrix?.roles) ? matrix.roles : []);
+      } finally {
+        setLoadingModuleMatrix(false);
+      }
+
       try {
         const presets = await apiGet<ModulePresetsResponse>('/admin/module-presets');
         setModulePresets(Array.isArray(presets?.presets) ? presets.presets : []);
@@ -375,6 +409,11 @@ export default function TenantDetailsPage() {
       );
       setAvailableModules(Array.isArray(latestModules?.availableModules) ? latestModules.availableModules : []);
       setEnabledModules(Array.isArray(latestModules?.enabledModules) ? latestModules.enabledModules : []);
+      const latestMatrix = await apiGet<ModulePermissionMatrixResponse>(
+        `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
+      );
+      setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
+      setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
       alert('Tenant modules updated successfully.');
     } catch (error) {
       console.error('Failed to update tenant modules:', error);
@@ -407,6 +446,11 @@ export default function TenantDetailsPage() {
       );
       setAvailableModules(Array.isArray(latestModules?.availableModules) ? latestModules.availableModules : []);
       setEnabledModules(Array.isArray(latestModules?.enabledModules) ? latestModules.enabledModules : []);
+      const latestMatrix = await apiGet<ModulePermissionMatrixResponse>(
+        `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
+      );
+      setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
+      setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
       setSelectedModulePreset('');
       await refreshUser();
       alert(`Module preset applied successfully: ${preset.label}.`);
@@ -1552,6 +1596,63 @@ const fetchMpesaConfig = useCallback(async () => {
                 </label>
               );
             })}
+          </div>
+
+          <div style={{ padding: '0.8rem', borderTop: '1px solid #e5e7eb' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#334155', margin: 0 }}>
+              Module Permission Matrix
+            </h4>
+            <p style={{ marginTop: '0.2rem', fontSize: '11px', color: '#64748b' }}>
+              Shows where a module is enabled but role permissions may still hide nav/actions.
+            </p>
+
+            {loadingModuleMatrix ? (
+              <div style={{ marginTop: '0.6rem', fontSize: '12px', color: '#64748b' }}>Loading matrix...</div>
+            ) : modulePermissionMatrix.length === 0 ? (
+              <div style={{ marginTop: '0.6rem', fontSize: '12px', color: '#64748b' }}>No role permission data found for this tenant yet.</div>
+            ) : (
+              <div style={{ marginTop: '0.6rem', overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      <th style={{ textAlign: 'left', padding: '0.4rem' }}>Module</th>
+                      <th style={{ textAlign: 'left', padding: '0.4rem' }}>Required Permissions</th>
+                      {moduleMatrixRoles.map((role) => (
+                        <th key={role} style={{ textAlign: 'left', padding: '0.4rem' }}>{role}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modulePermissionMatrix.map((entry) => (
+                      <tr key={entry.module} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '0.4rem', fontWeight: 600, color: entry.enabled ? '#1e3a8a' : '#64748b' }}>
+                          {entry.module} {entry.enabled ? '(enabled)' : '(disabled)'}
+                        </td>
+                        <td style={{ padding: '0.4rem', color: '#334155' }}>
+                          {entry.requiredPermissions.length > 0 ? entry.requiredPermissions.join(', ') : 'none'}
+                        </td>
+                        {moduleMatrixRoles.map((role) => {
+                          const check = entry.roleChecks.find((item) => item.roleName === role);
+                          return (
+                            <td key={`${entry.module}-${role}`} style={{ padding: '0.4rem' }}>
+                              {!check ? (
+                                <span style={{ color: '#94a3b8' }}>n/a</span>
+                              ) : check.allowed ? (
+                                <span style={{ color: '#166534', fontWeight: 600 }}>ok</span>
+                              ) : (
+                                <span style={{ color: '#b45309' }} title={check.missing.join(', ')}>
+                                  missing: {check.missing.join(', ')}
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <div style={{ padding: '0.8rem', borderTop: '1px solid #e5e7eb' }}>

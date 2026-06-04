@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaTimes, FaMagic, FaLayerGroup } from 'react-icons/fa';
+import Image from 'next/image';
 import {
   ProductAttribute,
   ProductVariation,
@@ -11,6 +12,7 @@ import {
   productAttributesApi,
   productVariationsApi,
 } from '@/lib/api/product-variations';
+import API_BASE_URL from '@/config/apiConfig';
 
 // Helper function for cartesian product (pure function, no dependencies)
 const cartesianProduct = (arrays: string[][]): string[][] => {
@@ -49,6 +51,10 @@ export default function VariationManager({
   const [quickInputType, setQuickInputType] = useState<{ name: string; unit: string; attributeName: string } | null>(null);
   const [quickInputValues, setQuickInputValues] = useState<string>('');
   const [editingVariation, setEditingVariation] = useState<string | null>(null);
+  const [imageModalVariation, setImageModalVariation] = useState<ProductVariation | null>(null);
+  const [imagesBusy, setImagesBusy] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // Generate variations state
   const [selectedAttributes, setSelectedAttributes] = useState<
@@ -262,6 +268,59 @@ export default function VariationManager({
     }
   };
 
+  const resolveImageUrl = useCallback((imagePath?: string) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+    const normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+    return `${API_BASE_URL}${normalizedPath}`;
+  }, []);
+
+  const getVariationImageUrls = useCallback((variation: ProductVariation) => {
+    return (variation.images || [])
+      .map((imagePath) => resolveImageUrl(imagePath))
+      .filter((imageUrl): imageUrl is string => Boolean(imageUrl));
+  }, [resolveImageUrl]);
+
+  const handleUploadVariationImages = async (variation: ProductVariation, files: File[]) => {
+    if (!files.length) return;
+    try {
+      setImagesBusy(true);
+      const updated = await productVariationsApi.uploadImages(variation.id, files, branchId);
+      setImageModalVariation(updated);
+      await loadData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to upload variation images');
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+
+  const handleDeleteVariationImage = async (variation: ProductVariation, imageUrl: string) => {
+    try {
+      setImagesBusy(true);
+      const updated = await productVariationsApi.deleteImage(variation.id, imageUrl, branchId);
+      setImageModalVariation(updated);
+      await loadData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to remove variation image');
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+
+  const handleSetVariationCoverImage = async (variation: ProductVariation, imageUrl: string) => {
+    try {
+      setImagesBusy(true);
+      const updated = await productVariationsApi.setPrimaryImage(variation.id, imageUrl, variation.images || [], branchId);
+      setImageModalVariation(updated);
+      await loadData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to set variation cover image');
+    } finally {
+      setImagesBusy(false);
+    }
+  };
+
   // Generate variation matrix preview
   const generateMatrix = useCallback(() => {
     if (selectedAttributes.length === 0) {
@@ -459,6 +518,7 @@ export default function VariationManager({
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
                 {attributes
                   .filter((attr) =>
@@ -478,6 +538,32 @@ export default function VariationManager({
             <tbody className="bg-white divide-y divide-gray-200">
               {variations.map((variation) => (
                 <tr key={variation.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {getVariationImageUrls(variation)[0] ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLightboxImages(getVariationImageUrls(variation));
+                          setLightboxIndex(0);
+                        }}
+                        className="relative h-14 w-14 overflow-hidden rounded border border-gray-200"
+                        title="Preview variation image"
+                      >
+                        <Image
+                          src={getVariationImageUrls(variation)[0]}
+                          alt={`${variation.sku} cover`}
+                          fill
+                          sizes="56px"
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </button>
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded border border-dashed border-gray-300 text-[10px] text-gray-500">
+                        No
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-900">{variation.sku}</td>
                   {attributes
                     .filter((attr) => variation.attributes[attr.name])
@@ -548,6 +634,13 @@ export default function VariationManager({
                         title="Edit"
                       >
                         <FaEdit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setImageModalVariation(variation)}
+                        className="text-indigo-600 hover:text-indigo-800 p-1 rounded hover:bg-indigo-50"
+                        title="Manage images"
+                      >
+                        <FaLayerGroup className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteVariation(variation.id)}
@@ -993,6 +1086,153 @@ export default function VariationManager({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {imageModalVariation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Variation Images</h3>
+                <p className="text-xs text-gray-500">{imageModalVariation.sku}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImageModalVariation(null)}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+              >
+                <FaTimes className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mb-3">
+              <label className="mb-1 block text-xs font-medium text-gray-700">Upload images for this variation</label>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => {
+                  const files = Array.from(event.target.files || []);
+                  handleUploadVariationImages(imageModalVariation, files);
+                  event.currentTarget.value = '';
+                }}
+                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 file:mr-3 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-blue-700"
+                disabled={imagesBusy}
+              />
+              <p className="mt-1 text-[11px] text-gray-500">First image acts as cover for this variation.</p>
+            </div>
+
+            {(imageModalVariation.images || []).length === 0 ? (
+              <div className="rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+                No variation images yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {(imageModalVariation.images || []).map((imagePath, index) => {
+                  const imageUrl = resolveImageUrl(imagePath);
+                  if (!imageUrl) return null;
+
+                  return (
+                    <div key={`${imagePath}-${index}`} className="rounded border border-gray-200 p-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLightboxImages(getVariationImageUrls(imageModalVariation));
+                          setLightboxIndex(index);
+                        }}
+                        className="relative block h-32 w-full overflow-hidden rounded border border-gray-200"
+                      >
+                        <Image
+                          src={imageUrl}
+                          alt={`Variation image ${index + 1}`}
+                          fill
+                          sizes="220px"
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </button>
+                      <div className="mt-1 flex gap-1">
+                        <button
+                          type="button"
+                          disabled={imagesBusy || index === 0}
+                          onClick={() => handleSetVariationCoverImage(imageModalVariation, imagePath)}
+                          className="flex-1 rounded border border-blue-200 bg-blue-50 px-1 py-0.5 text-[10px] font-medium text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {index === 0 ? 'Cover' : 'Set cover'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={imagesBusy}
+                          onClick={() => handleDeleteVariationImage(imageModalVariation, imagePath)}
+                          className="flex-1 rounded border border-red-200 bg-red-50 px-1 py-0.5 text-[10px] font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {lightboxImages.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3"
+          onClick={() => {
+            setLightboxImages([]);
+            setLightboxIndex(0);
+          }}
+        >
+          <div
+            className="relative w-full max-w-3xl rounded border border-gray-700 bg-black p-2"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between text-xs text-white/80">
+              <span>{lightboxIndex + 1} / {lightboxImages.length}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setLightboxImages([]);
+                  setLightboxIndex(0);
+                }}
+                className="rounded border border-white/30 px-2 py-1 text-white hover:bg-white/10"
+              >
+                Close
+              </button>
+            </div>
+            <div className="relative h-[60vh] w-full overflow-hidden rounded">
+              <Image
+                src={lightboxImages[lightboxIndex]}
+                alt={`Variation image ${lightboxIndex + 1}`}
+                fill
+                sizes="(max-width: 1024px) 100vw, 900px"
+                className="object-contain"
+                unoptimized
+              />
+            </div>
+            {lightboxImages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex((prev) => (prev - 1 + lightboxImages.length) % lightboxImages.length)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded border border-white/30 bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/80"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex((prev) => (prev + 1) % lightboxImages.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-white/30 bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/80"
+                >
+                  Next
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

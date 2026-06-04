@@ -55,6 +55,7 @@ interface Product {
     id: string;
     name: string;
   };
+  images?: string[];
 }
 
 interface ProductVariation {
@@ -63,6 +64,7 @@ interface ProductVariation {
   price?: number;
   cost?: number;
   stock: number;
+  images?: string[];
   attributes?: Record<string, string>;
 }
 
@@ -80,6 +82,8 @@ interface ProductListRow {
   category?: string;
   description?: string;
   attributeSummary?: string;
+  imageUrl?: string;
+  imageUrls?: string[];
 }
 
 interface InventoryItem {
@@ -241,6 +245,12 @@ export default function UnifiedProductsInventoryPage() {
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryError, setCategoryError] = useState('');
+  const [productImageFiles, setProductImageFiles] = useState<File[]>([]);
+  const [productImagePreviewUrls, setProductImagePreviewUrls] = useState<string[]>([]);
+  const [existingProductImages, setExistingProductImages] = useState<string[]>([]);
+  const [imageActionLoading, setImageActionLoading] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // Inventory tab states
   const [stockFilter, setStockFilter] = useState("all");
@@ -388,6 +398,89 @@ export default function UnifiedProductsInventoryPage() {
   const canDeleteProducts = hasPermission(user, 'delete_products');
   const canViewInventory = hasPermission(user, 'view_inventory');
   const canEditInventory = hasPermission(user, 'edit_inventory');
+
+  useEffect(() => {
+    return () => {
+      productImagePreviewUrls.forEach((url) => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, [productImagePreviewUrls]);
+
+  const resolveProductImageUrl = useCallback((imagePath?: string | null) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return imagePath;
+    const normalizedPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+    return `${API_BASE_URL}${normalizedPath}`;
+  }, []);
+
+  const getPrimaryProductImage = useCallback((product?: Product | null) => {
+    const firstImagePath = Array.isArray(product?.images) ? product?.images?.[0] : undefined;
+    return resolveProductImageUrl(firstImagePath || null);
+  }, [resolveProductImageUrl]);
+
+  const uploadProductImages = useCallback(async (productId: string, files: File[]) => {
+    if (files.length === 0) return;
+
+    const payload = new FormData();
+    files.forEach((file) => payload.append('images', file));
+
+    const response = await fetch(`${API_BASE_URL}/products/upload-images/${productId}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined,
+      body: payload,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let message = 'Failed to upload product images';
+      try {
+        const parsed = JSON.parse(errorText) as { message?: string | string[] };
+        if (Array.isArray(parsed.message)) {
+          message = parsed.message.join(', ');
+        } else if (parsed.message) {
+          message = parsed.message;
+        }
+      } catch {
+        if (errorText) {
+          message = errorText;
+        }
+      }
+      throw new Error(message);
+    }
+  }, [selectedBranchId]);
+
+  const deleteProductImage = useCallback(async (productId: string, imageUrl: string) => {
+    const response = await fetch(`${API_BASE_URL}/products/delete-image/${productId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(selectedBranchId ? { 'x-branch-id': selectedBranchId } : {}),
+      },
+      body: JSON.stringify({ imageUrl }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Failed to delete product image');
+    }
+  }, [selectedBranchId]);
+
+  const reorderProductImageAsPrimary = useCallback(async (productId: string, imageUrl: string, currentImages: string[]) => {
+    const reordered = [imageUrl, ...currentImages.filter((item) => item !== imageUrl)];
+    await apiPut(`/products/${productId}`, { images: reordered }, { 'x-branch-id': selectedBranchId || '' });
+    return reordered;
+  }, [selectedBranchId]);
+
+  const openImageLightbox = useCallback((images: string[], startIndex = 0) => {
+    if (!images.length) return;
+    setLightboxImages(images);
+    setLightboxIndex(startIndex);
+  }, []);
 
   // Helper: can create product
   const canCreate = () => {
@@ -844,6 +937,8 @@ export default function UnifiedProductsInventoryPage() {
           stock: Number(product.stock) || 0,
           category: product.category,
           description: product.description,
+          imageUrl: product.images?.[0],
+          imageUrls: product.images || [],
         });
         return;
       }
@@ -863,6 +958,8 @@ export default function UnifiedProductsInventoryPage() {
           category: product.category,
           description: product.description,
           attributeSummary: formatVariationAttributes(variation.attributes),
+          imageUrl: variation.images?.[0] || product.images?.[0],
+          imageUrls: variation.images?.length ? variation.images : (product.images || []),
         });
       });
     });
@@ -1012,6 +1109,10 @@ export default function UnifiedProductsInventoryPage() {
         supplier: formData.get("supplier"),
         branchId: selectedBranchId,
       }, { 'x-branch-id': selectedBranchId || '' }) as Product;
+
+      if (created?.id && productImageFiles.length > 0) {
+        await uploadProductImages(created.id, productImageFiles);
+      }
       
       queryClient.invalidateQueries({ queryKey: ['products', selectedBranchId] });
       setShowAddForm(false);
@@ -1047,6 +1148,10 @@ export default function UnifiedProductsInventoryPage() {
           category: String(formData.get('category') || '').trim() || undefined,
           supplier: formData.get("supplier"),
         }, { 'x-branch-id': selectedBranchId || '' });
+
+        if (productImageFiles.length > 0) {
+          await uploadProductImages(editProduct.id, productImageFiles);
+        }
         setEditProduct(null);
       }
       setShowAddForm(false);
@@ -1063,12 +1168,23 @@ export default function UnifiedProductsInventoryPage() {
   const resetForm = () => {
     setEditProduct(null);
     setProductCategoryInput('');
+    productImagePreviewUrls.forEach((url) => {
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    setProductImageFiles([]);
+    setProductImagePreviewUrls([]);
+    setExistingProductImages([]);
     setShowAddForm(false);
   };
 
   function openEditModal(product: Product) {
     setEditProduct(product);
     setProductCategoryInput(product.category || '');
+    setProductImageFiles([]);
+    setProductImagePreviewUrls([]);
+    setExistingProductImages(product.images || []);
     setShowAddForm(true);
   }
 
@@ -1861,6 +1977,167 @@ export default function UnifiedProductsInventoryPage() {
                           />
                         </div>
                         <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Product Images
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(event) => {
+                              const files = Array.from(event.target.files || []);
+                              if (!files.length) return;
+                              const newPreviewUrls = files.map((file) => URL.createObjectURL(file));
+                              setProductImageFiles((prev) => [...prev, ...files]);
+                              setProductImagePreviewUrls((prev) => [...prev, ...newPreviewUrls]);
+                              event.currentTarget.value = '';
+                            }}
+                            className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 file:mr-3 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-blue-700 hover:file:bg-blue-100"
+                          />
+                          <p className="mt-1 text-[11px] text-gray-500">
+                            Upload one or more product photos. Max size per image is 5MB.
+                          </p>
+                          {editProduct && existingProductImages.length > 0 && (
+                            <div className="mt-2">
+                              <p className="mb-1 text-[11px] font-semibold text-gray-600">Saved images</p>
+                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                {existingProductImages.map((imagePath, index) => {
+                                  const imageUrl = resolveProductImageUrl(imagePath);
+                                  if (!imageUrl) return null;
+
+                                  return (
+                                    <div key={`${imagePath}-${index}`} className="rounded border border-gray-200 p-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => openImageLightbox(existingProductImages.map((path) => resolveProductImageUrl(path)).filter((url): url is string => Boolean(url)), index)}
+                                        className="relative block h-20 w-full overflow-hidden rounded border border-gray-200"
+                                      >
+                                        <Image
+                                          src={imageUrl}
+                                          alt={`Saved product image ${index + 1}`}
+                                          fill
+                                          sizes="120px"
+                                          className="object-cover"
+                                          unoptimized
+                                        />
+                                      </button>
+                                      <div className="mt-1 flex gap-1">
+                                        <button
+                                          type="button"
+                                          disabled={imageActionLoading || index === 0}
+                                          onClick={async () => {
+                                            if (!editProduct) return;
+                                            setImageActionLoading(true);
+                                            try {
+                                              const reordered = await reorderProductImageAsPrimary(editProduct.id, imagePath, existingProductImages);
+                                              setExistingProductImages(reordered);
+                                              queryClient.invalidateQueries({ queryKey: ['products', selectedBranchId] });
+                                            } catch (err) {
+                                              const errMsg = err instanceof Error ? err.message : 'Failed to set primary image';
+                                              setError(errMsg);
+                                            } finally {
+                                              setImageActionLoading(false);
+                                            }
+                                          }}
+                                          className="flex-1 rounded border border-blue-200 bg-blue-50 px-1 py-0.5 text-[10px] font-medium text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          {index === 0 ? 'Cover' : 'Set cover'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={imageActionLoading}
+                                          onClick={async () => {
+                                            if (!editProduct) return;
+                                            setImageActionLoading(true);
+                                            try {
+                                              await deleteProductImage(editProduct.id, imagePath);
+                                              setExistingProductImages((prev) => prev.filter((img) => img !== imagePath));
+                                              queryClient.invalidateQueries({ queryKey: ['products', selectedBranchId] });
+                                            } catch (err) {
+                                              const errMsg = err instanceof Error ? err.message : 'Failed to remove image';
+                                              setError(errMsg);
+                                            } finally {
+                                              setImageActionLoading(false);
+                                            }
+                                          }}
+                                          className="flex-1 rounded border border-red-200 bg-red-50 px-1 py-0.5 text-[10px] font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          {productImagePreviewUrls.length > 0 && (
+                            <div className="mt-2">
+                              <p className="mb-1 text-[11px] font-semibold text-gray-600">New uploads</p>
+                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              {productImagePreviewUrls.map((url, index) => (
+                                <div key={`${url}-${index}`} className="rounded border border-gray-200 p-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => openImageLightbox(productImagePreviewUrls, index)}
+                                    className="relative block h-20 w-full overflow-hidden rounded border border-gray-200"
+                                  >
+                                    <Image
+                                      src={url}
+                                      alt={`Product preview ${index + 1}`}
+                                      fill
+                                      sizes="120px"
+                                      className="object-cover"
+                                      unoptimized
+                                    />
+                                  </button>
+                                  <div className="mt-1 flex gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={index === 0}
+                                      onClick={() => {
+                                        if (index === 0) return;
+                                        setProductImageFiles((prev) => {
+                                          const next = [...prev];
+                                          const [picked] = next.splice(index, 1);
+                                          next.unshift(picked);
+                                          return next;
+                                        });
+                                        setProductImagePreviewUrls((prev) => {
+                                          const next = [...prev];
+                                          const [picked] = next.splice(index, 1);
+                                          next.unshift(picked);
+                                          return next;
+                                        });
+                                      }}
+                                      className="flex-1 rounded border border-blue-200 bg-blue-50 px-1 py-0.5 text-[10px] font-medium text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      {index === 0 ? 'Cover' : 'Set cover'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setProductImageFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
+                                        setProductImagePreviewUrls((prev) => {
+                                          const next = prev.filter((_, previewIndex) => previewIndex !== index);
+                                          if (url.startsWith('blob:')) {
+                                            URL.revokeObjectURL(url);
+                                          }
+                                          return next;
+                                        });
+                                      }}
+                                      className="flex-1 rounded border border-red-200 bg-red-50 px-1 py-0.5 text-[10px] font-medium text-red-700"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div>
                           <div className="mb-2 flex items-center justify-between">
                             <label className="block text-sm font-semibold text-gray-700">Category</label>
                             {isRestaurantTenant && (
@@ -2030,6 +2307,11 @@ export default function UnifiedProductsInventoryPage() {
                           const parentProduct = productsById.get(productRow.productId);
                           const margin = productRow.price > 0 ? ((productRow.price - (productRow.cost || 0)) / productRow.price * 100) : 0;
                           const stockStatus = productRow.stock > 10 ? 'good' : productRow.stock > 0 ? 'low' : 'out';
+                          const productImage = resolveProductImageUrl(productRow.imageUrl || null) || getPrimaryProductImage(parentProduct);
+                          const lightboxTargets =
+                            (productRow.imageUrls || [])
+                              .map((imagePath) => resolveProductImageUrl(imagePath))
+                              .filter((imageUrl): imageUrl is string => Boolean(imageUrl));
                           return (
                             <div 
                               key={productRow.id} 
@@ -2038,9 +2320,26 @@ export default function UnifiedProductsInventoryPage() {
                               {/* Header */}
                               <div className="mb-2.5 flex items-start justify-between">
                                 <div className="flex items-start gap-3 flex-1 min-w-0">
-                                  <div className="flex-shrink-0 rounded bg-blue-100 p-1.5">
-                                    <FaBox className="h-4 w-4 text-blue-600" />
-                                  </div>
+                                  {productImage ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openImageLightbox(lightboxTargets, 0)}
+                                      className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded border border-gray-200"
+                                    >
+                                      <Image
+                                        src={productImage}
+                                        alt={`${productRow.name} image`}
+                                        fill
+                                        sizes="44px"
+                                        className="object-cover"
+                                        unoptimized
+                                      />
+                                    </button>
+                                  ) : (
+                                    <div className="flex-shrink-0 rounded bg-blue-100 p-1.5">
+                                      <FaBox className="h-4 w-4 text-blue-600" />
+                                    </div>
+                                  )}
                                   <div className="min-w-0 flex-1">
                                     <h3 className="mb-0.5 line-clamp-2 text-sm font-semibold text-gray-900 group-hover:text-blue-600">
                                       {productRow.name}
@@ -2173,6 +2472,9 @@ export default function UnifiedProductsInventoryPage() {
                             <thead>
                               <tr className="border-b border-gray-200 bg-gray-50">
                                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-700">
+                                  Image
+                                </th>
+                                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-700">
                                   <button
                                     onClick={() => handleSort('name')}
                                     className="flex items-center gap-2 hover:text-gray-900"
@@ -2246,7 +2548,7 @@ export default function UnifiedProductsInventoryPage() {
                             <tbody className="bg-white divide-y divide-gray-200">
                               {sortedProducts.length === 0 ? (
                                 <tr>
-                                  <td colSpan={7} className="px-3 py-7 text-center">
+                                  <td colSpan={8} className="px-3 py-7 text-center">
                                     <div className="flex flex-col items-center">
                                       <FaBox className="w-12 h-12 text-gray-300 mb-3" />
                                       <p className="text-sm font-medium text-gray-900 mb-1">
@@ -2269,12 +2571,40 @@ export default function UnifiedProductsInventoryPage() {
                                   const cost = typeof productRow.cost === 'number' ? productRow.cost : 0;
                                   const stock = typeof productRow.stock === 'number' ? productRow.stock : 0;
                                   const margin = price > 0 ? ((price - cost) / price) * 100 : null;
+                                  const productImage = resolveProductImageUrl(productRow.imageUrl || null) || getPrimaryProductImage(parentProduct);
+                                  const lightboxTargets =
+                                    (productRow.imageUrls || [])
+                                      .map((imagePath) => resolveProductImageUrl(imagePath))
+                                      .filter((imageUrl): imageUrl is string => Boolean(imageUrl));
 
                                   return (
                                     <tr
                                       key={productRow.id}
                                       className="hover:bg-gray-50 transition-colors"
                                     >
+                                      <td className="whitespace-nowrap px-3 py-2.5">
+                                        {productImage ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => openImageLightbox(lightboxTargets, 0)}
+                                            className="relative h-9 w-9 overflow-hidden rounded border border-gray-200"
+                                          >
+                                            <Image
+                                              src={productImage}
+                                              alt={`${productRow.name} image`}
+                                              fill
+                                              sizes="36px"
+                                              className="object-cover"
+                                              unoptimized
+                                            />
+                                          </button>
+                                        ) : (
+                                          <div className="flex h-9 w-9 items-center justify-center rounded bg-gray-100 text-gray-400">
+                                            <FaBox className="h-3.5 w-3.5" />
+                                          </div>
+                                        )}
+                                      </td>
+
                                       {/* Product Name */}
                                       <td className="whitespace-nowrap px-3 py-2.5">
                                         <div className="font-medium text-gray-900">{productRow.name || '-'}</div>
@@ -3536,6 +3866,63 @@ export default function UnifiedProductsInventoryPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {lightboxImages.length > 0 && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3"
+            onClick={() => {
+              setLightboxImages([]);
+              setLightboxIndex(0);
+            }}
+          >
+            <div
+              className="relative w-full max-w-3xl rounded border border-gray-700 bg-black p-2"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-2 flex items-center justify-between text-xs text-white/80">
+                <span>{lightboxIndex + 1} / {lightboxImages.length}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLightboxImages([]);
+                    setLightboxIndex(0);
+                  }}
+                  className="rounded border border-white/30 px-2 py-1 text-white hover:bg-white/10"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="relative h-[60vh] w-full overflow-hidden rounded">
+                <Image
+                  src={lightboxImages[lightboxIndex]}
+                  alt={`Image ${lightboxIndex + 1}`}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 900px"
+                  className="object-contain"
+                  unoptimized
+                />
+              </div>
+              {lightboxImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxIndex((prev) => (prev - 1 + lightboxImages.length) % lightboxImages.length)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded border border-white/30 bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/80"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxIndex((prev) => (prev + 1) % lightboxImages.length)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-white/30 bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/80"
+                  >
+                    Next
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

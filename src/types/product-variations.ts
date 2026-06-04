@@ -40,6 +40,7 @@ export interface ProductVariation {
   price?: number;
   cost?: number;
   stock: number;
+  images?: string[];
   attributes: Record<string, string>; // e.g., { "Color": "Black", "Size": "38" }
   isActive: boolean;
   createdAt: string;
@@ -79,6 +80,7 @@ export interface UpdateVariationRequest {
   price?: number;
   cost?: number;
   stock?: number;
+  images?: string[];
   attributes?: Record<string, string>;
   barcode?: string;
   weight?: number;

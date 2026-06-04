@@ -1,4 +1,5 @@
 import { apiGet, apiPost, apiPut, apiDelete } from '@/utils/api';
+import API_BASE_URL from '@/config/apiConfig';
 import type {
   ProductAttribute,
   ProductAttributeValue,
@@ -147,6 +148,70 @@ export const productVariationsApi = {
   // Delete variation
   async delete(variationId: string): Promise<void> {
     return apiDelete(`/products/variations/${variationId}`);
+  },
+
+  async uploadImages(
+    variationId: string,
+    files: File[],
+    branchId?: string,
+  ): Promise<ProductVariation> {
+    const payload = new FormData();
+    files.forEach((file) => payload.append('images', file));
+
+    const response = await fetch(
+      `${API_BASE_URL}/products/variations/${variationId}/upload-images`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: branchId ? { 'x-branch-id': branchId } : undefined,
+        body: payload,
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Failed to upload variation images');
+    }
+
+    return response.json() as Promise<ProductVariation>;
+  },
+
+  async deleteImage(
+    variationId: string,
+    imageUrl: string,
+    branchId?: string,
+  ): Promise<ProductVariation> {
+    const response = await fetch(
+      `${API_BASE_URL}/products/variations/${variationId}/delete-image`,
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(branchId ? { 'x-branch-id': branchId } : {}),
+        },
+        body: JSON.stringify({ imageUrl }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Failed to delete variation image');
+    }
+
+    return response.json() as Promise<ProductVariation>;
+  },
+
+  async setPrimaryImage(
+    variationId: string,
+    imageUrl: string,
+    currentImages: string[],
+    branchId?: string,
+  ): Promise<ProductVariation> {
+    const reordered = [imageUrl, ...currentImages.filter((item) => item !== imageUrl)];
+    return apiPut<ProductVariation>(`/products/variations/${variationId}`, {
+      images: reordered,
+    }, branchId ? { 'x-branch-id': branchId } : undefined);
   },
 };
 
