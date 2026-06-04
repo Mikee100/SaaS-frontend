@@ -27,6 +27,7 @@ interface UserContextType {
   setUser: Dispatch<SetStateAction<User | null>>;
   loading: boolean;
   error: string | null;
+  entitlementsSyncedAt: number | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void | Promise<void>;
   refreshUser: () => Promise<void>;
@@ -102,6 +103,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [entitlementsSyncedAt, setEntitlementsSyncedAt] = useState<number | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -114,19 +116,26 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   
   // Cookie-based auth: fetch user via /user/me (cookies sent with credentials: 'include')
   const fetchUser = useCallback(async (forceRefresh: boolean = false) => {
+    const cached = !forceRefresh ? getCachedUser() : { user: null, isValid: false };
+    const hasCachedUser = !!(cached.isValid && cached.user);
+
     if (!forceRefresh) {
-      const cached = getCachedUser();
-      if (cached.isValid && cached.user) {
+      if (hasCachedUser) {
         setUser(cached.user);
+        if (typeof window !== 'undefined') {
+          const cachedTimestamp = Number(localStorage.getItem(USER_CACHE_TIMESTAMP_KEY) || 0);
+          setEntitlementsSyncedAt(cachedTimestamp > 0 ? cachedTimestamp : null);
+        }
         setError(null);
         setLoading(false);
-        return;
       }
     }
 
     if (fetchingRef.current) return;
     fetchingRef.current = true;
-    setLoading(true);
+    if (!hasCachedUser) {
+      setLoading(true);
+    }
 
     try {
       const userData = await apiGet('/user/me') as User;
@@ -154,6 +163,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         localStorage.setItem('selectedBranchId', userData.branchId);
       }
 
+      setEntitlementsSyncedAt(Date.now());
       setCachedUser(normalizedUser);
       setUser(normalizedUser);
       setError(null);
@@ -165,6 +175,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       // Don't clear user on 401 when we already have one (e.g. cross-origin cookies not sent after login)
       if (!userRef.current) {
         setUser(null);
+        setEntitlementsSyncedAt(null);
         clearUserCache();
         setError('Authentication failed. Please log in again.');
         if (typeof window !== 'undefined') localStorage.removeItem('token');
@@ -205,6 +216,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     // On auth pages (by pathname), clear user so login form shows
     if (isAuthPath()) {
       setUser(null);
+      setEntitlementsSyncedAt(null);
       setLoading(false);
       setError(null);
       initializedRef.current = true;
@@ -287,6 +299,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         localStorage.setItem('selectedBranchId', loginUser.branchId);
       }
 
+      setEntitlementsSyncedAt(Date.now());
       setCachedUser(normalizedUser);
       setUser(normalizedUser);
       setLoading(false);
@@ -304,6 +317,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       // Don't refetch here: cross-origin cookies often aren't sent, so /user/me would 401 and we'd clear user and redirect back to login
     } catch (err) {
       setUser(null);
+      setEntitlementsSyncedAt(null);
       setError(err instanceof Error ? err.message : 'Login failed');
       if (typeof window !== 'undefined') localStorage.removeItem('token');
     } finally {
@@ -316,6 +330,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     if (typeof window !== 'undefined') localStorage.removeItem('token');
     clearUserCache();
     setUser(null);
+    setEntitlementsSyncedAt(null);
     setError(null);
     initializedRef.current = false;
     router.push('/login');
@@ -352,12 +367,13 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     setUser,
     loading,
     error,
+    entitlementsSyncedAt,
     login,
     logout,
     refreshUser,
     clearError,
     endImpersonation,
-  }), [user, loading, error, login, logout, refreshUser, endImpersonation]);
+  }), [user, loading, error, entitlementsSyncedAt, login, logout, refreshUser, endImpersonation]);
 
   return (
     <UserContext.Provider value={ctxValue}>

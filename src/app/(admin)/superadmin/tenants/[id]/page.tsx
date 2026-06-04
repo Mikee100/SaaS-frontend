@@ -390,11 +390,17 @@ export default function TenantDetailsPage() {
       return;
     }
 
+    const preset = modulePresets.find((entry) => entry.key === selectedModulePreset);
+    if (!preset || !Array.isArray(preset.enabledModules) || preset.enabledModules.length === 0) {
+      alert('Selected preset is invalid. Reload the page and try again.');
+      return;
+    }
+
     try {
       setApplyingModulePreset(true);
-      await apiPut<TenantModulesResponse & { preset?: ModulePresetDefinition }>(
-        `/admin/tenants/${tenantId}/modules/preset`,
-        { presetKey: selectedModulePreset },
+      await apiPut<TenantModulesResponse>(
+        `/admin/tenants/${tenantId}/modules`,
+        { enabledModules: preset.enabledModules },
       );
       const latestModules = await apiGet<TenantModulesResponse>(
         `/admin/tenants/${tenantId}/modules?t=${Date.now()}`,
@@ -402,7 +408,8 @@ export default function TenantDetailsPage() {
       setAvailableModules(Array.isArray(latestModules?.availableModules) ? latestModules.availableModules : []);
       setEnabledModules(Array.isArray(latestModules?.enabledModules) ? latestModules.enabledModules : []);
       setSelectedModulePreset('');
-      alert('Module preset applied successfully.');
+      await refreshUser();
+      alert(`Module preset applied successfully: ${preset.label}.`);
     } catch (error) {
       console.error('Failed to apply module preset:', error);
       alert('Failed to apply module preset');
