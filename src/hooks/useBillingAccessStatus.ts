@@ -31,7 +31,9 @@ export function useBillingAccessStatus() {
     queryKey: ['billing-access-status', user?.tenantId],
     queryFn: async () => {
       try {
-        return await apiGet<BillingAccessStatus>('/billing/access-status');
+        return await apiGet<BillingAccessStatus>('/billing/access-status', {
+          'x-suppress-error-log': 'true',
+        });
       } catch (error: unknown) {
         const status =
           typeof error === 'object' && error !== null && 'status' in error
@@ -39,7 +41,7 @@ export function useBillingAccessStatus() {
             : undefined;
 
         if (status === 404) {
-          return await apiGet<BillingAccessStatus>('/api/billing/access-status');
+          return DEFAULT_STATUS;
         }
 
         throw error;
@@ -48,7 +50,18 @@ export function useBillingAccessStatus() {
     enabled: shouldFetch,
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
-    retry: 1,
+    retry: (failureCount, error: unknown) => {
+      const status =
+        typeof error === 'object' && error !== null && 'status' in error
+          ? Number((error as { status?: number }).status)
+          : undefined;
+
+      if (status === 404) {
+        return false;
+      }
+
+      return failureCount < 1;
+    },
   });
 
   const fallbackStatus: BillingAccessStatus =
