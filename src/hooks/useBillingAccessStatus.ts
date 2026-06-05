@@ -56,7 +56,7 @@ export function useBillingAccessStatus() {
           ? Number((error as { status?: number }).status)
           : undefined;
 
-      if (status === 404) {
+      if (status === 401 || status === 403 || status === 404) {
         return false;
       }
 

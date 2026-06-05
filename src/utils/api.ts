@@ -46,6 +46,19 @@ class EnhancedAPI {
     '/sales/credits/all',
   ];
 
+  private extractStatusFromUnknown(error: unknown): number | undefined {
+    if (error instanceof ApiError) {
+      return error.status;
+    }
+
+    if (typeof error === 'object' && error !== null && 'status' in error) {
+      const status = Number((error as { status?: number }).status);
+      return Number.isFinite(status) ? status : undefined;
+    }
+
+    return undefined;
+  }
+
   /** Cookie-based auth: no Authorization header; cookies sent via credentials: 'include'. */
   private getAuthHeaders(extra?: Record<string, string>): Record<string, string> {
     return {
@@ -167,7 +180,7 @@ class EnhancedAPI {
                 response: responseData || responseText,
               });
             }
-            throw new Error(errorMessage);
+            throw new ApiError(errorMessage, response.status, 'UNAUTHORIZED');
           }
           if (response.status === 401) {
             if (typeof window !== 'undefined') {
@@ -226,12 +239,15 @@ class EnhancedAPI {
           throw error;
         }
 
-        if (error instanceof ApiError && error.status && error.status >= 400 && error.status < 500) {
+        const status = this.extractStatusFromUnknown(error);
+
+        // Do not retry explicit HTTP failures here. Let callers decide if they want retries.
+        if (status && status >= 400 && status < 600) {
           throw error;
         }
 
-        // Don't retry 401 errors - they've already been handled above
-        if (error instanceof Error && error.message.includes('401')) {
+        // Abort errors typically indicate timeout/user navigation and are not recoverable by retries.
+        if (error instanceof DOMException && error.name === 'AbortError') {
           throw error;
         }
         
