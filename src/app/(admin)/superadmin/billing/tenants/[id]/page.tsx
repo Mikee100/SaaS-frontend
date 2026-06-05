@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiGet, apiPatch, apiPost } from '@/utils/api';
+import { ApiError, apiGet, apiPatch, apiPost } from '@/utils/api';
 import { FaChevronLeft, FaPlus, FaSync } from 'react-icons/fa';
 import { getFullAssetUrl } from '@/utils/logoUrl';
 import API_BASE_URL from '@/config/apiConfig';
@@ -278,14 +278,25 @@ export default function TenantBillingDetailsPage({
       setError('');
       setSuccess('');
 
-      await apiPost(
-        `/admin/subscriptions/operations/tenants/${tenantId}/manual-renewal`,
-        {
-          months: 1,
-          reason: 'Initial plan assignment from superadmin billing tenant page',
-          planId: initialPlanId,
-        },
-      );
+      try {
+        await apiPost(
+          `/admin/subscriptions/operations/tenants/${tenantId}/manual-renewal`,
+          {
+            months: 1,
+            reason: 'Initial plan assignment from superadmin billing tenant page',
+            planId: initialPlanId,
+          },
+        );
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          await apiPost('/billing/superadmin/assign-subscription', {
+            tenantId,
+            planId: initialPlanId,
+          });
+        } else {
+          throw error;
+        }
+      }
 
       setSuccess('Initial subscription plan assigned via manual renewal.');
       setInitialPlanId('');

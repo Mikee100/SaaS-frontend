@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { apiGet, apiPost } from '@/utils/api';
+import { ApiError, apiGet, apiPost } from '@/utils/api';
 import { toast } from 'react-hot-toast';
 
 interface Plan {
@@ -73,14 +73,27 @@ export default function AssignPlanModal({ isOpen, onClose, onSuccess }: AssignPl
 
     setLoading(true);
     try {
-      const response = await apiPost(
-        `/admin/subscriptions/operations/tenants/${selectedTenantId}/manual-renewal`,
-        {
-          months: 1,
-          reason: 'Plan assignment from superadmin modal',
-          planId: selectedPlanId,
-        },
-      );
+      let response: unknown;
+
+      try {
+        response = await apiPost(
+          `/admin/subscriptions/operations/tenants/${selectedTenantId}/manual-renewal`,
+          {
+            months: 1,
+            reason: 'Plan assignment from superadmin modal',
+            planId: selectedPlanId,
+          },
+        );
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          response = await apiPost('/billing/superadmin/assign-subscription', {
+            tenantId: selectedTenantId,
+            planId: selectedPlanId,
+          });
+        } else {
+          throw error;
+        }
+      }
 
       if (response) {
         toast.success('Plan assigned successfully');
