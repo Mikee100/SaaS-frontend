@@ -73,10 +73,14 @@ export default function AssignPlanModal({ isOpen, onClose, onSuccess }: AssignPl
 
     setLoading(true);
     try {
-      const response = await apiPost('/billing/superadmin/assign-subscription', {
-        tenantId: selectedTenantId,
-        planId: selectedPlanId,
-      });
+      const response = await apiPost(
+        `/admin/subscriptions/operations/tenants/${selectedTenantId}/manual-renewal`,
+        {
+          months: 1,
+          reason: 'Plan assignment from superadmin modal',
+          planId: selectedPlanId,
+        },
+      );
 
       if (response) {
         toast.success('Plan assigned successfully');
@@ -113,7 +117,7 @@ export default function AssignPlanModal({ isOpen, onClose, onSuccess }: AssignPl
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
         <div className="bg-white border border-gray-200 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-t-xl">
+          <div className="bg-linear-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-t-xl">
             <h2 className="text-2xl font-bold text-center">Assign Plan to Tenant</h2>
             <p className="text-indigo-100 text-center mt-2">
               Select a tenant and assign a subscription plan to them

@@ -278,12 +278,16 @@ export default function TenantBillingDetailsPage({
       setError('');
       setSuccess('');
 
-      await apiPost('/billing/superadmin/assign-subscription', {
-        tenantId,
-        planId: initialPlanId,
-      });
+      await apiPost(
+        `/admin/subscriptions/operations/tenants/${tenantId}/manual-renewal`,
+        {
+          months: 1,
+          reason: 'Initial plan assignment from superadmin billing tenant page',
+          planId: initialPlanId,
+        },
+      );
 
-      setSuccess('Initial subscription plan assigned successfully.');
+      setSuccess('Initial subscription plan assigned via manual renewal.');
       setInitialPlanId('');
       await refreshAll();
     } catch (err) {
