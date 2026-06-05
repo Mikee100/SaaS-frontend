@@ -29,7 +29,22 @@ export function useBillingAccessStatus() {
 
   const query = useQuery({
     queryKey: ['billing-access-status', user?.tenantId],
-    queryFn: () => apiGet<BillingAccessStatus>('/billing/access-status'),
+    queryFn: async () => {
+      try {
+        return await apiGet<BillingAccessStatus>('/billing/access-status');
+      } catch (error: unknown) {
+        const status =
+          typeof error === 'object' && error !== null && 'status' in error
+            ? Number((error as { status?: number }).status)
+            : undefined;
+
+        if (status === 404) {
+          return await apiGet<BillingAccessStatus>('/api/billing/access-status');
+        }
+
+        throw error;
+      }
+    },
     enabled: shouldFetch,
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
