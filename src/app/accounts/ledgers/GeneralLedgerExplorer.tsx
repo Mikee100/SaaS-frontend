@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { apiGet, apiPatch } from "@/utils/api";
+import { apiGet, apiPatch, apiPost } from "@/utils/api";
 import { 
   FaSearch, 
   FaArrowLeft, 
@@ -145,6 +145,8 @@ export default function GeneralLedgerExplorer() {
   const [drillEntry, setDrillEntry] = useState<LedgerEntry | null>(null);
   const [entriesCursor, setEntriesCursor] = useState<string | null>(null);
   const [hasMoreEntries, setHasMoreEntries] = useState(false);
+  const [recoveringLedger, setRecoveringLedger] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const normalizedRoles = Array.isArray(user?.roles)
@@ -362,6 +364,23 @@ export default function GeneralLedgerExplorer() {
     }
   };
 
+  const handleRecoverLedger = async () => {
+    setRecoveringLedger(true);
+    setRecoveryMessage(null);
+
+    try {
+      await apiPost("/ledger/init-coa", {}, getBranchHeaders());
+      await apiPost("/ledger/sync", {}, getBranchHeaders());
+      await fetchAccounts();
+      setRecoveryMessage("Ledger initialized and synced successfully.");
+    } catch (error) {
+      console.error("Error recovering ledger:", error);
+      setRecoveryMessage("Failed to initialize/sync ledger. Please try again.");
+    } finally {
+      setRecoveringLedger(false);
+    }
+  };
+
   useEffect(() => {
     if (!selectedAccount) return;
     void fetchEntries(selectedAccount);
@@ -564,6 +583,20 @@ export default function GeneralLedgerExplorer() {
           </div>
 
           <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">
+            {filteredAccounts.length === 0 && (
+              <div className="space-y-2 border border-dashed border-gray-300 p-3 text-xs text-gray-600">
+                <p>No accounts found for this tenant/branch.</p>
+                <button
+                  type="button"
+                  onClick={handleRecoverLedger}
+                  disabled={recoveringLedger}
+                  className="inline-flex h-8 items-center border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {recoveringLedger ? "Initializing..." : "Initialize & Sync Ledger"}
+                </button>
+                {recoveryMessage && <p className="text-[11px] text-gray-500">{recoveryMessage}</p>}
+              </div>
+            )}
             {Object.entries(groupedAccounts).map(([type, accs]) => (
               <div key={type}>
                 <h3 className="mb-1 border-b border-gray-100 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">{type}s</h3>

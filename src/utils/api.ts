@@ -95,9 +95,18 @@ class EnhancedAPI {
     );
   }
 
+  private getFallbackEndpoint(endpoint: string): string | null {
+    if (!endpoint.startsWith('/')) return null;
+    if (endpoint.startsWith('/api/')) {
+      return endpoint.slice('/api'.length);
+    }
+    return `/api${endpoint}`;
+  }
+
   private async makeRequest<T = unknown>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    allowPrefixFallback = true,
   ): Promise<T> {
     // Clean up stale requests
     this.cleanupPendingRequests();
@@ -154,6 +163,21 @@ class EnhancedAPI {
           const errorMessage = responseData?.message ||
                               response.statusText ||
                               `HTTP error! status: ${response.status}`;
+
+          // Hosted environments may expose API routes either with or without
+          // an /api prefix depending on proxy configuration. On 404, retry once
+          // with the alternate prefix form before surfacing an error.
+          if (response.status === 404 && allowPrefixFallback) {
+            const fallbackEndpoint = this.getFallbackEndpoint(endpoint);
+            if (fallbackEndpoint && fallbackEndpoint !== endpoint) {
+              return this.makeRequest<T>(
+                fallbackEndpoint,
+                options,
+                false,
+              );
+            }
+          }
+
           const isAccessRestricted =
             response.status === 403 &&
             typeof errorMessage === 'string' &&
