@@ -12,6 +12,16 @@ export default function ServiceWorkerRegistration() {
     if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
       const registerServiceWorker = async () => {
         try {
+          const swProbe = await fetch('/sw.js', {
+            method: 'HEAD',
+            cache: 'no-store',
+          });
+
+          if (!swProbe.ok) {
+            console.warn('Service worker script not found at /sw.js; skipping registration.');
+            return;
+          }
+
           const registration = await navigator.serviceWorker.register('/sw.js');
           
           // Check for updates immediately
@@ -42,7 +52,7 @@ export default function ServiceWorkerRegistration() {
                 if (Notification.permission === 'granted') {
                   const notification = new Notification('Update Available', {
                     body: 'A new version is available. Click to refresh.',
-                    icon: '/icon-192x192.png',
+                    icon: '/icon.svg',
                     requireInteraction: true
                   });
                   
@@ -56,7 +66,7 @@ export default function ServiceWorkerRegistration() {
                     if (permission === 'granted') {
                       const notification = new Notification('Update Available', {
                         body: 'A new version is available. Click to refresh.',
-                        icon: '/icon-192x192.png',
+                        icon: '/icon.svg',
                         requireInteraction: true
                       });
                       
@@ -96,12 +106,12 @@ export default function ServiceWorkerRegistration() {
           if (status === 'offline') {
             new Notification('You are offline', {
               body: 'Some features may be limited while offline.',
-              icon: '/icon-192x192.png'
+              icon: '/icon.svg'
             });
           } else {
             new Notification('Back online', {
               body: 'Your connection has been restored.',
-              icon: '/icon-192x192.png'
+              icon: '/icon.svg'
             });
           }
         } else if (Notification.permission !== 'denied') {
