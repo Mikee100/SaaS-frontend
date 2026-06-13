@@ -103,6 +103,12 @@ class EnhancedAPI {
     return `/api${endpoint}`;
   }
 
+  private shouldAttemptPrefixFallback(endpoint: string): boolean {
+    // Backend mounts superadmin routes at /admin, not /api/admin.
+    // Retrying these with /api creates noisy duplicate 404s.
+    return !endpoint.startsWith('/admin');
+  }
+
   private async makeRequest<T = unknown>(
     endpoint: string,
     options: RequestInit = {},
@@ -167,7 +173,11 @@ class EnhancedAPI {
           // Hosted environments may expose API routes either with or without
           // an /api prefix depending on proxy configuration. On 404, retry once
           // with the alternate prefix form before surfacing an error.
-          if (response.status === 404 && allowPrefixFallback) {
+          if (
+            response.status === 404 &&
+            allowPrefixFallback &&
+            this.shouldAttemptPrefixFallback(endpoint)
+          ) {
             const fallbackEndpoint = this.getFallbackEndpoint(endpoint);
             if (fallbackEndpoint && fallbackEndpoint !== endpoint) {
               return this.makeRequest<T>(

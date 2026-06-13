@@ -545,7 +545,9 @@ export default function TenantDetailsPage() {
 
 const fetchMpesaConfig = useCallback(async () => {
   try {
-    const config = await apiGet(`/mpesa/config`, { tenantId }) as MpesaConfigApiResponse;
+    const config = await apiGet(
+      `/mpesa/config?tenantId=${encodeURIComponent(tenantId)}`,
+    ) as MpesaConfigApiResponse;
     if (config) {
       setMpesaConfig({
         mpesaConsumerKey: config.consumerKey || '',
