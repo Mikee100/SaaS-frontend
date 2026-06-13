@@ -103,6 +103,19 @@ class EnhancedAPI {
     return `/api${endpoint}`;
   }
 
+  private getEndpointPath(endpoint: string): string {
+    const q = endpoint.indexOf('?');
+    return q >= 0 ? endpoint.slice(0, q) : endpoint;
+  }
+
+  private isHostedOptionalMissingRoute(path: string): boolean {
+    return (
+      path === '/admin/classifications' ||
+      path === '/classifications/public' ||
+      path === '/admin/module-presets'
+    );
+  }
+
   private shouldAttemptPrefixFallback(endpoint: string): boolean {
     // Backend mounts superadmin routes at /admin, not /api/admin.
     // Retrying these with /api creates noisy duplicate 404s.
@@ -131,7 +144,10 @@ class EnhancedAPI {
       ...this.getAuthHeaders(),
       ...options.headers,
     };
-    const suppressErrorLog = String((headers as Record<string, string>)['x-suppress-error-log'] || '') === 'true';
+    const endpointPath = this.getEndpointPath(endpoint);
+    const suppressErrorLog =
+      String((headers as Record<string, string>)['x-suppress-error-log'] || '') ===
+        'true' || this.isHostedOptionalMissingRoute(endpointPath);
     if ((headers as Record<string, string>)['x-suppress-error-log']) {
       delete (headers as Record<string, string>)['x-suppress-error-log'];
     }
@@ -169,6 +185,22 @@ class EnhancedAPI {
           const errorMessage = responseData?.message ||
                               response.statusText ||
                               `HTTP error! status: ${response.status}`;
+
+          const method = String(options.method || 'GET').toUpperCase();
+
+          // Some hosted environments run an older backend build where these
+          // optional GET routes are not exposed yet. Return safe empty data so
+          // superadmin pages stay usable without endless 404 error spam.
+          if (
+            response.status === 404 &&
+            method === 'GET' &&
+            this.isHostedOptionalMissingRoute(endpointPath)
+          ) {
+            if (endpointPath === '/admin/module-presets') {
+              return { presets: [] } as T;
+            }
+            return [] as T;
+          }
 
           // Hosted environments may expose API routes either with or without
           // an /api prefix depending on proxy configuration. On 404, retry once
