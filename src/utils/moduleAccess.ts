@@ -334,6 +334,7 @@ export function inferModuleFromPath(pathname: string): AppModuleKey | null {
   }
   if (path.startsWith('/sales/credits') || path.startsWith('/credit')) return 'credits';
   if (path.startsWith('/sales')) return 'sales';
+  if (path.startsWith('/restaurant')) return 'sales';
   if (
     path.startsWith('/products') ||
     path.startsWith('/product') ||

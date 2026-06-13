@@ -160,6 +160,7 @@ export default function PlanBasedNav() {
       subItems: [
         // { name: 'Sales', href: '/sales', requiredPermission: 'view_sales', icon: FaShoppingBasket }, // Sales page commented out
         { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales', icon: FaHistory },
+        { name: 'Restaurant Activity', href: '/restaurant/activity', requiredPermission: 'view_sales', icon: FaHistory },
         { name: 'M-Pesa Transactions', href: '/mpesa-transactions', requiredPermission: 'view_sales', icon: FaMoneyBillWave },
         { name: 'Sales Target', href: '/sales/targets', requiredPermission: 'view_sales', icon: FaBullseye },
       ]
