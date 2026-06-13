@@ -345,7 +345,10 @@ export default function TenantDetailsPage() {
       }
 
       try {
-        const presets = await apiGet<ModulePresetsResponse>('/admin/module-presets');
+        const presets = await apiGet<ModulePresetsResponse>(
+          '/admin/module-presets',
+          { 'x-suppress-error-log': 'true' },
+        );
         setModulePresets(Array.isArray(presets?.presets) ? presets.presets : []);
       } catch (presetError) {
         console.warn('Failed to load module presets:', presetError);
@@ -600,8 +603,21 @@ const fetchMpesaConfig = useCallback(async () => {
 
     try {
       setLoadingClassifications(true);
-      const data = await apiGet<ClassificationOption[]>('/admin/classifications');
-      const active = Array.isArray(data) ? data.filter((c) => c.isActive !== false) : [];
+      let data: ClassificationOption[] = [];
+      try {
+        data = await apiGet<ClassificationOption[]>('/admin/classifications', {
+          'x-suppress-error-log': 'true',
+        });
+      } catch {
+        // Hosted environments may temporarily miss admin classification routes.
+        // Fall back to the public catalog so provisioning can still proceed.
+        data = await apiGet<ClassificationOption[]>('/classifications/public', {
+          'x-suppress-error-log': 'true',
+        });
+      }
+      const active = Array.isArray(data)
+        ? data.filter((c) => c.isActive !== false)
+        : [];
       setClassificationOptions(active);
 
       const preselected = tenant.classificationId || resolveClassificationByBusinessType(tenant.businessType, active);

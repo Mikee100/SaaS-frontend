@@ -227,7 +227,16 @@ export default function SuperadminTenantsPage() {
   const fetchClassifications = async () => {
     try {
       setLoadingClassifications(true);
-      const data = (await apiGet("/admin/classifications")) as ClassificationOption[];
+      let data: ClassificationOption[] = [];
+      try {
+        data = (await apiGet("/admin/classifications", {
+          "x-suppress-error-log": "true",
+        })) as ClassificationOption[];
+      } catch {
+        data = (await apiGet("/classifications/public", {
+          "x-suppress-error-log": "true",
+        })) as ClassificationOption[];
+      }
       const active = Array.isArray(data) ? data.filter((c) => c.isActive !== false) : [];
       setClassifications(active);
     } catch (error) {
@@ -240,7 +249,9 @@ export default function SuperadminTenantsPage() {
 
   const fetchModulePresets = async () => {
     try {
-      const data = (await apiGet('/admin/module-presets')) as ModulePresetsResponse;
+      const data = (await apiGet('/admin/module-presets', {
+        'x-suppress-error-log': 'true',
+      })) as ModulePresetsResponse;
       const presets = Array.isArray(data?.presets) ? data.presets : [];
       setModulePresets(presets);
     } catch (error) {
