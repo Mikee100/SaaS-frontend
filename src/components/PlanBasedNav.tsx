@@ -425,7 +425,7 @@ export default function PlanBasedNav() {
 
           {/* Navigation */}
           <nav 
-            className="flex-1 p-2 overflow-y-auto custom-scrollbar" 
+            className="flex-1 min-h-0 p-2 overflow-y-auto overscroll-contain custom-scrollbar" 
             style={{ 
               paddingBottom: sidebarCollapsed ? '60px' : '120px'
             }}
@@ -725,8 +725,8 @@ export default function PlanBasedNav() {
             </div>
           </nav>
 
-          {/* Fixed Logout Section at Bottom */}
-          <div className="absolute bottom-0 left-0 w-full border-t border-gray-200 bg-white">
+          {/* Footer actions pinned by flex layout (does not overlap nav list) */}
+          <div className="mt-auto shrink-0 border-t border-gray-200 bg-white">
             {sidebarCollapsed ? (
               <>
                 <Tooltip content={isDark ? 'Light mode' : 'Dark mode'} position="right">
