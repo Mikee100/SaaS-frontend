@@ -90,6 +90,21 @@ interface TenantBlueprintResponse {
   configured: TenantBlueprintConfigured;
 }
 
+interface TenantBlueprintPreviewResponse {
+  tenantId: string;
+  mode: 'preview';
+  current: TenantBlueprintConfigured;
+  proposed: TenantBlueprintConfigured;
+  effectivePreview: {
+    manifest: {
+      navigation?: Array<unknown>;
+      dashboard?: Array<unknown>;
+      quickActions?: Array<unknown>;
+      enabledModules?: AppModuleKey[];
+    };
+  };
+}
+
 type CrmPackageKey = 'starter' | 'growth' | 'pro' | 'enterprise';
 
 type CrmCapabilityKey =
@@ -278,6 +293,9 @@ export default function TenantDetailsPage() {
   const [installedAppsInput, setInstalledAppsInput] = useState('');
   const [featureFlagsInput, setFeatureFlagsInput] = useState('{}');
   const [savingBlueprint, setSavingBlueprint] = useState(false);
+  const [previewingBlueprint, setPreviewingBlueprint] = useState(false);
+  const [rollingBackBlueprint, setRollingBackBlueprint] = useState(false);
+  const [blueprintPreview, setBlueprintPreview] = useState<TenantBlueprintPreviewResponse | null>(null);
   const [modulePermissionMatrix, setModulePermissionMatrix] = useState<ModulePermissionMatrixEntry[]>([]);
   const [moduleMatrixRoles, setModuleMatrixRoles] = useState<string[]>([]);
   const [loadingModuleMatrix, setLoadingModuleMatrix] = useState(false);
@@ -595,6 +613,7 @@ export default function TenantDetailsPage() {
       );
       setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
       setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
+      setBlueprintPreview(null);
 
       alert('Tenant blueprint configuration updated successfully.');
     } catch (error) {
@@ -602,6 +621,95 @@ export default function TenantDetailsPage() {
       alert('Failed to update tenant blueprint configuration');
     } finally {
       setSavingBlueprint(false);
+    }
+  };
+
+  const previewTenantBlueprint = async () => {
+    if (!selectedBlueprintKey) {
+      alert('Select a blueprint first.');
+      return;
+    }
+
+    let parsedFeatureFlags: Record<string, boolean> = {};
+    try {
+      const parsed = JSON.parse(featureFlagsInput || '{}');
+      if (typeof parsed === 'object' && parsed !== null) {
+        parsedFeatureFlags = Object.fromEntries(
+          Object.entries(parsed as Record<string, unknown>).filter(
+            ([, value]) => typeof value === 'boolean',
+          ),
+        ) as Record<string, boolean>;
+      }
+    } catch {
+      alert('Feature flags must be valid JSON (object with boolean values).');
+      return;
+    }
+
+    const installedApps = installedAppsInput
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry.length > 0);
+
+    try {
+      setPreviewingBlueprint(true);
+      const preview = await apiPost<TenantBlueprintPreviewResponse>(
+        `/admin/tenants/${tenantId}/blueprint/preview`,
+        {
+          businessType: selectedBusinessType,
+          blueprintKey: selectedBlueprintKey,
+          blueprintVersion: selectedBlueprintVersion || 'v1',
+          installedApps,
+          featureFlags: parsedFeatureFlags,
+        },
+      );
+      setBlueprintPreview(preview || null);
+      alert('Blueprint preview generated successfully.');
+    } catch (error) {
+      console.error('Failed to preview tenant blueprint:', error);
+      alert('Failed to preview tenant blueprint configuration');
+    } finally {
+      setPreviewingBlueprint(false);
+    }
+  };
+
+  const rollbackTenantBlueprint = async () => {
+    const confirmed = window.confirm(
+      'Rollback will restore the previous blueprint snapshot from audit history. Continue?',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRollingBackBlueprint(true);
+      const rolledBack = await apiPost<TenantBlueprintResponse>(
+        `/admin/tenants/${tenantId}/blueprint/rollback`,
+        {},
+      );
+
+      const configured = rolledBack?.configured;
+      if (configured) {
+        setSelectedBusinessType(configured.businessType || 'fashion');
+        setSelectedBlueprintKey(configured.blueprintKey || '');
+        setSelectedBlueprintVersion(configured.blueprintVersion || 'v1');
+        setInstalledAppsInput((configured.installedApps || []).join(', '));
+        setFeatureFlagsInput(JSON.stringify(configured.featureFlags || {}, null, 2));
+        setEnabledModules(Array.isArray(configured.enabledModules) ? configured.enabledModules : []);
+      }
+
+      const latestMatrix = await apiGet<ModulePermissionMatrixResponse>(
+        `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
+      );
+      setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
+      setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
+      setBlueprintPreview(null);
+
+      alert('Tenant blueprint rolled back successfully.');
+    } catch (error) {
+      console.error('Failed to rollback tenant blueprint:', error);
+      alert('Failed to rollback tenant blueprint configuration');
+    } finally {
+      setRollingBackBlueprint(false);
     }
   };
 
@@ -1781,25 +1889,82 @@ const fetchMpesaConfig = useCallback(async () => {
                 <span style={{ fontSize: '11px', color: '#065f46' }}>
                   Saving blueprint also syncs tenant module entitlements from selected blueprint.
                 </span>
-                <button
-                  type="button"
-                  onClick={saveTenantBlueprint}
-                  disabled={savingBlueprint || !selectedBlueprintKey}
-                  style={{
-                    background: '#047857',
-                    color: '#fff',
-                    padding: '0.35rem 0.85rem',
-                    borderRadius: '5px',
-                    border: 'none',
-                    cursor: savingBlueprint || !selectedBlueprintKey ? 'not-allowed' : 'pointer',
-                    fontWeight: 500,
-                    fontSize: '12px',
-                    opacity: savingBlueprint || !selectedBlueprintKey ? 0.7 : 1,
-                  }}
-                >
-                  {savingBlueprint ? 'Saving Blueprint...' : 'Save Blueprint'}
-                </button>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  <button
+                    type="button"
+                    onClick={previewTenantBlueprint}
+                    disabled={previewingBlueprint || !selectedBlueprintKey}
+                    style={{
+                      background: '#0369a1',
+                      color: '#fff',
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '5px',
+                      border: 'none',
+                      cursor: previewingBlueprint || !selectedBlueprintKey ? 'not-allowed' : 'pointer',
+                      fontWeight: 500,
+                      fontSize: '12px',
+                      opacity: previewingBlueprint || !selectedBlueprintKey ? 0.7 : 1,
+                    }}
+                  >
+                    {previewingBlueprint ? 'Previewing...' : 'Preview'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveTenantBlueprint}
+                    disabled={savingBlueprint || !selectedBlueprintKey}
+                    style={{
+                      background: '#047857',
+                      color: '#fff',
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '5px',
+                      border: 'none',
+                      cursor: savingBlueprint || !selectedBlueprintKey ? 'not-allowed' : 'pointer',
+                      fontWeight: 500,
+                      fontSize: '12px',
+                      opacity: savingBlueprint || !selectedBlueprintKey ? 0.7 : 1,
+                    }}
+                  >
+                    {savingBlueprint ? 'Saving Blueprint...' : 'Save Blueprint'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={rollbackTenantBlueprint}
+                    disabled={rollingBackBlueprint}
+                    style={{
+                      background: '#b91c1c',
+                      color: '#fff',
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '5px',
+                      border: 'none',
+                      cursor: rollingBackBlueprint ? 'not-allowed' : 'pointer',
+                      fontWeight: 500,
+                      fontSize: '12px',
+                      opacity: rollingBackBlueprint ? 0.7 : 1,
+                    }}
+                  >
+                    {rollingBackBlueprint ? 'Rolling Back...' : 'Rollback'}
+                  </button>
+                </div>
               </div>
+
+              {blueprintPreview && (
+                <div style={{ marginTop: '0.5rem', border: '1px solid #bae6fd', background: '#f0f9ff', borderRadius: '5px', padding: '0.45rem' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#0c4a6e', marginBottom: '0.2rem' }}>
+                    Preview Summary
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#075985' }}>
+                    Current: {blueprintPreview.current.blueprintKey} ({blueprintPreview.current.blueprintVersion})
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#075985' }}>
+                    Proposed: {blueprintPreview.proposed.blueprintKey} ({blueprintPreview.proposed.blueprintVersion})
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#075985' }}>
+                    Navigation: {Array.isArray(blueprintPreview.effectivePreview?.manifest?.navigation) ? blueprintPreview.effectivePreview.manifest.navigation.length : 0} items,
+                    Dashboard: {Array.isArray(blueprintPreview.effectivePreview?.manifest?.dashboard) ? blueprintPreview.effectivePreview.manifest.dashboard.length : 0} widgets,
+                    Quick actions: {Array.isArray(blueprintPreview.effectivePreview?.manifest?.quickActions) ? blueprintPreview.effectivePreview.manifest.quickActions.length : 0}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{ gridColumn: '1 / -1', border: '1px solid #dbeafe', background: '#eff6ff', borderRadius: '6px', padding: '0.6rem', marginBottom: '0.2rem' }}>
