@@ -4,6 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { apiGet, apiPost } from "@/utils/api";
 import { login as authLogin, logout as authLogout } from "@/lib/auth-client";
 import { AppModuleKey, CrmEntitlements, normalizeCrmEntitlements, normalizeEnabledModules } from '@/utils/moduleAccess';
+import { getEffectiveTenantManifest } from '@/utils/manifest/manifestClient';
 
 export interface User {
   id: string;
@@ -141,6 +142,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       const userData = await apiGet('/user/me') as User;
       if (!userData) throw new Error('No user data received');
 
+      let effectiveModules: AppModuleKey[] | null = null;
+      try {
+        const manifestResponse = await getEffectiveTenantManifest();
+        effectiveModules = normalizeEnabledModules(
+          manifestResponse?.manifest?.enabledModules,
+        );
+      } catch {
+        effectiveModules = null;
+      }
+
       const roles = Array.isArray(userData.roles) ? userData.roles : [];
       const permissions = Array.isArray(userData.permissions) ? userData.permissions : [];
       const normalizedUser: User = {
@@ -155,7 +166,10 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         receiptLogo: userData.receiptLogo,
         impersonating: userData.impersonating ?? false,
         impersonatingAsTenantName: userData.impersonatingAsTenantName ?? null,
-        enabledModules: normalizeEnabledModules((userData as { enabledModules?: unknown }).enabledModules),
+        enabledModules:
+          effectiveModules && effectiveModules.length > 0
+            ? effectiveModules
+            : normalizeEnabledModules((userData as { enabledModules?: unknown }).enabledModules),
         crmEntitlements: normalizeCrmEntitlements((userData as { crmEntitlements?: unknown }).crmEntitlements),
       };
 
@@ -280,6 +294,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       const { user: loginUser } = await authLogin(email, password);
       if (!loginUser) throw new Error('No user in response');
 
+      let effectiveModules: AppModuleKey[] | null = null;
+      try {
+        const manifestResponse = await getEffectiveTenantManifest();
+        effectiveModules = normalizeEnabledModules(
+          manifestResponse?.manifest?.enabledModules,
+        );
+      } catch {
+        effectiveModules = null;
+      }
+
       const { roles = [], permissions = [] } = loginUser;
       const normalizedUser: User = {
         id: loginUser.id,
@@ -291,7 +315,10 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
         tenantId: loginUser.tenantId ?? undefined,
         branchId: loginUser.branchId ?? undefined,
         receiptLogo: (loginUser as User).receiptLogo,
-        enabledModules: normalizeEnabledModules((loginUser as { enabledModules?: unknown }).enabledModules),
+        enabledModules:
+          effectiveModules && effectiveModules.length > 0
+            ? effectiveModules
+            : normalizeEnabledModules((loginUser as { enabledModules?: unknown }).enabledModules),
         crmEntitlements: normalizeCrmEntitlements((loginUser as { crmEntitlements?: unknown }).crmEntitlements),
       };
 
