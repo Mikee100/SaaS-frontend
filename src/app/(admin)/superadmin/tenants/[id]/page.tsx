@@ -59,6 +59,37 @@ interface ModulePermissionMatrixResponse {
   matrix: ModulePermissionMatrixEntry[];
 }
 
+interface BlueprintCatalogEntry {
+  businessType: string;
+  blueprintKey: string;
+  blueprintVersion: string;
+  displayName: string;
+  description: string;
+  enabledModules: AppModuleKey[];
+  apps: Array<{ key: string; label: string; enabledByDefault?: boolean }>;
+  features: string[];
+}
+
+interface BlueprintCatalogResponse {
+  version: string;
+  total: number;
+  blueprints: BlueprintCatalogEntry[];
+}
+
+interface TenantBlueprintConfigured {
+  businessType: string;
+  blueprintKey: string;
+  blueprintVersion: string;
+  installedApps: string[];
+  featureFlags: Record<string, boolean>;
+  enabledModules: AppModuleKey[];
+}
+
+interface TenantBlueprintResponse {
+  tenantId: string;
+  configured: TenantBlueprintConfigured;
+}
+
 type CrmPackageKey = 'starter' | 'growth' | 'pro' | 'enterprise';
 
 type CrmCapabilityKey =
@@ -240,6 +271,13 @@ export default function TenantDetailsPage() {
   const [modulePresets, setModulePresets] = useState<ModulePresetDefinition[]>([]);
   const [selectedModulePreset, setSelectedModulePreset] = useState('');
   const [applyingModulePreset, setApplyingModulePreset] = useState(false);
+  const [blueprintCatalog, setBlueprintCatalog] = useState<BlueprintCatalogEntry[]>([]);
+  const [selectedBusinessType, setSelectedBusinessType] = useState('fashion');
+  const [selectedBlueprintKey, setSelectedBlueprintKey] = useState('');
+  const [selectedBlueprintVersion, setSelectedBlueprintVersion] = useState('v1');
+  const [installedAppsInput, setInstalledAppsInput] = useState('');
+  const [featureFlagsInput, setFeatureFlagsInput] = useState('{}');
+  const [savingBlueprint, setSavingBlueprint] = useState(false);
   const [modulePermissionMatrix, setModulePermissionMatrix] = useState<ModulePermissionMatrixEntry[]>([]);
   const [moduleMatrixRoles, setModuleMatrixRoles] = useState<string[]>([]);
   const [loadingModuleMatrix, setLoadingModuleMatrix] = useState(false);
@@ -355,6 +393,42 @@ export default function TenantDetailsPage() {
         setModulePresets([]);
       }
 
+      try {
+        const [catalog, blueprint] = await Promise.all([
+          apiGet<BlueprintCatalogResponse>('/admin/blueprints', {
+            'x-suppress-error-log': 'true',
+          }),
+          apiGet<TenantBlueprintResponse>(
+            `/admin/tenants/${tenantId}/blueprint?t=${Date.now()}`,
+            { 'x-suppress-error-log': 'true' },
+          ),
+        ]);
+
+        const blueprints = Array.isArray(catalog?.blueprints)
+          ? catalog.blueprints
+          : [];
+        const configured = blueprint?.configured;
+
+        setBlueprintCatalog(blueprints);
+        setSelectedBusinessType(configured?.businessType || 'fashion');
+        setSelectedBlueprintVersion(configured?.blueprintVersion || 'v1');
+
+        const preferredKey =
+          configured?.blueprintKey ||
+          blueprints.find((entry) => entry.businessType === (configured?.businessType || 'fashion'))?.blueprintKey ||
+          blueprints[0]?.blueprintKey ||
+          '';
+
+        setSelectedBlueprintKey(preferredKey);
+        setInstalledAppsInput((configured?.installedApps || []).join(', '));
+        setFeatureFlagsInput(
+          JSON.stringify(configured?.featureFlags || {}, null, 2),
+        );
+      } catch (blueprintError) {
+        console.warn('Failed to load blueprint configuration:', blueprintError);
+        setBlueprintCatalog([]);
+      }
+
       const crm = await apiGet<TenantCrmEntitlementsResponse>(`/admin/tenants/${tenantId}/crm-entitlements`);
       if (crm?.entitlements) {
         setAvailableCrmPackages(Array.isArray(crm.availablePackages) ? crm.availablePackages : ['starter', 'growth', 'pro', 'enterprise']);
@@ -462,6 +536,72 @@ export default function TenantDetailsPage() {
       alert('Failed to apply module preset');
     } finally {
       setApplyingModulePreset(false);
+    }
+  };
+
+  const saveTenantBlueprint = async () => {
+    if (!selectedBlueprintKey) {
+      alert('Select a blueprint first.');
+      return;
+    }
+
+    let parsedFeatureFlags: Record<string, boolean> = {};
+    try {
+      const parsed = JSON.parse(featureFlagsInput || '{}');
+      if (typeof parsed === 'object' && parsed !== null) {
+        parsedFeatureFlags = Object.fromEntries(
+          Object.entries(parsed as Record<string, unknown>).filter(
+            ([, value]) => typeof value === 'boolean',
+          ),
+        ) as Record<string, boolean>;
+      }
+    } catch {
+      alert('Feature flags must be valid JSON (object with boolean values).');
+      return;
+    }
+
+    const installedApps = installedAppsInput
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry.length > 0);
+
+    try {
+      setSavingBlueprint(true);
+      const updated = await apiPut<TenantBlueprintResponse>(
+        `/admin/tenants/${tenantId}/blueprint`,
+        {
+          businessType: selectedBusinessType,
+          blueprintKey: selectedBlueprintKey,
+          blueprintVersion: selectedBlueprintVersion || 'v1',
+          installedApps,
+          featureFlags: parsedFeatureFlags,
+        },
+      );
+
+      const configured = updated?.configured;
+      if (configured) {
+        setSelectedBusinessType(configured.businessType || selectedBusinessType);
+        setSelectedBlueprintKey(configured.blueprintKey || selectedBlueprintKey);
+        setSelectedBlueprintVersion(configured.blueprintVersion || 'v1');
+        setInstalledAppsInput((configured.installedApps || []).join(', '));
+        setFeatureFlagsInput(
+          JSON.stringify(configured.featureFlags || {}, null, 2),
+        );
+        setEnabledModules(Array.isArray(configured.enabledModules) ? configured.enabledModules : enabledModules);
+      }
+
+      const latestMatrix = await apiGet<ModulePermissionMatrixResponse>(
+        `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
+      );
+      setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
+      setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
+
+      alert('Tenant blueprint configuration updated successfully.');
+    } catch (error) {
+      console.error('Failed to update tenant blueprint:', error);
+      alert('Failed to update tenant blueprint configuration');
+    } finally {
+      setSavingBlueprint(false);
     }
   };
 
@@ -1542,6 +1682,126 @@ const fetchMpesaConfig = useCallback(async () => {
           </div>
 
           <div style={{ padding: '0.8rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem' }}>
+            <div style={{ gridColumn: '1 / -1', border: '1px solid #d1fae5', background: '#ecfdf5', borderRadius: '6px', padding: '0.6rem', marginBottom: '0.2rem' }}>
+              <div style={{ marginBottom: '0.45rem', fontSize: '12px', fontWeight: 700, color: '#065f46' }}>
+                Blueprint Configuration
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
+                    Business Type
+                  </label>
+                  <select
+                    value={selectedBusinessType}
+                    onChange={(e) => {
+                      const nextType = e.target.value;
+                      setSelectedBusinessType(nextType);
+                      const preferred = blueprintCatalog.find((entry) => entry.businessType === nextType);
+                      if (preferred) {
+                        setSelectedBlueprintKey(preferred.blueprintKey);
+                        setSelectedBlueprintVersion(preferred.blueprintVersion || 'v1');
+                      }
+                    }}
+                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
+                  >
+                    <option value="fashion">fashion</option>
+                    <option value="restaurant">restaurant</option>
+                    <option value="spa_barber">spa_barber</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
+                    Blueprint
+                  </label>
+                  <select
+                    value={selectedBlueprintKey}
+                    onChange={(e) => {
+                      const key = e.target.value;
+                      setSelectedBlueprintKey(key);
+                      const selected = blueprintCatalog.find((entry) => entry.blueprintKey === key);
+                      if (selected) {
+                        setSelectedBusinessType(selected.businessType);
+                        setSelectedBlueprintVersion(selected.blueprintVersion || 'v1');
+                      }
+                    }}
+                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
+                  >
+                    <option value="">Select blueprint...</option>
+                    {blueprintCatalog.map((entry) => (
+                      <option key={`${entry.blueprintKey}-${entry.blueprintVersion}`} value={entry.blueprintKey}>
+                        {entry.displayName} ({entry.blueprintVersion})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
+                    Version
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedBlueprintVersion}
+                    onChange={(e) => setSelectedBlueprintVersion(e.target.value)}
+                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
+                    Installed Apps (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={installedAppsInput}
+                    onChange={(e) => setInstalledAppsInput(e.target.value)}
+                    placeholder="loyalty, online_booking"
+                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
+                    Feature Flags (JSON)
+                  </label>
+                  <textarea
+                    value={featureFlagsInput}
+                    onChange={(e) => setFeatureFlagsInput(e.target.value)}
+                    rows={3}
+                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '11px', color: '#065f46' }}>
+                  Saving blueprint also syncs tenant module entitlements from selected blueprint.
+                </span>
+                <button
+                  type="button"
+                  onClick={saveTenantBlueprint}
+                  disabled={savingBlueprint || !selectedBlueprintKey}
+                  style={{
+                    background: '#047857',
+                    color: '#fff',
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '5px',
+                    border: 'none',
+                    cursor: savingBlueprint || !selectedBlueprintKey ? 'not-allowed' : 'pointer',
+                    fontWeight: 500,
+                    fontSize: '12px',
+                    opacity: savingBlueprint || !selectedBlueprintKey ? 0.7 : 1,
+                  }}
+                >
+                  {savingBlueprint ? 'Saving Blueprint...' : 'Save Blueprint'}
+                </button>
+              </div>
+            </div>
+
             <div style={{ gridColumn: '1 / -1', border: '1px solid #dbeafe', background: '#eff6ff', borderRadius: '6px', padding: '0.6rem', marginBottom: '0.2rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center' }}>
                 <div>
