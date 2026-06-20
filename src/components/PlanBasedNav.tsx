@@ -20,6 +20,8 @@ import { hasPermission } from '@/utils/permissions';
 import { getFullAssetUrl } from '@/utils/logoUrl';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AppModuleKey, CrmCapabilityKey, isCrmCapabilityEnabled, isModuleEnabled } from '@/utils/moduleAccess';
+import { getEffectiveTenantManifest } from '@/utils/manifest/manifestClient';
+import { BlueprintNavItem } from '@/types/blueprintManifest';
 
 type PlanName = 'Basic' | 'Pro' | 'Enterprise';
 
@@ -39,6 +41,54 @@ interface NavItem extends NavSubItem {
   subItems?: NavSubItem[];
 }
 
+function iconForPath(path: string): IconType {
+  const normalized = String(path || '').toLowerCase();
+  if (normalized.startsWith('/dashboard') || normalized === '/') return FaTachometerAlt;
+  if (normalized.startsWith('/ai')) return FaRobot;
+  if (normalized.startsWith('/accounts')) return FaFileInvoiceDollar;
+  if (normalized.startsWith('/products') || normalized.startsWith('/inventory')) return FaBoxOpen;
+  if (normalized.startsWith('/sales') || normalized.startsWith('/restaurant')) return FaShoppingBasket;
+  if (normalized.startsWith('/analytics')) return MdOutlineAnalytics;
+  if (normalized.startsWith('/reports')) return MdOutlineReport;
+  if (normalized.startsWith('/credit')) return FaCreditCard;
+  if (normalized.startsWith('/hr') || normalized.startsWith('/users')) return FaUsers;
+  if (normalized.startsWith('/payroll')) return FaMoneyBillWave;
+  if (normalized.startsWith('/expenses')) return FaHistory;
+  if (normalized.startsWith('/settings')) return MdOutlineSettings;
+  if (normalized.startsWith('/billing') || normalized.startsWith('/account')) return FaFileInvoiceDollar;
+  return FaLayerGroup;
+}
+
+function toSubItems(items?: BlueprintNavItem[]): NavSubItem[] | undefined {
+  if (!Array.isArray(items) || items.length === 0) {
+    return undefined;
+  }
+
+  return items.map((item) => ({
+    name: item.label,
+    href: item.path,
+    icon: iconForPath(item.path),
+    requiredPermission: item.requiredPermission || null,
+    subItems: toSubItems(item.children),
+  }));
+}
+
+function toNavItems(items?: BlueprintNavItem[]): NavItem[] {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+
+  return items.map((item) => ({
+    name: item.label,
+    href: item.path,
+    icon: iconForPath(item.path),
+    requiredPlan: null,
+    requiredPermission: item.requiredPermission || null,
+    requiredModule: item.requiredModule,
+    subItems: toSubItems(item.children),
+  }));
+}
+
 
 export default function PlanBasedNav() {
   const userContext = useUser();
@@ -51,6 +101,7 @@ export default function PlanBasedNav() {
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [manifestNavigationItems, setManifestNavigationItems] = useState<NavItem[] | null>(null);
 
   const tenantBranchLoading = tenantLoading;
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
@@ -93,6 +144,39 @@ export default function PlanBasedNav() {
     setOpenDropdowns(newOpen);
   }, [pathname]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadManifestNavigation = async () => {
+      if (!userContext?.user) {
+        if (active) {
+          setManifestNavigationItems(null);
+        }
+        return;
+      }
+
+      try {
+        const payload = await getEffectiveTenantManifest();
+        const manifestItems = toNavItems(payload?.manifest?.navigation);
+        if (active) {
+          setManifestNavigationItems(
+            manifestItems.length > 0 ? manifestItems : null,
+          );
+        }
+      } catch {
+        if (active) {
+          setManifestNavigationItems(null);
+        }
+      }
+    };
+
+    loadManifestNavigation();
+
+    return () => {
+      active = false;
+    };
+  }, [userContext?.user?.id, userContext?.user?.tenantId, userContext?.entitlementsSyncedAt]);
+
   // Get tenant name and logo from cached data (API returns logoUrl; some code may use logo)
   const tenant = tenantData ? {
     name: tenantData.name || '',
@@ -100,7 +184,7 @@ export default function PlanBasedNav() {
   } : null;
 
   // Improved icon mapping for main and sub items
-  const navigationItems: NavItem[] = React.useMemo(() => [
+  const defaultNavigationItems: NavItem[] = React.useMemo(() => [
     { name: 'Dashboard', href: '/', icon: FaTachometerAlt, requiredPlan: null, requiredPermission: null, requiredModule: 'dashboard' as AppModuleKey },
     {
       name: 'AI Assistant',
@@ -217,6 +301,11 @@ export default function PlanBasedNav() {
     { name: 'Billing & Subscription', href: '/account/billing', icon: FaFileInvoiceDollar, requiredPlan: null, requiredPermission: null, requiredModule: 'billing' as AppModuleKey },
   ], []);
 
+  const navigationItems =
+    Array.isArray(manifestNavigationItems) && manifestNavigationItems.length > 0
+      ? manifestNavigationItems
+      : defaultNavigationItems;
+
   const planHierarchy: Record<PlanName, number> = React.useMemo(() => ({
     'Basic': 1,
     'Pro': 2,
@@ -245,13 +334,19 @@ export default function PlanBasedNav() {
   const accessibleItems = React.useMemo(() => {
     if (accessStatus.restricted) {
       return navigationItems.filter(
-        (item) => item.name === 'Dashboard' || item.name === 'Billing & Subscription',
+        (item) =>
+          item.href === '/' ||
+          item.href === '/dashboard' ||
+          item.href === '/account/billing' ||
+          item.href === '/settings/billing',
       );
     }
 
     // If no active subscription, only show Dashboard
     if (!hasActiveSubscription) {
-      return navigationItems.filter(item => item.name === 'Dashboard');
+      return navigationItems.filter(
+        (item) => item.href === '/' || item.href === '/dashboard',
+      );
     }
 
     return navigationItems.filter((item) => {
