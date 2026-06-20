@@ -328,12 +328,13 @@ export default function DashboardPage() {
   const { data: accessStatus, isLoading: accessStatusLoading } =
     useBillingAccessStatus();
   const isRestricted = accessStatus.restricted;
+  const isAuthenticated = Boolean(user?.id);
 
   // Fetch stock threshold configuration
   const { data: stockConfig } = useQuery({
     queryKey: ['stockThreshold'],
     queryFn: () => apiGet<{ value?: number | string }>('/tenant/configurations/stockThreshold'),
-    enabled: !isRestricted,
+    enabled: isAuthenticated && !isRestricted,
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
 
@@ -362,7 +363,7 @@ export default function DashboardPage() {
     },
     staleTime: 2 * 60 * 1000, // 2 minutes - analytics change frequently
     gcTime: 5 * 60 * 1000, // React Query v5: gcTime replaces cacheTime
-    enabled: !isRestricted && !!selectedBranchId,
+    enabled: isAuthenticated && !isRestricted && !!selectedBranchId,
   });
 
   // Fetch branch monthly comparison
@@ -375,12 +376,12 @@ export default function DashboardPage() {
     }>,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000, // React Query v5: gcTime replaces cacheTime
-    enabled: !isRestricted,
+    enabled: isAuthenticated && !isRestricted,
   });
 
   const { data: creditSnapshot } = useQuery({
     queryKey: ['dashboard', 'home-credit-snapshot', selectedBranchId],
-    enabled: !isRestricted && Boolean(selectedBranchId),
+    enabled: isAuthenticated && !isRestricted && Boolean(selectedBranchId),
     queryFn: async () => {
       try {
         const credits = await apiGet<CreditItem[]>('/sales/credits/all', branchHeaders);
@@ -406,7 +407,7 @@ export default function DashboardPage() {
 
   const { data: salesTargetsSnapshot } = useQuery({
     queryKey: ['dashboard', 'home-sales-target-snapshot', selectedBranchId],
-    enabled: !isRestricted && Boolean(selectedBranchId),
+    enabled: isAuthenticated && !isRestricted && Boolean(selectedBranchId),
     queryFn: async () => {
       try {
         const [targets, dailySales] = await Promise.all([

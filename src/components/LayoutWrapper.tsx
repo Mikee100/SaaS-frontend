@@ -39,11 +39,13 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   const requiredModule = inferModuleFromPath(pathname || '');
   const requiredCrmCapability = inferCrmCapabilityFromPath(pathname || '');
   const requiredCrmProvider = inferCrmProviderFromPath(pathname || '');
+  const crmTemporarilyDisabled = requiredModule === 'crm';
   const allowModuleSettingsRoute = pathname?.startsWith('/settings/modules');
   const moduleBlocked =
     !!user &&
     !allowModuleSettingsRoute &&
-    !isModuleEnabled(user.enabledModules, requiredModule);
+    (crmTemporarilyDisabled ||
+      !isModuleEnabled(user.enabledModules, requiredModule));
   const crmCapabilityBlocked =
     !!user &&
     !user.isSuperadmin &&
