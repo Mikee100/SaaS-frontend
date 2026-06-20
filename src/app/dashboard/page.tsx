@@ -7,12 +7,14 @@ import PlanGuard from '@/components/PlanGuard';
 import AuthGuard from '@/components/AuthGuard';
 import LogoEnforcement from '@/components/LogoEnforcement';
 import BranchSwitcher from '@/components/BranchSwitcher';
+import BlueprintWidgetRegistry from '@/components/dashboard/BlueprintWidgetRegistry';
 import QuickActions from '../QuickActions';
 import { useUser } from '@/components/UserContext';
 import { useAppPreferences, preferenceDateRangeToDashboard } from '@/hooks/useAppPreferences';
 import { hasPermission } from '@/utils/permissions';
 import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
+import { getEffectiveTenantManifest } from '@/utils/manifest/manifestClient';
 import {
   FiTrendingUp,
   FiRefreshCw,
@@ -215,6 +217,13 @@ export default function DashboardPage() {
   });
 
   const { data: planLimits } = usePlanLimits();
+
+  const { data: manifestPayload } = useQuery({
+    queryKey: ['tenant-effective-manifest', user?.tenantId, user?.id],
+    enabled: Boolean(user?.tenantId),
+    queryFn: getEffectiveTenantManifest,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data: creditSnapshot } = useQuery({
     queryKey: ['dashboard', 'credit-snapshot'],
@@ -625,6 +634,7 @@ export default function DashboardPage() {
   }
 
   const showPriorities = priorities.length > 0;
+  const manifestDashboardWidgets = manifestPayload?.manifest?.dashboard || [];
 
   if (isLoading && !data) {
     return (
@@ -966,6 +976,30 @@ export default function DashboardPage() {
               </h2>
               <QuickActions lowStockCount={isOwnerOrAdmin || isManager ? lowStockAlerts : undefined} />
             </div>
+
+            {manifestDashboardWidgets.length > 0 && (
+              <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">
+                    Blueprint Widgets
+                  </h2>
+                  <span className="text-xs text-gray-500 dark:text-slate-400">
+                    {manifestPayload?.manifest?.displayName || 'Blueprint'}
+                  </span>
+                </div>
+
+                <BlueprintWidgetRegistry
+                  widgets={manifestDashboardWidgets}
+                  user={user}
+                  analyticsData={analyticsData}
+                  todaySummary={todaySummary}
+                  lowStockAlerts={lowStockAlerts}
+                  pendingOrdersCount={pendingOrdersCount}
+                  openShiftsCount={openShiftsCount}
+                  retentionRate={retentionRate}
+                />
+              </div>
+            )}
 
             {/* Charts Section */}
             {/* Sales Trends Chart */}
