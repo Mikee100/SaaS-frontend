@@ -13,6 +13,7 @@ import { useAppPreferences, preferenceDateRangeToDashboard } from '@/hooks/useAp
 import { hasPermission } from '@/utils/permissions';
 import { apiGet } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
+import { getEffectiveTenantManifest } from '@/utils/manifest/manifestClient';
 import {
   FiTrendingUp,
   FiRefreshCw,
@@ -215,6 +216,13 @@ export default function DashboardPage() {
   });
 
   const { data: planLimits } = usePlanLimits();
+
+  const { data: manifestPayload } = useQuery({
+    queryKey: ['tenant-effective-manifest', user?.tenantId, user?.id],
+    enabled: Boolean(user?.tenantId),
+    queryFn: getEffectiveTenantManifest,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data: creditSnapshot } = useQuery({
     queryKey: ['dashboard', 'credit-snapshot'],
@@ -625,6 +633,7 @@ export default function DashboardPage() {
   }
 
   const showPriorities = priorities.length > 0;
+  const manifestDashboardWidgets = manifestPayload?.manifest?.dashboard || [];
 
   if (isLoading && !data) {
     return (
@@ -966,6 +975,40 @@ export default function DashboardPage() {
               </h2>
               <QuickActions lowStockCount={isOwnerOrAdmin || isManager ? lowStockAlerts : undefined} />
             </div>
+
+            {manifestDashboardWidgets.length > 0 && (
+              <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">
+                    Blueprint Widgets
+                  </h2>
+                  <span className="text-xs text-gray-500 dark:text-slate-400">
+                    {manifestPayload?.manifest?.displayName || 'Blueprint'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {manifestDashboardWidgets.map((widget) => (
+                    <div
+                      key={widget.key}
+                      className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50"
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                        {widget.widgetType}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-100">
+                        {widget.title}
+                      </p>
+                      {widget.requiredModule && (
+                        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                          Module: {widget.requiredModule}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Charts Section */}
             {/* Sales Trends Chart */}

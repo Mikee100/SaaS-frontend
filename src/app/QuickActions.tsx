@@ -11,9 +11,12 @@ import {
   FiBarChart2,
   FiSettings,
 } from "react-icons/fi";
+import { IconType } from 'react-icons';
 import { useRouter } from "next/navigation";
 import { useUser } from "@/components/UserContext";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
+import { useQuery } from '@tanstack/react-query';
+import { getEffectiveTenantManifest } from '@/utils/manifest/manifestClient';
 
 type QuickActionsProps = {
   lowStockCount?: number;
@@ -28,10 +31,41 @@ type QuickAction = {
   color: string;
 };
 
+function iconForActionPath(path: string): IconType {
+  const normalized = String(path || '').toLowerCase();
+  if (normalized.startsWith('/sales')) return FiShoppingCart;
+  if (normalized.startsWith('/products') || normalized.startsWith('/inventory')) return FiPackage;
+  if (normalized.startsWith('/settings/users')) return FiUserPlus;
+  if (normalized.startsWith('/settings')) return FiSettings;
+  if (normalized.startsWith('/analytics') || normalized.startsWith('/reports')) return FiBarChart2;
+  if (normalized.startsWith('/account') || normalized.startsWith('/billing')) return FiTag;
+  return FiFileText;
+}
+
+function colorForActionPath(path: string): string {
+  const normalized = String(path || '').toLowerCase();
+  if (normalized.startsWith('/sales')) return 'bg-blue-50 text-blue-700 hover:bg-blue-100';
+  if (normalized.startsWith('/products') || normalized.startsWith('/inventory')) {
+    return 'text-emerald-700 hover:border-emerald-300';
+  }
+  if (normalized.startsWith('/analytics') || normalized.startsWith('/reports')) {
+    return 'text-purple-700 hover:border-purple-300';
+  }
+  if (normalized.startsWith('/settings')) return 'text-slate-700 hover:border-slate-300';
+  return 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100';
+}
+
 export default function QuickActions({ lowStockCount }: QuickActionsProps) {
   const router = useRouter();
   const { user } = useUser();
   const { data: planLimits } = usePlanLimits();
+
+  const { data: manifestPayload } = useQuery({
+    queryKey: ['tenant-effective-manifest', user?.tenantId, user?.id],
+    enabled: Boolean(user?.tenantId),
+    queryFn: getEffectiveTenantManifest,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const roles = user?.roles || [];
   const isOwnerOrAdmin =
@@ -105,6 +139,27 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
 
   const contextActions: QuickAction[] = [];
 
+  const manifestQuickActions: QuickAction[] = React.useMemo(() => {
+    const quickActions = manifestPayload?.manifest?.quickActions;
+    if (!Array.isArray(quickActions) || quickActions.length === 0) {
+      return [];
+    }
+
+    return quickActions
+      .filter((action) => action.actionType === 'navigate' && typeof action.path === 'string' && action.path.length > 0)
+      .map((action) => {
+        const Icon = iconForActionPath(action.path || '');
+        return {
+          id: action.key,
+          label: action.label,
+          description: `Open ${action.label} workspace.`,
+          href: action.path || '/dashboard',
+          icon: <Icon className="h-5 w-5" />,
+          color: colorForActionPath(action.path || ''),
+        };
+      });
+  }, [manifestPayload]);
+
   if (typeof lowStockCount === "number" && lowStockCount > 0) {
     contextActions.push({
       id: "reorder-stock",
@@ -131,9 +186,13 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
 
   let actions: QuickAction[] = [...baseActions];
 
-  if (isOwnerOrAdmin) {
+  if (manifestQuickActions.length > 0) {
+    actions = [...manifestQuickActions];
+  }
+
+  if (manifestQuickActions.length === 0 && isOwnerOrAdmin) {
     actions = actions.concat(ownerActions);
-  } else if (isCashierOrStaff) {
+  } else if (manifestQuickActions.length === 0 && isCashierOrStaff) {
     // Cashier/staff: keep base actions, optionally add inventory access
     actions.push({
       id: "manage-inventory",
