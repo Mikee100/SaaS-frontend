@@ -7,6 +7,7 @@ import PlanGuard from '@/components/PlanGuard';
 import AuthGuard from '@/components/AuthGuard';
 import LogoEnforcement from '@/components/LogoEnforcement';
 import BranchSwitcher from '@/components/BranchSwitcher';
+import BlueprintWidgetRegistry from '@/components/dashboard/BlueprintWidgetRegistry';
 import QuickActions from '../QuickActions';
 import { useUser } from '@/components/UserContext';
 import { useAppPreferences, preferenceDateRangeToDashboard } from '@/hooks/useAppPreferences';
@@ -987,26 +988,16 @@ export default function DashboardPage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {manifestDashboardWidgets.map((widget) => (
-                    <div
-                      key={widget.key}
-                      className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50"
-                    >
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-                        {widget.widgetType}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-100">
-                        {widget.title}
-                      </p>
-                      {widget.requiredModule && (
-                        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                          Module: {widget.requiredModule}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                <BlueprintWidgetRegistry
+                  widgets={manifestDashboardWidgets}
+                  user={user}
+                  analyticsData={analyticsData}
+                  todaySummary={todaySummary}
+                  lowStockAlerts={lowStockAlerts}
+                  pendingOrdersCount={pendingOrdersCount}
+                  openShiftsCount={openShiftsCount}
+                  retentionRate={retentionRate}
+                />
               </div>
             )}
 
