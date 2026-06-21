@@ -180,6 +180,66 @@ type TabType = 'products' | 'inventory' | 'advanced' | 'attributes' | 'variation
 type AdvancedSubTab = 'overview' | 'movements' | 'alerts' | 'forecasting' | 'locations';
 type ProductBusinessFlow = 'restaurant' | 'fashion' | 'spa';
 
+interface UnifiedProductsDisplayConfig {
+  version: 'v1';
+  global: {
+    showWorkflowPanel: boolean;
+    showDescription: boolean;
+    showImages: boolean;
+    showCategory: boolean;
+  };
+  restaurant: {
+    showAllergens: boolean;
+    showPrepStation: boolean;
+    showTaxClass: boolean;
+  };
+  fashion: {
+    showBrand: boolean;
+    showSeason: boolean;
+    showSupplier: boolean;
+    enableVariationTypeSelector: boolean;
+  };
+  spa: {
+    showDurationMinutes: boolean;
+    showStaffSkillLevel: boolean;
+    showCommissionProfile: boolean;
+    showConsumables: boolean;
+  };
+}
+
+interface TenantUnifiedProductsDisplayResponse {
+  key: string;
+  businessType: 'fashion' | 'restaurant' | 'spa_barber';
+  config: UnifiedProductsDisplayConfig;
+}
+
+const DEFAULT_UNIFIED_PRODUCTS_DISPLAY_CONFIG: UnifiedProductsDisplayConfig = {
+  version: 'v1',
+  global: {
+    showWorkflowPanel: true,
+    showDescription: true,
+    showImages: true,
+    showCategory: true,
+  },
+  restaurant: {
+    showAllergens: true,
+    showPrepStation: true,
+    showTaxClass: true,
+  },
+  fashion: {
+    showBrand: true,
+    showSeason: true,
+    showSupplier: true,
+    enableVariationTypeSelector: true,
+  },
+  spa: {
+    showDurationMinutes: true,
+    showStaffSkillLevel: true,
+    showCommissionProfile: true,
+    showConsumables: true,
+  },
+};
+
 export default function UnifiedProductsInventoryPage() {
   // Fetch tenant info (includes classificationId)
   const { data: tenant, isLoading: tenantLoading } = useTenant();
@@ -1033,6 +1093,20 @@ export default function UnifiedProductsInventoryPage() {
     retry: 1,
   });
 
+  const { data: unifiedDisplayConfigResponse } = useQuery({
+    queryKey: ['tenant', 'unified-products-display'],
+    queryFn: () =>
+      apiGet<TenantUnifiedProductsDisplayResponse>(
+        '/tenant/configurations/unified-products-display/effective',
+      ),
+    enabled: !!user?.tenantId,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const displayConfig =
+    unifiedDisplayConfigResponse?.config || DEFAULT_UNIFIED_PRODUCTS_DISPLAY_CONFIG;
+
   const businessFlow = useMemo<ProductBusinessFlow>(() => {
     const tenantData = (tenant || {}) as Record<string, unknown>;
     const manifestBusinessType = String(
@@ -1094,6 +1168,16 @@ export default function UnifiedProductsInventoryPage() {
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
+
+  useEffect(() => {
+    if (
+      isFashionTenant &&
+      !displayConfig.fashion.enableVariationTypeSelector &&
+      productType !== 'simple'
+    ) {
+      setProductType('simple');
+    }
+  }, [displayConfig.fashion.enableVariationTypeSelector, isFashionTenant, productType]);
 
   const {
     data: managedCategories = [],
@@ -1182,7 +1266,12 @@ export default function UnifiedProductsInventoryPage() {
             sku: sku || undefined,
             basePrice: Number.isFinite(price) ? price : 0,
             quantity: 0,
-            durationMinutes: isSpaTenant ? durationMinutes : undefined,
+            durationMinutes:
+              isSpaTenant && displayConfig.spa.showDurationMinutes
+                ? durationMinutes
+                : isSpaTenant
+                  ? 60
+                  : undefined,
             attributes: {
               description,
               cost,
@@ -1190,14 +1279,22 @@ export default function UnifiedProductsInventoryPage() {
               branchId: selectedBranchId,
               productType,
               businessFlow,
-              allergens,
-              prepStation,
-              taxClass,
-              brand,
-              season,
-              staffSkillLevel,
-              commissionProfile,
-              consumables,
+              ...(displayConfig.restaurant.showAllergens
+                ? { allergens }
+                : {}),
+              ...(displayConfig.restaurant.showPrepStation
+                ? { prepStation }
+                : {}),
+              ...(displayConfig.restaurant.showTaxClass ? { taxClass } : {}),
+              ...(displayConfig.fashion.showBrand ? { brand } : {}),
+              ...(displayConfig.fashion.showSeason ? { season } : {}),
+              ...(displayConfig.spa.showStaffSkillLevel
+                ? { staffSkillLevel }
+                : {}),
+              ...(displayConfig.spa.showCommissionProfile
+                ? { commissionProfile }
+                : {}),
+              ...(displayConfig.spa.showConsumables ? { consumables } : {}),
             },
             variantAttributes: wantsVariations ? [] : undefined,
           },
@@ -1985,7 +2082,7 @@ export default function UnifiedProductsInventoryPage() {
                         </div>
                       )}
 
-                      {!editProduct && platformWorkflow?.workflow?.length ? (
+                      {!editProduct && displayConfig.global.showWorkflowPanel && platformWorkflow?.workflow?.length ? (
                         <div className="mb-4 rounded border border-indigo-200 bg-indigo-50 px-3 py-2">
                           <p className="text-xs font-semibold text-indigo-900">
                             Workflow for {platformEntityType.replace('_', ' ')}
@@ -2069,7 +2166,7 @@ export default function UnifiedProductsInventoryPage() {
                               />
                             </div>
                           </div>
-                          {isSpaTenant && (
+                          {isSpaTenant && displayConfig.spa.showDurationMinutes && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">
                                 Duration (minutes) <span className="text-red-500">*</span>
@@ -2086,7 +2183,7 @@ export default function UnifiedProductsInventoryPage() {
                               />
                             </div>
                           )}
-                          {isFashionTenant && (
+                          {isFashionTenant && displayConfig.fashion.enableVariationTypeSelector && (
                           <div className="md:col-span-2">
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                               Product type
@@ -2129,6 +2226,7 @@ export default function UnifiedProductsInventoryPage() {
                           </div>
                           )}
                         </div>
+                        {displayConfig.global.showDescription && (
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
                           <textarea
@@ -2139,9 +2237,11 @@ export default function UnifiedProductsInventoryPage() {
                             placeholder="Enter product description (optional)"
                           />
                         </div>
+                        )}
 
                         {isRestaurantTenant && (
                           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            {displayConfig.restaurant.showAllergens && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">Allergens</label>
                               <input
@@ -2152,6 +2252,8 @@ export default function UnifiedProductsInventoryPage() {
                                 placeholder="e.g. Gluten, Dairy, Nuts"
                               />
                             </div>
+                            )}
+                            {displayConfig.restaurant.showPrepStation && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">Prep Station</label>
                               <input
@@ -2162,6 +2264,8 @@ export default function UnifiedProductsInventoryPage() {
                                 placeholder="e.g. Grill, Bar, Cold Kitchen"
                               />
                             </div>
+                            )}
+                            {displayConfig.restaurant.showTaxClass && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">Tax Class</label>
                               <input
@@ -2172,11 +2276,13 @@ export default function UnifiedProductsInventoryPage() {
                                 placeholder="e.g. VAT16, Zero-Rated"
                               />
                             </div>
+                            )}
                           </div>
                         )}
 
                         {isFashionTenant && (
                           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            {displayConfig.fashion.showBrand && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">Brand</label>
                               <input
@@ -2187,6 +2293,8 @@ export default function UnifiedProductsInventoryPage() {
                                 placeholder="e.g. Zara, Levi's"
                               />
                             </div>
+                            )}
+                            {displayConfig.fashion.showSeason && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">Season</label>
                               <input
@@ -2197,6 +2305,8 @@ export default function UnifiedProductsInventoryPage() {
                                 placeholder="e.g. Summer 2026"
                               />
                             </div>
+                            )}
+                            {displayConfig.fashion.showSupplier && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">Supplier</label>
                               <input
@@ -2207,11 +2317,13 @@ export default function UnifiedProductsInventoryPage() {
                                 placeholder="e.g. Global Apparel Ltd"
                               />
                             </div>
+                            )}
                           </div>
                         )}
 
                         {isSpaTenant && (
                           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            {displayConfig.spa.showStaffSkillLevel && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">Staff Skill Level</label>
                               <input
@@ -2222,6 +2334,8 @@ export default function UnifiedProductsInventoryPage() {
                                 placeholder="e.g. Senior Therapist"
                               />
                             </div>
+                            )}
+                            {displayConfig.spa.showCommissionProfile && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">Commission Profile</label>
                               <input
@@ -2232,6 +2346,8 @@ export default function UnifiedProductsInventoryPage() {
                                 placeholder="e.g. 20% or Tier A"
                               />
                             </div>
+                            )}
+                            {displayConfig.spa.showConsumables && (
                             <div>
                               <label className="block text-sm font-semibold text-gray-700 mb-2">Consumables</label>
                               <input
@@ -2242,9 +2358,11 @@ export default function UnifiedProductsInventoryPage() {
                                 placeholder="e.g. Oils, Towels, Serums"
                               />
                             </div>
+                            )}
                           </div>
                         )}
 
+                        {displayConfig.global.showImages && (
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
                             Product Images
@@ -2406,6 +2524,8 @@ export default function UnifiedProductsInventoryPage() {
                             </div>
                           )}
                         </div>
+                        )}
+                        {displayConfig.global.showCategory && (
                         <div>
                           <div className="mb-2 flex items-center justify-between">
                             <label className="block text-sm font-semibold text-gray-700">Category</label>
@@ -2447,6 +2567,7 @@ export default function UnifiedProductsInventoryPage() {
                             </div>
                           )}
                         </div>
+                        )}
                         <div className="flex items-center gap-2 border-t border-gray-200 pt-2.5">
                           <button
                             type="submit"

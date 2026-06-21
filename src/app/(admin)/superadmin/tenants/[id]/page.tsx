@@ -66,6 +66,12 @@ interface BlueprintCatalogEntry {
   displayName: string;
   description: string;
   enabledModules: AppModuleKey[];
+  navigation: Array<{
+    key: string;
+    label: string;
+    path: string;
+    requiredModule?: AppModuleKey;
+  }>;
   apps: Array<{ key: string; label: string; enabledByDefault?: boolean }>;
   features: string[];
 }
@@ -74,6 +80,7 @@ interface BlueprintCatalogResponse {
   version: string;
   total: number;
   blueprints: BlueprintCatalogEntry[];
+  navigationCatalog?: BlueprintCatalogEntry['navigation'];
 }
 
 interface TenantBlueprintConfigured {
@@ -83,10 +90,12 @@ interface TenantBlueprintConfigured {
   installedApps: string[];
   featureFlags: Record<string, boolean>;
   enabledModules: AppModuleKey[];
+  navigationKeys: string[];
 }
 
 interface TenantBlueprintResponse {
   tenantId: string;
+  configuredNavigationKeysSet?: boolean;
   configured: TenantBlueprintConfigured;
 }
 
@@ -97,7 +106,7 @@ interface TenantBlueprintPreviewResponse {
   proposed: TenantBlueprintConfigured;
   effectivePreview: {
     manifest: {
-      navigation?: Array<unknown>;
+      navigation?: Array<{ key?: string; label?: string; path?: string }>;
       dashboard?: Array<unknown>;
       quickActions?: Array<unknown>;
       enabledModules?: AppModuleKey[];
@@ -287,9 +296,11 @@ export default function TenantDetailsPage() {
   const [selectedModulePreset, setSelectedModulePreset] = useState('');
   const [applyingModulePreset, setApplyingModulePreset] = useState(false);
   const [blueprintCatalog, setBlueprintCatalog] = useState<BlueprintCatalogEntry[]>([]);
+  const [blueprintNavigationCatalog, setBlueprintNavigationCatalog] = useState<BlueprintCatalogEntry['navigation']>([]);
   const [selectedBusinessType, setSelectedBusinessType] = useState('fashion');
   const [selectedBlueprintKey, setSelectedBlueprintKey] = useState('');
   const [selectedBlueprintVersion, setSelectedBlueprintVersion] = useState('v1');
+  const [selectedNavigationKeys, setSelectedNavigationKeys] = useState<string[]>([]);
   const [installedAppsInput, setInstalledAppsInput] = useState('');
   const [featureFlagsInput, setFeatureFlagsInput] = useState('{}');
   const [savingBlueprint, setSavingBlueprint] = useState(false);
@@ -425,9 +436,13 @@ export default function TenantDetailsPage() {
         const blueprints = Array.isArray(catalog?.blueprints)
           ? catalog.blueprints
           : [];
+        const navigationCatalog = Array.isArray(catalog?.navigationCatalog)
+          ? catalog.navigationCatalog
+          : [];
         const configured = blueprint?.configured;
 
         setBlueprintCatalog(blueprints);
+        setBlueprintNavigationCatalog(navigationCatalog);
         setSelectedBusinessType(configured?.businessType || 'fashion');
         setSelectedBlueprintVersion(configured?.blueprintVersion || 'v1');
 
@@ -438,6 +453,24 @@ export default function TenantDetailsPage() {
           '';
 
         setSelectedBlueprintKey(preferredKey);
+        const preferredBlueprint = blueprints.find(
+          (entry) => entry.blueprintKey === preferredKey,
+        );
+        const defaultNavigationKeys = Array.isArray(preferredBlueprint?.navigation)
+          ? preferredBlueprint.navigation
+              .map((item) => String(item?.key || '').trim().toLowerCase())
+              .filter((item) => item.length > 0)
+          : [];
+        const configuredNavigationKeys = Array.isArray(configured?.navigationKeys)
+          ? configured.navigationKeys
+              .map((entry) => String(entry || '').trim().toLowerCase())
+              .filter((entry) => entry.length > 0)
+          : [];
+        setSelectedNavigationKeys(
+          blueprint?.configuredNavigationKeysSet
+            ? configuredNavigationKeys
+            : defaultNavigationKeys,
+        );
         setInstalledAppsInput((configured?.installedApps || []).join(', '));
         setFeatureFlagsInput(
           JSON.stringify(configured?.featureFlags || {}, null, 2),
@@ -445,6 +478,8 @@ export default function TenantDetailsPage() {
       } catch (blueprintError) {
         console.warn('Failed to load blueprint configuration:', blueprintError);
         setBlueprintCatalog([]);
+      setBlueprintNavigationCatalog([]);
+        setSelectedNavigationKeys([]);
       }
 
       const crm = await apiGet<TenantCrmEntitlementsResponse>(`/admin/tenants/${tenantId}/crm-entitlements`);
@@ -494,6 +529,26 @@ export default function TenantDetailsPage() {
         : [...prev, moduleKey],
     );
   };
+
+  const toggleNavigationKey = (navKey: string) => {
+    setSelectedNavigationKeys((prev) =>
+      prev.includes(navKey)
+        ? prev.filter((entry) => entry !== navKey)
+        : [...prev, navKey],
+    );
+  };
+
+  const selectedBlueprintDefinition = React.useMemo(
+    () => blueprintCatalog.find((entry) => entry.blueprintKey === selectedBlueprintKey),
+    [blueprintCatalog, selectedBlueprintKey],
+  );
+  const availableNavigationOptions = React.useMemo(
+    () =>
+      Array.isArray(blueprintNavigationCatalog) && blueprintNavigationCatalog.length > 0
+        ? blueprintNavigationCatalog
+        : selectedBlueprintDefinition?.navigation || [],
+    [blueprintNavigationCatalog, selectedBlueprintDefinition],
+  );
 
   const saveTenantModules = async () => {
     try {
@@ -593,6 +648,7 @@ export default function TenantDetailsPage() {
           blueprintVersion: selectedBlueprintVersion || 'v1',
           installedApps,
           featureFlags: parsedFeatureFlags,
+          navigationKeys: selectedNavigationKeys,
         },
       );
 
@@ -604,6 +660,11 @@ export default function TenantDetailsPage() {
         setInstalledAppsInput((configured.installedApps || []).join(', '));
         setFeatureFlagsInput(
           JSON.stringify(configured.featureFlags || {}, null, 2),
+        );
+        setSelectedNavigationKeys(
+          Array.isArray(configured.navigationKeys)
+            ? configured.navigationKeys
+            : [],
         );
         setEnabledModules(Array.isArray(configured.enabledModules) ? configured.enabledModules : enabledModules);
       }
@@ -660,6 +721,7 @@ export default function TenantDetailsPage() {
           blueprintVersion: selectedBlueprintVersion || 'v1',
           installedApps,
           featureFlags: parsedFeatureFlags,
+          navigationKeys: selectedNavigationKeys,
         },
       );
       setBlueprintPreview(preview || null);
@@ -694,6 +756,11 @@ export default function TenantDetailsPage() {
         setSelectedBlueprintVersion(configured.blueprintVersion || 'v1');
         setInstalledAppsInput((configured.installedApps || []).join(', '));
         setFeatureFlagsInput(JSON.stringify(configured.featureFlags || {}, null, 2));
+        setSelectedNavigationKeys(
+          Array.isArray(configured.navigationKeys)
+            ? configured.navigationKeys
+            : [],
+        );
         setEnabledModules(Array.isArray(configured.enabledModules) ? configured.enabledModules : []);
       }
 
@@ -1090,6 +1157,22 @@ const fetchMpesaConfig = useCallback(async () => {
         </div>
 
         <div style={{ marginTop: '0.6rem' }}>
+          <button
+            onClick={() => router.push(`/superadmin/tenants/${tenantId}/unified-page-display`)}
+            style={{
+              background: '#eff6ff',
+              color: '#1d4ed8',
+              padding: '0.28rem 0.75rem',
+              borderRadius: '5px',
+              border: '1px solid #bfdbfe',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '12px',
+              marginRight: '0.45rem',
+            }}
+          >
+            Unified Page Display
+          </button>
           <button
             onClick={openProvisionModal}
             disabled={loadingClassifications}
@@ -1809,6 +1892,13 @@ const fetchMpesaConfig = useCallback(async () => {
                       if (preferred) {
                         setSelectedBlueprintKey(preferred.blueprintKey);
                         setSelectedBlueprintVersion(preferred.blueprintVersion || 'v1');
+                        setSelectedNavigationKeys(
+                          Array.isArray(preferred.navigation)
+                            ? preferred.navigation
+                                .map((item) => String(item?.key || '').trim().toLowerCase())
+                                .filter((item) => item.length > 0)
+                            : [],
+                        );
                       }
                     }}
                     style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
@@ -1832,6 +1922,13 @@ const fetchMpesaConfig = useCallback(async () => {
                       if (selected) {
                         setSelectedBusinessType(selected.businessType);
                         setSelectedBlueprintVersion(selected.blueprintVersion || 'v1');
+                        setSelectedNavigationKeys(
+                          Array.isArray(selected.navigation)
+                            ? selected.navigation
+                                .map((item) => String(item?.key || '').trim().toLowerCase())
+                                .filter((item) => item.length > 0)
+                            : [],
+                        );
                       }
                     }}
                     style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
@@ -1885,9 +1982,54 @@ const fetchMpesaConfig = useCallback(async () => {
                 </div>
               </div>
 
+              <div style={{ marginTop: '0.5rem', border: '1px solid #a7f3d0', borderRadius: '5px', padding: '0.45rem', background: '#f0fdf4' }}>
+                <div style={{ fontSize: '12px', color: '#065f46', fontWeight: 700, marginBottom: '0.25rem' }}>
+                  Tenant Navigation Items
+                </div>
+                <div style={{ fontSize: '11px', color: '#047857', marginBottom: '0.35rem' }}>
+                  Select which blueprint menu items should show for this tenant.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.3rem' }}>
+                  {availableNavigationOptions.map((item) => {
+                    const key = String(item?.key || '').trim().toLowerCase();
+                    if (!key) {
+                      return null;
+                    }
+                    return (
+                      <label
+                        key={key}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          fontSize: '11px',
+                          color: '#064e3b',
+                          background: '#ffffff',
+                          border: '1px solid #d1fae5',
+                          borderRadius: '4px',
+                          padding: '0.28rem 0.35rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedNavigationKeys.includes(key)}
+                          onChange={() => toggleNavigationKey(key)}
+                          style={{ width: '12px', height: '12px' }}
+                        />
+                        <span>
+                          {item.label}
+                          <span style={{ color: '#6b7280' }}> ({item.path})</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '11px', color: '#065f46' }}>
-                  Saving blueprint also syncs tenant module entitlements from selected blueprint.
+                  Saving blueprint syncs modules and applies the selected navigation items for this tenant.
                 </span>
                 <div style={{ display: 'flex', gap: '0.35rem' }}>
                   <button
