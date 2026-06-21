@@ -20,6 +20,7 @@ export interface User {
   impersonatingAsTenantName?: string | null;
   enabledModules?: AppModuleKey[];
   crmEntitlements?: CrmEntitlements;
+  restaurantFeaturesEnabled?: boolean;
   // Add more fields as needed
 }
 
@@ -171,6 +172,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
             ? effectiveModules
             : normalizeEnabledModules((userData as { enabledModules?: unknown }).enabledModules),
         crmEntitlements: normalizeCrmEntitlements((userData as { crmEntitlements?: unknown }).crmEntitlements),
+        restaurantFeaturesEnabled: Boolean((userData as { restaurantFeaturesEnabled?: boolean }).restaurantFeaturesEnabled),
       };
 
       if (userData.branchId && typeof window !== 'undefined') {

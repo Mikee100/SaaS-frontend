@@ -66,6 +66,27 @@ export default function PermissionsSettings() {
   // Permission checks
   const canEditUsers = hasPermission(user, "edit_users");
   const canEditRoles = hasPermission(user, "edit_roles");
+  const canSeeRestaurantPermissions = Boolean(user?.restaurantFeaturesEnabled);
+  const restaurantPermissionKeys = [
+    "restaurant_view",
+    "restaurant_orders_manage",
+    "restaurant_kitchen_manage",
+    "restaurant_checkout",
+    "restaurant_tables_manage",
+    "restaurant_bom_manage",
+    "restaurant_activity_view",
+  ];
+
+  const isRestaurantPermission = (key: string) => restaurantPermissionKeys.includes(key);
+
+  const visiblePermissions = permissions.filter((p) =>
+    canSeeRestaurantPermissions ? true : !isRestaurantPermission(p.key),
+  );
+
+  const filterPermissionKeys = (keys: string[]) =>
+    canSeeRestaurantPermissions
+      ? keys
+      : keys.filter((key) => !isRestaurantPermission(key));
 
   const permKey = (rp: { permission: { key?: string; name?: string } }) =>
     rp.permission?.key ?? rp.permission?.name ?? "";
@@ -235,14 +256,27 @@ export default function PermissionsSettings() {
     "Analytics": ["view_analytics", "export_data"],
     "Settings": ["view_settings", "edit_settings"],
     "Billing": ["view_billing", "edit_billing"],
+    "Restaurant POS": [
+      "restaurant_view",
+      "restaurant_orders_manage",
+      "restaurant_kitchen_manage",
+      "restaurant_checkout",
+      "restaurant_tables_manage",
+      "restaurant_bom_manage",
+      "restaurant_activity_view",
+    ],
   };
+
+  const visiblePermissionCategories = Object.entries(permissionCategories).filter(([category]) =>
+    canSeeRestaurantPermissions ? true : category !== "Restaurant POS",
+  );
 
   const listPermissions = (u: User) => {
     if (Array.isArray(u.effectivePermissions) && u.effectivePermissions.length > 0) {
-      return u.effectivePermissions;
+      return filterPermissionKeys(u.effectivePermissions);
     }
     if (Array.isArray(u.permissions) && u.permissions.length > 0) {
-      return u.permissions;
+      return filterPermissionKeys(u.permissions);
     }
     return [];
   };
@@ -346,7 +380,7 @@ export default function PermissionsSettings() {
                     </p>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto bg-gray-50 dark:bg-gray-900/30 rounded p-3">
-                    {permissions.map((p) => (
+                    {visiblePermissions.map((p) => (
                       <label key={p.key} className="flex items-center gap-2 text-gray-800 dark:text-gray-200 py-1">
                         {(() => {
                           const isInherited = userInheritedPermissionsEdit.includes(p.key);
@@ -384,7 +418,7 @@ export default function PermissionsSettings() {
                   <div>
                     <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-2">Inherited (read-only)</label>
                     <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
-                      {userInheritedPermissionsEdit.map((perm) => (
+                      {filterPermissionKeys(userInheritedPermissionsEdit).map((perm) => (
                         <span
                           key={perm}
                           className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200"
@@ -688,11 +722,16 @@ export default function PermissionsSettings() {
                   <div className="space-y-3 mt-3">
                     <h5 className="font-medium text-gray-700 dark:text-gray-300 text-sm">Permissions:</h5>
                     <div>
-                      {rolePerms(role).length === 0 ? (
+                      {filterPermissionKeys(rolePerms(role).map((rp) => permKey(rp)).filter(Boolean)).length === 0 ? (
                         <p className="text-gray-500 dark:text-gray-400 text-sm">No permissions assigned</p>
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                          {rolePerms(role).map((rp, index) => (
+                          {rolePerms(role)
+                            .filter((rp) => {
+                              const key = permKey(rp);
+                              return key ? (canSeeRestaurantPermissions || !isRestaurantPermission(key)) : false;
+                            })
+                            .map((rp, index) => (
                             <div key={index} className="flex items-center gap-2 bg-green-50 dark:bg-green-900/30 rounded px-2 py-1">
                               <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full" />
                               <span className="text-xs text-gray-700 dark:text-gray-200">{permKey(rp)}</span>
@@ -727,7 +766,7 @@ export default function PermissionsSettings() {
 
         {showAvailablePermissions && (
           <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-            {Object.entries(permissionCategories).map(([category, perms]) => (
+            {visiblePermissionCategories.map(([category, perms]) => (
               <div key={category} className="mb-6">
                 <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">{category}</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -845,7 +884,7 @@ export default function PermissionsSettings() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Permissions</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
-                    {permissions.map((p) => (
+                    {visiblePermissions.map((p) => (
                       <label key={p.key} className="flex items-center gap-2 text-gray-800 dark:text-gray-200 text-sm">
                         <input
                           type="checkbox"
