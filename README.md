@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SaaS Platform Frontend
 
-## Getting Started
+Next.js frontend for the SaaS Platform. This app now supports manifest-driven tenant composition and superadmin blueprint operations.
 
-First, run the development server:
+## Current Blueprint Rollout Status
+
+This frontend currently includes:
+
+- Effective manifest client integration
+- Manifest-driven navigation rendering with fallback behavior
+- Manifest-driven quick actions
+- Blueprint dashboard widget registry and rendering
+- Superadmin tenant blueprint management UI
+- Superadmin blueprint preview and rollback controls
+
+Roadmap and ticket tracking are in [../docs/BUSINESS_OS_BLUEPRINT_EXECUTION_BACKLOG.md](../docs/BUSINESS_OS_BLUEPRINT_EXECUTION_BACKLOG.md).
+
+## Blueprint-Related UI Areas
+
+Core shell composition:
+
+- [src/components/UserContext.tsx](src/components/UserContext.tsx)
+- [src/components/PlanBasedNav.tsx](src/components/PlanBasedNav.tsx)
+- [src/app/QuickActions.tsx](src/app/QuickActions.tsx)
+- [src/app/dashboard/page.tsx](src/app/dashboard/page.tsx)
+- [src/components/dashboard/BlueprintWidgetRegistry.tsx](src/components/dashboard/BlueprintWidgetRegistry.tsx)
+
+Superadmin tenant operations:
+
+- [src/app/(admin)/superadmin/tenants/[id]/page.tsx](src/app/(admin)/superadmin/tenants/[id]/page.tsx)
+
+## Local Development
+
+Install and run:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Build:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## API Dependencies for Blueprint Flow
 
-## Learn More
+The frontend expects the backend endpoints below:
 
-To learn more about Next.js, take a look at the following resources:
+- GET /tenant/configurations/manifest/effective
+- GET /admin/blueprints
+- GET /admin/tenants/:id/blueprint
+- PUT /admin/tenants/:id/blueprint
+- POST /admin/tenants/:id/blueprint/preview
+- POST /admin/tenants/:id/blueprint/rollback
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Branch Promotion Flow
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Frontend repository flow:
 
-## Deploy on Vercel
+- feature/* -> staging -> master
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Use compare links in GitHub to create PRs between each stage.
