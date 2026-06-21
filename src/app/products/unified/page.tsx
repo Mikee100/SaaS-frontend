@@ -10,6 +10,7 @@ import { apiGet, apiPost, apiDelete, apiPut } from "@/utils/api";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useBranches } from '@/hooks/useBranches';
+import { getEffectiveTenantManifest } from '@/utils/manifest/manifestClient';
 import FeatureGuard from '@/components/FeatureGuard';
 import AuthGuard from '@/components/AuthGuard';
 import { 
@@ -22,6 +23,11 @@ import {
 import { hasPermission } from '@/utils/permissions';
 import { useUser } from '@/components/UserContext';
 import { useTenant } from '@/hooks/useTenant';
+import {
+  createPlatformEntity,
+  getPlatformEntityWorkflow,
+  PlatformEntityType,
+} from '@/utils/platform/entitiesClient';
 import { useBranch } from "@/contexts/BranchContext";
 import Image from 'next/image';
 import API_BASE_URL from '../../../config/apiConfig';
@@ -172,6 +178,7 @@ const RESTAURANT_MENU_CATEGORIES = [
 
 type TabType = 'products' | 'inventory' | 'advanced' | 'attributes' | 'variations';
 type AdvancedSubTab = 'overview' | 'movements' | 'alerts' | 'forecasting' | 'locations';
+type ProductBusinessFlow = 'restaurant' | 'fashion' | 'spa';
 
 export default function UnifiedProductsInventoryPage() {
   // Fetch tenant info (includes classificationId)
@@ -1018,23 +1025,75 @@ export default function UnifiedProductsInventoryPage() {
   const hasCreatedProduct = (products.length > 0) || ((inventoryProductsData?.length || 0) > 0);
   const hasAttributes = (attributesSetupData?.length || 0) > 0;
   const hasPickedVariationProduct = !!selectedProductId;
-  const isRestaurantTenant = useMemo(() => {
+  const { data: effectiveManifest } = useQuery({
+    queryKey: ['tenant', 'effective-manifest'],
+    queryFn: getEffectiveTenantManifest,
+    enabled: !!user?.tenantId,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const businessFlow = useMemo<ProductBusinessFlow>(() => {
     const tenantData = (tenant || {}) as Record<string, unknown>;
-    const businessType = String(tenantData.businessType || '').toLowerCase();
-    const hasRestaurantAddon = Boolean(tenantData.restaurantFeaturesEnabled);
+    const manifestBusinessType = String(
+      effectiveManifest?.manifest?.businessType ||
+      effectiveManifest?.source?.businessType ||
+      '',
+    ).toLowerCase();
+    const tenantBusinessType = String(tenantData.businessType || '').toLowerCase();
     const classificationSlug = String(classificationMeta?.slug || '').toLowerCase();
     const classificationName = String(classificationMeta?.name || '').toLowerCase();
 
-    return (
-      hasRestaurantAddon ||
-      businessType.includes('restaurant') ||
-      businessType.includes('hospitality') ||
+    if (manifestBusinessType.includes('restaurant') || manifestBusinessType.includes('hospitality')) {
+      return 'restaurant';
+    }
+    if (manifestBusinessType.includes('spa') || manifestBusinessType.includes('barber')) {
+      return 'spa';
+    }
+    if (Boolean(tenantData.restaurantFeaturesEnabled)) {
+      return 'restaurant';
+    }
+    if (
+      tenantBusinessType.includes('restaurant') ||
+      tenantBusinessType.includes('hospitality') ||
       classificationSlug.includes('restaurant') ||
       classificationSlug.includes('hospitality') ||
       classificationName.includes('restaurant') ||
       classificationName.includes('hospitality')
-    );
-  }, [tenant, classificationMeta]);
+    ) {
+      return 'restaurant';
+    }
+    if (
+      tenantBusinessType.includes('spa') ||
+      tenantBusinessType.includes('barber') ||
+      tenantBusinessType.includes('salon') ||
+      classificationSlug.includes('spa') ||
+      classificationSlug.includes('barber') ||
+      classificationName.includes('spa') ||
+      classificationName.includes('barber')
+    ) {
+      return 'spa';
+    }
+    return 'fashion';
+  }, [tenant, classificationMeta, effectiveManifest]);
+
+  const isRestaurantTenant = businessFlow === 'restaurant';
+  const isSpaTenant = businessFlow === 'spa';
+  const isFashionTenant = businessFlow === 'fashion';
+
+  const platformEntityType = useMemo<PlatformEntityType>(() => {
+    if (businessFlow === 'restaurant') return 'MENU_ITEM';
+    if (businessFlow === 'spa') return 'SERVICE';
+    return productType === 'withVariations' ? 'PRODUCT_STYLE' : 'RETAIL_PRODUCT';
+  }, [businessFlow, productType]);
+
+  const { data: platformWorkflow } = useQuery({
+    queryKey: ['platform', 'workflow', platformEntityType, selectedBranchId],
+    queryFn: () => getPlatformEntityWorkflow(platformEntityType, selectedBranchId || undefined),
+    enabled: showAddForm && !editProduct && !!selectedBranchId,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
 
   const {
     data: managedCategories = [],
@@ -1094,19 +1153,69 @@ export default function UnifiedProductsInventoryPage() {
     }
 
     const wantsVariations = productType === "withVariations";
+    const name = String(formData.get('name') || '').trim();
+    const sku = String(formData.get('sku') || '').trim();
+    const category = String(formData.get('category') || '').trim() || undefined;
+    const description = String(formData.get('description') || '').trim() || undefined;
+    const supplier = String(formData.get('supplier') || '').trim() || undefined;
+    const price = parseFloat(String(formData.get('price') || '0'));
+    const cost = parseFloat(String(formData.get('cost') || '0')) || 0;
+    const durationMinutes = Math.max(1, Number.parseInt(String(formData.get('durationMinutes') || '0'), 10) || 0);
+    const allergens = String(formData.get('allergens') || '').trim() || undefined;
+    const prepStation = String(formData.get('prepStation') || '').trim() || undefined;
+    const taxClass = String(formData.get('taxClass') || '').trim() || undefined;
+    const brand = String(formData.get('brand') || '').trim() || undefined;
+    const season = String(formData.get('season') || '').trim() || undefined;
+    const staffSkillLevel = String(formData.get('staffSkillLevel') || '').trim() || undefined;
+    const commissionProfile = String(formData.get('commissionProfile') || '').trim() || undefined;
+    const consumables = String(formData.get('consumables') || '').trim() || undefined;
 
     setSaving(true);
     setError("");
     try {
+      try {
+        await createPlatformEntity(
+          {
+            entityType: platformEntityType,
+            name,
+            category,
+            sku: sku || undefined,
+            basePrice: Number.isFinite(price) ? price : 0,
+            quantity: 0,
+            durationMinutes: isSpaTenant ? durationMinutes : undefined,
+            attributes: {
+              description,
+              cost,
+              supplier,
+              branchId: selectedBranchId,
+              productType,
+              businessFlow,
+              allergens,
+              prepStation,
+              taxClass,
+              brand,
+              season,
+              staffSkillLevel,
+              commissionProfile,
+              consumables,
+            },
+            variantAttributes: wantsVariations ? [] : undefined,
+          },
+          selectedBranchId,
+        );
+      } catch (platformErr) {
+        console.warn('Platform create failed, falling back to /products only:', platformErr);
+      }
+
       const created = await apiPost("/products", {
-        name: formData.get("name"),
-        sku: formData.get("sku"),
-        price: parseFloat(formData.get("price") as string),
-        cost: parseFloat(formData.get("cost") as string) || 0,
+        name,
+        sku,
+        price,
+        cost,
         stock: productType === 'withVariations' ? 0 : 0, // Stock managed per variation or set to 0 for simple products
-        description: formData.get("description"),
-        category: String(formData.get('category') || '').trim() || undefined,
-        supplier: formData.get("supplier"),
+        description,
+        category,
+        supplier,
         branchId: selectedBranchId,
       }, { 'x-branch-id': selectedBranchId || '' }) as Product;
 
@@ -1515,17 +1624,19 @@ export default function UnifiedProductsInventoryPage() {
 
   const usagePercentage = getUsagePercentage();
   const isNearLimit = usagePercentage >= 80;
-  const topTitle = isRestaurantTenant ? 'Menu & Inventory' : 'Products & Inventory';
-  const productsTabLabel = isRestaurantTenant ? 'Menu' : 'Products';
-  const productsCountLabel = isRestaurantTenant ? 'Menu Item' : 'Physical Item';
-  const addPrimaryLabel = isRestaurantTenant ? 'Add Menu Item' : 'Add Product';
-  const createPrimaryLabel = isRestaurantTenant ? 'Create Menu Item' : 'Create Product';
-  const noItemsTitle = isRestaurantTenant ? 'No menu items found' : 'No products found';
+  const topTitle = isRestaurantTenant ? 'Menu & Inventory' : isSpaTenant ? 'Services & Inventory' : 'Products & Inventory';
+  const productsTabLabel = isRestaurantTenant ? 'Menu' : isSpaTenant ? 'Services' : 'Products';
+  const productsCountLabel = isRestaurantTenant ? 'Menu Item' : isSpaTenant ? 'Service' : 'Physical Item';
+  const addPrimaryLabel = isRestaurantTenant ? 'Add Menu Item' : isSpaTenant ? 'Add Service' : 'Add Product';
+  const createPrimaryLabel = isRestaurantTenant ? 'Create Menu Item' : isSpaTenant ? 'Create Service' : 'Create Product';
+  const noItemsTitle = isRestaurantTenant ? 'No menu items found' : isSpaTenant ? 'No services found' : 'No products found';
   const noItemsDescription = search
     ? 'Try adjusting your search criteria'
     : isRestaurantTenant
       ? 'Get started by adding your first menu item'
-      : 'Get started by adding your first product';
+      : isSpaTenant
+        ? 'Get started by adding your first service'
+        : 'Get started by adding your first product';
 
   // Pagination for inventory
   const inventoryItemsPerPage = 12;
@@ -1774,7 +1885,9 @@ export default function UnifiedProductsInventoryPage() {
                         <p className="text-[11px] text-blue-700">
                           {isRestaurantTenant
                             ? '1. Add Menu Item, 2. Set Category, 3. Add Variations (optional), 4. Update stock for tracked items'
-                            : '1. Create Product, 2. Add Attributes (optional), 3. Add Variations, 4. Update Variation Stock'}
+                            : isSpaTenant
+                              ? '1. Create Service, 2. Set Duration, 3. Add optional details, 4. Publish and start booking'
+                              : '1. Create Product, 2. Add Attributes (optional), 3. Add Variations, 4. Update Variation Stock'}
                         </p>
                         <div className="mt-1 flex flex-wrap gap-1.5">
                           <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${hasCreatedProduct ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-gray-600 border border-blue-200'}`}>
@@ -1827,17 +1940,25 @@ export default function UnifiedProductsInventoryPage() {
                           </div>
                           <div>
                             <h2 className="text-base font-semibold text-gray-900">
-                              {editProduct ? (isRestaurantTenant ? 'Edit Menu Item' : 'Edit Product') : (isRestaurantTenant ? 'Add New Menu Item' : 'Add New Product')}
+                              {editProduct
+                                ? (isRestaurantTenant ? 'Edit Menu Item' : isSpaTenant ? 'Edit Service' : 'Edit Product')
+                                : (isRestaurantTenant ? 'Add New Menu Item' : isSpaTenant ? 'Add New Service' : 'Add New Product')}
                             </h2>
                             <p className="mt-0.5 text-xs text-gray-500">
                               {editProduct
-                                ? isRestaurantTenant ? 'Update menu item information' : 'Update product information'
-                                : productType === 'withVariations'
+                                ? isRestaurantTenant
+                                  ? 'Update menu item information'
+                                  : isSpaTenant
+                                    ? 'Update service information'
+                                    : 'Update product information'
+                                : isFashionTenant && productType === 'withVariations'
                                   ? isRestaurantTenant
                                     ? 'Step 1 of 2 — basic menu item details. We will help you add variations next.'
                                     : 'Step 1 of 2 — basic details. We will help you add variations next.'
                                   : isRestaurantTenant
                                     ? 'Create a new menu item in your catalog'
+                                    : isSpaTenant
+                                      ? 'Create a new service with pricing and duration'
                                     : 'Create a new product in your catalog'}
                             </p>
                           </div>
@@ -1864,11 +1985,34 @@ export default function UnifiedProductsInventoryPage() {
                         </div>
                       )}
 
+                      {!editProduct && platformWorkflow?.workflow?.length ? (
+                        <div className="mb-4 rounded border border-indigo-200 bg-indigo-50 px-3 py-2">
+                          <p className="text-xs font-semibold text-indigo-900">
+                            Workflow for {platformEntityType.replace('_', ' ')}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {platformWorkflow.workflow.map((step) => (
+                              <span
+                                key={step.key}
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                  step.required
+                                    ? 'bg-indigo-100 text-indigo-800'
+                                    : 'bg-white text-indigo-700 border border-indigo-200'
+                                }`}
+                              >
+                                {step.label}
+                                {step.required ? ' *' : ''}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
                       <form onSubmit={editProduct ? handleEditProduct : handleAddProduct} className="space-y-3">
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              {isRestaurantTenant ? 'Menu Item Name' : 'Product Name'} <span className="text-red-500">*</span>
+                              {isRestaurantTenant ? 'Menu Item Name' : isSpaTenant ? 'Service Name' : 'Product Name'} <span className="text-red-500">*</span>
                             </label>
                             <input
                               type="text"
@@ -1876,7 +2020,7 @@ export default function UnifiedProductsInventoryPage() {
                               defaultValue={editProduct?.name || ''}
                               required
                               className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                              placeholder={isRestaurantTenant ? 'Enter menu item name' : 'Enter product name'}
+                              placeholder={isRestaurantTenant ? 'Enter menu item name' : isSpaTenant ? 'Enter service name' : 'Enter product name'}
                             />
                           </div>
                           <div>
@@ -1894,7 +2038,7 @@ export default function UnifiedProductsInventoryPage() {
                           </div>
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Selling Price <span className="text-red-500">*</span>
+                              {isSpaTenant ? 'Service Price' : 'Selling Price'} <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 font-medium text-gray-500">$</span>
@@ -1911,7 +2055,7 @@ export default function UnifiedProductsInventoryPage() {
                             </div>
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">Buying Price</label>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">{isSpaTenant ? 'Service Cost (Optional)' : 'Buying Price'}</label>
                             <div className="relative">
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 font-medium text-gray-500">$</span>
                               <input
@@ -1925,6 +2069,24 @@ export default function UnifiedProductsInventoryPage() {
                               />
                             </div>
                           </div>
+                          {isSpaTenant && (
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Duration (minutes) <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                name="durationMinutes"
+                                min="1"
+                                step="1"
+                                defaultValue="60"
+                                required
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="60"
+                              />
+                            </div>
+                          )}
+                          {isFashionTenant && (
                           <div className="md:col-span-2">
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                               Product type
@@ -1965,6 +2127,7 @@ export default function UnifiedProductsInventoryPage() {
                                 : 'Use this when the same product is sold in multiple options (for example T-shirts with different sizes and colors).'}
                             </p>
                           </div>
+                          )}
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
@@ -1976,6 +2139,112 @@ export default function UnifiedProductsInventoryPage() {
                             placeholder="Enter product description (optional)"
                           />
                         </div>
+
+                        {isRestaurantTenant && (
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Allergens</label>
+                              <input
+                                type="text"
+                                name="allergens"
+                                defaultValue={String(editProduct?.customFields?.allergens || '')}
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g. Gluten, Dairy, Nuts"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Prep Station</label>
+                              <input
+                                type="text"
+                                name="prepStation"
+                                defaultValue={String(editProduct?.customFields?.prepStation || '')}
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g. Grill, Bar, Cold Kitchen"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Tax Class</label>
+                              <input
+                                type="text"
+                                name="taxClass"
+                                defaultValue={String(editProduct?.customFields?.taxClass || '')}
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g. VAT16, Zero-Rated"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {isFashionTenant && (
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Brand</label>
+                              <input
+                                type="text"
+                                name="brand"
+                                defaultValue={String(editProduct?.customFields?.brand || '')}
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g. Zara, Levi's"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Season</label>
+                              <input
+                                type="text"
+                                name="season"
+                                defaultValue={String(editProduct?.customFields?.season || '')}
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g. Summer 2026"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Supplier</label>
+                              <input
+                                type="text"
+                                name="supplier"
+                                defaultValue={String(editProduct?.supplier?.name || '')}
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g. Global Apparel Ltd"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {isSpaTenant && (
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Staff Skill Level</label>
+                              <input
+                                type="text"
+                                name="staffSkillLevel"
+                                defaultValue={String(editProduct?.customFields?.staffSkillLevel || '')}
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g. Senior Therapist"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Commission Profile</label>
+                              <input
+                                type="text"
+                                name="commissionProfile"
+                                defaultValue={String(editProduct?.customFields?.commissionProfile || '')}
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g. 20% or Tier A"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-gray-700 mb-2">Consumables</label>
+                              <input
+                                type="text"
+                                name="consumables"
+                                defaultValue={String(editProduct?.customFields?.consumables || '')}
+                                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                placeholder="e.g. Oils, Towels, Serums"
+                              />
+                            </div>
+                          </div>
+                        )}
+
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">
                             Product Images
@@ -2194,7 +2463,7 @@ export default function UnifiedProductsInventoryPage() {
                                 {editProduct ? (
                                   <>
                                     <FaCheckCircle className="w-4 h-4" />
-                                    <span>Update Product</span>
+                                    <span>{isRestaurantTenant ? 'Update Menu Item' : isSpaTenant ? 'Update Service' : 'Update Product'}</span>
                                   </>
                                 ) : (
                                   <>
@@ -2294,7 +2563,7 @@ export default function UnifiedProductsInventoryPage() {
                             className="inline-flex items-center gap-1.5 rounded bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
                           >
                             <FaPlus className="w-4 h-4" />
-                            {isRestaurantTenant ? 'Add Your First Menu Item' : 'Add Your First Product'}
+                            {isRestaurantTenant ? 'Add Your First Menu Item' : isSpaTenant ? 'Add Your First Service' : 'Add Your First Product'}
                           </button>
                         )}
                       </div>
