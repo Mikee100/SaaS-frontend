@@ -42,6 +42,24 @@ interface NavItem extends NavSubItem {
   subItems?: NavSubItem[];
 }
 
+function iconBadgeClass(path: string): string {
+  const normalized = String(path || '').toLowerCase();
+  if (normalized.startsWith('/dashboard')) return 'bg-sky-100 text-sky-700';
+  if (normalized.startsWith('/ai')) return 'bg-violet-100 text-violet-700';
+  if (normalized.startsWith('/accounts')) return 'bg-amber-100 text-amber-700';
+  if (normalized.startsWith('/products') || normalized.startsWith('/inventory')) return 'bg-emerald-100 text-emerald-700';
+  if (normalized.startsWith('/sales') || normalized.startsWith('/mpesa')) return 'bg-indigo-100 text-indigo-700';
+  if (normalized.startsWith('/restaurant')) return 'bg-rose-100 text-rose-700';
+  if (normalized.startsWith('/analytics') || normalized.startsWith('/reports')) return 'bg-cyan-100 text-cyan-700';
+  if (normalized.startsWith('/credit')) return 'bg-fuchsia-100 text-fuchsia-700';
+  if (normalized.startsWith('/hr') || normalized.startsWith('/users')) return 'bg-orange-100 text-orange-700';
+  if (normalized.startsWith('/payroll')) return 'bg-lime-100 text-lime-700';
+  if (normalized.startsWith('/expenses')) return 'bg-red-100 text-red-700';
+  if (normalized.startsWith('/settings')) return 'bg-slate-200 text-slate-700';
+  if (normalized.startsWith('/billing') || normalized.startsWith('/account')) return 'bg-teal-100 text-teal-700';
+  return 'bg-gray-100 text-gray-700';
+}
+
 function isRestaurantRoute(path: string): boolean {
   return String(path || '').toLowerCase().startsWith('/restaurant');
 }
@@ -127,12 +145,13 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
     name: string,
     href: string,
     requiredPermission?: string,
+    iconOverride?: IconType,
   ): NavSubItem | null => {
     const source = byHref.get(href);
     return {
       name,
       href,
-      icon: source?.icon || iconForPath(href),
+      icon: iconOverride || source?.icon || iconForPath(href),
       requiredPermission: source?.requiredPermission || requiredPermission || null,
       requiredRestaurant: source?.requiredRestaurant || isRestaurantRoute(href),
     };
@@ -162,22 +181,21 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
   };
 
   const accountsSubItems = [
-    createSubItem('Accounts Ledgers', '/accounts/ledgers'),
-    createSubItem('Balance Sheet', '/accounts/balance-sheet'),
-    createSubItem('Trial Balance', '/accounts/trial-balance'),
-    createSubItem('Capital', '/accounts/capital'),
-    createSubItem('Revenue', '/accounts/revenue'),
-    createSubItem('Profit & Loss', '/accounts/profit-loss'),
-    createSubItem('Inventory', '/accounts/inventory'),
+    createSubItem('Accounts Ledgers', '/accounts/ledgers', undefined, FaHistory),
+    createSubItem('Balance Sheet', '/accounts/balance-sheet', undefined, FaChartBar),
+    createSubItem('Trial Balance', '/accounts/trial-balance', undefined, FaLayerGroup),
+    createSubItem('Revenue', '/accounts/revenue', undefined, FaMoneyBillWave),
+    createSubItem('Profit & Loss', '/accounts/profit-loss', undefined, MdOutlineAnalytics),
+    createSubItem('Inventory', '/accounts/inventory', undefined, MdOutlineInventory2),
   ].filter((item): item is NavSubItem => Boolean(item));
 
   const productsInventorySubItems = [
-    createSubItem('Unified Management', '/products/unified', 'view_products'),
-    createSubItem('Restaurant Menu Studio', '/restaurant/menu-studio', 'view_products'),
-    createSubItem('Suppliers', '/inventory/suppliers', 'view_inventory'),
-    createSubItem('Product Sales Report', '/products/reports/product-sales', 'view_reports'),
-    createSubItem('Inventory Levels Report', '/products/reports/inventory-levels', 'view_reports'),
-    createSubItem('Low Stock Alerts', '/products/reports/low-stock-alerts', 'view_reports'),
+    createSubItem('Unified Management', '/products/unified', 'view_products', FaLayerGroup),
+    createSubItem('Restaurant Menu Studio', '/restaurant/menu-studio', 'view_products', FaShoppingBasket),
+    createSubItem('Suppliers', '/inventory/suppliers', 'view_inventory', FaUsers),
+    createSubItem('Product Sales Report', '/products/reports/product-sales', 'view_reports', FaChartBar),
+    createSubItem('Inventory Levels Report', '/products/reports/inventory-levels', 'view_reports', MdOutlineInventory2),
+    createSubItem('Low Stock Alerts', '/products/reports/low-stock-alerts', 'view_reports', FaBullseye),
   ].filter((item): item is NavSubItem => Boolean(item));
 
   const salesTransactionsSubItems = [
@@ -385,11 +403,10 @@ export default function PlanBasedNav() {
       requiredModule: 'accounts' as AppModuleKey,
       subItems: [
         { name: 'Ledgers', href: '/accounts/ledgers', icon: FaHistory },
-        { name: 'Balance Sheet', href: '/accounts/balance-sheet', icon: MdOutlineAnalytics },
+        { name: 'Balance Sheet', href: '/accounts/balance-sheet', icon: FaChartBar },
         { name: 'Trial Balance', href: '/accounts/trial-balance', icon: FaLayerGroup },
-        { name: 'Capital', href: '/accounts/capital', icon: FaMoneyBillWave },
-        { name: 'Revenue', href: '/accounts/revenue', icon: FaCreditCard },
-        { name: 'Profit & Loss', href: '/accounts/profit-loss', icon: FaChartBar },
+        { name: 'Revenue', href: '/accounts/revenue', icon: FaMoneyBillWave },
+        { name: 'Profit & Loss', href: '/accounts/profit-loss', icon: MdOutlineAnalytics },
         { name: 'Inventory', href: '/accounts/inventory', icon: MdOutlineInventory2 }
       ]
     },
@@ -745,14 +762,16 @@ export default function PlanBasedNav() {
                       <button
                         type="button"
                         onClick={() => handleToggleSubmenu(submenuKey)}
-                        className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded text-xs font-medium transition-all duration-200 ${
+                        className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
                           isActive
-                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                            ? 'bg-linear-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-300 shadow-sm'
                             : 'text-gray-700 hover:text-blue-700 hover:bg-blue-50'
                         }`}
                       >
                         <span className="flex items-center gap-2 min-w-0">
-                          <Icon className="w-4 h-4 shrink-0" />
+                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md shrink-0 ${iconBadgeClass(item.href)}`}>
+                            <Icon className="w-3.5 h-3.5" />
+                          </span>
                           <span className="truncate text-xs">{item.name}</span>
                         </span>
                         <span className="shrink-0">
@@ -778,13 +797,15 @@ export default function PlanBasedNav() {
                                   <button
                                     type="button"
                                     onClick={() => handleToggleSubmenu(submenuKey)}
-                                    className={`flex items-center w-full space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
+                                    className={`flex items-center w-full space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
                                       isSubActive || openNested
-                                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                        ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4 shrink-0" />
+                                    <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(subItem.href)}`}>
+                                      <SubIcon className="w-3 h-3 shrink-0" />
+                                    </span>
                                     <span>{subItem.name}</span>
                                     <span className="ml-auto">
                                       {openNested ? (
@@ -803,13 +824,15 @@ export default function PlanBasedNav() {
                                         setSidebarOpen(false);
                                       }
                                     }}
-                                    className={`flex items-center space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
+                                    className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
                                       isSubActive
-                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-300 shadow-sm'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4 shrink-0" />
+                                    <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(subItem.href)}`}>
+                                      <SubIcon className="w-3 h-3 shrink-0" />
+                                    </span>
                                     <span>{subItem.name}</span>
                                   </Link>
                                 )}
@@ -829,13 +852,15 @@ export default function PlanBasedNav() {
                                               setSidebarOpen(false);
                                             }
                                           }}
-                                          className={`flex items-center space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
+                                          className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
                                             isNestedActive
-                                              ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                              ? 'bg-blue-100 text-blue-700 border border-blue-300 shadow-sm'
                                               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                           }`}
                                         >
-                                          <NestedIcon className="w-4 h-4 shrink-0" />
+                                          <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(nested.href)}`}>
+                                            <NestedIcon className="w-3 h-3 shrink-0" />
+                                          </span>
                                           <span>{nested.name}</span>
                                         </Link>
                                       );
@@ -866,16 +891,18 @@ export default function PlanBasedNav() {
                           }
                           setOpenDropdowns(newOpenDropdowns);
                         }}
-                        className={`flex items-center justify-between transition-all duration-200 rounded text-xs font-medium w-full ${
+                        className={`flex items-center justify-between transition-all duration-200 rounded-lg text-xs font-semibold w-full ${
                           sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'space-x-2 px-2.5 py-2'
                         } ${
                           isActive
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            ? 'bg-linear-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-300 shadow-sm'
                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                         }`}
                       >
                         <div className="flex items-center space-x-2 min-w-0">
-                          <Icon className="w-4 h-4 shrink-0" />
+                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md shrink-0 ${iconBadgeClass(item.href)}`}>
+                            <Icon className="w-3.5 h-3.5" />
+                          </span>
                           {!sidebarCollapsed && (
                             <span className="truncate text-xs">{item.name}</span>
                           )}
@@ -905,13 +932,15 @@ export default function PlanBasedNav() {
                                   <button
                                     type="button"
                                     onClick={() => handleToggleSubmenu(submenuKey)}
-                                    className={`flex items-center w-full space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
+                                    className={`flex items-center w-full space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
                                       isSubActive || open
-                                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                        ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4 shrink-0" />
+                                    <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(subItem.href)}`}>
+                                      <SubIcon className="w-3 h-3 shrink-0" />
+                                    </span>
                                     <span>{subItem.name}</span>
                                     <span className="ml-auto">
                                       {open ? (
@@ -924,13 +953,15 @@ export default function PlanBasedNav() {
                                 ) : (
                                   <a
                                     href={subItem.href}
-                                    className={`flex items-center space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
+                                    className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
                                       isSubActive
-                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-300 shadow-sm'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <SubIcon className="w-4 h-4 shrink-0" />
+                                    <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(subItem.href)}`}>
+                                      <SubIcon className="w-3 h-3 shrink-0" />
+                                    </span>
                                     <span>{subItem.name}</span>
                                   </a>
                                 )}
@@ -944,13 +975,15 @@ export default function PlanBasedNav() {
                                         <a
                                           key={nested.name}
                                           href={nested.href}
-                                          className={`flex items-center space-x-2 px-2 py-1 rounded text-xs transition-all duration-200 ${
+                                          className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
                                             isNestedActive
-                                              ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                              ? 'bg-blue-100 text-blue-700 border border-blue-300 shadow-sm'
                                               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                           }`}
                                         >
-                                          <NestedIcon className="w-4 h-4 shrink-0" />
+                                          <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(nested.href)}`}>
+                                            <NestedIcon className="w-3 h-3 shrink-0" />
+                                          </span>
                                           <span>{nested.name}</span>
                                         </a>
                                       );
@@ -972,11 +1005,13 @@ export default function PlanBasedNav() {
                           'justify-center px-2 py-3'
                         } ${
                           isActive
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            ? 'bg-linear-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-300 shadow-sm'
                             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                         }`}
                       >
-                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 ${iconBadgeClass(item.href)}`}>
+                          <Icon className="w-4 h-4" />
+                        </span>
                       </a>
                     </Tooltip>
                   ) : (
@@ -992,11 +1027,13 @@ export default function PlanBasedNav() {
                         sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'space-x-2 px-2.5 py-2'
                       } ${
                         isActive
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                          ? 'bg-linear-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-300 shadow-sm'
                           : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                       }`}
                     >
-                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md shrink-0 ${iconBadgeClass(item.href)}`}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </span>
                       {!sidebarCollapsed && (
                         <span className="truncate text-xs">{item.name}</span>
                       )}
