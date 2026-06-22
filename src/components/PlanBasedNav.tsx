@@ -89,6 +89,162 @@ function toNavItems(items?: BlueprintNavItem[]): NavItem[] {
   }));
 }
 
+function flattenNavItems(items: NavItem[]): NavSubItem[] {
+  const output: NavSubItem[] = [];
+
+  const walk = (entries?: NavSubItem[]) => {
+    if (!Array.isArray(entries)) return;
+    for (const entry of entries) {
+      output.push({
+        name: entry.name,
+        href: entry.href,
+        icon: entry.icon,
+        requiredPermission: entry.requiredPermission || null,
+      });
+      if (Array.isArray(entry.subItems) && entry.subItems.length > 0) {
+        walk(entry.subItems);
+      }
+    }
+  };
+
+  walk(items);
+  return output;
+}
+
+function buildGroupedNavigation(items: NavItem[]): NavItem[] {
+  const flat = flattenNavItems(items);
+  const byHref = new Map(flat.map((entry) => [entry.href, entry]));
+
+  const createSubItem = (
+    name: string,
+    href: string,
+    requiredPermission?: string,
+  ): NavSubItem | null => {
+    const source = byHref.get(href);
+    if (!source) return null;
+    return {
+      name,
+      href,
+      icon: source.icon || iconForPath(href),
+      requiredPermission: source.requiredPermission || requiredPermission || null,
+    };
+  };
+
+  const createMainItem = (
+    name: string,
+    href: string,
+    Icon: IconType,
+    requiredModule?: AppModuleKey,
+    requiredPermission?: string,
+    subItems?: NavSubItem[],
+  ): NavItem | null => {
+    const source = byHref.get(href);
+    const hasSubItems = Array.isArray(subItems) && subItems.length > 0;
+    if (!source && !hasSubItems) return null;
+    return {
+      name,
+      href,
+      icon: source?.icon || Icon,
+      requiredPlan: null,
+      requiredPermission: source?.requiredPermission || requiredPermission || null,
+      requiredModule,
+      subItems,
+    };
+  };
+
+  const accountsSubItems = [
+    createSubItem('Accounts Ledgers', '/accounts/ledgers'),
+    createSubItem('Balance Sheet', '/accounts/balance-sheet'),
+    createSubItem('Trial Balance', '/accounts/trial-balance'),
+    createSubItem('Capital', '/accounts/capital'),
+    createSubItem('Revenue', '/accounts/revenue'),
+    createSubItem('Profit & Loss', '/accounts/profit-loss'),
+    createSubItem('Inventory', '/accounts/inventory'),
+  ].filter((item): item is NavSubItem => Boolean(item));
+
+  const productsInventorySubItems = [
+    createSubItem('Unified Management', '/products/unified', 'view_products'),
+    createSubItem('Suppliers', '/inventory/suppliers', 'view_inventory'),
+    createSubItem('Product Sales Report', '/products/reports/product-sales', 'view_reports'),
+    createSubItem('Inventory Levels Report', '/products/reports/inventory-levels', 'view_reports'),
+    createSubItem('Low Stock Alerts', '/products/reports/low-stock-alerts', 'view_reports'),
+  ].filter((item): item is NavSubItem => Boolean(item));
+
+  const salesTransactionsSubItems = [
+    createSubItem('Sales History', '/sales/history', 'view_sales'),
+    createSubItem('Restaurant Activity', '/restaurant/activity', 'view_sales'),
+    createSubItem('M-Pesa Transactions', '/mpesa-transactions', 'view_sales'),
+    createSubItem('Sales Target', '/sales/targets', 'view_sales'),
+  ].filter((item): item is NavSubItem => Boolean(item));
+
+  const coreOperationsSubItems = [
+    createSubItem('Sales', '/sales', 'view_sales'),
+    createSubItem('Products', '/products', 'view_products'),
+    createSubItem('Inventory', '/inventory', 'view_inventory'),
+    createSubItem('Customers', '/crm/pipeline', 'view_sales'),
+    createSubItem('Orders', '/sales', 'view_sales'),
+  ].filter((item): item is NavSubItem => Boolean(item));
+
+  const grouped: Array<NavItem | null> = [
+    createMainItem('Dashboard', '/dashboard', FaTachometerAlt, 'dashboard'),
+    createMainItem('AI Assistant', '/ai-assistant', FaRobot, 'ai'),
+    accountsSubItems.length
+      ? {
+          name: 'Accounts',
+          href: '/accounts/ledgers',
+          icon: FaFileInvoiceDollar,
+          requiredPlan: null,
+          requiredPermission: null,
+          requiredModule: 'accounts',
+          subItems: accountsSubItems,
+        }
+      : null,
+    productsInventorySubItems.length
+      ? {
+          name: 'Products & Inventory',
+          href: '/products/unified',
+          icon: FaBoxOpen,
+          requiredPlan: null,
+          requiredPermission: 'view_products',
+          requiredModule: 'inventory',
+          subItems: productsInventorySubItems,
+        }
+      : null,
+    salesTransactionsSubItems.length
+      ? {
+          name: 'Transactions',
+          href: '/sales/history',
+          icon: FaShoppingBasket,
+          requiredPlan: null,
+          requiredPermission: 'view_sales',
+          requiredModule: 'sales',
+          subItems: salesTransactionsSubItems,
+        }
+      : null,
+    coreOperationsSubItems.length
+      ? {
+          name: 'Core Operations',
+          href: '/sales',
+          icon: FaLayerGroup,
+          requiredPlan: null,
+          requiredPermission: 'view_sales',
+          requiredModule: 'sales',
+          subItems: coreOperationsSubItems,
+        }
+      : null,
+    createMainItem('Analytics', '/analytics', MdOutlineAnalytics, 'analytics', 'view_analytics'),
+    createMainItem('Reports', '/reports', MdOutlineReport, 'reports', 'view_reports'),
+    createMainItem('Credit', '/credit', FaCreditCard, 'credits', 'view_users'),
+    createMainItem('HR Employees', '/hr/employees', FaUsers, 'payroll', 'view_sales'),
+    createMainItem('Payroll', '/payroll', FaMoneyBillWave, 'payroll', 'view_sales'),
+    createMainItem('Expenses', '/expenses', FaHistory, 'expenses', 'view_users'),
+    createMainItem('Settings', '/settings', MdOutlineSettings, 'settings'),
+    createMainItem('Billing & Subscription', '/account/billing', FaFileInvoiceDollar, 'billing'),
+  ];
+
+  return grouped.filter((item): item is NavItem => Boolean(item));
+}
+
 
 export default function PlanBasedNav() {
   const userContext = useUser();
@@ -137,6 +293,23 @@ export default function PlanBasedNav() {
   // Close dropdowns when navigating to a different page, but open relevant ones for reports
   React.useEffect(() => {
     const newOpen = new Set<string>();
+    if (pathname?.startsWith('/accounts')) {
+      newOpen.add('Accounts');
+    }
+    if (
+      pathname?.startsWith('/products') ||
+      pathname?.startsWith('/inventory')
+    ) {
+      newOpen.add('Products & Inventory');
+    }
+    if (
+      pathname?.startsWith('/sales') ||
+      pathname?.startsWith('/restaurant') ||
+      pathname?.startsWith('/mpesa-transactions')
+    ) {
+      newOpen.add('Transactions');
+      newOpen.add('Core Operations');
+    }
     if (pathname?.startsWith('/products/reports')) {
       newOpen.add('Products & Inventory');
       newOpen.add('Reports');
@@ -303,7 +476,7 @@ export default function PlanBasedNav() {
 
   const navigationItems =
     Array.isArray(manifestNavigationItems) && manifestNavigationItems.length > 0
-      ? manifestNavigationItems
+      ? buildGroupedNavigation(manifestNavigationItems)
       : defaultNavigationItems;
 
   const planHierarchy: Record<PlanName, number> = React.useMemo(() => ({
