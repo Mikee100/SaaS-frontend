@@ -121,12 +121,11 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
     requiredPermission?: string,
   ): NavSubItem | null => {
     const source = byHref.get(href);
-    if (!source) return null;
     return {
       name,
       href,
-      icon: source.icon || iconForPath(href),
-      requiredPermission: source.requiredPermission || requiredPermission || null,
+      icon: source?.icon || iconForPath(href),
+      requiredPermission: source?.requiredPermission || requiredPermission || null,
     };
   };
 
@@ -164,6 +163,7 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
 
   const productsInventorySubItems = [
     createSubItem('Unified Management', '/products/unified', 'view_products'),
+    createSubItem('Restaurant Menu Studio', '/restaurant/menu-studio', 'view_products'),
     createSubItem('Suppliers', '/inventory/suppliers', 'view_inventory'),
     createSubItem('Product Sales Report', '/products/reports/product-sales', 'view_reports'),
     createSubItem('Inventory Levels Report', '/products/reports/inventory-levels', 'view_reports'),
@@ -173,6 +173,7 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
   const salesTransactionsSubItems = [
     createSubItem('Sales History', '/sales/history', 'view_sales'),
     createSubItem('Restaurant Activity', '/restaurant/activity', 'view_sales'),
+    createSubItem('Restaurant Inventory Costing', '/restaurant/inventory-costing', 'view_sales'),
     createSubItem('M-Pesa Transactions', '/mpesa-transactions', 'view_sales'),
     createSubItem('Sales Target', '/sales/targets', 'view_sales'),
   ].filter((item): item is NavSubItem => Boolean(item));
@@ -418,6 +419,7 @@ export default function PlanBasedNav() {
         // { name: 'Sales', href: '/sales', requiredPermission: 'view_sales', icon: FaShoppingBasket }, // Sales page commented out
         { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales', icon: FaHistory },
         { name: 'Restaurant Activity', href: '/restaurant/activity', requiredPermission: 'view_sales', icon: FaHistory },
+        { name: 'Restaurant Inventory Costing', href: '/restaurant/inventory-costing', requiredPermission: 'view_sales', icon: MdOutlineInventory2 },
         { name: 'M-Pesa Transactions', href: '/mpesa-transactions', requiredPermission: 'view_sales', icon: FaMoneyBillWave },
         { name: 'Sales Target', href: '/sales/targets', requiredPermission: 'view_sales', icon: FaBullseye },
       ]

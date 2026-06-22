@@ -30,6 +30,7 @@ import {
 } from '@/utils/platform/entitiesClient';
 import { useBranch } from "@/contexts/BranchContext";
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import API_BASE_URL from '../../../config/apiConfig';
 
 // Lazy-load heavier product management modules used only in specific tabs
@@ -241,6 +242,7 @@ const DEFAULT_UNIFIED_PRODUCTS_DISPLAY_CONFIG: UnifiedProductsDisplayConfig = {
 };
 
 export default function UnifiedProductsInventoryPage() {
+  const router = useRouter();
   // Fetch tenant info (includes classificationId)
   const { data: tenant, isLoading: tenantLoading } = useTenant();
   // State for classification units
@@ -1154,6 +1156,12 @@ export default function UnifiedProductsInventoryPage() {
   const isRestaurantTenant = businessFlow === 'restaurant';
   const isSpaTenant = businessFlow === 'spa';
   const isFashionTenant = businessFlow === 'fashion';
+
+  useEffect(() => {
+    if (!tenantLoading && isRestaurantTenant) {
+      router.replace('/restaurant/menu-studio');
+    }
+  }, [isRestaurantTenant, tenantLoading, router]);
 
   const platformEntityType = useMemo<PlatformEntityType>(() => {
     if (businessFlow === 'restaurant') return 'MENU_ITEM';

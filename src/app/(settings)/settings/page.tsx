@@ -140,6 +140,14 @@ export default function SettingsPage() {
           color: 'teal',
           permission: 'view_settings'
         },
+        {
+          href: '/settings/pos-display-name',
+          label: 'POS Display Name',
+          icon: FaFileAlt,
+          description: 'Set the business name shown on POS screens',
+          color: 'indigo',
+          permission: 'view_settings'
+        },
         { 
           href: '/settings/pdf-templates', 
           label: 'Report / PDF Design', 

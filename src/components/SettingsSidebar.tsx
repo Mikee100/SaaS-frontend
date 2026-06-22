@@ -25,6 +25,7 @@ export default function SettingsSidebar({ collapsed = false, onToggle }: Setting
       items: [
         { href: "/settings/business-info", label: "Business Info", icon: FaBuilding },
         { href: "/settings/logo", label: "Logo", icon: FaImage },
+        { href: "/settings/pos-display-name", label: "POS Display Name", icon: FaFileAlt },
         { href: "/settings/pdf-templates", label: "Report / PDF Design", icon: FaFileAlt },
         { href: "/settings/users", label: "Users", icon: FaUsers },
         { href: "/settings/branches", label: "Branches", icon: FaBuilding },
