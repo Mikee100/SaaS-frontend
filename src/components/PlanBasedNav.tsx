@@ -30,6 +30,7 @@ interface NavSubItem {
   href: string;
   icon?: IconType;
   requiredPermission?: string | null;
+  requiredRestaurant?: boolean;
   subItems?: NavSubItem[];
 }
 
@@ -39,6 +40,10 @@ interface NavItem extends NavSubItem {
   requiredModule?: AppModuleKey;
   requiredCrmCapability?: CrmCapabilityKey;
   subItems?: NavSubItem[];
+}
+
+function isRestaurantRoute(path: string): boolean {
+  return String(path || '').toLowerCase().startsWith('/restaurant');
 }
 
 function iconForPath(path: string): IconType {
@@ -69,6 +74,7 @@ function toSubItems(items?: BlueprintNavItem[]): NavSubItem[] | undefined {
     href: item.path,
     icon: iconForPath(item.path),
     requiredPermission: item.requiredPermission || null,
+    requiredRestaurant: isRestaurantRoute(item.path),
     subItems: toSubItems(item.children),
   }));
 }
@@ -84,6 +90,7 @@ function toNavItems(items?: BlueprintNavItem[]): NavItem[] {
     icon: iconForPath(item.path),
     requiredPlan: null,
     requiredPermission: item.requiredPermission || null,
+    requiredRestaurant: isRestaurantRoute(item.path),
     requiredModule: item.requiredModule,
     subItems: toSubItems(item.children),
   }));
@@ -100,6 +107,7 @@ function flattenNavItems(items: NavItem[]): NavSubItem[] {
         href: entry.href,
         icon: entry.icon,
         requiredPermission: entry.requiredPermission || null,
+        requiredRestaurant: entry.requiredRestaurant,
       });
       if (Array.isArray(entry.subItems) && entry.subItems.length > 0) {
         walk(entry.subItems);
@@ -126,6 +134,7 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
       href,
       icon: source?.icon || iconForPath(href),
       requiredPermission: source?.requiredPermission || requiredPermission || null,
+      requiredRestaurant: source?.requiredRestaurant || isRestaurantRoute(href),
     };
   };
 
@@ -146,6 +155,7 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
       icon: source?.icon || Icon,
       requiredPlan: null,
       requiredPermission: source?.requiredPermission || requiredPermission || null,
+      requiredRestaurant: source?.requiredRestaurant || isRestaurantRoute(href),
       requiredModule,
       subItems,
     };
@@ -179,11 +189,9 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
   ].filter((item): item is NavSubItem => Boolean(item));
 
   const coreOperationsSubItems = [
-    createSubItem('Sales', '/sales', 'view_sales'),
     createSubItem('Products', '/products', 'view_products'),
     createSubItem('Inventory', '/inventory', 'view_inventory'),
     createSubItem('Customers', '/crm/pipeline', 'view_sales'),
-    createSubItem('Orders', '/sales', 'view_sales'),
   ].filter((item): item is NavSubItem => Boolean(item));
 
   const grouped: Array<NavItem | null> = [
@@ -225,7 +233,7 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
     coreOperationsSubItems.length
       ? {
           name: 'Core Operations',
-          href: '/sales',
+          href: '/products',
           icon: FaLayerGroup,
           requiredPlan: null,
           requiredPermission: 'view_sales',
@@ -525,6 +533,10 @@ export default function PlanBasedNav() {
     }
 
     return navigationItems.filter((item) => {
+      if (item.requiredRestaurant && !userContext.user?.restaurantFeaturesEnabled) {
+        return false;
+      }
+
       if (!isModuleEnabled(userContext.user?.enabledModules, item.requiredModule)) {
         return false;
       }
@@ -546,6 +558,9 @@ export default function PlanBasedNav() {
       // For items with subItems, check if any subItem is accessible
       if (item.subItems && userContext?.user) {
         const accessibleSubItems = item.subItems.filter(subItem => {
+          if (subItem.requiredRestaurant && !userContext.user?.restaurantFeaturesEnabled) {
+            return false;
+          }
           if (subItem.requiredPermission) {
             return hasPermission(userContext.user, subItem.requiredPermission);
           }
@@ -557,6 +572,9 @@ export default function PlanBasedNav() {
     }).map(item => ({
       ...item,
       subItems: item.subItems ? item.subItems.filter(subItem => {
+        if (subItem.requiredRestaurant && !userContext.user?.restaurantFeaturesEnabled) {
+          return false;
+        }
         if (subItem.requiredPermission && userContext?.user) {
           return hasPermission(userContext.user, subItem.requiredPermission);
         }
