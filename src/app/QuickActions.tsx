@@ -85,14 +85,6 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
 
   const baseActions: QuickAction[] = [
     {
-      id: "new-sale",
-      label: "New Sale",
-      description: "Open POS to record a sale for the current branch.",
-      href: "/sales",
-      icon: <FiShoppingCart className="h-5 w-5" />,
-      color: "bg-blue-50 text-blue-700 hover:bg-blue-100",
-    },
-    {
       id: "today-sales",
       label: "Today’s Sales",
       description: "View today’s transactions and monitor performance.",
@@ -146,6 +138,12 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
     }
 
     return quickActions
+      .filter((action) => {
+        const key = String(action.key || '').toLowerCase();
+        const label = String(action.label || '').toLowerCase();
+        const path = String(action.path || '').toLowerCase();
+        return !(key === 'new_sale' || label === 'new sale' || path === '/sales');
+      })
       .filter((action) => action.actionType === 'navigate' && typeof action.path === 'string' && action.path.length > 0)
       .map((action) => {
         const Icon = iconForActionPath(action.path || '');

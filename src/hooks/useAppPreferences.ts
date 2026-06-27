@@ -19,7 +19,7 @@ export interface AppPreferences {
 
 const defaults: AppPreferences = {
   dashboardDefaultDateRange: "last_30_days",
-  dashboardAutoRefresh: false,
+  dashboardAutoRefresh: true,
   posDefaultPaymentMethod: "cash",
   posAutoPrintReceipt: true,
   reportingDefaultExportFormat: "pdf",

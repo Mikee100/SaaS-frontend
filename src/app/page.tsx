@@ -2,7 +2,7 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
-import { apiGet } from '@/utils/api';
+import { apiGet, apiPut } from '@/utils/api';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import { useTenant } from '@/hooks/useTenant';
 import { useBillingAccessStatus } from '@/hooks/useBillingAccessStatus';
@@ -50,6 +50,22 @@ const ChartComponents = {
     () => import('@/components/BranchComparisonChart'),
     { ssr: false }
   ),
+  TopProductsChart: dynamic(
+    () => import('@/components/TopProductsChart'),
+    { ssr: false }
+  ),
+  TopProductsByProfitChart: dynamic(
+    () => import('@/components/TopProductsByProfitChart'),
+    { ssr: false }
+  ),
+  GrossProfitTrendChart: dynamic(
+    () => import('@/components/GrossProfitTrendChart'),
+    { ssr: false }
+  ),
+  SalesByHourHeatmap: dynamic(
+    () => import('@/components/SalesByHourHeatmap'),
+    { ssr: false }
+  ),
   BranchMonthlyComparisonChart: dynamic(
     () => import('@/components/BranchMonthlyComparisonChart'),
     { ssr: false }
@@ -60,6 +76,10 @@ const {
   SalesTarget,
   SimpleChart,
   BranchComparisonChart,
+  TopProductsChart,
+  TopProductsByProfitChart,
+  GrossProfitTrendChart,
+  SalesByHourHeatmap,
   BranchMonthlyComparisonChart,
 } = ChartComponents;
 
@@ -105,6 +125,8 @@ interface AnalyticsData {
   branchSalesByMonth?: Record<string, Record<string, number>>;
   branchTopProducts?: Record<string, Array<{ name: string; sales: number; revenue: number; margin?: number; cost?: number }>>;
   topProducts?: Array<{ name: string; sales: number; revenue: number; margin?: number; cost?: number }>;
+  grossProfitTrend?: Array<{ day: string; revenue: number; cost: number; profit: number }>;
+  salesByHourHeatmap?: Array<{ dow: number; hour: number; orders: number; revenue?: number }>;
   customerSegments?: Array<{ segment: string; count: number; revenue: number }>;
   realTimeData?: {
     currentUsers: number;
@@ -160,24 +182,47 @@ interface AnalyticsData {
   }>;
 };
 
-type PriorityItem = {
+type ActionCenterItem = {
   id: string;
   title: string;
   description: string;
   severity?: 'low' | 'medium' | 'high';
   href?: string;
+  ageLabel?: string;
+  slaBreached?: boolean;
+  actionLabel?: string;
+  actionHref?: string;
+  actionType?: 'open-reorder' | 'open-branch-target-editor' | 'reconcile-failed-sync' | 'open-link';
+};
+
+type MpesaTransactionItem = {
+  id: string;
+  status?: string;
+  createdAt?: string;
+  checkoutRequestId?: string;
+  checkoutRequestID?: string;
 };
 
 type CreditItem = {
   id: string;
   status?: string;
   balance?: number;
+  dueDate?: string | null;
 };
 
 type SalesTargets = {
   daily: number;
   weekly: number;
   monthly: number;
+};
+
+type BranchTargetSnapshot = {
+  branchId: string;
+  branchName: string;
+  daily: number;
+  weekly: number;
+  monthly: number;
+  isExplicit: boolean;
 };
 
 function StatCard({ icon, label, value, trend, trendDirection, loading = false, color = 'indigo' }: {
@@ -332,7 +377,7 @@ export default function DashboardPage() {
 
   // Fetch stock threshold configuration
   const { data: stockConfig } = useQuery({
-    queryKey: ['stockThreshold'],
+    queryKey: ['stockThreshold', user?.tenantId, user?.id],
     queryFn: () => apiGet<{ value?: number | string }>('/tenant/configurations/stockThreshold'),
     enabled: isAuthenticated && !isRestricted,
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -346,7 +391,7 @@ export default function DashboardPage() {
 
   // Fetch dashboard analytics data (branch-aware)
   const { data: analyticsData, isLoading: analyticsLoading } = useQuery({
-    queryKey: ['analytics', 'dashboard', selectedBranchId],
+    queryKey: ['analytics', 'dashboard', user?.tenantId, user?.id, selectedBranchId],
     queryFn: async () => {
       const stats = await apiGet('/analytics/dashboard', branchHeaders) as AnalyticsData;
       return {
@@ -363,12 +408,14 @@ export default function DashboardPage() {
     },
     staleTime: 2 * 60 * 1000, // 2 minutes - analytics change frequently
     gcTime: 5 * 60 * 1000, // React Query v5: gcTime replaces cacheTime
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: true,
     enabled: isAuthenticated && !isRestricted && !!selectedBranchId,
   });
 
   // Fetch branch monthly comparison
   const { data: branchMonthlyComparison } = useQuery({
-    queryKey: ['analytics', 'branch-monthly-comparison'],
+    queryKey: ['analytics', 'branch-monthly-comparison', user?.tenantId, user?.id],
     queryFn: () => apiGet('/analytics/branch-monthly-sales-comparison') as Promise<{
       months: string[];
       branches: { branchId: string; branchName: string; data: number[] }[];
@@ -380,13 +427,13 @@ export default function DashboardPage() {
   });
 
   const { data: creditSnapshot } = useQuery({
-    queryKey: ['dashboard', 'home-credit-snapshot', selectedBranchId],
+    queryKey: ['dashboard', 'home-credit-snapshot', user?.tenantId, user?.id, selectedBranchId],
     enabled: isAuthenticated && !isRestricted && Boolean(selectedBranchId),
     queryFn: async () => {
       try {
         const credits = await apiGet<CreditItem[]>('/sales/credits/all', branchHeaders);
         if (!Array.isArray(credits)) {
-          return { outstanding: 0, overdue: 0, openCredits: 0 };
+          return { outstanding: 0, overdue: 0, openCredits: 0, oldestOverdueDays: 0 };
         }
 
         const outstanding = credits.reduce((sum, credit) => sum + Number(credit.balance || 0), 0);
@@ -396,17 +443,34 @@ export default function DashboardPage() {
         }).length;
         const openCredits = credits.filter((credit) => Number(credit.balance || 0) > 0).length;
 
-        return { outstanding, overdue, openCredits };
+        const now = Date.now();
+        const overdueAges = credits
+          .filter((credit) => {
+            const status = String(credit.status || '').toLowerCase();
+            return status === 'overdue' && Number(credit.balance || 0) > 0 && Boolean(credit.dueDate);
+          })
+          .map((credit) => {
+            const due = Date.parse(String(credit.dueDate));
+            return Number.isFinite(due) ? Math.max(0, now - due) : 0;
+          });
+
+        const oldestOverdueDays = overdueAges.length > 0
+          ? Math.floor(Math.max(...overdueAges) / (1000 * 60 * 60 * 24))
+          : 0;
+
+        return { outstanding, overdue, openCredits, oldestOverdueDays };
       } catch {
-        return { outstanding: 0, overdue: 0, openCredits: 0 };
+        return { outstanding: 0, overdue: 0, openCredits: 0, oldestOverdueDays: 0 };
       }
     },
     staleTime: 60 * 1000,
     gcTime: 3 * 60 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: true,
   });
 
   const { data: salesTargetsSnapshot } = useQuery({
-    queryKey: ['dashboard', 'home-sales-target-snapshot', selectedBranchId],
+    queryKey: ['dashboard', 'home-sales-target-snapshot', user?.tenantId, user?.id, selectedBranchId],
     enabled: isAuthenticated && !isRestricted && Boolean(selectedBranchId),
     queryFn: async () => {
       try {
@@ -427,7 +491,85 @@ export default function DashboardPage() {
     },
     staleTime: 60 * 1000,
     gcTime: 3 * 60 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: true,
   });
+
+  const { data: branchTargetsSnapshot, refetch: refetchBranchTargets } = useQuery({
+    queryKey: ['dashboard', 'home-branch-targets', user?.tenantId, user?.id],
+    enabled: isAuthenticated && !isRestricted,
+    queryFn: async () => {
+      try {
+        const response = await apiGet<{ branches?: BranchTargetSnapshot[] }>('/sales-targets/branch-targets');
+        return Array.isArray(response?.branches) ? response.branches : [];
+      } catch {
+        return [] as BranchTargetSnapshot[];
+      }
+    },
+    staleTime: 60 * 1000,
+    gcTime: 3 * 60 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: true,
+  });
+
+  const { data: mpesaTransactions = [] } = useQuery({
+    queryKey: ['dashboard', 'mpesa-transactions', user?.tenantId, user?.id],
+    enabled: isAuthenticated && !isRestricted,
+    queryFn: async () => {
+      try {
+        const response = await apiGet<{ success?: boolean; data?: MpesaTransactionItem[] }>('/mpesa/tenant/transactions');
+        return Array.isArray(response?.data) ? response.data : [];
+      } catch {
+        return [] as MpesaTransactionItem[];
+      }
+    },
+    staleTime: 60 * 1000,
+    gcTime: 3 * 60 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: true,
+  });
+
+  const [reorderModalOpen, setReorderModalOpen] = React.useState(false);
+  const [branchTargetModalOpen, setBranchTargetModalOpen] = React.useState(false);
+  const [branchTargetDrafts, setBranchTargetDrafts] = React.useState<
+    Record<string, { daily: string; weekly: string; monthly: string }>
+  >({});
+  const [branchTargetSaveBusyById, setBranchTargetSaveBusyById] = React.useState<Record<string, boolean>>({});
+
+  React.useEffect(() => {
+    const nextDrafts: Record<string, { daily: string; weekly: string; monthly: string }> = {};
+    for (const row of branchTargetsSnapshot || []) {
+      nextDrafts[row.branchId] = {
+        daily: String(Number(row.daily || 0)),
+        weekly: String(Number(row.weekly || 0)),
+        monthly: String(Number(row.monthly || 0)),
+      };
+    }
+    setBranchTargetDrafts(nextDrafts);
+  }, [branchTargetsSnapshot]);
+
+  const formatAgeDays = (days: number): string => {
+    if (!Number.isFinite(days) || days <= 0) return 'today';
+    return `${days}d`;
+  };
+
+  const saveBranchTarget = async (branchId: string) => {
+    const draft = branchTargetDrafts[branchId];
+    if (!draft) return;
+
+    setBranchTargetSaveBusyById((prev) => ({ ...prev, [branchId]: true }));
+    try {
+      await apiPut('/sales-targets/branch-targets', {
+        branchId,
+        daily: Number(draft.daily || 0),
+        weekly: Number(draft.weekly || 0),
+        monthly: Number(draft.monthly || 0),
+      });
+      await refetchBranchTargets();
+    } finally {
+      setBranchTargetSaveBusyById((prev) => ({ ...prev, [branchId]: false }));
+    }
+  };
 
   // Compute derived data
   const salesByDay = analyticsData?.salesByDay || {};
@@ -500,43 +642,123 @@ export default function DashboardPage() {
     analyticsData?.inventoryAnalytics?.lowStockItems ??
     lowStockProducts.length;
 
-  const priorities: PriorityItem[] = [];
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const overdueCreditsCount = Number(creditSnapshot?.overdue || 0);
+  const oldestOverdueDays = Number(creditSnapshot?.oldestOverdueDays || 0);
+
+  const branches = analyticsData?.branches || [];
+  const branchCount = branches.length;
+  const globalDailyTarget = Number(salesTargetsSnapshot?.dailyTarget || 0);
+  const perBranchDailyTarget = branchCount > 0 ? globalDailyTarget / branchCount : 0;
+  const branchTargetsById = new Map(
+    (branchTargetsSnapshot || []).map((target) => [target.branchId, Number(target.daily || 0)])
+  );
+
+  const branchesBelowTargetCount =
+    (branchTargetsById.size > 0 || perBranchDailyTarget > 0)
+      ? branches.filter((branch) => {
+          const branchTarget =
+            branchTargetsById.get(branch.id) ??
+            perBranchDailyTarget;
+          const branchTodaySales = Number(
+            analyticsData?.branchSalesByDay?.[branch.id]?.[todayKey] || 0
+          );
+          return branchTarget > 0 && branchTodaySales < branchTarget;
+        }).length
+      : 0;
+
+  const failedStatuses = new Set(['failed', 'cancelled', 'timeout', 'stock_unavailable']);
+  const failedPaymentSyncTodayCount = mpesaTransactions.filter((tx) => {
+    const status = String(tx.status || '').toLowerCase();
+    const createdAt = String(tx.createdAt || '');
+    return failedStatuses.has(status) && createdAt.slice(0, 10) === todayKey;
+  }).length;
+
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const nowTs = Date.now();
+
+  const lowStockAgeDays = lowStockCount > 0 ? 0 : 0;
+
+  const belowTargetAgeDays = (() => {
+    if (branchesBelowTargetCount <= 0) return 0;
+    return 0;
+  })();
+
+  const failedSyncAges = (mpesaTransactions || [])
+    .filter((tx) => failedStatuses.has(String(tx.status || '').toLowerCase()))
+    .map((tx) => Date.parse(String(tx.createdAt || '')))
+    .filter((ts) => Number.isFinite(ts));
+
+  const oldestFailedSyncDays = failedSyncAges.length > 0
+    ? Math.max(0, Math.floor((nowTs - Math.min(...failedSyncAges)) / msPerDay))
+    : 0;
+
+  const stockSlaBreached = lowStockAgeDays >= 1;
+  const creditSlaBreached = oldestOverdueDays >= 3;
+  const targetSlaBreached = belowTargetAgeDays >= 1;
+  const syncSlaBreached = oldestFailedSyncDays >= 1;
+
+  const actionCenterItems: ActionCenterItem[] = [];
 
   if (lowStockCount > 0) {
-    priorities.push({
-      id: 'low-stock',
-      title: 'Reorder stock',
-      description: `${lowStockCount} item${lowStockCount === 1 ? '' : 's'} below minimum`,
+    actionCenterItems.push({
+      id: 'stockouts-today',
+      title: 'Stockouts today',
+      description: `${lowStockCount} item${lowStockCount === 1 ? '' : 's'} need immediate restock`,
       severity: lowStockCount > 10 ? 'high' : 'medium',
       href: '/products/reports/low-stock-alerts',
+      ageLabel: formatAgeDays(lowStockAgeDays),
+      slaBreached: stockSlaBreached,
+      actionLabel: 'Reorder now',
+      actionType: 'open-reorder',
     });
   }
 
-  if (
-    analyticsData?.inventoryAnalytics?.stockoutRate !== undefined &&
-    analyticsData.inventoryAnalytics.stockoutRate > 0.05
-  ) {
-    const stockoutRatePercent = Math.round(
-      analyticsData.inventoryAnalytics.stockoutRate * 100
-    );
-    const totalProducts = analyticsData?.totalProducts || 0;
-    const estimatedOutOfStock =
-      totalProducts > 0
-        ? Math.round((analyticsData.inventoryAnalytics.stockoutRate || 0) * totalProducts)
-        : 0;
-    priorities.push({
-      id: 'stockouts',
-      title: 'Reduce stockouts',
-      description:
-        totalProducts > 0
-          ? `${stockoutRatePercent}% of catalog is out of stock (${estimatedOutOfStock}/${totalProducts} items)`
-          : `${stockoutRatePercent}% of catalog is out of stock`,
-      severity: 'medium',
-      href: '/products/reports/stockout-lost-sales',
+  if (overdueCreditsCount > 0) {
+    actionCenterItems.push({
+      id: 'credits-overdue',
+      title: 'Credits overdue',
+      description: `${overdueCreditsCount} credit account${overdueCreditsCount === 1 ? '' : 's'} overdue`,
+      severity: overdueCreditsCount > 10 ? 'high' : 'medium',
+      href: '/credit',
+      ageLabel: formatAgeDays(oldestOverdueDays),
+      slaBreached: creditSlaBreached,
+      actionLabel: 'Collect now',
+      actionHref: '/credit?status=overdue',
+      actionType: 'open-link',
     });
   }
 
-  const showPriorities = priorities.length > 0;
+  if (branchesBelowTargetCount > 0) {
+    actionCenterItems.push({
+      id: 'below-target-branches',
+      title: 'Sales below target by branch',
+      description: `${branchesBelowTargetCount}/${branchCount} branch${branchCount === 1 ? '' : 'es'} below today target`,
+      severity: branchesBelowTargetCount >= Math.max(1, Math.ceil(branchCount / 2)) ? 'high' : 'medium',
+      href: '/sales/targets',
+      ageLabel: formatAgeDays(belowTargetAgeDays),
+      slaBreached: targetSlaBreached,
+      actionLabel: 'Edit targets',
+      actionType: 'open-branch-target-editor',
+    });
+  }
+
+  if (failedPaymentSyncTodayCount > 0) {
+    actionCenterItems.push({
+      id: 'failed-payment-sync-events',
+      title: 'Failed payment sync events',
+      description: `${failedPaymentSyncTodayCount} failed M-Pesa sync event${failedPaymentSyncTodayCount === 1 ? '' : 's'} today`,
+      severity: failedPaymentSyncTodayCount > 3 ? 'high' : 'medium',
+      href: '/mpesa-transactions',
+      ageLabel: formatAgeDays(oldestFailedSyncDays),
+      slaBreached: syncSlaBreached,
+      actionLabel: 'Open failed syncs',
+      actionHref: '/mpesa-transactions',
+      actionType: 'open-link',
+    });
+  }
+
+  const showActionCenter = actionCenterItems.length > 0;
 
   const isOwnerOrManager =
     user?.isSuperadmin ||
@@ -711,14 +933,14 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Today’s priorities */}
+        {/* Action Center */}
         <div className="mb-4 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300">
-              Today&apos;s priorities
+              Action Center
             </span>
-            {showPriorities ? (
-              priorities.slice(0, 3).map((item) => {
+            {showActionCenter ? (
+              actionCenterItems.map((item) => {
                 const severityClasses =
                   item.severity === 'high'
                     ? 'border-rose-200 bg-rose-50 text-rose-700'
@@ -726,35 +948,60 @@ export default function DashboardPage() {
                     ? 'border-amber-200 bg-amber-50 text-amber-700'
                     : 'border-gray-200 bg-gray-50 text-gray-700';
 
-                const content = (
-                  <>
-                    <span className="text-xs font-semibold">{item.title}</span>
-                    <span className="text-[11px] text-gray-600 dark:text-slate-400">
-                      · {item.description}
-                    </span>
-                  </>
-                );
+                const slaText = item.slaBreached ? 'SLA breached' : 'Within SLA';
 
-                return item.href ? (
-                  <a
+                const handleChipAction = async (event: React.MouseEvent<HTMLButtonElement>) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+
+                  if (item.actionType === 'open-link' && item.actionHref) {
+                    window.location.href = item.actionHref;
+                    return;
+                  }
+
+                  if (item.actionType === 'open-reorder') {
+                    setReorderModalOpen(true);
+                    return;
+                  }
+
+                  if (item.actionType === 'open-branch-target-editor') {
+                    setBranchTargetModalOpen(true);
+                    return;
+                  }
+
+                };
+
+                return (
+                  <div
                     key={item.id}
-                    href={item.href}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${severityClasses}`}
+                    className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] ${severityClasses}`}
                   >
-                    {content}
-                  </a>
-                ) : (
-                  <span
-                    key={item.id}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${severityClasses}`}
-                  >
-                    {content}
-                  </span>
+                    <a href={item.href || '#'} className="inline-flex items-center gap-1">
+                      <span className="text-xs font-semibold">{item.title}</span>
+                      <span className="text-[11px] text-gray-600 dark:text-slate-400">
+                        · {item.description}
+                      </span>
+                      {(item.ageLabel || item.slaBreached !== undefined) && (
+                        <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-300">
+                          Oldest: {item.ageLabel || 'today'} • {slaText}
+                        </span>
+                      )}
+                    </a>
+                    {item.actionLabel && (
+                      <button
+                        type="button"
+                        onClick={handleChipAction}
+                        className="rounded-full border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {item.actionLabel}
+                      </button>
+                    )}
+                  </div>
                 );
               })
             ) : (
               <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                No urgent issues – you&apos;re good for today.
+                No urgent issues right now.
               </span>
             )}
           </div>
@@ -1129,6 +1376,30 @@ export default function DashboardPage() {
             />
           </div>
 
+          {/* Best performing products/meals */}
+          {analyticsData?.topProducts && analyticsData.topProducts.length > 0 && (
+            <div className="mb-6">
+              <TopProductsChart
+                products={analyticsData.topProducts.map((product) => ({
+                  name: product.name,
+                  sales: product.sales,
+                }))}
+              />
+            </div>
+          )}
+
+          <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <GrossProfitTrendChart data={analyticsData?.grossProfitTrend || []} />
+            <TopProductsByProfitChart products={analyticsData?.topProducts || []} />
+          </div>
+
+          <div className="mb-6">
+            <SalesByHourHeatmap
+              data={analyticsData?.salesByHourHeatmap || []}
+              scopeLabel={selectedBranchId && selectedBranchId !== 'all' ? 'Current branch' : 'All branches'}
+            />
+          </div>
+
           {/* Branch Top Products Section */}
           {analyticsData?.branches && analyticsData.branches.length > 0 && analyticsData.branchTopProducts && (
             <div className="mb-6">
@@ -1239,6 +1510,143 @@ export default function DashboardPage() {
           </section>
 
           {/* Sales Targets Section */}
+
+          {reorderModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3">
+              <div className="w-full max-w-xl rounded-xl border border-gray-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Reorder Low-Stock Items</h3>
+                  <button
+                    type="button"
+                    onClick={() => setReorderModalOpen(false)}
+                    className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                </div>
+                <p className="mb-3 text-xs text-gray-600 dark:text-slate-400">
+                  Prioritize these items now. This list shows the first low-stock products detected on your dashboard.
+                </p>
+                <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-slate-700">
+                  {lowStockProducts.length > 0 ? (
+                    lowStockProducts.slice(0, 20).map((p, idx) => (
+                      <div key={`${p.name}-${idx}`} className="flex items-center justify-between rounded-md bg-gray-50 px-2 py-1 text-xs dark:bg-slate-800">
+                        <span className="font-medium text-gray-800 dark:text-slate-200">{p.name}</span>
+                        <span className="text-gray-600 dark:text-slate-400">{p.sales ?? 0} left</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-500 dark:text-slate-400">No low-stock items right now.</p>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center justify-end gap-2">
+                  <a
+                    href="/products/reports/low-stock-alerts"
+                    className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                  >
+                    Open low-stock report
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {branchTargetModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3">
+              <div className="w-full max-w-3xl rounded-xl border border-gray-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Quick Edit Branch Targets</h3>
+                  <button
+                    type="button"
+                    onClick={() => setBranchTargetModalOpen(false)}
+                    className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-200 dark:border-slate-700">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 dark:bg-slate-800">
+                      <tr>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-slate-300">Branch</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-slate-300">Daily</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-slate-300">Weekly</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-slate-300">Monthly</th>
+                        <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-slate-300">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(branchTargetsSnapshot || []).map((row) => {
+                        const draft = branchTargetDrafts[row.branchId] || {
+                          daily: String(Number(row.daily || 0)),
+                          weekly: String(Number(row.weekly || 0)),
+                          monthly: String(Number(row.monthly || 0)),
+                        };
+
+                        return (
+                          <tr key={row.branchId} className="border-t border-gray-100 dark:border-slate-800">
+                            <td className="px-2 py-2 text-gray-800 dark:text-slate-200">{row.branchName}</td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="number"
+                                min={0}
+                                value={draft.daily}
+                                onChange={(event) =>
+                                  setBranchTargetDrafts((prev) => ({
+                                    ...prev,
+                                    [row.branchId]: { ...draft, daily: event.target.value },
+                                  }))
+                                }
+                                className="w-24 rounded border border-gray-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="number"
+                                min={0}
+                                value={draft.weekly}
+                                onChange={(event) =>
+                                  setBranchTargetDrafts((prev) => ({
+                                    ...prev,
+                                    [row.branchId]: { ...draft, weekly: event.target.value },
+                                  }))
+                                }
+                                className="w-24 rounded border border-gray-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="number"
+                                min={0}
+                                value={draft.monthly}
+                                onChange={(event) =>
+                                  setBranchTargetDrafts((prev) => ({
+                                    ...prev,
+                                    [row.branchId]: { ...draft, monthly: event.target.value },
+                                  }))
+                                }
+                                className="w-28 rounded border border-gray-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <button
+                                type="button"
+                                onClick={() => saveBranchTarget(row.branchId)}
+                                disabled={Boolean(branchTargetSaveBusyById[row.branchId])}
+                                className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {branchTargetSaveBusyById[row.branchId] ? 'Saving...' : 'Save'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
   );

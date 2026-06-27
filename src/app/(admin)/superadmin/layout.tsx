@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUser } from "@/components/UserContext";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { FiHome, FiUsers, FiServer, FiSettings, FiMonitor, FiLifeBuoy, FiBarChart2, FiFileText, FiChevronLeft, FiChevronRight, FiLogOut, FiUserPlus, FiCreditCard, FiActivity, FiClock, FiSliders, FiTool } from "react-icons/fi";
 
 const SIDEBAR_COLLAPSED_KEY = "superadmin-sidebar-collapsed";
@@ -41,7 +41,6 @@ type SidebarSection = {
 
 export default function SuperadminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useUser();
-  const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
@@ -60,9 +59,11 @@ export default function SuperadminLayout({ children }: { children: React.ReactNo
 
   React.useEffect(() => {
     if (!loading && (!user || (!user.isSuperadmin && !user.roles?.includes("superadmin")))) {
-      router.replace("/");
+      if (typeof window !== "undefined") {
+        window.location.replace("/");
+      }
     }
-  }, [user, loading, router]);
+  }, [user, loading]);
 
   if (loading || !user) return null;
 

@@ -161,6 +161,8 @@ export default function SalesHistoryPage() {
     },
     staleTime: 1 * 60 * 1000, // 1 minute - sales history changes frequently
     gcTime: 5 * 60 * 1000,
+    refetchInterval: 20 * 1000,
+    refetchIntervalInBackground: true,
     placeholderData: keepPreviousData, // Keep previous page while loading new page
   });
 

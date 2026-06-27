@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useUser } from "@/components/UserContext";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiGet } from "@/utils/api";
 import {
@@ -51,7 +50,6 @@ const formatBytes = (bytes: number) => {
 
 export default function SuperadminDashboard() {
   const { user, loading } = useUser();
-  const router = useRouter();
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [revenueHistory, setRevenueHistory] = useState<RevenueHistory[]>([]);
   const [tenantGrowth, setTenantGrowth] = useState<TenantGrowth[]>([]);
@@ -59,9 +57,11 @@ export default function SuperadminDashboard() {
 
   useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
-      router.replace("/");
+      if (typeof window !== "undefined") {
+        window.location.replace("/");
+      }
     }
-  }, [user, loading, router]);
+  }, [user, loading]);
 
   useEffect(() => {
     if (user?.isSuperadmin) {

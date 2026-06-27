@@ -53,9 +53,10 @@ export default function TopProductsChart({ products }: TopProductsChartProps) {
         {topProducts.map((product, index) => {
           const percentage = ((product.sales / maxSales) * 100).toFixed(0);
           const colorClass = colors[index % colors.length];
+          const itemKey = `${product.name}-${index}-${product.sales}`;
           
           return (
-            <div key={product.name} className="relative">
+            <div key={itemKey} className="relative">
               <div className="flex justify-between text-sm mb-1">
                 <span className="font-medium text-gray-700 truncate pr-2" title={product.name}>
                   {product.name}
