@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { useUser } from "@/components/UserContext";
-import { useRouter } from "next/navigation";
 import { apiGet } from "@/utils/api";
 
 interface AuditLogDetails {
@@ -41,16 +40,17 @@ interface AuditLog {
 
 export default function SuperadminLogsPage() {
   const { user, loading } = useUser();
-  const router = useRouter();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [filter, setFilter] = useState<'all' | 'api' | 'user'>('all');
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
-      router.replace("/");
+      if (typeof window !== "undefined") {
+        window.location.replace("/");
+      }
     }
-  }, [user, loading, router]);
+  }, [user, loading]);
 
   useEffect(() => {
     if (user?.isSuperadmin) {
