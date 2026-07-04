@@ -155,6 +155,8 @@ export default function PayrollPage() {
   const [periodLocks, setPeriodLocks] = useState<PayrollPeriodLock[]>([]);
   const [runScope, setRunScope] = useState<'all' | 'mine'>(user?.branchId ? 'mine' : 'all');
   const [runStatusFilter, setRunStatusFilter] = useState<'all' | 'draft' | 'approved' | 'posted' | 'reversed' | 'cancelled'>('all');
+  const [runMonthFilter, setRunMonthFilter] = useState<number | 'all'>('all');
+  const [runYearFilter, setRunYearFilter] = useState<number | 'all'>('all');
   const [selectedRunId, setSelectedRunId] = useState<string>('');
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [adjustments, setAdjustments] = useState<
@@ -220,6 +222,12 @@ export default function PayrollPage() {
     if (runScope === 'mine' && user?.branchId) {
       params.set('branchId', user.branchId);
     }
+    if (runMonthFilter !== 'all') {
+      params.set('month', String(runMonthFilter));
+    }
+    if (runYearFilter !== 'all') {
+      params.set('year', String(runYearFilter));
+    }
     if (runStatusFilter !== 'all') {
       params.set('status', runStatusFilter);
     }
@@ -227,8 +235,8 @@ export default function PayrollPage() {
     const query = params.toString();
     const response = await apiGet(`/hr/payroll-runs${query ? `?${query}` : ''}`);
     const data = (response as { data?: unknown[] })?.data || [];
-    setRuns(Array.isArray(data) ? (data as PayrollRun[]).slice(0, 8) : []);
-  }, [runScope, runStatusFilter, user?.branchId]);
+    setRuns(Array.isArray(data) ? (data as PayrollRun[]) : []);
+  }, [runMonthFilter, runScope, runStatusFilter, runYearFilter, user?.branchId]);
 
   const fetchPayrollSettings = useCallback(async () => {
     const response = await apiGet('/hr/payroll-settings');
@@ -263,19 +271,29 @@ export default function PayrollPage() {
     }));
   }, [adjustments]);
 
-  const previewPayroll = useCallback(async () => {
+  const requestPayrollPreview = useCallback(async (adjustmentsPayload: Array<{
+    salarySchemeId: string;
+    bonus?: number;
+    commission?: number;
+    deduction?: number;
+    paidAmount?: number;
+  }> = []) => {
     const response = await apiPost('/salary-schemes/payroll-preview', {
       month,
       year,
       applyTemplates: true,
-      adjustments: buildAdjustmentsPayload(),
+      adjustments: adjustmentsPayload,
     });
 
     const data = (response as { data?: PayrollPreview })?.data;
     if (data) {
       setPreview(data);
     }
-  }, [buildAdjustmentsPayload, month, year]);
+  }, [month, year]);
+
+  const previewPayroll = useCallback(async () => {
+    await requestPayrollPreview(buildAdjustmentsPayload());
+  }, [buildAdjustmentsPayload, requestPayrollPreview]);
 
   const loadData = useCallback(async () => {
     try {
@@ -288,14 +306,13 @@ export default function PayrollPage() {
         fetchPayrollSettings(),
         fetchTaxPresets(),
         fetchPeriodLocks(),
-        previewPayroll(),
       ]);
     } catch (e) {
       setError((e as { message?: string })?.message || 'Failed to load payroll data');
     } finally {
       setLoading(false);
     }
-  }, [fetchSalarySchemes, fetchTemplates, fetchRuns, fetchPayrollSettings, fetchTaxPresets, fetchPeriodLocks, previewPayroll]);
+  }, [fetchSalarySchemes, fetchTemplates, fetchRuns, fetchPayrollSettings, fetchTaxPresets, fetchPeriodLocks]);
 
   const currentPeriodLocked = periodLocks.some((lock) => lock.month === month && lock.year === year);
 
@@ -304,19 +321,42 @@ export default function PayrollPage() {
     loadData();
   }, [canView, loadData]);
 
+  useEffect(() => {
+    if (!canView) return;
+    requestPayrollPreview();
+  }, [canView, requestPayrollPreview]);
+
+  useEffect(() => {
+    if (!canView) return;
+
+    const timerId = window.setTimeout(() => {
+      void requestPayrollPreview(buildAdjustmentsPayload());
+    }, 300);
+
+    return () => window.clearTimeout(timerId);
+  }, [adjustments, buildAdjustmentsPayload, canView, requestPayrollPreview]);
+
   const updateAdjustment = (
     schemeId: string,
     field: 'bonus' | 'commission' | 'deduction' | 'paidAmount',
     value: string,
   ) => {
     const numeric = Number(value || 0);
+    const currentItem = preview?.payrollItems?.find(
+      (item) => item.salarySchemeId === schemeId,
+    );
+
     setAdjustments((prev) => ({
       ...prev,
       [schemeId]: {
-        bonus: prev[schemeId]?.bonus || 0,
-        commission: prev[schemeId]?.commission || 0,
-        deduction: prev[schemeId]?.deduction || 0,
-        paidAmount: prev[schemeId]?.paidAmount || 0,
+        bonus: prev[schemeId]?.bonus ?? Number(currentItem?.bonus || 0),
+        commission:
+          prev[schemeId]?.commission ?? Number(currentItem?.commission || 0),
+        deduction:
+          prev[schemeId]?.deduction ?? Number(currentItem?.deduction || 0),
+        paidAmount:
+          prev[schemeId]?.paidAmount ??
+          Number((currentItem?.paidAmount ?? currentItem?.netPay) || 0),
         [field]: Number.isFinite(numeric) ? numeric : 0,
       },
     }));
@@ -1228,6 +1268,40 @@ export default function PayrollPage() {
                 <option value="posted">Posted</option>
                 <option value="reversed">Reversed</option>
                 <option value="cancelled">Cancelled</option>
+              </select>
+              <select
+                value={runMonthFilter}
+                onChange={(e) =>
+                  setRunMonthFilter(
+                    e.target.value === 'all' ? 'all' : Number(e.target.value),
+                  )
+                }
+                className="px-2 py-1 rounded border border-slate-300 text-[11px] bg-white"
+              >
+                <option value="all">All Months</option>
+                {monthOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={runYearFilter}
+                onChange={(e) =>
+                  setRunYearFilter(
+                    e.target.value === 'all' ? 'all' : Number(e.target.value),
+                  )
+                }
+                className="px-2 py-1 rounded border border-slate-300 text-[11px] bg-white"
+              >
+                <option value="all">All Years</option>
+                {Array.from({ length: 6 }, (_, idx) => now.getFullYear() - idx).map(
+                  (yearOption) => (
+                    <option key={yearOption} value={yearOption}>
+                      {yearOption}
+                    </option>
+                  ),
+                )}
               </select>
               <button
                 onClick={fetchRuns}

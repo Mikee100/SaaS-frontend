@@ -123,10 +123,15 @@ interface PDFTemplate {
 // Add interfaces for branch comparison and past months data
 interface BranchComparisonData {
   branches?: {
+    branchId?: string;
     branchName: string;
     totalAmount: number;
     expenseCount: number;
   }[];
+  dateRange?: {
+    start: string;
+    end: string;
+  };
 }
 
 interface PastMonthsData {
@@ -203,12 +208,12 @@ export default function ExpensesPage() {
   const [salaryTotalForMonth, setSalaryTotalForMonth] = useState<{ monthName: string; totalAmount: number; salarySchemeCount: number } | null>(null);
   const [fetchingMonthlyTotal, setFetchingMonthlyTotal] = useState(false);
 
-  const [fetchingCurrentMonthExpenses, /* setFetchingCurrentMonthExpenses */] = useState(false);
-  const [currentMonthExpensesTotal, /* setCurrentMonthExpensesTotal */] = useState<{ monthName: string; totalAmount: number; expenseCount: number } | null>(null);
+  const [fetchingCurrentMonthExpenses, setFetchingCurrentMonthExpenses] = useState(false);
+  const [currentMonthExpensesTotal, setCurrentMonthExpensesTotal] = useState<{ monthName: string; totalAmount: number; expenseCount: number } | null>(null);
   const [expenseSelectedMonth, setExpenseSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [expenseSelectedYear, setExpenseSelectedYear] = useState<number>(new Date().getFullYear());
-  const [fetchingExpenseMonthlyTotal, /* setFetchingExpenseMonthlyTotal */] = useState(false);
-  const [expenseTotalForSelectedMonth, /* setExpenseTotalForSelectedMonth */] = useState<{ monthName: string; totalAmount: number; expenseCount: number } | null>(null);
+  const [fetchingExpenseMonthlyTotal, setFetchingExpenseMonthlyTotal] = useState(false);
+  const [expenseTotalForSelectedMonth, setExpenseTotalForSelectedMonth] = useState<{ monthName: string; totalAmount: number; expenseCount: number } | null>(null);
 
   const normalizedRoles = Array.isArray(user?.roles)
     ? user.roles.map((role) => String(role).toLowerCase())
@@ -240,73 +245,76 @@ export default function ExpensesPage() {
     );
   }, [isBranchScopedUser, assignedBranchId, branchFilter]);
 
-  // Derive branch comparison data from loaded expenses
-  useEffect(() => {
-    if (!expenses || expenses.length === 0) {
+  const fetchBranchComparison = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (effectiveBranchFilter) {
+        params.append('branchId', effectiveBranchFilter);
+      }
+      const endpoint = `/expenses/comparison/branches${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await apiGet(endpoint);
+      setBranchComparison(response as BranchComparisonData);
+    } catch (error) {
+      console.error('Failed to fetch branch comparison:', error);
       setBranchComparison(null);
-      return;
     }
+  }, [effectiveBranchFilter]);
 
-    const branchMap: Record<string, { branchName: string; totalAmount: number; expenseCount: number }> = {};
-
-    expenses.forEach((exp) => {
-      const branchName = exp.branch?.name || 'Unassigned';
-
-      if (!branchMap[branchName]) {
-        branchMap[branchName] = {
-          branchName,
-          totalAmount: 0,
-          expenseCount: 0,
-        };
+  const fetchPastMonths = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ months: '12' });
+      if (effectiveBranchFilter) {
+        params.append('branchId', effectiveBranchFilter);
       }
-
-      branchMap[branchName].totalAmount += exp.amount;
-      branchMap[branchName].expenseCount += 1;
-    });
-
-    setBranchComparison({
-      branches: Object.values(branchMap),
-    });
-  }, [expenses]);
-
-  // Derive past months data from loaded expenses
-  useEffect(() => {
-    if (!expenses || expenses.length === 0) {
+      const response = await apiGet(`/expenses/past-months?${params.toString()}`);
+      const payload = response as PastMonthsData;
+      const records = [...(payload.records || [])].sort((a, b) => b.month.localeCompare(a.month));
+      setPastMonthsData({ records });
+    } catch (error) {
+      console.error('Failed to fetch past months records:', error);
       setPastMonthsData(null);
-      return;
     }
+  }, [effectiveBranchFilter]);
 
-    const monthMap: Record<string, { month: string; monthName: string; totalAmount: number; expenseCount: number }> = {};
-
-    expenses.forEach((exp) => {
-      const date = new Date(exp.createdAt);
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
-      const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-      if (!monthMap[monthKey]) {
-        monthMap[monthKey] = {
-          month: monthKey,
-          monthName,
-          totalAmount: 0,
-          expenseCount: 0,
-        };
+  const fetchCurrentMonthExpenseTotal = useCallback(async () => {
+    try {
+      setFetchingCurrentMonthExpenses(true);
+      const params = new URLSearchParams();
+      if (effectiveBranchFilter) {
+        params.append('branchId', effectiveBranchFilter);
       }
+      const endpoint = `/expenses/current-month-total${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await apiGet(endpoint);
+      const payload = (response as { data?: { monthName: string; totalAmount: number; expenseCount: number } }).data;
+      setCurrentMonthExpensesTotal(payload || null);
+    } catch (error) {
+      console.error('Failed to fetch current month expense total:', error);
+      setCurrentMonthExpensesTotal(null);
+    } finally {
+      setFetchingCurrentMonthExpenses(false);
+    }
+  }, [effectiveBranchFilter]);
 
-      monthMap[monthKey].totalAmount += exp.amount;
-      monthMap[monthKey].expenseCount += 1;
-    });
-
-    // Sort by month (most recent first)
-    const sortedRecords = Object.values(monthMap).sort((a, b) => {
-      return b.month.localeCompare(a.month);
-    });
-
-    setPastMonthsData({
-      records: sortedRecords,
-    });
-  }, [expenses]);
+  const fetchExpenseTotalForMonth = useCallback(async () => {
+    try {
+      setFetchingExpenseMonthlyTotal(true);
+      const params = new URLSearchParams({
+        month: String(expenseSelectedMonth),
+        year: String(expenseSelectedYear),
+      });
+      if (effectiveBranchFilter) {
+        params.append('branchId', effectiveBranchFilter);
+      }
+      const response = await apiGet(`/expenses/total-expense?${params.toString()}`);
+      const payload = (response as { data?: { monthName: string; totalAmount: number; expenseCount: number } }).data;
+      setExpenseTotalForSelectedMonth(payload || null);
+    } catch (error) {
+      console.error('Failed to fetch selected month expense total:', error);
+      setExpenseTotalForSelectedMonth(null);
+    } finally {
+      setFetchingExpenseMonthlyTotal(false);
+    }
+  }, [effectiveBranchFilter, expenseSelectedMonth, expenseSelectedYear]);
 
   const fetchCurrentMonthSalaryTotal = useCallback(async () => {
     try {
@@ -343,6 +351,11 @@ export default function ExpensesPage() {
     fetchCurrentMonthSalaryTotal();
     fetchSalaryTotalForMonth();
   }, [fetchCurrentMonthSalaryTotal, fetchSalaryTotalForMonth]);
+
+  useEffect(() => {
+    fetchCurrentMonthExpenseTotal();
+    fetchExpenseTotalForMonth();
+  }, [fetchCurrentMonthExpenseTotal, fetchExpenseTotalForMonth]);
 
   // Use React Query hook for tenant data (cached and shared across components)
   const { data: tenantData } = useTenant();
@@ -396,6 +409,10 @@ export default function ExpensesPage() {
       await apiPost('/expenses/reset-monthly', {});
       setSuccess('Monthly expenses reset successfully!');
       await fetchExpenses();
+      await fetchBranchComparison();
+      await fetchPastMonths();
+      await fetchCurrentMonthExpenseTotal();
+      await fetchExpenseTotalForMonth();
       setTimeout(() => setSuccess(null), 3000);
     } catch (error: unknown) {
       setError((error as { message?: string })?.message || 'Failed to reset monthly expenses');
@@ -405,11 +422,13 @@ export default function ExpensesPage() {
   };
 
   useEffect(() => {
-    if (activeTab === 'records') {
-      
-      
+    if (activeTab === 'comparison') {
+      void fetchBranchComparison();
     }
-  }, [activeTab, search, branchFilter, expenseTypeFilter]);
+    if (activeTab === 'past') {
+      void fetchPastMonths();
+    }
+  }, [activeTab, fetchBranchComparison, fetchPastMonths]);
 
   const handleDownloadReport = async () => {
     if (filteredExpenses.length === 0) {
@@ -567,11 +586,22 @@ export default function ExpensesPage() {
   useEffect(() => {
     const fetchAll = async () => {
       await fetchExpenses();
+      await fetchBranchComparison();
+      await fetchPastMonths();
+      await fetchCurrentMonthExpenseTotal();
+      await fetchExpenseTotalForMonth();
       await fetchBranches();
       await fetchUsers();
     };
     fetchAll();
-  }, [effectiveBranchFilter, fetchExpenses]);
+  }, [
+    effectiveBranchFilter,
+    fetchExpenses,
+    fetchBranchComparison,
+    fetchPastMonths,
+    fetchCurrentMonthExpenseTotal,
+    fetchExpenseTotalForMonth,
+  ]);
 
   // Filter and sort expenses
   useEffect(() => {
@@ -696,6 +726,10 @@ export default function ExpensesPage() {
 
       // Refresh expenses list
       await fetchExpenses();
+      await fetchBranchComparison();
+      await fetchPastMonths();
+      await fetchCurrentMonthExpenseTotal();
+      await fetchExpenseTotalForMonth();
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000);
@@ -717,6 +751,10 @@ export default function ExpensesPage() {
       setDrawerType(null);
       setSelectedExpense(null);
       await fetchExpenses();
+      await fetchBranchComparison();
+      await fetchPastMonths();
+      await fetchCurrentMonthExpenseTotal();
+      await fetchExpenseTotalForMonth();
       setTimeout(() => setSuccess(null), 3000);
     } catch (error: unknown) {
       setError((error as { message?: string })?.message || 'Failed to delete expense');
@@ -1036,14 +1074,9 @@ export default function ExpensesPage() {
               <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
                 <div className="text-[11px] text-gray-500 dark:text-gray-400">This Month</div>
                 <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                  Ksh {expenses
-                    .filter((exp) => {
-                      const d = new Date(exp.createdAt);
-                      const now = new Date();
-                      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                    })
-                    .reduce((sum, exp) => sum + exp.amount, 0)
-                    .toFixed(2)}
+                  {fetchingCurrentMonthExpenses
+                    ? 'Loading...'
+                    : `Ksh ${(currentMonthExpensesTotal?.totalAmount || 0).toFixed(2)}`}
                 </div>
               </div>
               <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-white dark:bg-gray-900">
@@ -1547,6 +1580,53 @@ export default function ExpensesPage() {
                   </button>
                 )}
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-gray-50 dark:bg-gray-800/40">
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400">Current Month Total</div>
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {fetchingCurrentMonthExpenses
+                      ? 'Loading...'
+                      : `Ksh ${(currentMonthExpensesTotal?.totalAmount || 0).toFixed(2)}`}
+                  </div>
+                </div>
+                <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-gray-50 dark:bg-gray-800/40">
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400">Selected Month Total</div>
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {fetchingExpenseMonthlyTotal
+                      ? 'Loading...'
+                      : `Ksh ${(expenseTotalForSelectedMonth?.totalAmount || 0).toFixed(2)}`}
+                  </div>
+                </div>
+                <div className="border border-gray-200 dark:border-gray-800 rounded p-2 bg-gray-50 dark:bg-gray-800/40">
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">Select Month</div>
+                  <div className="flex gap-2">
+                    <select
+                      value={expenseSelectedMonth}
+                      onChange={(e) => setExpenseSelectedMonth(parseInt(e.target.value, 10))}
+                      className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-xs focus:ring-2 focus:ring-slate-500 focus:border-transparent dark:text-gray-200"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={expenseSelectedYear}
+                      onChange={(e) => setExpenseSelectedYear(parseInt(e.target.value, 10))}
+                      className="w-24 px-2 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-xs focus:ring-2 focus:ring-slate-500 focus:border-transparent dark:text-gray-200"
+                    >
+                      {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               {!pastMonthsData || !pastMonthsData.records || pastMonthsData.records.length === 0 ? (
                 <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-xs">
                   <FaCalendarAlt className="w-7 h-7 text-gray-300 dark:text-gray-700 mx-auto mb-2" />

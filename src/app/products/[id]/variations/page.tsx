@@ -7,6 +7,7 @@ import { FaArrowLeft, FaPlus, FaTrash, FaSave, FaBox, FaPalette, FaRuler } from 
 import { apiGet, apiPost, apiPut, apiDelete } from '@/utils/api';
 import AuthGuard from '@/components/AuthGuard';
 import { useBranch } from '@/contexts/BranchContext';
+import Image from 'next/image';
 
 interface ProductVariation {
   id: string;
@@ -16,6 +17,14 @@ interface ProductVariation {
   stock: number;
   attributes: Record<string, string>;
   isActive: boolean;
+  barcode?: string;
+  images?: string[];
+  barcodes?: Array<{
+    id: string;
+    code: string;
+    isPrimary: boolean;
+    type: string;
+  }>;
 }
 
 interface Product {
@@ -54,6 +63,36 @@ export default function ProductVariationsPage() {
   ];
 
   const availableSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+
+  const getPrimaryBarcode = (variation: ProductVariation): string => {
+    const primary = variation.barcodes?.find((item) => item.isPrimary)?.code;
+    return primary || variation.barcode || '—';
+  };
+
+  const getAlternateBarcodes = (variation: ProductVariation): string[] => {
+    const primary = getPrimaryBarcode(variation);
+    return (variation.barcodes || [])
+      .filter((item) => !item.isPrimary && item.code !== primary)
+      .map((item) => item.code);
+  };
+
+  const getAttributeValue = (
+    variation: ProductVariation,
+    keys: string[],
+  ): string => {
+    for (const key of keys) {
+      const value = variation.attributes?.[key];
+      if (value) return value;
+    }
+    return '—';
+  };
+
+  const toImageSrc = (imagePath?: string): string | null => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/')) return `http://localhost:7050${imagePath}`;
+    return `http://localhost:7050/${imagePath}`;
+  };
 
   useEffect(() => {
     // Inline function to avoid missing dependency warning
@@ -349,22 +388,31 @@ export default function ProductVariationsPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Attributes
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Image
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         SKU
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Stock
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Color
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Size
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Barcodes
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Price
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Cost
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Stock
+                      </th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -372,30 +420,72 @@ export default function ProductVariationsPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {variations.map((variation) => (
                       <tr key={variation.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex flex-wrap gap-2">
-                            {Object.entries(variation.attributes).map(([key, value]) => (
-                              <div key={key} className="flex items-center gap-1">
-                                {key === 'color' && (
-                                  <div
-                                    className="w-3 h-3 rounded-full border border-gray-300"
-                                    style={{
-                                      backgroundColor: value.toLowerCase() === 'white' ? '#f8f9fa' :
-                                                     value.toLowerCase() === 'black' ? '#000000' :
-                                                     value.toLowerCase()
-                                    }}
-                                  />
-                                )}
-                                <span className="text-xs text-gray-600">{key}:</span>
-                                <span className="text-sm font-medium text-gray-900">{value}</span>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {toImageSrc(variation.images?.[0]) ? (
+                            <Image
+                              src={toImageSrc(variation.images?.[0]) || ''}
+                              alt={`${variation.sku} cover`}
+                              width={40}
+                              height={40}
+                              className="h-10 w-10 rounded object-cover border border-gray-200"
+                              unoptimized
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded border border-dashed border-gray-300 bg-gray-50" />
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <span className="text-xs font-mono text-gray-900">{variation.sku}</span>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                          {getAttributeValue(variation, ['color', 'Color'])}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                          {getAttributeValue(variation, ['size', 'Size'])}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="max-w-60 space-y-1">
+                            <div className="text-[11px] font-mono text-gray-900 break-all">
+                              {getPrimaryBarcode(variation)}
+                            </div>
+                            {getAlternateBarcodes(variation).length > 0 && (
+                              <div className="text-[11px] text-gray-500 break-all">
+                                {getAlternateBarcodes(variation).join(', ')}
                               </div>
-                            ))}
+                            )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-mono text-gray-900">{variation.sku}</span>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {editingVariation === variation.id ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editValues[variation.id]?.price || variation.price || ''}
+                              onChange={(e) => updateEditValue(variation.id, 'price', parseFloat(e.target.value) || 0)}
+                              className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder={product.price.toString()}
+                            />
+                          ) : (
+                            <span className="text-sm text-gray-900">Ksh {(variation.price || product.price).toFixed(2)}</span>
+                          )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {editingVariation === variation.id ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editValues[variation.id]?.cost || variation.cost || ''}
+                              onChange={(e) => updateEditValue(variation.id, 'cost', parseFloat(e.target.value) || 0)}
+                              className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder={product.cost.toString()}
+                            />
+                          ) : (
+                            <span className="text-sm text-gray-900">Ksh {(variation.cost || product.cost).toFixed(2)}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
                           {editingVariation === variation.id ? (
                             <input
                               type="number"
@@ -408,37 +498,7 @@ export default function ProductVariationsPage() {
                             <span className="text-sm text-gray-900">{variation.stock}</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {editingVariation === variation.id ? (
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={editValues[variation.id]?.price || variation.price || ''}
-                              onChange={(e) => updateEditValue(variation.id, 'price', parseFloat(e.target.value) || 0)}
-                              className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              placeholder={product.price.toString()}
-                            />
-                          ) : (
-                            <span className="text-sm text-gray-900">${(variation.price || product.price).toFixed(2)}</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {editingVariation === variation.id ? (
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={editValues[variation.id]?.cost || variation.cost || ''}
-                              onChange={(e) => updateEditValue(variation.id, 'cost', parseFloat(e.target.value) || 0)}
-                              className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              placeholder={product.cost.toString()}
-                            />
-                          ) : (
-                            <span className="text-sm text-gray-900">${(variation.cost || product.cost).toFixed(2)}</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <td className="px-3 py-2 whitespace-nowrap text-right">
                           <div className="flex items-center gap-2">
                             {editingVariation === variation.id ? (
                               <>

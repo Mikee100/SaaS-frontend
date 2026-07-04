@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaTimes, FaMagic, FaLayerGroup } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTimes, FaMagic, FaLayerGroup, FaPrint } from 'react-icons/fa';
 import Image from 'next/image';
 import {
   ProductAttribute,
@@ -281,6 +281,116 @@ export default function VariationManager({
       .filter((imageUrl): imageUrl is string => Boolean(imageUrl));
   }, [resolveImageUrl]);
 
+  const getPrimaryBarcode = useCallback((variation: ProductVariation): string => {
+    const primary = variation.barcodes?.find((item) => item.isPrimary)?.code;
+    return primary || variation.barcode || '—';
+  }, []);
+
+  const getAlternateBarcodes = useCallback((variation: ProductVariation): string[] => {
+    const primary = getPrimaryBarcode(variation);
+    return (variation.barcodes || [])
+      .filter((item) => !item.isPrimary && item.code !== primary)
+      .map((item) => item.code);
+  }, [getPrimaryBarcode]);
+
+  const escapeHtml = (value: string): string =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+  const printBarcodeLabels = useCallback((items: Array<{ sku: string; barcode: string }>) => {
+    const printable = items.filter((item) => item.barcode && item.barcode !== '—');
+
+    if (printable.length === 0) {
+      setError('No printable barcodes found for selected variations');
+      return;
+    }
+
+    const labelMarkup = printable
+      .map(
+        (item) => `
+          <div class="label">
+            <div class="sku">${escapeHtml(item.sku)}</div>
+            <svg class="barcode" data-value="${escapeHtml(item.barcode)}"></svg>
+            <div class="code">${escapeHtml(item.barcode)}</div>
+          </div>
+        `,
+      )
+      .join('');
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+      setError('Popup blocked. Allow popups to print labels.');
+      return;
+    }
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Variation Barcode Labels</title>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 12px; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+            .label { border: 1px solid #ddd; border-radius: 6px; padding: 8px; break-inside: avoid; }
+            .sku { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+            .barcode { width: 100%; height: 64px; }
+            .code { margin-top: 4px; font-size: 11px; font-family: monospace; word-break: break-all; }
+            @media print {
+              body { margin: 0; padding: 8px; }
+              .label { border-color: #bbb; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="grid">${labelMarkup}</div>
+          <script>
+            const nodes = Array.from(document.querySelectorAll('svg.barcode'));
+            for (const node of nodes) {
+              const value = node.getAttribute('data-value') || '';
+              if (!value) continue;
+              JsBarcode(node, value, {
+                format: 'CODE128',
+                displayValue: false,
+                margin: 0,
+                width: 1.5,
+                height: 56,
+              });
+            }
+            window.focus();
+            setTimeout(() => window.print(), 250);
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }, []);
+
+  const handlePrintAllLabels = useCallback(() => {
+    const items = variations.map((variation) => ({
+      sku: variation.sku,
+      barcode: getPrimaryBarcode(variation),
+    }));
+    printBarcodeLabels(items);
+  }, [variations, getPrimaryBarcode, printBarcodeLabels]);
+
+  const handlePrintSingleLabel = useCallback((variation: ProductVariation) => {
+    printBarcodeLabels([
+      {
+        sku: variation.sku,
+        barcode: getPrimaryBarcode(variation),
+      },
+    ]);
+  }, [getPrimaryBarcode, printBarcodeLabels]);
+
   const handleUploadVariationImages = async (variation: ProductVariation, files: File[]) => {
     if (!files.length) return;
     try {
@@ -416,6 +526,13 @@ export default function VariationManager({
               Generate
             </button>
             <button
+              onClick={handlePrintAllLabels}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-colors"
+            >
+              <FaPrint className="w-3.5 h-3.5" />
+              Print All Labels
+            </button>
+            <button
               onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
             >
@@ -520,6 +637,7 @@ export default function VariationManager({
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Barcodes</th>
                 {attributes
                   .filter((attr) =>
                     variations.some((v) => v.attributes[attr.name]),
@@ -565,6 +683,18 @@ export default function VariationManager({
                     )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-900">{variation.sku}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">
+                    <div className="max-w-60 space-y-1">
+                      <div className="font-mono text-[11px] text-gray-900 break-all">
+                        {getPrimaryBarcode(variation)}
+                      </div>
+                      {getAlternateBarcodes(variation).length > 0 && (
+                        <div className="text-[11px] text-gray-500 break-all">
+                          {getAlternateBarcodes(variation).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   {attributes
                     .filter((attr) => variation.attributes[attr.name])
                     .map((attr) => (
@@ -641,6 +771,13 @@ export default function VariationManager({
                         title="Manage images"
                       >
                         <FaLayerGroup className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handlePrintSingleLabel(variation)}
+                        className="text-emerald-600 hover:text-emerald-800 p-1 rounded hover:bg-emerald-50"
+                        title="Print barcode label"
+                      >
+                        <FaPrint className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteVariation(variation.id)}
