@@ -48,6 +48,12 @@ export interface ProductVariation {
   tenantId: string;
   branchId?: string;
   barcode?: string;
+  barcodes?: Array<{
+    id: string;
+    code: string;
+    isPrimary: boolean;
+    type: string;
+  }>;
   weight?: number;
 }
 
@@ -71,6 +77,7 @@ export interface CreateVariationRequest {
   stock: number;
   attributes: Record<string, string>;
   barcode?: string;
+  alternateBarcodes?: string[];
   weight?: number;
   branchId?: string;
 }
@@ -83,6 +90,7 @@ export interface UpdateVariationRequest {
   images?: string[];
   attributes?: Record<string, string>;
   barcode?: string;
+  alternateBarcodes?: string[];
   weight?: number;
   isActive?: boolean;
 }

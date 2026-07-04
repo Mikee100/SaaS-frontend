@@ -104,7 +104,7 @@ const getApiOrigin = (): string => {
 
   const appBase = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5000';
   const appOrigin = new URL(appBase).origin;
-  return appOrigin.replace(/:5000$/, ':7000');
+  return appOrigin.replace(/:5000$/, ':7050');
 };
 
 async function mockBlueprintSession(

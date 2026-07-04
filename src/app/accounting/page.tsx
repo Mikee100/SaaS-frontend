@@ -1,4 +1,4 @@
-import LedgerAndBalanceSheetUI from "./LedgerAndBalanceSheetUI";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Accounting Center | SaaS Platform",
@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function AccountingPage() {
-  return <LedgerAndBalanceSheetUI />;
+  redirect('/accounts/ledgers');
 }

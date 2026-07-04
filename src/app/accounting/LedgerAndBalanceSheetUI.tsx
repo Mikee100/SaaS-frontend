@@ -16,7 +16,7 @@ import {
 import { useUser } from "@/components/UserContext";
 import { useBranches } from "@/hooks/useBranches";
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:7000").replace(/\/+$/, "");
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:7050").replace(/\/+$/, "");
 
 export default function LedgerAndBalanceSheetUI() {
   const { user } = useUser();

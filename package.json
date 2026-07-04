@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint .",
-    "generate:api-types": "openapi-typescript http://127.0.0.1:7000/api-json -o src/openapi.generated.ts",
+    "generate:api-types": "openapi-typescript http://127.0.0.1:7050/api-json -o src/openapi.generated.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed"
   },

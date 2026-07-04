@@ -196,7 +196,7 @@ export default function GeneralLedgerExplorer() {
   useEffect(() => {
     if (!user?.tenantId) return;
 
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:7000";
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:7050";
     const socket = io(socketUrl, {
       transports: ["websocket"],
       autoConnect: true,
