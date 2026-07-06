@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "@/utils/api";
 import { useUser } from "@/components/UserContext";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchScope } from "@/hooks/useBranchScope";
 import {
   CartesianGrid,
   Line,
@@ -61,7 +62,6 @@ export default function RevenuePage() {
   const { user } = useUser();
   const { data: branches = [] } = useBranches();
   const [seriesMode, setSeriesMode] = useState<SeriesMode>("monthly");
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
   const [monthlyGoal, setMonthlyGoal] = useState<number>(250000);
 
   const normalizedRoles = Array.isArray(user?.roles)
@@ -79,34 +79,12 @@ export default function RevenuePage() {
     normalizedRoles.includes("cashier") ||
     primaryRole === "manager" ||
     primaryRole === "cashier";
-  const assignedBranchId = user?.branchId || "";
-  const canTenantSelectBranch =
-    !isBranchScopedUser &&
-    (normalizedRoles.includes("owner") ||
-      normalizedRoles.includes("admin") ||
-      Boolean(user?.isSuperadmin));
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (isBranchScopedUser && assignedBranchId) {
-      setSelectedBranchId(assignedBranchId);
-      localStorage.setItem("selectedBranchId", assignedBranchId);
-      return;
-    }
-
-    if (canTenantSelectBranch) {
-      const storedBranch = localStorage.getItem("selectedBranchId") || "all";
-      const existsInBranches =
-        storedBranch === "all" || branches.some((branch) => branch.id === storedBranch);
-      const nextBranch = existsInBranches ? storedBranch : "all";
-      setSelectedBranchId(nextBranch);
-      localStorage.setItem("selectedBranchId", nextBranch);
-      return;
-    }
-
-    setSelectedBranchId(assignedBranchId || "all");
-  }, [assignedBranchId, branches, canTenantSelectBranch, isBranchScopedUser]);
+  const {
+    selectedBranchId,
+    setSelectedBranchIdPersisted,
+    canTenantSelectBranch,
+    activeBranchName,
+  } = useBranchScope({ user, branches });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -217,10 +195,6 @@ export default function RevenuePage() {
   const cogs = toNumber(basicData?.cogs);
   const grossMargin = totalRevenue - cogs;
   const grossMarginPct = totalRevenue > 0 ? ((grossMargin / totalRevenue) * 100) : 0;
-  const activeBranchName =
-    selectedBranchId === "all"
-      ? "All Branches"
-      : branches.find((branch) => branch.id === selectedBranchId)?.name || "Assigned Branch";
 
   // Branch comparison data (only for tenant/owner/admin/superadmin)
   const isTenantUser =
@@ -251,10 +225,7 @@ export default function RevenuePage() {
 
   const handleBranchChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextBranchId = event.target.value;
-    setSelectedBranchId(nextBranchId);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("selectedBranchId", nextBranchId);
-    }
+    setSelectedBranchIdPersisted(nextBranchId);
   };
 
   const handleGoalChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -427,7 +398,7 @@ export default function RevenuePage() {
           <div className="text-xs text-gray-500">No product revenue data available yet.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-xs">
+            <table className="w-full min-w-130 text-xs">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-gray-600">
                   <th className="py-1.5 pr-2 font-medium">Product</th>

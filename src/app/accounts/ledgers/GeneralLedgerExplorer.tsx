@@ -3,6 +3,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { apiGet, apiPatch, apiPost } from "@/utils/api";
 import { 
   FaSearch, 
@@ -19,10 +20,14 @@ import { io, Socket } from "socket.io-client";
 import { useUser } from "@/components/UserContext";
 import { useBranches } from "@/hooks/useBranches";
 import { useTenant } from "@/hooks/useTenant";
+import { useBranchScope } from "@/hooks/useBranchScope";
+import { useToast } from "@/components/ui/use-toast";
 import {
   getPdfDocOptions,
   getPdfMargin,
-  getPdfFontSize,
+  getPdfBodyFontSize,
+  getPdfTitleFontSize,
+  getPdfCurrency,
   applyPdfBusinessHeader,
   applyPdfFooterAndPageNumbers,
   getPdfTableColors,
@@ -128,13 +133,13 @@ export default function GeneralLedgerExplorer() {
   const { user } = useUser();
   const { data: branches = [] } = useBranches();
   const { data: tenantData } = useTenant();
+  const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("all");
   const [selectedDate, setSelectedDate] = useState<string>(formatDateInput(new Date()));
   const [selectedWeek, setSelectedWeek] = useState<string>(formatWeekInput(new Date()));
@@ -149,49 +154,12 @@ export default function GeneralLedgerExplorer() {
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
-  const normalizedRoles = Array.isArray(user?.roles)
-    ? user.roles
-        .map((role: any) =>
-          typeof role === "string"
-            ? role.toLowerCase()
-            : String(role?.name || "").toLowerCase(),
-        )
-        .filter(Boolean)
-    : [];
-  const primaryRole = String((user as any)?.role || "").toLowerCase();
-  const isBranchScopedUser =
-    normalizedRoles.includes("manager") ||
-    normalizedRoles.includes("cashier") ||
-    primaryRole === "manager" ||
-    primaryRole === "cashier";
-  const assignedBranchId = user?.branchId || "";
-  const canTenantSelectBranch =
-    !isBranchScopedUser &&
-    (normalizedRoles.includes("owner") ||
-      normalizedRoles.includes("admin") ||
-      Boolean(user?.isSuperadmin));
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (isBranchScopedUser && assignedBranchId) {
-      setSelectedBranchId(assignedBranchId);
-      localStorage.setItem("selectedBranchId", assignedBranchId);
-      return;
-    }
-
-    if (canTenantSelectBranch) {
-      const storedBranch = localStorage.getItem("selectedBranchId") || "all";
-      const existsInBranches =
-        storedBranch === "all" || branches.some((branch) => branch.id === storedBranch);
-      const nextBranch = existsInBranches ? storedBranch : "all";
-      setSelectedBranchId(nextBranch);
-      localStorage.setItem("selectedBranchId", nextBranch);
-      return;
-    }
-
-    setSelectedBranchId(assignedBranchId || "all");
-  }, [assignedBranchId, branches, canTenantSelectBranch, isBranchScopedUser]);
+  const {
+    selectedBranchId,
+    setSelectedBranchIdPersisted,
+    canTenantSelectBranch,
+    activeBranchName,
+  } = useBranchScope({ user, branches });
 
   useEffect(() => {
     if (!user?.tenantId) return;
@@ -303,20 +271,12 @@ export default function GeneralLedgerExplorer() {
 
   const handleBranchChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const nextBranchId = event.target.value;
-    setSelectedBranchId(nextBranchId);
+    setSelectedBranchIdPersisted(nextBranchId);
     setSelectedAccount(null);
     setEntries([]);
     setEntriesCursor(null);
     setHasMoreEntries(false);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("selectedBranchId", nextBranchId);
-    }
   };
-
-  const activeBranchName =
-    selectedBranchId === "all"
-      ? "All Branches"
-      : branches.find((branch) => branch.id === selectedBranchId)?.name || "Assigned Branch";
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -480,40 +440,52 @@ export default function GeneralLedgerExplorer() {
 
     const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
     const margin = getPdfMargin(pdfTemplate);
-    const fontSize = getPdfFontSize(pdfTemplate);
-    const { primaryRgb, secondaryRgb } = getPdfTableColors(pdfTemplate);
+    const titleFontSize = getPdfTitleFontSize(pdfTemplate);
+    const bodyFontSize = getPdfBodyFontSize(pdfTemplate);
+    const reportCurrency = getPdfCurrency(tenantData, pdfTemplate);
+    const { primaryRgb } = getPdfTableColors(pdfTemplate);
 
     const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
     await preparePdfWatermark(doc, getFullAssetUrl(tenantData?.watermark as string | null | undefined));
     let yPosition = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
 
-    doc.setFontSize(fontSize + 4);
+    doc.setFontSize(titleFontSize);
     doc.setTextColor((pdfTemplate.primaryColor || "#000000").replace("#", "") || "000000");
-    doc.text("General Ledger", margin, yPosition + 8);
-    yPosition += 16;
-    doc.setFontSize(fontSize - 2);
+    doc.text("General Ledger", margin, yPosition + 6);
+    yPosition += 10;
+    doc.setFontSize(bodyFontSize);
     doc.setTextColor("666666");
     doc.text(`Account: ${selectedAccount.code} - ${selectedAccount.name}`, margin, yPosition);
-    yPosition += 6;
-    doc.text(`Branch: ${activeBranchName}`, margin, yPosition);
-    yPosition += 6;
+    yPosition += 4;
+    if (pdfTemplate.branchInfo) {
+      doc.text(`Branch: ${activeBranchName}`, margin, yPosition);
+      yPosition += 4;
+    }
     doc.text(`Filter: ${getFilterLabel()}`, margin, yPosition);
-    yPosition += 8;
+    yPosition += 5;
+
+    const reportCurrencyFormatter = new Intl.NumberFormat("en-KE", {
+      style: "currency",
+      currency: reportCurrency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const formatReportCurrency = (value: number) => reportCurrencyFormatter.format(value || 0);
 
     autoTable(doc, {
       startY: yPosition,
-      head: [["Date", "Reference", "Description", "Type", "Debit", "Credit"]],
+      head: [["Date", "Reference", "Description", "Type", `Debit (${reportCurrency})`, `Credit (${reportCurrency})`]],
       body: filteredEntries.map((entry) => [
         new Date(entry.date).toLocaleDateString(),
         entry.reference || "-",
         entry.description || "-",
         entry.type || "-",
-        entry.debit > 0 ? entry.debit.toLocaleString() : "-",
-        entry.credit > 0 ? entry.credit.toLocaleString() : "-",
+        entry.debit > 0 ? formatReportCurrency(entry.debit) : "-",
+        entry.credit > 0 ? formatReportCurrency(entry.credit) : "-",
       ]),
-      styles: { fontSize: Math.max(8, fontSize - 2), cellPadding: 4 },
+      styles: { fontSize: Math.max(7, bodyFontSize - 3), cellPadding: 2 },
       headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: secondaryRgb },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
         4: { halign: "right" },
         5: { halign: "right" },
@@ -523,10 +495,10 @@ export default function GeneralLedgerExplorer() {
 
     const tableState = doc as jsPDF & { lastAutoTable?: { finalY: number } };
     const finalY = (tableState.lastAutoTable?.finalY || yPosition) + 12;
-    doc.setFontSize(Math.max(8, fontSize - 1));
+    doc.setFontSize(Math.max(8, bodyFontSize - 1));
     doc.setTextColor("333333");
-    doc.text(`Debit Total: ${totalDebit.toLocaleString()}`, margin, finalY);
-    doc.text(`Credit Total: ${totalCredit.toLocaleString()}`, margin + 60, finalY);
+    doc.text(`Debit Total: ${formatReportCurrency(totalDebit)}`, margin, finalY);
+    doc.text(`Credit Total: ${formatReportCurrency(totalCredit)}`, margin + 80, finalY);
     doc.text(`Rows: ${filteredEntries.length}`, margin + 120, finalY);
 
     applyPdfFooterAndPageNumbers(doc, pdfTemplate, "SaaS POS • Accounting");
@@ -602,12 +574,11 @@ export default function GeneralLedgerExplorer() {
                 <h3 className="mb-1 border-b border-gray-100 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">{type}s</h3>
                 <div className="space-y-0.5">
                   {accs.map(acc => (
-                    <button
+                    <div
                       key={acc.id}
-                      onClick={() => fetchEntries(acc)}
                       className={`group flex w-full items-center justify-between px-2 py-1.5 text-left text-xs transition-colors ${
-                        selectedAccount?.id === acc.id 
-                          ? "bg-gray-900 text-white" 
+                        selectedAccount?.id === acc.id
+                          ? "bg-gray-900 text-white"
                           : "text-gray-700 hover:bg-gray-50"
                       }`}
                     >
@@ -615,10 +586,23 @@ export default function GeneralLedgerExplorer() {
                         <span className={`w-10 text-[10px] font-semibold ${selectedAccount?.id === acc.id ? "text-gray-300" : "text-gray-400"}`}>
                           {acc.code}
                         </span>
-                        <span className="truncate">{acc.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => fetchEntries(acc)}
+                          className="truncate text-left"
+                        >
+                          {acc.name}
+                        </button>
                       </div>
-                      <FaChevronRight className={`text-[10px] ${selectedAccount?.id === acc.id ? "opacity-100" : "opacity-40 group-hover:opacity-100"}`} />
-                    </button>
+                      <Link
+                        href={`/accounts/account/${acc.id}?from=ledgers&branchId=${selectedBranchId}`}
+                        className={`inline-flex items-center gap-1 text-[10px] font-semibold ${selectedAccount?.id === acc.id ? "text-gray-200" : "text-gray-500 hover:text-gray-700"}`}
+                        title="Open dedicated account page"
+                      >
+                        Open
+                        <FaChevronRight className={`text-[10px] ${selectedAccount?.id === acc.id ? "opacity-100" : "opacity-70 group-hover:opacity-100"}`} />
+                      </Link>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -818,7 +802,7 @@ export default function GeneralLedgerExplorer() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {filteredEntries.map((entry, idx) => (
+                      {filteredEntries.map((entry) => (
                         <tr
                           key={entry.id}
                           className="hover:bg-gray-50 cursor-pointer"
@@ -839,9 +823,13 @@ export default function GeneralLedgerExplorer() {
                                 const newTag = e.target.value;
                                 try {
                                   await apiPatch(`/ledger/entry/${entry.id}/tag`, { tag: newTag });
-                                  setEntries((prev) => prev.map((en, i) => i === idx ? { ...en, tag: newTag } : en));
+                                  setEntries((prev) => prev.map((en) => en.id === entry.id ? { ...en, tag: newTag } : en));
                                 } catch (err) {
-                                  alert("Failed to update tag");
+                                  toast({
+                                    title: "Tag update failed",
+                                    description: "Failed to update entry tag.",
+                                    variant: "destructive",
+                                  });
                                 }
                               }}
                               className="border border-gray-200 bg-white px-1 py-0.5 text-xs text-gray-700 rounded"
@@ -867,59 +855,61 @@ export default function GeneralLedgerExplorer() {
                           </td>
                         </tr>
                       ))}
-                          {/* Drill-down Modal */}
-                          {drillEntry && (
-                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-                              <div className="bg-white rounded shadow-lg max-w-md w-full p-6 relative">
-                                <button
-                                  className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
-                                  onClick={() => setDrillEntry(null)}
-                                >
-                                  ×
-                                </button>
-                                <h2 className="text-lg font-semibold mb-2">Ledger Entry Details</h2>
-                                <div className="space-y-1 text-sm">
-                                  <div><span className="font-semibold">Date:</span> {new Date(drillEntry.date).toLocaleString()}</div>
-                                  <div><span className="font-semibold">Reference:</span> {drillEntry.reference}</div>
-                                  <div><span className="font-semibold">Type:</span> {drillEntry.type}</div>
-                                  <div><span className="font-semibold">Description:</span> {drillEntry.description}</div>
-                                  <div><span className="font-semibold">Tag:</span> {drillEntry.tag || "general"}</div>
-                                  <div><span className="font-semibold">Debit:</span> {drillEntry.debit}</div>
-                                  <div><span className="font-semibold">Credit:</span> {drillEntry.credit}</div>
-                                  {drillEntry.user && <div><span className="font-semibold">User:</span> {drillEntry.user}</div>}
-                                  {drillEntry.meta && (
-                                    <div><span className="font-semibold">Meta:</span> <pre className="bg-gray-50 rounded p-2 text-xs overflow-x-auto">{JSON.stringify(drillEntry.meta, null, 2)}</pre></div>
-                                  )}
-                                </div>
-                                {drillEntry.source && (
-                                  <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-700">
-                                    <div className="font-semibold">Related Source</div>
-                                    <div className="mt-1 flex items-center gap-2">
-                                      <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-gray-600">
-                                        {drillEntry.source.type.replace("_", " ")}
-                                      </span>
-                                      {drillEntry.source.id && (
-                                        <span className="text-[10px] text-gray-500">ID: {drillEntry.source.id}</span>
-                                      )}
-                                    </div>
-                                    <a
-                                      href={drillEntry.source.url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="mt-2 inline-flex items-center border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
-                                    >
-                                      {drillEntry.source.label}
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
                     </tbody>
                   </table>
                 </div>
               )}
             </div>
+
+            {/* Drill-down Modal */}
+            {drillEntry && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+                <div className="bg-white rounded shadow-lg max-w-md w-full p-6 relative">
+                  <button
+                    className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
+                    onClick={() => setDrillEntry(null)}
+                  >
+                    ×
+                  </button>
+                  <h2 className="text-lg font-semibold mb-2">Ledger Entry Details</h2>
+                  <div className="space-y-1 text-sm">
+                    <div><span className="font-semibold">Date:</span> {new Date(drillEntry.date).toLocaleString()}</div>
+                    <div><span className="font-semibold">Reference:</span> {drillEntry.reference}</div>
+                    <div><span className="font-semibold">Type:</span> {drillEntry.type}</div>
+                    <div><span className="font-semibold">Description:</span> {drillEntry.description}</div>
+                    <div><span className="font-semibold">Tag:</span> {drillEntry.tag || "general"}</div>
+                    <div><span className="font-semibold">Debit:</span> {drillEntry.debit}</div>
+                    <div><span className="font-semibold">Credit:</span> {drillEntry.credit}</div>
+                    {drillEntry.user && <div><span className="font-semibold">User:</span> {drillEntry.user}</div>}
+                    {drillEntry.meta && (
+                      <div><span className="font-semibold">Meta:</span> <pre className="bg-gray-50 rounded p-2 text-xs overflow-x-auto">{JSON.stringify(drillEntry.meta, null, 2)}</pre></div>
+                    )}
+                  </div>
+                  {drillEntry.source && (
+                    <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-700">
+                      <div className="font-semibold">Related Source</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-gray-600">
+                          {drillEntry.source.type.replace("_", " ")}
+                        </span>
+                        {drillEntry.source.id && (
+                          <span className="text-[10px] text-gray-500">ID: {drillEntry.source.id}</span>
+                        )}
+                      </div>
+                      <a
+                        href={drillEntry.source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+                      >
+                        {drillEntry.source.label}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="mt-2 flex justify-end gap-4 text-[11px] text-gray-600">
               <span>Debit: {totalDebit.toLocaleString()}</span>
               <span>Credit: {totalCredit.toLocaleString()}</span>
@@ -940,6 +930,6 @@ export default function GeneralLedgerExplorer() {
         )}
       </div>
     </div>
-    </div>
-  );
+  </div>
+);
 }

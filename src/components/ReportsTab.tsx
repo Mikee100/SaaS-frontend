@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/utils/api';
 import { 
@@ -19,6 +19,11 @@ import {
 import { useBranches } from '@/hooks/useBranches';
 import { useTenant } from '@/hooks/useTenant';
 import {
+  DEFAULT_REPORT_PREFERENCES,
+  mergeReportPreferences,
+  type ReportPreferences,
+} from '@/utils/reportPreferences';
+import {
   getPdfDocOptions,
   getPdfMargin,
   getPdfFontSize,
@@ -31,6 +36,7 @@ import {
 import { getFullAssetUrl } from '@/utils/logoUrl';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
 
 interface ReportsTabProps {
@@ -48,9 +54,34 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [reportPreferences, setReportPreferences] = useState<ReportPreferences>(DEFAULT_REPORT_PREFERENCES);
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
+  const reportContentRef = useRef<HTMLDivElement | null>(null);
 
   const { data: branches = [] } = useBranches();
   const { data: tenantData } = useTenant();
+
+  const { data: userPreferencesData } = useQuery({
+    queryKey: ['user-report-preferences'],
+    queryFn: async () => {
+      const me = await apiGet<{ preferences?: Record<string, unknown> }>('/user/me');
+      const rawPrefs =
+        me?.preferences && typeof me.preferences === 'object'
+          ? me.preferences
+          : {};
+      return mergeReportPreferences(rawPrefs.reportPreferences);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (!userPreferencesData) return;
+    setReportPreferences(userPreferencesData);
+    if (!defaultsApplied) {
+      setDateRange(userPreferencesData.defaultDateRange);
+      setDefaultsApplied(true);
+    }
+  }, [userPreferencesData, defaultsApplied]);
 
   // Calculate date range
   const getDateRange = () => {
@@ -214,7 +245,10 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
         head: [['Metric', 'Value']],
         body: rows,
         startY: yPosition,
-        styles: { fontSize: fontSize - 2, cellPadding: 3 },
+        styles: {
+          fontSize: reportPreferences.compactPdfLayout ? Math.max(8, fontSize - 3) : fontSize - 2,
+          cellPadding: reportPreferences.compactPdfLayout ? 2 : 3,
+        },
         headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255], fontStyle: 'bold' },
         alternateRowStyles: { fillColor: secondaryRgb },
         margin: { left: margin, right: margin },
@@ -224,6 +258,42 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
       doc.setFontSize(fontSize - 2);
       doc.setTextColor('333333');
       doc.text(String(reportData), margin, yPosition);
+    }
+
+    if (reportPreferences.includeChartsInPdf && reportContentRef.current) {
+      try {
+        const canvas = await html2canvas(reportContentRef.current, {
+          backgroundColor: '#ffffff',
+          scale: 1.5,
+          useCORS: true,
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const imageWidth = pageWidth - margin * 2;
+        const imageHeight = (canvas.height * imageWidth) / canvas.width;
+
+        if (yPosition + imageHeight + 10 > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+
+        doc.setFontSize(Math.max(10, fontSize - 1));
+        doc.setTextColor('333333');
+        doc.text('Charts Snapshot', margin, yPosition);
+        yPosition += 5;
+
+        doc.addImage(
+          canvas.toDataURL('image/png'),
+          'PNG',
+          margin,
+          yPosition,
+          imageWidth,
+          Math.min(imageHeight, pageHeight - margin - yPosition),
+        );
+      } catch {
+        // Keep export resilient if chart snapshot capture fails.
+      }
     }
 
     applyPdfFooterAndPageNumbers(doc, pdfTemplate, 'SaaS POS • Reports');
@@ -255,6 +325,18 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
     a.download = `${selectedReportType}-report-${Date.now()}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+  };
+
+  const handleQuickDownload = async () => {
+    if (reportPreferences.defaultDownloadFormat === 'pdf') {
+      await exportToPDF();
+      return;
+    }
+    if (reportPreferences.defaultDownloadFormat === 'xlsx') {
+      exportToExcel();
+      return;
+    }
+    exportToCSV();
   };
 
   const getCurrentReportData = () => {
@@ -587,7 +669,7 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
   const renderReportContent = () => {
     if (isLoading) {
       return (
-        <div className="flex justify-center items-center min-h-[400px]">
+        <div className="flex justify-center items-center min-h-100">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       );
@@ -618,6 +700,14 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
           <p className="text-[11px] text-gray-500 mt-1">Generate and export business reports</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={handleQuickDownload}
+            className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1.5 text-xs"
+            title={`Download using your default format (${reportPreferences.defaultDownloadFormat.toUpperCase()})`}
+          >
+            <FaDownload className="w-3 h-3" />
+            Quick Download
+          </button>
           <button
             onClick={exportToPDF}
             className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 flex items-center gap-1.5 text-xs"
@@ -718,7 +808,7 @@ export default function ReportsTab({ basicData, advancedData, user }: ReportsTab
       </div>
 
       {/* Report Content */}
-      <div className="bg-white rounded border border-gray-200 p-2">
+      <div ref={reportContentRef} className="bg-white rounded border border-gray-200 p-2">
         {renderReportContent()}
       </div>
     </div>

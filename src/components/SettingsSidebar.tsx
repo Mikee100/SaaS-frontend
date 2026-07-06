@@ -27,6 +27,7 @@ export default function SettingsSidebar({ collapsed = false, onToggle }: Setting
         { href: "/settings/logo", label: "Logo", icon: FaImage },
         { href: "/settings/pos-display-name", label: "POS Display Name", icon: FaFileAlt },
         { href: "/settings/pdf-templates", label: "Report / PDF Design", icon: FaFileAlt },
+        { href: "/settings/report-preferences", label: "Report Preferences", icon: FaFileAlt },
         { href: "/settings/users", label: "Users", icon: FaUsers },
         { href: "/settings/branches", label: "Branches", icon: FaBuilding },
         { href: "/settings/permissions", label: "Permissions", icon: FaUserShield },
@@ -85,7 +86,7 @@ export default function SettingsSidebar({ collapsed = false, onToggle }: Setting
             )}
             <ul className={`${isCollapsed ? 'space-y-2' : 'space-y-1'}`}>
               {group.items.map((s) => {
-                const active = pathname === s.href;
+                const active = pathname === s.href || pathname === s.href.split('#')[0];
                 return (
                   <li key={s.href}>
                     <Link
