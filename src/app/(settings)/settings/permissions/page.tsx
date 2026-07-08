@@ -250,6 +250,7 @@ export default function PermissionsSettings() {
   const permissionCategories = {
     "User Management": ["view_users", "edit_users", "delete_users"],
     "Role Management": ["view_roles", "edit_roles", "delete_roles"],
+    "POS Access": ["pos.access", "pos.branch.locked"],
     "Sales": ["view_sales", "create_sales", "edit_sales", "delete_sales"],
     "Inventory": ["view_inventory", "edit_inventory", "delete_inventory"],
     "Products": ["view_products", "edit_products", "delete_products"],
