@@ -2,8 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { apiPut } from '@/utils/api';
+import { apiGet, apiPut } from '@/utils/api';
 import { useTenant } from '@/hooks/useTenant';
+import {
+  DEFAULT_REPORT_PREFERENCES,
+  PDF_TREND_GRANULARITIES,
+  mergeReportPreferences,
+  type ReportPreferences,
+} from '@/utils/reportPreferences';
 import {
   FaSave,
   FaEye,
@@ -66,6 +72,10 @@ const DEFAULT_TEMPLATE: PdfTemplateState = {
   currency: 'KES',
 };
 
+type UserMeResponse = {
+  preferences?: Record<string, unknown>;
+};
+
 function mergeTemplate(saved: Record<string, unknown> | null | undefined): PdfTemplateState {
   if (!saved || typeof saved !== 'object') return { ...DEFAULT_TEMPLATE };
   const align = saved.headerAlignment as HeaderAlignment;
@@ -92,6 +102,9 @@ export default function PDFTemplatesPage() {
   const tenant = tenantData as { name?: string; address?: string; contactPhone?: string; contactEmail?: string; pdfTemplate?: Record<string, unknown> } | null | undefined;
 
   const [pdfTemplate, setPdfTemplate] = useState<PdfTemplateState>(DEFAULT_TEMPLATE);
+  const [reportPreferences, setReportPreferences] = useState<ReportPreferences>(
+    DEFAULT_REPORT_PREFERENCES,
+  );
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -107,6 +120,33 @@ export default function PDFTemplatesPage() {
     if (!loading && tenant !== undefined) loadTemplate();
   }, [loading, tenant, loadTemplate]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadReportPreferences = async () => {
+      try {
+        const me = await apiGet<UserMeResponse>('/user/me');
+        if (cancelled) return;
+
+        const prefsBlob =
+          me?.preferences && typeof me.preferences === 'object'
+            ? me.preferences
+            : {};
+        setReportPreferences(mergeReportPreferences(prefsBlob.reportPreferences));
+      } catch {
+        if (!cancelled) {
+          setReportPreferences({ ...DEFAULT_REPORT_PREFERENCES });
+        }
+      }
+    };
+
+    loadReportPreferences();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const update = (updates: Partial<PdfTemplateState>) => {
     setPdfTemplate((prev) => ({ ...prev, ...updates }));
     setSaveError(null);
@@ -119,6 +159,11 @@ export default function PDFTemplatesPage() {
     setSaveSuccess(false);
     try {
       await apiPut('/tenant/pdf-template', pdfTemplate);
+      await apiPut('/user/me/preferences', {
+        preferences: {
+          reportPreferences,
+        },
+      });
       await queryClient.invalidateQueries({ queryKey: ['tenant'] });
       setSaveSuccess(true);
       setHasUnsavedChanges(false);
@@ -132,13 +177,14 @@ export default function PDFTemplatesPage() {
 
   const handleReset = () => {
     setPdfTemplate({ ...DEFAULT_TEMPLATE });
+    setReportPreferences({ ...DEFAULT_REPORT_PREFERENCES });
     setSaveError(null);
     setHasUnsavedChanges(true);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[320px]">
+      <div className="flex items-center justify-center min-h-80">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-gray-500">Loading template settings…</p>
@@ -179,7 +225,7 @@ export default function PDFTemplatesPage() {
               This design is used for reports, sales history, expenses, and other PDF exports.
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {saveSuccess && (
               <span className="flex items-center gap-1.5 text-sm text-green-600">
                 <FaCheckCircle className="w-4 h-4" /> Saved
@@ -224,7 +270,7 @@ export default function PDFTemplatesPage() {
         {/* Settings */}
         <div className="lg:col-span-2 space-y-6">
           {/* Layout */}
-          <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <section id="downloadable-report-preferences" className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/80">
               <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                 <FaCog className="w-4 h-4 text-gray-500" /> Layout
@@ -267,6 +313,153 @@ export default function PDFTemplatesPage() {
                   <option value="wide">Wide</option>
                 </select>
               </label>
+            </div>
+          </section>
+
+          {/* Downloadable report preferences */}
+          <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/80">
+              <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <FaFileAlt className="w-4 h-4 text-gray-500" /> Downloadable report preferences
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">Set your personal defaults for generated reports and exports.</p>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-600 mb-1">Default download format</span>
+                  <select
+                    value={reportPreferences.defaultDownloadFormat}
+                    onChange={(e) => {
+                      setReportPreferences((prev) => ({
+                        ...prev,
+                        defaultDownloadFormat: e.target.value as ReportPreferences['defaultDownloadFormat'],
+                      }));
+                      setHasUnsavedChanges(true);
+                      setSaveError(null);
+                    }}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="pdf">PDF</option>
+                    <option value="xlsx">Excel (.xlsx)</option>
+                    <option value="csv">CSV</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-600 mb-1">Default report date range</span>
+                  <select
+                    value={reportPreferences.defaultDateRange}
+                    onChange={(e) => {
+                      setReportPreferences((prev) => ({
+                        ...prev,
+                        defaultDateRange: e.target.value as ReportPreferences['defaultDateRange'],
+                      }));
+                      setHasUnsavedChanges(true);
+                      setSaveError(null);
+                    }}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="90d">Last 90 Days</option>
+                    <option value="6m">Last 6 Months</option>
+                    <option value="1y">Last Year</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50/50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={reportPreferences.includeChartsInPdf}
+                    onChange={(e) => {
+                      setReportPreferences((prev) => ({ ...prev, includeChartsInPdf: e.target.checked }));
+                      setHasUnsavedChanges(true);
+                      setSaveError(null);
+                    }}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-800">Include charts in PDFs</span>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50/50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={reportPreferences.includeComparisonSummary}
+                    onChange={(e) => {
+                      setReportPreferences((prev) => ({ ...prev, includeComparisonSummary: e.target.checked }));
+                      setHasUnsavedChanges(true);
+                      setSaveError(null);
+                    }}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-800">Include comparison summaries</span>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50/50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={reportPreferences.compactPdfLayout}
+                    onChange={(e) => {
+                      setReportPreferences((prev) => ({ ...prev, compactPdfLayout: e.target.checked }));
+                      setHasUnsavedChanges(true);
+                      setSaveError(null);
+                    }}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-800">Use compact table spacing</span>
+                </label>
+              </div>
+
+              {reportPreferences.includeChartsInPdf && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">
+                    Trend chart types included in PDF
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {PDF_TREND_GRANULARITIES.map((granularity) => {
+                      const selected = reportPreferences.pdfTrendGranularities.includes(granularity);
+                      return (
+                        <button
+                          key={granularity}
+                          type="button"
+                          onClick={() => {
+                            setReportPreferences((prev) => {
+                              const exists = prev.pdfTrendGranularities.includes(granularity);
+                              const next = exists
+                                ? prev.pdfTrendGranularities.filter((item) => item !== granularity)
+                                : [...prev.pdfTrendGranularities, granularity];
+
+                              return {
+                                ...prev,
+                                pdfTrendGranularities:
+                                  next.length > 0 ? next : [...prev.pdfTrendGranularities],
+                              };
+                            });
+                            setHasUnsavedChanges(true);
+                            setSaveError(null);
+                          }}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium border ${
+                            selected
+                              ? 'border-blue-600 bg-blue-100 text-blue-800'
+                              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {granularity === 'day'
+                            ? 'Days'
+                            : granularity === 'week'
+                              ? 'Weeks'
+                              : granularity === 'month'
+                                ? 'Months'
+                                : 'Years'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] text-gray-500">
+                    Pick only the views you need to keep exported PDFs focused and compact.
+                  </p>
+                </div>
+              )}
             </div>
           </section>
 
@@ -348,7 +541,7 @@ export default function PDFTemplatesPage() {
             </div>
             <div className="p-4 space-y-4">
               <div className="flex flex-wrap items-end gap-3">
-                <div className="flex-1 min-w-[120px]">
+                <div className="flex-1 min-w-30">
                   <label className="block text-xs font-medium text-gray-600 mb-1">Primary colour (headers)</label>
                   <div className="flex gap-2">
                     <input
@@ -365,7 +558,7 @@ export default function PDFTemplatesPage() {
                     />
                   </div>
                 </div>
-                <div className="flex-1 min-w-[120px]">
+                <div className="flex-1 min-w-30">
                   <label className="block text-xs font-medium text-gray-600 mb-1">Secondary colour (accents)</label>
                   <div className="flex gap-2">
                     <input
@@ -426,7 +619,7 @@ export default function PDFTemplatesPage() {
                 <select
                   value={pdfTemplate.fontSize}
                   onChange={(e) => update({ fontSize: e.target.value })}
-                  className="w-full max-w-[140px] px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full max-w-35 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
                   {[8, 10, 12, 14, 16, 18].map((n) => (
                     <option key={n} value={String(n)}>{n}pt</option>
