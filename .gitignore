@@ -41,3 +41,7 @@ yarn-error.log*
 # Ignore backup files
 backups/
 next-env.d.ts
+
+*.sql.gz
+*.bak
+*.backup
