@@ -25,100 +25,60 @@ interface UsageMetricProps {
   current: number;
   limit: number;
   percentage: number;
-  color: 'blue' | 'green' | 'purple';
   isExceeded: boolean;
   exceededBy?: number;
 }
 
-function UsageMetricCard({ title, icon, current, limit, percentage, color, isExceeded, exceededBy }: UsageMetricProps) {
-  const getColorClasses = (colorType: string, exceeded: boolean) => {
-    const baseColors = {
-      blue: {
-        iconBg: 'bg-blue-100',
-        iconColor: 'text-blue-600',
-        normalProgress: 'bg-blue-500',
-        normalProgressBg: 'bg-blue-100',
-        normalBorder: 'border-blue-200',
-      },
-      green: {
-        iconBg: 'bg-green-100',
-        iconColor: 'text-green-600',
-        normalProgress: 'bg-green-500',
-        normalProgressBg: 'bg-green-100',
-        normalBorder: 'border-green-200',
-      },
-      purple: {
-        iconBg: 'bg-purple-100',
-        iconColor: 'text-purple-600',
-        normalProgress: 'bg-purple-500',
-        normalProgressBg: 'bg-purple-100',
-        normalBorder: 'border-purple-200',
-      },
-    };
-
-    const base = baseColors[colorType as keyof typeof baseColors];
-
-    if (exceeded) {
+function UsageMetricCard({ title, icon, current, limit, percentage, isExceeded, exceededBy }: UsageMetricProps) {
+  const getColorClasses = (exceeded: boolean, currentPercentage: number) => {
+    if (exceeded || currentPercentage >= 95) {
       return {
-        bg: 'bg-red-50',
-        iconBg: 'bg-red-100',
-        iconColor: 'text-red-600',
-        progress: 'bg-red-600',
-        progressBg: 'bg-red-100',
-        warning: 'text-red-700',
-        warningBg: 'bg-red-50',
-        border: 'border-red-300',
+        iconBg: 'bg-red-100 dark:bg-red-950/40',
+        iconColor: 'text-red-600 dark:text-red-400',
+        progress: 'bg-red-600 dark:bg-red-500',
+        progressBg: 'bg-red-100 dark:bg-red-950/40',
+        warning: 'text-red-700 dark:text-red-300',
+        warningBg: 'bg-red-50 dark:bg-red-950/30',
+        border: 'border-red-300 dark:border-red-800',
+        ring: 'ring-red-200 dark:ring-red-900/60',
       };
     }
 
-    if (percentage >= 90) {
+    if (currentPercentage >= 80) {
       return {
-        bg: 'bg-orange-50',
-        iconBg: base.iconBg,
-        iconColor: base.iconColor,
-        progress: 'bg-orange-500',
-        progressBg: 'bg-orange-100',
-        warning: 'text-orange-700',
-        warningBg: 'bg-orange-50',
-        border: 'border-orange-300',
-      };
-    }
-
-    if (percentage >= 80) {
-      return {
-        bg: 'bg-amber-50',
-        iconBg: base.iconBg,
-        iconColor: base.iconColor,
-        progress: 'bg-amber-500',
-        progressBg: 'bg-amber-100',
-        warning: 'text-amber-700',
-        warningBg: 'bg-amber-50',
-        border: 'border-amber-300',
+        iconBg: 'bg-amber-100 dark:bg-amber-950/40',
+        iconColor: 'text-amber-700 dark:text-amber-400',
+        progress: 'bg-amber-500 dark:bg-amber-400',
+        progressBg: 'bg-amber-100 dark:bg-amber-950/40',
+        warning: 'text-amber-700 dark:text-amber-300',
+        warningBg: 'bg-amber-50 dark:bg-amber-950/30',
+        border: 'border-amber-300 dark:border-amber-800',
+        ring: '',
       };
     }
 
     return {
-      bg: 'bg-white',
-      iconBg: base.iconBg,
-      iconColor: base.iconColor,
-      progress: base.normalProgress,
-      progressBg: base.normalProgressBg,
-      warning: 'text-gray-600',
-      warningBg: 'bg-gray-50',
-      border: base.normalBorder,
+      iconBg: 'bg-gray-100 dark:bg-zinc-800',
+      iconColor: 'text-gray-600 dark:text-zinc-400',
+      progress: 'bg-gray-500 dark:bg-zinc-400',
+      progressBg: 'bg-gray-200 dark:bg-zinc-700',
+      warning: 'text-gray-600 dark:text-zinc-400',
+      warningBg: 'bg-gray-50 dark:bg-zinc-900',
+      border: 'border-gray-200 dark:border-zinc-800',
+      ring: '',
     };
   };
 
-  const colors = getColorClasses(color, isExceeded);
+  const colors = getColorClasses(isExceeded, percentage);
   const displayPercentage = Math.min(percentage, 100);
   const remaining = limit - current;
 
   return (
-    <div className={`bg-white rounded-2xl border-2 ${colors.border} p-6 hover:shadow-lg transition-all duration-200 ${isExceeded ? 'ring-2 ring-red-200' : ''}`}>
+    <div className={`rounded-xl border bg-white p-6 dark:bg-zinc-900 ${colors.border} ${colors.ring ? `ring-1 ${colors.ring}` : ''}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className={`${colors.iconBg} p-3 rounded-xl`}>
+          <div className={`${colors.iconBg} rounded-lg p-3`}>
             <div className={colors.iconColor}>
               {icon}
             </div>
@@ -140,11 +100,11 @@ function UsageMetricCard({ title, icon, current, limit, percentage, color, isExc
       {/* Stats */}
       <div className="mb-4">
         <div className="flex items-baseline gap-2 mb-1">
-          <span className={`text-3xl font-bold tabular-nums ${isExceeded ? 'text-red-600' : 'text-gray-900'}`}>
+          <span className={`text-3xl font-bold tabular-nums ${isExceeded ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-zinc-100'}`}>
             {formatNumberWithCommas(current)}
           </span>
           <span className="text-lg text-gray-400">/</span>
-          <span className="text-xl text-gray-500 tabular-nums">
+          <span className="text-xl text-gray-500 dark:text-zinc-400 tabular-nums">
             {formatNumberWithCommas(limit)}
           </span>
         </div>
@@ -161,7 +121,7 @@ function UsageMetricCard({ title, icon, current, limit, percentage, color, isExc
                 {displayPercentage}%
               </span>
               <span className="text-gray-400">•</span>
-              <span className="text-gray-600">
+              <span className="text-gray-600 dark:text-zinc-400">
                 {formatNumberWithCommas(Math.max(0, remaining))} remaining
               </span>
             </>
@@ -184,14 +144,14 @@ function UsageMetricCard({ title, icon, current, limit, percentage, color, isExc
 
       {/* Warning/Exceeded Message */}
       {isExceeded ? (
-        <div className={`${colors.warningBg} border-2 ${colors.border} rounded-lg p-3 mt-3`}>
+        <div className={`${colors.warningBg} border ${colors.border} rounded-lg p-3 mt-3`}>
           <div className="flex items-start gap-2">
-            <FaExclamationTriangle className={`${colors.warning} w-4 h-4 mt-0.5 flex-shrink-0`} />
+            <FaExclamationTriangle className={`${colors.warning} w-4 h-4 mt-0.5 shrink-0`} />
             <div className="flex-1 min-w-0">
               <p className={`text-xs font-semibold ${colors.warning} mb-1`}>
                 Limit Exceeded - Action Required
               </p>
-              <p className="text-xs text-gray-700">
+              <p className="text-xs text-gray-700 dark:text-zinc-300">
                 Your usage has exceeded the plan limit by {formatNumber(exceededBy || 0)} {title.toLowerCase()}. 
                 Please upgrade your plan immediately to restore full functionality and avoid service restrictions.
               </p>
@@ -201,7 +161,7 @@ function UsageMetricCard({ title, icon, current, limit, percentage, color, isExc
       ) : percentage >= 80 ? (
         <div className={`${colors.warningBg} border ${colors.border} rounded-lg p-3 mt-3`}>
           <div className="flex items-start gap-2">
-            <FaExclamationTriangle className={`${colors.warning} w-4 h-4 mt-0.5 flex-shrink-0`} />
+            <FaExclamationTriangle className={`${colors.warning} w-4 h-4 mt-0.5 shrink-0`} />
             <div className="flex-1 min-w-0">
               <p className={`text-xs font-medium ${colors.warning} mb-1`}>
                 {percentage >= 90 ? 'Approaching Limit' : 'Getting Close'}
@@ -230,7 +190,7 @@ const [isClient, setIsClient] = useState(false);
 
   // Loading skeleton
   const LoadingSkeleton = () => (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+      <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-center gap-3 mb-6">
         <div className="w-12 h-12 bg-gray-200 rounded-xl animate-pulse"></div>
         <div className="flex-1">
@@ -257,10 +217,10 @@ const [isClient, setIsClient] = useState(false);
 
   if (!limits) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+      <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="text-center py-8">
-          <FaChartLine className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 text-sm">Unable to load usage information</p>
+          <FaChartLine className="w-12 h-12 text-gray-300 dark:text-zinc-600 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-zinc-400 text-sm">Unable to load usage information</p>
         </div>
       </div>
     );
@@ -302,22 +262,22 @@ const [isClient, setIsClient] = useState(false);
   return (
     <div className="w-full">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-2xl shadow-lg p-6 mb-6 text-white">
+      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="bg-white/20 backdrop-blur-sm p-4 rounded-2xl">
-              <FaCrown className="w-8 h-8" />
+            <div className="rounded-lg bg-gray-100 p-4 dark:bg-zinc-800">
+              <FaCrown className="w-8 h-8 text-gray-600 dark:text-zinc-400" />
             </div>
             <div>
-              <h3 className="text-2xl font-bold mb-1">Usage Dashboard</h3>
-              <p className="text-blue-100 text-sm">
+              <h3 className="mb-1 text-2xl font-bold text-gray-900 dark:text-zinc-100">Usage Dashboard</h3>
+              <p className="text-sm text-gray-600 dark:text-zinc-400">
                 Monitor your plan usage and capacity
               </p>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-blue-100 mb-1">Current Plan</div>
-            <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl font-semibold text-lg">
+            <div className="mb-1 text-xs text-gray-500 dark:text-zinc-400">Current Plan</div>
+            <div className="inline-flex items-center rounded-md bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
               {currentPlan}
             </div>
           </div>
@@ -332,7 +292,6 @@ const [isClient, setIsClient] = useState(false);
           current={currentUsers}
           limit={limitUsers}
           percentage={usersPercentage}
-          color="blue"
           isExceeded={usersUsage.isExceeded}
           exceededBy={usersUsage.exceededBy}
         />
@@ -342,7 +301,6 @@ const [isClient, setIsClient] = useState(false);
           current={currentProducts}
           limit={limitProducts}
           percentage={productsPercentage}
-          color="green"
           isExceeded={productsUsage.isExceeded}
           exceededBy={productsUsage.exceededBy}
         />
@@ -352,7 +310,6 @@ const [isClient, setIsClient] = useState(false);
           current={currentSales}
           limit={limitSales}
           percentage={salesPercentage}
-          color="purple"
           isExceeded={salesUsage.isExceeded}
           exceededBy={salesUsage.exceededBy}
         />
@@ -361,14 +318,14 @@ const [isClient, setIsClient] = useState(false);
       {/* Upgrade CTA - Enhanced */}
       {hasWarnings && (
         <div className={`${usersUsage.isExceeded || productsUsage.isExceeded || salesUsage.isExceeded 
-          ? 'bg-gradient-to-r from-red-50 via-orange-50 to-red-50 border-2 border-red-300' 
-          : 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-2 border-amber-200'
-        } rounded-2xl p-6`}>
+          ? 'bg-red-50 border border-red-300 dark:bg-red-950/30 dark:border-red-800' 
+          : 'bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
+        } rounded-xl p-6`}>
           <div className="flex items-start gap-4">
             <div className={`${usersUsage.isExceeded || productsUsage.isExceeded || salesUsage.isExceeded 
-              ? 'bg-red-100' 
-              : 'bg-amber-100'
-            } p-3 rounded-xl flex-shrink-0`}>
+              ? 'bg-red-100 dark:bg-red-950/50' 
+              : 'bg-amber-100 dark:bg-amber-950/50'
+            } p-3 rounded-lg shrink-0`}>
               <FaExclamationTriangle className={`w-6 h-6 ${usersUsage.isExceeded || productsUsage.isExceeded || salesUsage.isExceeded 
                 ? 'text-red-600' 
                 : 'text-amber-600'
@@ -376,8 +333,8 @@ const [isClient, setIsClient] = useState(false);
             </div>
             <div className="flex-1">
               <h4 className={`font-bold mb-1 text-lg ${usersUsage.isExceeded || productsUsage.isExceeded || salesUsage.isExceeded 
-                ? 'text-red-900' 
-                : 'text-gray-900'
+                ? 'text-red-900 dark:text-red-300' 
+                : 'text-gray-900 dark:text-zinc-100'
               }`}>
                 {usersUsage.isExceeded || productsUsage.isExceeded || salesUsage.isExceeded 
                   ? 'Immediate Action Required' 
@@ -385,8 +342,8 @@ const [isClient, setIsClient] = useState(false);
                 }
               </h4>
               <p className={`text-sm mb-4 ${usersUsage.isExceeded || productsUsage.isExceeded || salesUsage.isExceeded 
-                ? 'text-red-800' 
-                : 'text-gray-700'
+                ? 'text-red-800 dark:text-red-300' 
+                : 'text-gray-700 dark:text-zinc-300'
               }`}>
                 {usersUsage.isExceeded || productsUsage.isExceeded || salesUsage.isExceeded
                   ? 'Your usage has exceeded plan limits. Upgrade immediately to restore full functionality and avoid service restrictions.'
@@ -397,9 +354,9 @@ const [isClient, setIsClient] = useState(false);
                 href="/settings/billing"
                 className={`inline-flex items-center gap-2 px-6 py-3 ${
                   usersUsage.isExceeded || productsUsage.isExceeded || salesUsage.isExceeded
-                    ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700'
-                    : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700'
-                } text-white rounded-xl transition-all font-semibold shadow-md hover:shadow-lg transform hover:-translate-y-0.5`}
+                    ? 'bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-400'
+                    : 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400'
+                } text-white rounded-lg transition-colors font-semibold`}
               >
                 <FaArrowUp className="w-4 h-4" />
                 {usersUsage.isExceeded || productsUsage.isExceeded || salesUsage.isExceeded 

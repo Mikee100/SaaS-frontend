@@ -639,12 +639,12 @@ export default function DashboardPage() {
   if (isLoading && !data) {
     return (
       <AuthGuard>
-        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-8">
+        <div className="adeera-page min-h-screen p-8">
           <div className="mx-auto max-w-7xl">
-            <div className="h-8 w-64 animate-pulse rounded-md bg-gray-200"></div>
+            <div className="adeera-skeleton h-8 w-64 rounded-md"></div>
             <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-32 animate-pulse rounded-xl bg-gray-200"></div>
+                <div key={i} className="adeera-skeleton h-32 rounded-xl"></div>
               ))}
             </div>
           </div>
@@ -656,21 +656,21 @@ export default function DashboardPage() {
   return (
     <AuthGuard>
       <PlanGuard requiredFeature="advanced_analytics">
-        <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 dark:bg-slate-900 dark:from-slate-900 dark:to-slate-900">
+        <div className="adeera-page min-h-screen">
           <LogoEnforcement />
           <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
             {/* Header */}
             <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="bg-linear-to-r from-indigo-600 to-purple-600 bg-clip-text text-2xl font-bold text-transparent dark:text-indigo-300">
+                  <h1 className="text-[22px] font-semibold tracking-tight text-(--adeera-text)">
                     Operations dashboard
                   </h1>
-                  <span className="rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-2.5 py-0.5 text-xs font-medium text-indigo-800 dark:text-indigo-300">
+                  <span className="rounded-full border border-(--adeera-border) bg-(--adeera-surface-muted) px-2.5 py-0.5 text-xs font-medium text-(--adeera-text-muted)">
                     {dateRange === '7d' ? '7D' : dateRange === '30d' ? '30D' : dateRange === '90d' ? '90D' : '12M'}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                <p className="mt-1 text-sm text-(--adeera-text-muted)">
                   Live metrics and priorities for running today. Use Analytics for deeper reports.
                 </p>
               </div>
@@ -685,7 +685,7 @@ export default function DashboardPage() {
                         window.localStorage.setItem('dashboardDateRange', value);
                       }
                     }}
-                    className="block w-full rounded-lg border-0 bg-white dark:bg-slate-800 py-2.5 pl-4 pr-10 text-sm shadow-sm ring-1 ring-gray-200 dark:ring-slate-600 text-gray-900 dark:text-slate-100 transition-all hover:ring-gray-300 dark:hover:ring-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                    className="block w-full rounded-lg border border-(--adeera-border) bg-(--adeera-surface) py-2.5 pl-4 pr-10 text-sm text-(--adeera-text) transition-all hover:border-(--adeera-text-muted) focus:outline-none focus:ring-2 focus:ring-(--adeera-accent)"
                   >
                     <option value="7d">Last 7 days</option>
                     <option value="30d">Last 30 days</option>
@@ -698,7 +698,7 @@ export default function DashboardPage() {
                   type="button"
                   onClick={() => refetch()}
                   disabled={isRefreshing}
-                  className={`inline-flex w-full items-center justify-center rounded-lg border-0 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-medium shadow-sm text-gray-900 dark:text-slate-100 transition-all hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 sm:w-auto ${
+                  className={`inline-flex w-full items-center justify-center rounded-lg border border-(--adeera-border) bg-(--adeera-surface) px-4 py-2.5 text-sm font-medium text-(--adeera-text) transition-all hover:bg-(--adeera-surface-muted) focus:outline-none focus:ring-2 focus:ring-(--adeera-accent) sm:w-auto ${
                     isRefreshing ? 'cursor-not-allowed opacity-70' : ''
                   }`}
                 >
@@ -711,12 +711,12 @@ export default function DashboardPage() {
             </div>
 
             {/* Role-based focus widgets */}
-            <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+            <div className="adeera-card mb-6 p-5">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">
+                <h2 className="adeera-section-title">
                   {personaTitle}
                 </h2>
-                <span className="text-xs text-gray-500 dark:text-slate-400">
+                <span className="text-xs text-(--adeera-text-muted)">
                   Role-based defaults for your workflow
                 </span>
               </div>
@@ -725,11 +725,11 @@ export default function DashboardPage() {
                 {roleCards.map((card) => {
                   const content = (
                     <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                      <p className="adeera-label">
                         {card.label}
                       </p>
-                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-100">{card.value}</p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{card.note}</p>
+                      <p className="mt-1 text-xl font-semibold text-(--adeera-text)">{card.value}</p>
+                      <p className="mt-1 text-xs text-(--adeera-text-muted)">{card.note}</p>
                     </div>
                   );
 
@@ -749,7 +749,7 @@ export default function DashboardPage() {
                     <a
                       key={action.id}
                       href={action.href}
-                      className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                      className="inline-flex items-center rounded-md border border-(--adeera-border) bg-(--adeera-surface) px-3 py-1.5 text-xs font-semibold text-(--adeera-accent) transition hover:bg-(--adeera-accent-soft)"
                     >
                       {action.label}
                     </a>
@@ -761,17 +761,17 @@ export default function DashboardPage() {
             {/* Hero: primary KPI + secondary KPIs */}
             <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* Primary KPI - Today’s revenue */}
-              <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <div className="adeera-card lg:col-span-2 p-6">
                 <div className="mb-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-(--adeera-surface-muted) text-(--adeera-text-muted)">
                       <FiDollarSign className="h-4 w-4" />
                     </span>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                      <p className="adeera-label">
                         Today&apos;s Revenue
                       </p>
-                      <p className="text-[11px] text-gray-500 dark:text-slate-500">
+                      <p className="text-[11px] text-(--adeera-text-muted)">
                         Compared to your recent daily average
                       </p>
                     </div>
@@ -780,8 +780,8 @@ export default function DashboardPage() {
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                         todaySummary.revenueTrendDirection === 'up'
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-rose-50 text-rose-700'
+                          ? 'bg-(--adeera-success-soft) text-(--adeera-success)'
+                          : 'bg-(--adeera-danger-soft) text-(--adeera-danger)'
                       }`}
                     >
                       {todaySummary.revenueTrendDirection === 'up' ? '▲' : '▼'}
@@ -790,13 +790,13 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <div className="mt-2 flex items-baseline gap-3">
-                  <p className="text-3xl font-semibold text-gray-900 dark:text-slate-50">
+                  <p className="adeera-metric-value">
                     {todaySummary
                       ? `Ksh ${Math.round(todaySummary.revenueToday).toLocaleString()}`
                       : '—'}
                   </p>
                   {!todaySummary && (
-                    <span className="text-xs text-gray-500 dark:text-slate-500">
+                    <span className="text-xs text-(--adeera-text-muted)">
                       Today&apos;s figures will appear as you record sales.
                     </span>
                   )}
@@ -805,37 +805,37 @@ export default function DashboardPage() {
 
               {/* Secondary KPIs */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                <div className="adeera-card p-4">
+                  <p className="adeera-label">
                     Orders Today
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-50">
+                  <p className="mt-1 text-xl font-semibold text-(--adeera-text)">
                     {todaySummary ? todaySummary.ordersToday.toLocaleString() : '—'}
                   </p>
                 </div>
-                <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                <div className="adeera-card p-4">
+                  <p className="adeera-label">
                     Avg Order Value (Today)
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-50">
+                  <p className="mt-1 text-xl font-semibold text-(--adeera-text)">
                     {todaySummary
                       ? `Ksh ${todaySummary.averageOrderValueToday.toFixed(2)}`
                       : '—'}
                   </p>
                 </div>
-                <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                <div className="adeera-card p-4">
+                  <p className="adeera-label">
                     Customers (All time)
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-50">
+                  <p className="mt-1 text-xl font-semibold text-(--adeera-text)">
                     {analyticsData.totalCustomers?.toLocaleString() ?? '—'}
                   </p>
                 </div>
-                <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                <div className="adeera-card p-4">
+                  <p className="adeera-label">
                     Products (All time)
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-50">
+                  <p className="mt-1 text-xl font-semibold text-(--adeera-text)">
                     {analyticsData.totalProducts?.toLocaleString() ?? '—'}
                   </p>
                 </div>
@@ -843,71 +843,71 @@ export default function DashboardPage() {
             </div>
 
             {showCrossModuleSnapshot && (
-              <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <div className="adeera-card mb-6 p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">Cross-Module Snapshot</h2>
-                  <span className="text-xs text-gray-500 dark:text-slate-400">Credit, targets, and plan limits in one view</span>
+                  <h2 className="adeera-section-title">Cross-Module Snapshot</h2>
+                  <span className="text-xs text-(--adeera-text-muted)">Credit, targets, and plan limits in one view</span>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+                  <div className="rounded-lg border border-(--adeera-border) bg-(--adeera-surface-muted) p-4">
                     <div className="mb-1 flex items-center justify-between">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Credit Snapshot</p>
-                      <a href="/credit" className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">Open</a>
+                      <p className="adeera-label">Credit Snapshot</p>
+                      <a href="/credit" className="text-[11px] font-medium text-(--adeera-accent) hover:opacity-85">Open</a>
                     </div>
-                    <p className="text-sm text-gray-700 dark:text-slate-300">
+                    <p className="text-sm text-(--adeera-text)">
                       Outstanding: <span className="font-semibold">Ksh {(creditSnapshot?.outstanding || 0).toLocaleString()}</span>
                     </p>
-                    <p className="text-sm text-gray-700 dark:text-slate-300">
+                    <p className="text-sm text-(--adeera-text)">
                       Overdue: <span className="font-semibold">{(creditSnapshot?.overdue || 0).toLocaleString()}</span>
                     </p>
-                    <p className="text-sm text-gray-700 dark:text-slate-300">
+                    <p className="text-sm text-(--adeera-text)">
                       Open Accounts: <span className="font-semibold">{(creditSnapshot?.openCredits || 0).toLocaleString()}</span>
                     </p>
                   </div>
 
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+                  <div className="rounded-lg border border-(--adeera-border) bg-(--adeera-surface-muted) p-4">
                     <div className="mb-1 flex items-center justify-between">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Sales Target Progress</p>
-                      <a href="/sales/targets" className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">Open</a>
+                      <p className="adeera-label">Sales Target Progress</p>
+                      <a href="/sales/targets" className="text-[11px] font-medium text-(--adeera-accent) hover:opacity-85">Open</a>
                     </div>
-                    <p className="text-sm text-gray-700 dark:text-slate-300">
+                    <p className="text-sm text-(--adeera-text)">
                       Today Revenue: <span className="font-semibold">Ksh {(salesTargetsProgress?.todayRevenue || 0).toLocaleString()}</span>
                     </p>
-                    <p className="text-sm text-gray-700 dark:text-slate-300">
+                    <p className="text-sm text-(--adeera-text)">
                       Daily Target: <span className="font-semibold">Ksh {(salesTargetsProgress?.dailyTarget || 0).toLocaleString()}</span>
                     </p>
                     <div className="mt-2">
-                      <div className="mb-1 flex items-center justify-between text-[11px] text-gray-600 dark:text-slate-400">
+                      <div className="mb-1 flex items-center justify-between text-[11px] text-(--adeera-text-muted)">
                         <span>Progress</span>
                         <span>{(salesTargetsProgress?.dailyProgress || 0).toFixed(1)}%</span>
                       </div>
-                      <div className="h-2 rounded-full bg-gray-200 dark:bg-slate-700">
+                      <div className="h-2 rounded-full bg-(--adeera-border)">
                         <div
-                          className="h-2 rounded-full bg-indigo-500"
+                          className="h-2 rounded-full bg-(--adeera-accent)"
                           style={{ width: `${Math.min(100, salesTargetsProgress?.dailyProgress || 0)}%` }}
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+                  <div className="rounded-lg border border-(--adeera-border) bg-(--adeera-surface-muted) p-4">
                     <div className="mb-1 flex items-center justify-between">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Usage Limits</p>
-                      <a href="/account/billing" className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">Open</a>
+                      <p className="adeera-label">Usage Limits</p>
+                      <a href="/account/billing" className="text-[11px] font-medium text-(--adeera-accent) hover:opacity-85">Open</a>
                     </div>
                     <div className="space-y-1.5">
                       {usageRows.map((row) => {
                         const percentage = row.limit > 0 ? Math.min(100, (row.current / row.limit) * 100) : 0;
                         return (
                           <div key={row.id}>
-                            <div className="flex items-center justify-between text-xs text-gray-700 dark:text-slate-300">
+                            <div className="flex items-center justify-between text-xs text-(--adeera-text)">
                               <span>{row.label}</span>
                               <span className="font-medium">{row.current.toLocaleString()} / {row.limit.toLocaleString()}</span>
                             </div>
-                            <div className="mt-0.5 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700">
+                            <div className="mt-0.5 h-1.5 rounded-full bg-(--adeera-border)">
                               <div
-                                className={`h-1.5 rounded-full ${percentage >= 90 ? 'bg-rose-500' : percentage >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                className={`h-1.5 rounded-full ${percentage >= 90 ? 'bg-(--adeera-danger)' : percentage >= 80 ? 'bg-(--adeera-warning)' : 'bg-(--adeera-success)'}`}
                                 style={{ width: `${percentage}%` }}
                               />
                             </div>
@@ -921,25 +921,28 @@ export default function DashboardPage() {
             )}
 
             {/* Today’s priorities */}
-            <div className="mb-6 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300">
+            <div className="adeera-card mb-6 p-4">
+              <div className="flex flex-col gap-2">
+                <span className="adeera-section-title">
                   Today&apos;s priorities
                 </span>
                 {showPriorities ? (
                   priorities.slice(0, 3).map((item) => {
                     const severityClasses =
                       item.severity === 'high'
-                        ? 'border-rose-200 bg-rose-50 text-rose-700'
+                        ? 'border-(--adeera-danger)/30 bg-(--adeera-danger-soft) text-(--adeera-danger)'
                         : item.severity === 'medium'
-                        ? 'border-amber-200 bg-amber-50 text-amber-700'
-                        : 'border-gray-200 bg-gray-50 text-gray-700';
+                        ? 'border-(--adeera-warning)/30 bg-(--adeera-warning-soft) text-(--adeera-warning)'
+                        : 'border-(--adeera-border) bg-(--adeera-surface-muted) text-(--adeera-text-muted)';
 
                     const content = (
                       <>
-                        <span className="text-xs font-semibold">{item.title}</span>
-                        <span className="text-[11px] text-gray-600 dark:text-slate-400">
-                          · {item.description}
+                        <span className="inline-flex items-center gap-2 text-xs font-semibold text-(--adeera-text)">
+                          <span className={`adeera-status-dot ${item.severity === 'high' ? 'bg-(--adeera-danger)' : item.severity === 'medium' ? 'bg-(--adeera-warning)' : 'bg-(--adeera-success)'}`} />
+                          {item.title}
+                        </span>
+                        <span className="text-[11px] text-(--adeera-text-muted)">
+                          {item.description}
                         </span>
                       </>
                     );
@@ -948,21 +951,21 @@ export default function DashboardPage() {
                       <a
                         key={item.id}
                         href={item.href}
-                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${severityClasses}`}
+                        className={`adeera-status-row ${severityClasses}`}
                       >
                         {content}
                       </a>
                     ) : (
                       <span
                         key={item.id}
-                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${severityClasses}`}
+                        className={`adeera-status-row ${severityClasses}`}
                       >
                         {content}
                       </span>
                     );
                   })
                 ) : (
-                  <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                  <span className="text-[11px] text-(--adeera-text-muted)">
                     No urgent issues detected – focus on serving customers.
                   </span>
                 )}
@@ -971,19 +974,19 @@ export default function DashboardPage() {
 
             {/* Quick Actions */}
             <div className="mb-6 space-y-2">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">
+              <h2 className="adeera-section-title">
                 {showCashierOpsWidgets ? 'Quick POS Actions' : 'Quick Actions'}
               </h2>
               <QuickActions lowStockCount={isOwnerOrAdmin || isManager ? lowStockAlerts : undefined} />
             </div>
 
             {manifestDashboardWidgets.length > 0 && (
-              <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
+              <div className="adeera-card mb-6 p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">
+                  <h2 className="adeera-section-title">
                     Blueprint Widgets
                   </h2>
-                  <span className="text-xs text-gray-500 dark:text-slate-400">
+                  <span className="text-xs text-(--adeera-text-muted)">
                     {manifestPayload?.manifest?.displayName || 'Blueprint'}
                   </span>
                 </div>
@@ -1012,48 +1015,48 @@ export default function DashboardPage() {
             {/* Customer Segmentation Section */}
             {showCustomerSegmentationWidget && (
             <div className="mb-6">
-<div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
+<div className="adeera-card p-5">
                 <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Customer Segmentation</h2>
+                <h2 className="adeera-section-title">Customer Segmentation</h2>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div className="lg:col-span-2">
                     <ChartComponents.CustomerSegmentation />
                   </div>
                   <div className="space-y-3">
-                    <div className="p-3 bg-blue-50 rounded-md">
+                    <div className="rounded-lg border border-(--adeera-border) bg-(--adeera-surface-muted) p-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-medium text-blue-800">Top Spending Segment</p>
-                          <p className="text-lg font-bold text-blue-600">Champions</p>
-                          <p className="text-xs text-blue-600">15% of customers, 45% of revenue</p>
+                          <p className="adeera-label">Top Spending Segment</p>
+                          <p className="text-lg font-semibold text-(--adeera-text)">Champions</p>
+                          <p className="text-xs text-(--adeera-text-muted)">15% of customers, 45% of revenue</p>
                         </div>
-                        <div className="p-2 bg-blue-100 rounded-full">
-                          <FiDollarSign className="w-4 h-4 text-blue-600" />
+                        <div className="rounded-full bg-(--adeera-accent-soft) p-2">
+                          <FiDollarSign className="w-4 h-4 text-(--adeera-accent)" />
                         </div>
                       </div>
                     </div>
-                    <div className="p-3 bg-amber-50 rounded-md">
+                    <div className="rounded-lg border border-(--adeera-warning)/30 bg-(--adeera-warning-soft) p-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-medium text-amber-800">Growth Opportunity</p>
-                          <p className="text-lg font-bold text-amber-600">Potential Loyalists</p>
-                          <p className="text-xs text-amber-600">30% of customers, 25% of revenue</p>
+                          <p className="adeera-label">Growth Opportunity</p>
+                          <p className="text-lg font-semibold text-(--adeera-text)">Potential Loyalists</p>
+                          <p className="text-xs text-(--adeera-text-muted)">30% of customers, 25% of revenue</p>
                         </div>
-                        <div className="p-2 bg-amber-100 rounded-full">
-                          <FiTrendingUp className="w-4 h-4 text-amber-600" />
+                        <div className="rounded-full bg-(--adeera-surface) p-2">
+                          <FiTrendingUp className="w-4 h-4 text-(--adeera-warning)" />
                         </div>
                       </div>
                     </div>
-                    <div className="p-3 bg-rose-50 rounded-md">
+                    <div className="rounded-lg border border-(--adeera-danger)/30 bg-(--adeera-danger-soft) p-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-medium text-rose-800">At Risk</p>
-                          <p className="text-lg font-bold text-rose-600">18% of customers</p>
-                          <p className="text-xs text-rose-600">Last purchase 30-60 days ago</p>
+                          <p className="adeera-label">At Risk</p>
+                          <p className="text-lg font-semibold text-(--adeera-text)">18% of customers</p>
+                          <p className="text-xs text-(--adeera-text-muted)">Last purchase 30-60 days ago</p>
                         </div>
-                        <div className="p-2 bg-rose-100 rounded-full">
-                          <FiAlertCircle className="w-4 h-4 text-rose-600" />
+                        <div className="rounded-full bg-(--adeera-surface) p-2">
+                          <FiAlertCircle className="w-4 h-4 text-(--adeera-danger)" />
                         </div>
                       </div>
                     </div>
@@ -1067,11 +1070,11 @@ export default function DashboardPage() {
             <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
               {/* Sales Chart */}
               <div className="lg:col-span-2">
-                <div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
+                <div className="adeera-card p-5">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Sales Overview</h3>
+                    <h3 className="adeera-section-title">Sales Overview</h3>
                     <div className="flex items-center space-x-2">
-                      <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                      <span className="inline-flex items-center rounded-full bg-(--adeera-success-soft) px-2 py-0.5 text-xs font-medium text-(--adeera-success)">
                         <FiTrendingUp className="mr-1 h-3 w-3" />
                         12.5% from last month
                       </span>
@@ -1086,18 +1089,18 @@ export default function DashboardPage() {
               {/* Right Sidebar */}
               <div className="space-y-4">
                 {/* Customer Growth */}
-                <div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
-                  <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Customer Growth</h3>
+                <div className="adeera-card p-5">
+                  <h3 className="mb-3 adeera-section-title">Customer Growth</h3>
                   <div className="h-56">
                     <ChartComponents.CustomerGrowthChart growthData={analyticsData?.customerGrowth || {}} />
                   </div>
                 </div>
 
                 {/* Recent Activities */}
-                <div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
+                <div className="adeera-card p-5">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Recent Activities</h3>
-                    <button className="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                    <h3 className="adeera-section-title">Recent Activities</h3>
+                    <button className="text-(--adeera-accent) hover:opacity-85 text-sm font-medium">
                       View All
                     </button>
                   </div>
@@ -1105,13 +1108,13 @@ export default function DashboardPage() {
                     {[1, 2, 3].map((i) => (
                       <div key={i} className="flex items-start">
                         <div className="shrink-0">
-                          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
-                            <FiUserPlus className="h-4 w-4 text-gray-500" />
+                          <div className="h-8 w-8 rounded-full bg-(--adeera-surface-muted) flex items-center justify-center">
+                            <FiUserPlus className="h-4 w-4 text-(--adeera-text-muted)" />
                           </div>
                         </div>
                         <div className="ml-2">
-                          <p className="text-sm font-medium text-gray-900">New customer registered</p>
-                          <p className="text-xs text-gray-500">2 hours ago</p>
+                          <p className="text-sm font-medium text-(--adeera-text)">New customer registered</p>
+                          <p className="text-xs text-(--adeera-text-muted)">2 hours ago</p>
                         </div>
                       </div>
                     ))}
@@ -1122,20 +1125,20 @@ export default function DashboardPage() {
             )}
 
             {showCashierOpsWidgets && (
-              <div className="mb-6 rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
-                <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Cashier Operations</h3>
+              <div className="adeera-card mb-6 p-5">
+                <h3 className="mb-3 adeera-section-title">Cashier Operations</h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="rounded-md border border-gray-200 p-3 dark:border-slate-700">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Pending Orders</p>
-                    <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-100">{pendingOrdersCount.toLocaleString()}</p>
+                  <div className="rounded-md border border-(--adeera-border) p-3">
+                    <p className="adeera-label">Pending Orders</p>
+                    <p className="mt-1 text-lg font-semibold text-(--adeera-text)">{pendingOrdersCount.toLocaleString()}</p>
                   </div>
-                  <div className="rounded-md border border-gray-200 p-3 dark:border-slate-700">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Open Shifts</p>
-                    <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-100">{openShiftsCount === null ? '—' : openShiftsCount.toLocaleString()}</p>
+                  <div className="rounded-md border border-(--adeera-border) p-3">
+                    <p className="adeera-label">Open Shifts</p>
+                    <p className="mt-1 text-lg font-semibold text-(--adeera-text)">{openShiftsCount === null ? '—' : openShiftsCount.toLocaleString()}</p>
                   </div>
-                  <div className="rounded-md border border-gray-200 p-3 dark:border-slate-700">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Today Sales</p>
-                    <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-100">{todaySummary ? todaySummary.ordersToday.toLocaleString() : '—'}</p>
+                  <div className="rounded-md border border-(--adeera-border) p-3">
+                    <p className="adeera-label">Today Sales</p>
+                    <p className="mt-1 text-lg font-semibold text-(--adeera-text)">{todaySummary ? todaySummary.ordersToday.toLocaleString() : '—'}</p>
                   </div>
                 </div>
               </div>
@@ -1144,8 +1147,8 @@ export default function DashboardPage() {
             {/* Sales Trends Analysis */}
             {showSalesAnalysisWidget && (
             <div className="mb-6">
-              <div className="rounded-lg bg-white dark:bg-slate-800 p-4 shadow-sm ring-1 ring-gray-200 dark:ring-slate-600">
-                <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-100">Sales Trends Analysis</h3>
+              <div className="adeera-card p-5">
+                <h3 className="mb-3 adeera-section-title">Sales Trends Analysis</h3>
                 <div className="grid grid-cols-1 gap-4">
                   <ChartComponents.MonthlySalesTrends />
                 </div>

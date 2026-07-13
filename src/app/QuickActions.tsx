@@ -28,7 +28,7 @@ type QuickAction = {
   description: string;
   href: string;
   icon: React.ReactElement;
-  color: string;
+  tone?: 'default' | 'warning';
 };
 
 function iconForActionPath(path: string): IconType {
@@ -40,19 +40,6 @@ function iconForActionPath(path: string): IconType {
   if (normalized.startsWith('/analytics') || normalized.startsWith('/reports')) return FiBarChart2;
   if (normalized.startsWith('/account') || normalized.startsWith('/billing')) return FiTag;
   return FiFileText;
-}
-
-function colorForActionPath(path: string): string {
-  const normalized = String(path || '').toLowerCase();
-  if (normalized.startsWith('/sales')) return 'bg-blue-50 text-blue-700 hover:bg-blue-100';
-  if (normalized.startsWith('/products') || normalized.startsWith('/inventory')) {
-    return 'text-emerald-700 hover:border-emerald-300';
-  }
-  if (normalized.startsWith('/analytics') || normalized.startsWith('/reports')) {
-    return 'text-purple-700 hover:border-purple-300';
-  }
-  if (normalized.startsWith('/settings')) return 'text-slate-700 hover:border-slate-300';
-  return 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100';
 }
 
 export default function QuickActions({ lowStockCount }: QuickActionsProps) {
@@ -90,7 +77,6 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
       description: "View today’s transactions and monitor performance.",
       href: "/sales/history",
       icon: <FiBarChart2 className="h-5 w-5" />,
-      color: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100",
     },
   ];
 
@@ -101,7 +87,6 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
       description: "Create a new product in your catalog.",
       href: "/products/unified",
       icon: <FiPlusCircle className="h-5 w-5" />,
-      color: "text-emerald-700 hover:border-emerald-300",
     },
     {
       id: "invite-user",
@@ -109,7 +94,6 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
       description: "Add staff or managers to your account.",
       href: "/settings/users",
       icon: <FiUserPlus className="h-5 w-5" />,
-      color: "text-amber-700 hover:border-amber-300",
     },
     {
       id: "configure-branches",
@@ -117,7 +101,6 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
       description: "Add or update your business branches.",
       href: "/settings/branches",
       icon: <FiSettings className="h-5 w-5" />,
-      color: "text-slate-700 hover:border-slate-300",
     },
     {
       id: "view-analytics",
@@ -125,7 +108,6 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
       description: "Open analytics to explore trends and insights.",
       href: "/analytics",
       icon: <FiFileText className="h-5 w-5" />,
-      color: "text-purple-700 hover:border-purple-300",
     },
   ];
 
@@ -153,7 +135,6 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
           description: `Open ${action.label} workspace.`,
           href: action.path || '/dashboard',
           icon: <Icon className="h-5 w-5" />,
-          color: colorForActionPath(action.path || ''),
         };
       });
   }, [manifestPayload]);
@@ -167,7 +148,7 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
       } below minimum level.`,
       href: "/products/reports/low-stock-alerts",
       icon: <FiPackage className="h-5 w-5" />,
-      color: "text-rose-700 hover:border-rose-300",
+      tone: 'warning',
     });
   }
 
@@ -178,7 +159,7 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
       description: "You’re close to a plan limit. Review or upgrade.",
       href: "/settings/billing/subscription",
       icon: <FiTag className="h-5 w-5" />,
-      color: "text-pink-700 hover:border-pink-300",
+      tone: 'warning',
     });
   }
 
@@ -198,7 +179,6 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
       description: "Check product availability and stock levels.",
       href: "/products/unified",
       icon: <FiPackage className="h-5 w-5" />,
-      color: "text-emerald-700 hover:border-emerald-300",
     });
   }
 
@@ -215,14 +195,18 @@ export default function QuickActions({ lowStockCount }: QuickActionsProps) {
         <button
           key={action.id}
           onClick={() => router.push(action.href)}
-          className={`flex flex-col items-start justify-between rounded-lg border border-gray-200 bg-white p-3 text-left text-gray-800 shadow-sm transition-all duration-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100 ${action.color}`}
+          className={`flex flex-col items-start justify-between rounded-lg border p-3 text-left transition-all duration-200 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 ${
+            action.tone === 'warning'
+              ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 text-gray-900 dark:text-zinc-100'
+              : 'border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100'
+          }`}
         >
-          <div className="flex items-center justify-center rounded-md bg-white/70 p-2 shadow-sm dark:bg-slate-800/60">
+          <div className="flex items-center justify-center rounded-md bg-gray-50 dark:bg-zinc-800/70 p-2 text-indigo-600 dark:text-indigo-400">
             {action.icon}
           </div>
           <div className="mt-2 space-y-0.5">
             <p className="text-sm font-semibold">{action.label}</p>
-            <p className="text-[11px] text-gray-600 dark:text-slate-400">
+            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
               {action.description}
             </p>
           </div>

@@ -302,7 +302,7 @@ export default function BranchesPage() {
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
                 <button
                   onClick={() => setShowViewModal(branch)}
-                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                   title="View Details"
                 >
                   <FaEye className="w-4 h-4" />
@@ -310,7 +310,7 @@ export default function BranchesPage() {
                 
                 <button
                   onClick={() => openEditModal(branch)}
-                  className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                  className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                   title="Edit Branch"
                 >
                   <FaEdit className="w-4 h-4" />
@@ -318,7 +318,7 @@ export default function BranchesPage() {
                 
                 <button
                   onClick={() => handleDeleteBranch(branch.id)}
-                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 hover:text-red-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-red-400"
                   title="Delete Branch"
                 >
                   <FaTrash className="w-4 h-4" />
@@ -336,7 +336,7 @@ export default function BranchesPage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Create New Branch</h2>
               <button
-                className="p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
                 onClick={() => setShowCreateModal(false)}
               >
                 <FaTimes className="w-5 h-5" />
@@ -539,7 +539,7 @@ export default function BranchesPage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">{showViewModal.name}</h2>
               <button
-                className="p-2 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
                 onClick={() => setShowViewModal(null)}
               >
                 <FaTimes className="w-5 h-5" />
@@ -547,9 +547,9 @@ export default function BranchesPage() {
             </div>
             
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <FaUser className="w-5 h-5 text-blue-600" />
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="rounded-lg bg-gray-100 p-2">
+                  <FaUser className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                   <div className="text-sm text-gray-500">Manager</div>
@@ -557,9 +557,9 @@ export default function BranchesPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <FaPhone className="w-5 h-5 text-green-600" />
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="rounded-lg bg-gray-100 p-2">
+                  <FaPhone className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                   <div className="text-sm text-gray-500">Phone</div>
@@ -567,9 +567,9 @@ export default function BranchesPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <FaEnvelope className="w-5 h-5 text-purple-600" />
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="rounded-lg bg-gray-100 p-2">
+                  <FaEnvelope className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                   <div className="text-sm text-gray-500">Email</div>
@@ -577,9 +577,9 @@ export default function BranchesPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <FaMapMarkerAlt className="w-5 h-5 text-amber-600" />
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="rounded-lg bg-gray-100 p-2">
+                  <FaMapMarkerAlt className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                   <div className="text-sm text-gray-500">Address</div>
@@ -593,9 +593,9 @@ export default function BranchesPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <FaClock className="w-5 h-5 text-blue-600" />
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="rounded-lg bg-gray-100 p-2">
+                  <FaClock className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                   <div className="text-sm text-gray-500">Opening Hours</div>
@@ -603,8 +603,8 @@ export default function BranchesPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-gray-100 rounded-lg">
+              <div className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="rounded-lg bg-gray-100 p-2">
                   <FaGlobe className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
@@ -614,7 +614,7 @@ export default function BranchesPage() {
               </div>
               
               {showViewModal.customField && (
-                <div className="p-3 bg-gray-50 rounded-lg">
+                <div className="rounded-xl border border-gray-200 p-3">
                   <div className="text-sm text-gray-500 mb-1">Custom Field</div>
                   <div className="font-medium">{showViewModal.customField}</div>
                 </div>

@@ -149,22 +149,22 @@ const SalesTrendsAnalysis: React.FC<SalesTrendsAnalysisProps> = ({
   };
 
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden ${className}`}>
-      <div className="p-5 border-b border-gray-200 flex justify-between items-center">
+    <div className={`adeera-card overflow-hidden ${className}`}>
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 p-5">
         <div className="flex items-center space-x-2">
-          <FiBarChart2 className="w-5 h-5 text-indigo-600" />
-          <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+          <FiBarChart2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+          <h3 className="text-base font-semibold tracking-tight text-gray-900 dark:text-zinc-100">{title}</h3>
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setViewMode(prev => prev === 'monthly' ? 'weekly' : 'monthly')}
-            className="px-3 py-1.5 text-sm font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+            className="rounded-md border border-gray-200 dark:border-zinc-800 px-3 py-1.5 text-sm font-medium text-gray-500 dark:text-zinc-400 transition-colors hover:bg-gray-100 dark:hover:bg-zinc-800"
           >
             {viewMode === 'monthly' ? 'Weekly View' : 'Monthly View'}
           </button>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+            className="rounded-md p-1.5 text-gray-500 dark:text-zinc-400 transition-colors hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-zinc-100"
             aria-label={expanded ? 'Minimize' : 'Expand'}
           >
             {expanded ? (
@@ -180,7 +180,7 @@ const SalesTrendsAnalysis: React.FC<SalesTrendsAnalysisProps> = ({
         </div>
       </div>
 
-      <div className="p-5 border-b border-gray-200">
+      <div className="border-b border-gray-200 dark:border-zinc-800 p-5">
         <div className="flex flex-wrap gap-2 mb-4">
           {(['1Y', '2Y', '3Y', 'ALL'] as TimeRange[]).map(range => (
             <button
@@ -189,7 +189,7 @@ const SalesTrendsAnalysis: React.FC<SalesTrendsAnalysisProps> = ({
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 timeRange === range
                   ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800'
               }`}
             >
               {range}
@@ -199,20 +199,20 @@ const SalesTrendsAnalysis: React.FC<SalesTrendsAnalysisProps> = ({
 
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-500 mb-1">Total Sales</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total)}</p>
-              <p className="text-xs text-gray-500">
+            <div className="rounded-lg border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/70 p-4">
+              <p className="mb-1 text-sm text-gray-500 dark:text-zinc-400">Total Sales</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-zinc-100">{formatCurrency(summary.total)}</p>
+              <p className="text-xs text-gray-500 dark:text-zinc-400">
                 {summary.periodCount} {viewMode === 'monthly' ? 'months' : 'weeks'}
               </p>
             </div>
             
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-500 mb-1">Average / {viewMode === 'monthly' ? 'Month' : 'Week'}</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.average)}</p>
+            <div className="rounded-lg border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/70 p-4">
+              <p className="mb-1 text-sm text-gray-500 dark:text-zinc-400">Average / {viewMode === 'monthly' ? 'Month' : 'Week'}</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-zinc-100">{formatCurrency(summary.average)}</p>
               <div className="flex items-center text-xs">
                 {summary.yoyGrowth !== null && (
-                  <span className={`flex items-center ${summary.yoyGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`flex items-center ${summary.yoyGrowth >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {summary.yoyGrowth >= 0 ? (
                       <FiTrendingUp className="mr-1" size={14} />
                     ) : (
@@ -225,18 +225,18 @@ const SalesTrendsAnalysis: React.FC<SalesTrendsAnalysisProps> = ({
             </div>
 
             {bestPeriod && (
-              <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-                <p className="text-sm text-green-700 mb-1">Best {viewMode === 'monthly' ? 'Month' : 'Week'}</p>
-                <p className="text-lg font-bold text-green-900">{formatPeriod(bestPeriod.period)}</p>
-                <p className="text-sm text-green-700">{formatCurrency(bestPeriod.value)}</p>
+              <div className="rounded-lg border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/30 p-4">
+                <p className="mb-1 text-sm text-green-600 dark:text-green-400">Best {viewMode === 'monthly' ? 'Month' : 'Week'}</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-zinc-100">{formatPeriod(bestPeriod.period)}</p>
+                <p className="text-sm text-green-600 dark:text-green-400">{formatCurrency(bestPeriod.value)}</p>
               </div>
             )}
 
             {worstPeriod && (
-              <div className="bg-red-50 p-4 rounded-lg border border-red-100">
-                <p className="text-sm text-red-700 mb-1">Worst {viewMode === 'monthly' ? 'Month' : 'Week'}</p>
-                <p className="text-lg font-bold text-red-900">{formatPeriod(worstPeriod.period)}</p>
-                <p className="text-sm text-red-700">{formatCurrency(worstPeriod.value)}</p>
+              <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-4">
+                <p className="mb-1 text-sm text-red-600 dark:text-red-400">Worst {viewMode === 'monthly' ? 'Month' : 'Week'}</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-zinc-100">{formatPeriod(worstPeriod.period)}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">{formatCurrency(worstPeriod.value)}</p>
               </div>
             )}
           </div>
@@ -245,32 +245,32 @@ const SalesTrendsAnalysis: React.FC<SalesTrendsAnalysisProps> = ({
 
       <div className="p-5">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-zinc-800">
             <thead>
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                   {viewMode === 'monthly' ? 'Month' : 'Week'}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                   Sales
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                   % of Total
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200 dark:divide-zinc-800">
               {Object.entries(filteredData)
                 .sort(([a], [b]) => a.localeCompare(b))
                 .map(([period, { total }]) => (
-                  <tr key={period} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <tr key={period} className="hover:bg-gray-100 dark:hover:bg-zinc-800">
+                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-zinc-100">
                       {formatPeriod(period)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-gray-900">
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-900 dark:text-zinc-100">
                       {formatCurrency(total)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-gray-900">
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-900 dark:text-zinc-100">
                       {summary ? ((total / summary.total) * 100).toFixed(1) : '0'}%
                     </td>
                   </tr>

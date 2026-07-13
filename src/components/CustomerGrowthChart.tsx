@@ -84,7 +84,7 @@ export default function CustomerGrowthChart({
   if (!growthData || Object.keys(growthData).length === 0) {
     return (
       <div
-        className={`bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm transition-all duration-300 ${
+        className={`adeera-card overflow-hidden transition-all duration-300 ${
           isExpanded ? 'fixed inset-4 z-50 m-auto max-w-6xl max-h-[90vh]' : 'h-full'
         } ${className}`}
         style={{
@@ -97,19 +97,19 @@ export default function CustomerGrowthChart({
           <div className="absolute top-4 right-4 z-10">
             <button
               onClick={() => setIsExpanded(false)}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+              className="rounded-full p-2 text-[var(--adeera-text-muted)] hover:bg-[var(--adeera-surface-muted)] hover:text-[var(--adeera-text)]"
               aria-label="Minimize chart"
             >
               <FiMinimize2 size={20} />
             </button>
           </div>
         )}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 text-center flex flex-col items-center justify-center" style={{ minHeight: `${height}px` }}>
-          <div className="bg-gray-100 p-3 rounded-full mb-3">
-            <FiUsers className="text-gray-400" size={24} />
+        <div className="flex min-h-full flex-col items-center justify-center rounded-xl border border-[var(--adeera-border)] bg-[var(--adeera-surface)] p-6 text-center" style={{ minHeight: `${height}px` }}>
+          <div className="mb-3 rounded-full bg-[var(--adeera-surface-muted)] p-3">
+            <FiUsers className="text-[var(--adeera-text-muted)]" size={24} />
           </div>
-          <h3 className="text-gray-700 font-medium mb-1">No Customer Data</h3>
-          <p className="text-gray-500 text-sm max-w-xs">
+          <h3 className="mb-1 font-medium text-[var(--adeera-text)]">No Customer Data</h3>
+          <p className="max-w-xs text-sm text-[var(--adeera-text-muted)]">
             There&apos;s no customer data available for the selected time period.
           </p>
         </div>
@@ -119,7 +119,7 @@ export default function CustomerGrowthChart({
 
   return (
     <div
-      className={`bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm transition-all duration-300 ${
+      className={`adeera-card overflow-hidden transition-all duration-300 ${
         isExpanded ? 'fixed inset-4 z-50 m-auto max-w-6xl max-h-[90vh]' : 'h-full'
       } ${className}`}
       style={{
@@ -132,7 +132,7 @@ export default function CustomerGrowthChart({
         <div className="absolute top-4 right-4 z-10">
           <button
             onClick={() => setIsExpanded(false)}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+            className="rounded-full p-2 text-[var(--adeera-text-muted)] hover:bg-[var(--adeera-surface-muted)] hover:text-[var(--adeera-text)]"
             aria-label="Minimize chart"
           >
             <FiMinimize2 size={20} />
@@ -143,18 +143,18 @@ export default function CustomerGrowthChart({
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 px-6 pt-6">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <FiUsers className="mr-2 text-purple-500" size={20} />
+            <h3 className="flex items-center text-base font-semibold tracking-tight text-[var(--adeera-text)]">
+              <FiUsers className="mr-2 text-[var(--adeera-accent)]" size={20} />
               {title}
               <button
                 onClick={() => {}}
-                className="ml-2 text-gray-400 hover:text-gray-600"
+                className="ml-2 text-[var(--adeera-text-muted)] hover:text-[var(--adeera-text)]"
                 title="More information"
               >
                 <FiInfo size={16} />
               </button>
             </h3>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="mt-1 text-sm text-[var(--adeera-text-muted)]">
               {activeFilter === '1W' ? 'Last 7 days' :
                 activeFilter === '1M' ? 'Last 30 days' :
                 activeFilter === '3M' ? 'Last 90 days' :
@@ -168,8 +168,8 @@ export default function CustomerGrowthChart({
                 onClick={() => setActiveFilter(filter)}
                 className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                   activeFilter === filter
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    ? 'bg-[var(--adeera-accent)] text-white'
+                    : 'border border-[var(--adeera-border)] text-[var(--adeera-text-muted)] hover:bg-[var(--adeera-surface-muted)]'
                 }`}
               >
                 {filter}
@@ -181,8 +181,8 @@ export default function CustomerGrowthChart({
               onClick={() => setChartType('area')}
               className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                 chartType === 'area'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-[var(--adeera-accent)] text-white'
+                  : 'border border-[var(--adeera-border)] text-[var(--adeera-text-muted)] hover:bg-[var(--adeera-surface-muted)]'
               }`}
               aria-label="Area chart view"
             >
@@ -192,8 +192,8 @@ export default function CustomerGrowthChart({
               onClick={() => setChartType('line')}
               className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                 chartType === 'line'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-[var(--adeera-accent)] text-white'
+                  : 'border border-[var(--adeera-border)] text-[var(--adeera-text-muted)] hover:bg-[var(--adeera-surface-muted)]'
               }`}
               aria-label="Line chart view"
             >
@@ -209,23 +209,23 @@ export default function CustomerGrowthChart({
               <AreaChart data={filteredData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.22} />
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 12 }} />
-                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b6b70' }} tickMargin={8} />
+                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 11, fill: '#6b6b70' }} tickMargin={8} />
+                <CartesianGrid strokeDasharray="2 3" stroke="#e5e5e7" vertical={false} />
                 <Tooltip formatter={(value) => formatNumber(Number(value ?? 0))} />
-                <Area type="monotone" dataKey="value" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorValue)" />
+                <Area type="monotone" dataKey="value" stroke="#4f46e5" fillOpacity={1} fill="url(#colorValue)" />
               </AreaChart>
             ) : (
               <LineChart data={filteredData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 12 }} />
-                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b6b70' }} tickMargin={8} />
+                <YAxis tickFormatter={formatNumber} tick={{ fontSize: 11, fill: '#6b6b70' }} tickMargin={8} />
+                <CartesianGrid strokeDasharray="2 3" stroke="#e5e5e7" vertical={false} />
                 <Tooltip formatter={(value) => formatNumber(Number(value ?? 0))} />
-                <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -233,61 +233,61 @@ export default function CustomerGrowthChart({
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-6 py-6">
-          <div className="bg-purple-50 p-4 rounded-xl shadow-sm border border-purple-100">
+          <div className="rounded-xl border border-[var(--adeera-border)] bg-[var(--adeera-surface-muted)] p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-purple-600">Total Customers</p>
-                <p className="text-xl font-bold text-gray-900">{formatNumber(totalCustomers)}</p>
+                <p className="text-xs font-medium text-[var(--adeera-text-muted)]">Total Customers</p>
+                <p className="text-xl font-semibold text-[var(--adeera-text)]">{formatNumber(totalCustomers)}</p>
               </div>
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <FiUsers className="text-purple-600" size={20} />
+              <div className="rounded-lg bg-[var(--adeera-accent-soft)] p-2">
+                <FiUsers className="text-[var(--adeera-accent)]" size={20} />
               </div>
             </div>
             <div className="mt-2 flex items-center text-xs">
-              <span className={`inline-flex items-center ${growthRate >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`inline-flex items-center ${growthRate >= 0 ? 'text-[var(--adeera-success)]' : 'text-[var(--adeera-danger)]'}`}>
                 {growthRate >= 0 ? <FiTrendingUp className="mr-1" /> : <FiTrendingDown className="mr-1" />}
                 {Math.abs(growthRate).toFixed(1)}% growth
               </span>
             </div>
           </div>
 
-          <div className="bg-white border border-gray-100 p-4 rounded-xl shadow-sm">
+          <div className="rounded-xl border border-[var(--adeera-border)] bg-[var(--adeera-surface)] p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-gray-500">New Customers</p>
-                <p className="text-lg font-semibold text-gray-900">{formatNumber(newCustomers)}</p>
+                <p className="text-xs font-medium text-[var(--adeera-text-muted)]">New Customers</p>
+                <p className="text-lg font-semibold text-[var(--adeera-text)]">{formatNumber(newCustomers)}</p>
               </div>
-              <div className="p-2 bg-green-50 rounded-lg">
-                <FiTrendingUp className="text-green-500" size={20} />
+              <div className="rounded-lg bg-[var(--adeera-surface-muted)] p-2">
+                <FiTrendingUp className="text-[var(--adeera-success)]" size={20} />
               </div>
             </div>
-            <div className="mt-2 text-xs text-gray-500">This period</div>
+            <div className="mt-2 text-xs text-[var(--adeera-text-muted)]">This period</div>
           </div>
 
-          <div className="bg-white border border-gray-100 p-4 rounded-xl shadow-sm">
+          <div className="rounded-xl border border-[var(--adeera-border)] bg-[var(--adeera-surface)] p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-gray-500">Avg. Growth</p>
-                <p className="text-lg font-semibold text-gray-900">{formatNumber(avgGrowth)}</p>
+                <p className="text-xs font-medium text-[var(--adeera-text-muted)]">Avg. Growth</p>
+                <p className="text-lg font-semibold text-[var(--adeera-text)]">{formatNumber(avgGrowth)}</p>
               </div>
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <FiTrendingUp className="text-blue-500" size={20} />
+              <div className="rounded-lg bg-[var(--adeera-surface-muted)] p-2">
+                <FiTrendingUp className="text-[var(--adeera-accent)]" size={20} />
               </div>
             </div>
-            <div className="mt-2 text-xs text-gray-500">Per period</div>
+            <div className="mt-2 text-xs text-[var(--adeera-text-muted)]">Per period</div>
           </div>
 
-          <div className="bg-white border border-gray-100 p-4 rounded-xl shadow-sm">
+          <div className="rounded-xl border border-[var(--adeera-border)] bg-[var(--adeera-surface)] p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-gray-500">Data Points</p>
-                <p className="text-lg font-semibold text-gray-900">{filteredData.length}</p>
+                <p className="text-xs font-medium text-[var(--adeera-text-muted)]">Data Points</p>
+                <p className="text-lg font-semibold text-[var(--adeera-text)]">{filteredData.length}</p>
               </div>
-              <div className="p-2 bg-gray-50 rounded-lg">
-                <FiInfo className="text-gray-600" size={20} />
+              <div className="rounded-lg bg-[var(--adeera-surface-muted)] p-2">
+                <FiInfo className="text-[var(--adeera-text-muted)]" size={20} />
               </div>
             </div>
-            <div className="mt-2 text-xs text-gray-500">Total periods</div>
+            <div className="mt-2 text-xs text-[var(--adeera-text-muted)]">Total periods</div>
           </div>
         </div>
       </div>

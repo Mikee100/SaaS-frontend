@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import Link from "next/link";
-import { FaEdit, FaTrash, FaUserPlus, FaUsers, FaClipboardList, FaDownload } from "react-icons/fa";
+import { FaEdit, FaTrash, FaUserPlus, FaUsers, FaClipboardList, FaDownload, FaSearch } from "react-icons/fa";
 
 interface UserRoleLink {
   role: {
@@ -21,7 +21,6 @@ interface User {
   branchId?: string;
   lastLogin?: string;
   failedLoginCount?: number;
-  mfaEnabled?: boolean;
   forceReset?: boolean;
   locked?: boolean;
 }
@@ -61,8 +60,8 @@ const FRIENDLY_AUDIT_ACTIONS: Record<string, string> = {
   login_failed: "Failed sign in",
   password_reset_required: "Password reset required",
   password_reset_completed: "Password reset completed",
-  mfa_enabled: "MFA enabled",
-  mfa_disabled: "MFA disabled",
+  mfa_enabled: "Authentication setting updated",
+  mfa_disabled: "Authentication setting updated",
   account_locked: "Account locked",
   account_unlocked: "Account unlocked",
   api_request: "System request",
@@ -236,6 +235,9 @@ export default function UsersSettingsPage() {
   const [activityLogs, setActivityLogs] = useState<AuditLog[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [activityError, setActivityError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [branchFilter, setBranchFilter] = useState("all");
   const csvLinkRef = useRef<HTMLAnchorElement>(null);
 
   const openActivityDrawer = async (user: User) => {
@@ -447,6 +449,58 @@ export default function UsersSettingsPage() {
     return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
   };
 
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      const matchesSearch =
+        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const userRole = (user.userRoles || [])
+        .map((ur) => ur.role?.name)
+        .filter(Boolean)
+        .join(", ");
+
+      const matchesRole =
+        roleFilter === "all" ||
+        userRole.toLowerCase() === roleFilter.toLowerCase();
+
+      const matchesBranch =
+        branchFilter === "all" || user.branchId === branchFilter;
+
+      return matchesSearch && matchesRole && matchesBranch;
+    });
+  }, [users, searchQuery, roleFilter, branchFilter]);
+
+  const usersNeedingAttention = useMemo(
+    () => users.filter((u) => Boolean(u.locked || u.forceReset || (u.failedLoginCount || 0) > 3)).length,
+    [users],
+  );
+
+  const usersByBranch = useMemo(() => {
+    const branchNameById = new Map(branches.map((branch) => [branch.id, branch.name]));
+    const grouped = new Map<string, { branchName: string; users: User[] }>();
+
+    for (const user of filteredUsers) {
+      const branchKey = user.branchId || "__no_branch";
+      const branchName = user.branchId ? branchNameById.get(user.branchId) || "No Branch" : "No Branch";
+
+      if (!grouped.has(branchKey)) {
+        grouped.set(branchKey, { branchName, users: [] });
+      }
+
+      grouped.get(branchKey)?.users.push(user);
+    }
+
+    return Array.from(grouped.values()).sort((a, b) => {
+      if (a.branchName === "No Branch") return 1;
+      if (b.branchName === "No Branch") return -1;
+      return a.branchName.localeCompare(b.branchName);
+    });
+  }, [filteredUsers, branches]);
+
+  const rowActionButtonClass =
+    "rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800";
+
   // Inline role/branch change state and handlers (must be at top level, not inside JSX)
   const [pendingChange, setPendingChange] = useState<{
     user: User;
@@ -507,243 +561,267 @@ export default function UsersSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[300px] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+      <div className="flex min-h-75 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-indigo-500" />
       </div>
     );
   }
   return (
-    <div className="mx-auto min-h-[80vh] max-w-7xl px-4 py-10">
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <FaUsers className="text-2xl text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Users</h2>
+    <div className="mx-auto min-h-[80vh] max-w-7xl px-4 py-8">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="mb-1 flex items-center gap-2">
+            <FaUsers className="text-lg text-gray-600 dark:text-zinc-400" />
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-zinc-100">Users</h2>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-zinc-400">
+            Manage team access, branch assignments, and account security.
+          </p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white shadow transition hover:bg-blue-700"
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700"
           >
             <FaUserPlus />
             <span>Add New User</span>
           </button>
           <Link
             href="/settings"
-            className="flex items-center text-sm text-blue-600 hover:underline"
+            className="flex items-center rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
           >
-            ← All Settings
+            Back to Settings
           </Link>
         </div>
       </div>
 
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Total Users</p>
+          <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-zinc-100">{users.length}</p>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Filtered Results</p>
+          <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-zinc-100">{filteredUsers.length}</p>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Needs Attention</p>
+          <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-zinc-100">{usersNeedingAttention}</p>
+        </div>
+      </div>
+
       {success && (
-        <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-green-700">
+        <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
           Operation completed successfully!
         </div>
       )}
       {error && (
-        <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-2 text-red-700">
+        <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-2 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
           {error}
         </div>
       )}
 
-      <div className="w-full rounded-xl bg-white p-8 shadow">
-        <div className="mb-6 flex items-center gap-2">
-          <FaUsers className="text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-800">Organization Users</h3>
-          <span className="text-sm text-gray-500">({users.length} users)</span>
+      <div className="w-full rounded-xl border border-gray-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="relative md:col-span-1">
+            <FaSearch className="pointer-events-none absolute left-3 top-3.5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name or email"
+              className="h-10 w-full rounded-lg border border-gray-300 pl-9 pr-3 text-sm focus:border-indigo-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+          </div>
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-indigo-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          >
+            <option value="all">All Roles</option>
+            {roles.map((role) => (
+              <option key={role.id} value={role.name}>
+                {role.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-indigo-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          >
+            <option value="all">All Branches</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {users.length === 0 ? (
-          <div className="py-8 text-center text-gray-500">
-            <FaUsers className="mx-auto mb-4 text-4xl text-gray-300" />
-            <p>No users found in your organization.</p>
+        {filteredUsers.length === 0 ? (
+          <div className="py-8 text-center text-gray-500 dark:text-zinc-400">
+            <FaUsers className="mx-auto mb-4 text-4xl text-gray-300 dark:text-zinc-700" />
+            <p>No users match your current filters.</p>
             <p className="mt-2 text-sm">Add your first user to get started.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {users.map((user) => (
-              <div key={user.id} className="rounded-lg border border-gray-200 bg-white p-4">
-                <div className="mb-3 flex flex-col gap-3 border-b border-gray-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
-                      <span className="text-sm font-medium text-blue-600">
-                        {user.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900">{user.name}</div>
-                      <div className="text-xs text-gray-600">{user.email}</div>
-                    </div>
-                    {user.isSuperadmin && (
-                      <span className="rounded bg-purple-100 px-2 py-1 text-xs text-purple-800">
-                        Super Admin
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {!isOwnerAccount(user) && (
-                      <>
-                        <button
-                          onClick={() => openEditModal(user)}
-                          className="rounded-md p-2 text-blue-600 transition hover:bg-blue-50"
-                          title="Edit user"
-                        >
-                          <FaEdit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => openDeleteModal(user)}
-                          className="rounded-md p-2 text-red-600 transition hover:bg-red-50"
-                          title={user.isSuperadmin ? "Super Admin cannot be deleted" : "Delete user"}
-                          disabled={user.isSuperadmin}
-                        >
-                          <FaTrash className="h-4 w-4" />
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => openActivityDrawer(user)}
-                      className="rounded-md p-2 text-gray-600 transition hover:bg-gray-100"
-                      title="View activity"
-                    >
-                      <FaClipboardList className="h-4 w-4" />
-                    </button>
-                  </div>
+          <div className="space-y-5">
+            {usersByBranch.map((branchGroup) => (
+              <section key={branchGroup.branchName} className="space-y-3">
+                <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">{branchGroup.branchName}</h4>
+                  <span className="rounded-lg border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    {branchGroup.users.length} user{branchGroup.users.length === 1 ? "" : "s"}
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                  <div className="rounded-md bg-gray-50 p-3">
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Access</div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500">Role</span>
-                        {isOwnerAccount(user) ? (
-                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
-                            {(user.userRoles || [])
-                              .map((ur) => ur.role?.name)
-                              .filter(Boolean)
-                              .join(", ") || "No Role"}
-                          </span>
-                        ) : (
-                          <select
-                            className="rounded border px-2 py-1 text-xs"
-                            value={user.userRoles[0]?.role?.name || ""}
-                            onChange={(e) => handleInlineRoleChange(user, e.target.value)}
-                            disabled={saving}
-                          >
-                            <option value="">Select Role</option>
-                            {roles.map((role) => (
-                              <option key={role.id} value={role.name}>
-                                {role.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500">Branch</span>
-                        {isOwnerAccount(user) ? (
-                          <span className="text-xs text-gray-700">
-                            {branches.find((branch) => branch.id === user.branchId)?.name || "No Branch"}
-                          </span>
-                        ) : (
-                          <select
-                            className="rounded border px-2 py-1 text-xs"
-                            value={user.branchId || ""}
-                            onChange={(e) => handleInlineBranchChange(user, e.target.value)}
-                            disabled={saving}
-                          >
-                            <option value="">Select Branch</option>
-                            {branches.map((branch) => (
-                              <option key={branch.id} value={branch.id}>
-                                {branch.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500">Created</span>
-                        <span className="text-xs text-gray-700">{formatDate(user.createdAt)}</span>
-                      </div>
-                    </div>
-                  </div>
+                <div className="space-y-3">
+                  {branchGroup.users.map((user) => (
+                    <div key={user.id} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                      <div className="mb-3 flex flex-col gap-3 border-b border-gray-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-800">
+                            <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">
+                              {user.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-gray-900 dark:text-zinc-100">{user.name}</div>
+                            <div className="text-xs text-gray-600 dark:text-zinc-400">{user.email}</div>
+                          </div>
+                          {user.isSuperadmin && (
+                            <span className="rounded bg-indigo-50 px-2 py-1 text-xs text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                              Super Admin
+                            </span>
+                          )}
+                        </div>
 
-                  <div className="rounded-md bg-gray-50 p-3">
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Authentication</div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500">Last Login</span>
-                        <span className="text-xs text-gray-700">
-                          {user.lastLogin ? formatDate(user.lastLogin) : "-"}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {!isOwnerAccount(user) && (
+                            <>
+                              <button
+                                onClick={() => openEditModal(user)}
+                                className={rowActionButtonClass}
+                                title="Edit user"
+                              >
+                                <FaEdit className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => openDeleteModal(user)}
+                                className={`${rowActionButtonClass} hover:text-red-600 dark:hover:text-red-400`}
+                                title={user.isSuperadmin ? "Super Admin cannot be deleted" : "Delete user"}
+                                disabled={user.isSuperadmin}
+                              >
+                                <FaTrash className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => openActivityDrawer(user)}
+                            className={rowActionButtonClass}
+                            title="View activity"
+                          >
+                            <FaClipboardList className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500">Failed Logins</span>
-                        <span className="text-xs text-gray-700">
-                          {typeof user.failedLoginCount === "number" ? user.failedLoginCount : "-"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500">MFA</span>
-                        {user.mfaEnabled ? (
-                          <span className="text-xs font-medium text-green-600">Enabled</span>
-                        ) : (
-                          <span className="text-xs text-gray-400">-</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="rounded-md bg-gray-50 p-3">
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Security Controls</div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500">Force Reset</span>
-                        {user.forceReset ? (
-                          <span className="text-xs font-medium text-red-600">Required</span>
-                        ) : (
-                          <button
-                            className="rounded bg-yellow-100 px-2 py-1 text-xs text-yellow-800 hover:bg-yellow-200"
-                            disabled={saving}
-                          >
-                            Force
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500">Lock Status</span>
-                        {user.locked ? (
-                          <span className="text-xs font-medium text-red-600">Locked</span>
-                        ) : (
-                          <button
-                            className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-800 hover:bg-gray-200"
-                            disabled={saving}
-                          >
-                            Lock
-                          </button>
-                        )}
+                      <div className="grid grid-cols-1 gap-4 border-t border-gray-100 pt-3 lg:grid-cols-2 dark:border-zinc-800">
+                        <div>
+                          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Access</div>
+                          <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 dark:divide-zinc-800 dark:border-zinc-800">
+                            <div className="flex items-center justify-between gap-2 px-3 py-2">
+                              <span className="text-xs text-gray-500">Role</span>
+                              {isOwnerAccount(user) ? (
+                                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                                  {(user.userRoles || [])
+                                    .map((ur) => ur.role?.name)
+                                    .filter(Boolean)
+                                    .join(", ") || "No Role"}
+                                </span>
+                              ) : (
+                                <select
+                                  className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                                  value={user.userRoles[0]?.role?.name || ""}
+                                  onChange={(e) => handleInlineRoleChange(user, e.target.value)}
+                                  disabled={saving}
+                                >
+                                  <option value="">Select Role</option>
+                                  {roles.map((role) => (
+                                    <option key={role.id} value={role.name}>
+                                      {role.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between gap-2 px-3 py-2">
+                              <span className="text-xs text-gray-500">Branch</span>
+                              {isOwnerAccount(user) ? (
+                                <span className="text-xs text-gray-700">
+                                  {branches.find((branch) => branch.id === user.branchId)?.name || "No Branch"}
+                                </span>
+                              ) : (
+                                <select
+                                  className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                                  value={user.branchId || ""}
+                                  onChange={(e) => handleInlineBranchChange(user, e.target.value)}
+                                  disabled={saving}
+                                >
+                                  <option value="">Select Branch</option>
+                                  {branches.map((branch) => (
+                                    <option key={branch.id} value={branch.id}>
+                                      {branch.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between gap-2 px-3 py-2">
+                              <span className="text-xs text-gray-500">Created</span>
+                              <span className="text-xs text-gray-700">{formatDate(user.createdAt)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Authentication</div>
+                          <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 dark:divide-zinc-800 dark:border-zinc-800">
+                            <div className="flex items-center justify-between gap-2 px-3 py-2">
+                              <span className="text-xs text-gray-500">Last Login</span>
+                              <span className="text-xs text-gray-700 dark:text-zinc-300">
+                                {user.lastLogin ? formatDate(user.lastLogin) : "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 px-3 py-2">
+                              <span className="text-xs text-gray-500">Failed Logins</span>
+                              <span className="text-xs text-gray-700 dark:text-zinc-300">
+                                {typeof user.failedLoginCount === "number" ? user.failedLoginCount : "-"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
+              </section>
             ))}
           </div>
         )}
       </div>
 
       {pendingChange && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6">
-            <h3 className="mb-4 text-lg font-semibold">Confirm {pendingChange.field === 'role' ? 'Role' : 'Branch'} Change</h3>
-            <p className="mb-2 text-gray-700">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-zinc-100">Confirm {pendingChange.field === 'role' ? 'Role' : 'Branch'} Change</h3>
+            <p className="mb-2 text-gray-700 dark:text-zinc-300">
               Are you sure you want to change {pendingChange.user.name}'s {pendingChange.field} to <strong>{pendingChange.newValue}</strong>?
             </p>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Audit Note (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-zinc-300">Audit Note (optional)</label>
             <textarea
-              className="mb-4 w-full rounded border border-gray-300 px-3 py-2"
+              className="mb-4 w-full rounded border border-gray-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               value={auditNote}
               onChange={(e) => setAuditNote(e.target.value)}
               rows={2}
@@ -751,14 +829,14 @@ export default function UsersSettingsPage() {
             <div className="flex gap-3">
               <button
                 onClick={handleConfirmChange}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:opacity-60"
+                className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-white transition hover:bg-indigo-700 disabled:opacity-60"
                 disabled={saving}
               >
                 {saving ? "Saving..." : "Confirm"}
               </button>
               <button
                 onClick={handleCancelChange}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition hover:bg-gray-50"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition hover:bg-gray-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 disabled={saving}
               >
                 Cancel
@@ -769,10 +847,10 @@ export default function UsersSettingsPage() {
       )}
 
       {showActivityDrawer && activityUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="relative mx-4 w-full max-w-2xl rounded-xl bg-white p-8 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="relative mx-4 w-full max-w-2xl rounded-xl border border-gray-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900">
             <button
-              className="absolute right-3 top-3 text-xl text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-3 text-xl text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300"
               onClick={closeActivityDrawer}
               aria-label="Close"
             >
@@ -786,7 +864,7 @@ export default function UsersSettingsPage() {
               <span className="text-sm text-gray-600">Recent user activity (last 50)</span>
               <button
                 onClick={exportActivityLogs}
-                className="flex items-center gap-2 px-3 py-1 rounded bg-green-600 text-white text-xs hover:bg-green-700"
+                className="flex items-center gap-2 rounded border border-gray-300 bg-transparent px-3 py-1 text-xs text-gray-700 hover:bg-gray-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 disabled={loadingActivity || !activityLogs.length}
               >
                 <FaDownload className="h-4 w-4" /> Export CSV
@@ -801,9 +879,9 @@ export default function UsersSettingsPage() {
               <div className="py-8 text-center text-gray-400">No activity found for this user.</div>
             ) : (
               <div className="overflow-x-auto max-h-96">
-                <table className="w-full text-xs border">
+                <table className="w-full border text-xs dark:border-zinc-800">
                   <thead>
-                    <tr className="bg-gray-50">
+                    <tr className="bg-gray-50 dark:bg-zinc-900">
                       <th className="px-3 py-2 text-left font-medium text-gray-700">When</th>
                       <th className="px-3 py-2 text-left font-medium text-gray-700">What Happened</th>
                       <th className="px-3 py-2 text-left font-medium text-gray-700">Summary</th>
@@ -811,10 +889,10 @@ export default function UsersSettingsPage() {
                   </thead>
                   <tbody>
                     {activityLogs.map((log) => (
-                      <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50 dark:border-zinc-800 dark:hover:bg-zinc-900">
                         <td className="px-3 py-2 whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</td>
                         <td className="px-3 py-2">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
                             {formatAuditAction(log.action)}
                           </span>
                         </td>
@@ -841,18 +919,18 @@ export default function UsersSettingsPage() {
       )}
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="relative mx-4 w-full max-w-lg rounded-xl bg-white p-8 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="relative mx-4 w-full max-w-lg rounded-xl border border-gray-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900">
             <button
-              className="absolute right-3 top-3 text-xl text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-3 text-xl text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300"
               onClick={() => setShowAddModal(false)}
               aria-label="Close"
             >
               x
             </button>
             <div className="mb-6 flex items-center gap-2">
-              <FaUserPlus className="text-blue-600" />
-              <h3 className="text-lg font-semibold text-gray-800">Add New User</h3>
+              <FaUserPlus className="text-gray-600 dark:text-zinc-400" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-zinc-100">Add New User</h3>
             </div>
             <form
               onSubmit={handleSubmit}
@@ -865,7 +943,7 @@ export default function UsersSettingsPage() {
                   name="name"
                   value={form.name}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                   required
                   disabled={saving}
                 />
@@ -877,7 +955,7 @@ export default function UsersSettingsPage() {
                   name="email"
                   value={form.email}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                   required
                   disabled={saving}
                 />
@@ -889,7 +967,7 @@ export default function UsersSettingsPage() {
                   name="password"
                   value={form.password}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                   required
                   disabled={saving}
                 />
@@ -900,7 +978,7 @@ export default function UsersSettingsPage() {
                   name="role"
                   value={form.role}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                   required
                   disabled={saving}
                 >
@@ -917,7 +995,7 @@ export default function UsersSettingsPage() {
                 <select
                   value={branchId}
                   onChange={(e) => setBranchId(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                   required
                   disabled={saving}
                 >
@@ -932,7 +1010,7 @@ export default function UsersSettingsPage() {
               <div className="mt-4 flex gap-3 md:col-span-2">
                 <button
                   type="submit"
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={
                     saving ||
                     !form.name ||
@@ -946,7 +1024,7 @@ export default function UsersSettingsPage() {
                 </button>
                 <button
                   type="button"
-                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition hover:bg-gray-50"
+                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition hover:bg-gray-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   onClick={() => setShowAddModal(false)}
                   disabled={saving}
                 >
@@ -959,9 +1037,9 @@ export default function UsersSettingsPage() {
       )}
 
       {showEditModal && editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6">
-            <h3 className="mb-4 text-lg font-semibold">Edit User</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-zinc-100">Edit User</h3>
             <form onSubmit={handleEditUser}>
               <div className="space-y-4">
                 <div>
@@ -974,7 +1052,7 @@ export default function UsersSettingsPage() {
                         prev ? { ...prev, name: e.target.value } : prev,
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                     required
                   />
                 </div>
@@ -989,7 +1067,7 @@ export default function UsersSettingsPage() {
                           : prev,
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                   >
                     <option value="">Select Role</option>
                     {roles.map((role) => (
@@ -1008,7 +1086,7 @@ export default function UsersSettingsPage() {
                         prev ? { ...prev, branchId: e.target.value } : prev,
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                   >
                     <option value="">Select Branch</option>
                     {branches.map((branch) => (
@@ -1022,7 +1100,7 @@ export default function UsersSettingsPage() {
               <div className="mt-6 flex gap-3">
                 <button
                   type="submit"
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:opacity-60"
+                  className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-white transition hover:bg-indigo-700 disabled:opacity-60"
                   disabled={saving}
                 >
                   {saving ? "Saving..." : "Save Changes"}
@@ -1030,7 +1108,7 @@ export default function UsersSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition hover:bg-gray-50"
+                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition hover:bg-gray-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   Cancel
                 </button>
@@ -1041,10 +1119,10 @@ export default function UsersSettingsPage() {
       )}
 
       {showDeleteModal && userToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6">
-            <h3 className="mb-4 text-lg font-semibold">Delete User</h3>
-            <p className="mb-6 text-gray-600">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-zinc-100">Delete User</h3>
+            <p className="mb-6 text-gray-600 dark:text-zinc-300">
               Are you sure you want to delete <strong>{userToDelete.name}</strong>? This action
               cannot be undone.
             </p>
@@ -1058,7 +1136,7 @@ export default function UsersSettingsPage() {
               </button>
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition hover:bg-gray-50"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition hover:bg-gray-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Cancel
               </button>

@@ -817,7 +817,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent dark:text-indigo-300">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">
               {tenant?.name || 'Business'} – Today at a glance
             </h1>
             <p className="text-gray-600 dark:text-slate-400 mt-1 text-base">
@@ -873,10 +873,10 @@ export default function DashboardPage() {
               </div>
               {hasMeaningfulTrend && (
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                  className={`inline-flex items-center gap-1 text-xs font-semibold ${
                     revenueTodayTrendDirection === 'up'
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : 'bg-rose-50 text-rose-700'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-rose-600 dark:text-rose-400'
                   }`}
                 >
                   {revenueTodayTrendDirection === 'up' ? '▲' : '▼'}
@@ -935,7 +935,7 @@ export default function DashboardPage() {
 
         {/* Action Center */}
         <div className="mb-4 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300">
               Action Center
             </span>
@@ -943,10 +943,10 @@ export default function DashboardPage() {
               actionCenterItems.map((item) => {
                 const severityClasses =
                   item.severity === 'high'
-                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                    ? 'border-rose-200 bg-rose-50/80 dark:border-rose-900 dark:bg-rose-950/30'
                     : item.severity === 'medium'
-                    ? 'border-amber-200 bg-amber-50 text-amber-700'
-                    : 'border-gray-200 bg-gray-50 text-gray-700';
+                    ? 'border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/30'
+                    : 'border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/50';
 
                 const slaText = item.slaBreached ? 'SLA breached' : 'Within SLA';
 
@@ -974,15 +974,24 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={item.id}
-                    className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] ${severityClasses}`}
+                    className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[11px] ${severityClasses}`}
                   >
-                    <a href={item.href || '#'} className="inline-flex items-center gap-1">
-                      <span className="text-xs font-semibold">{item.title}</span>
-                      <span className="text-[11px] text-gray-600 dark:text-slate-400">
-                        · {item.description}
+                    <a href={item.href || '#'} className="inline-flex min-w-0 items-center gap-2">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          item.severity === 'high'
+                            ? 'bg-rose-600 dark:bg-rose-400'
+                            : item.severity === 'medium'
+                            ? 'bg-amber-600 dark:bg-amber-400'
+                            : 'bg-emerald-600 dark:bg-emerald-400'
+                        }`}
+                      />
+                      <span className="text-xs font-semibold text-gray-900 dark:text-slate-100">{item.title}</span>
+                      <span className="truncate text-[11px] text-gray-700 dark:text-slate-300">
+                        {item.description}
                       </span>
                       {(item.ageLabel || item.slaBreached !== undefined) && (
-                        <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-300">
+                        <span className="rounded-md border border-gray-200 bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                           Oldest: {item.ageLabel || 'today'} • {slaText}
                         </span>
                       )}
@@ -991,7 +1000,7 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={handleChipAction}
-                        className="rounded-full border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="shrink-0 rounded-md border border-gray-300 bg-transparent px-2 py-0.5 text-[10px] font-semibold text-gray-700 hover:bg-gray-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {item.actionLabel}
                       </button>

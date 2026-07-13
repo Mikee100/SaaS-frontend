@@ -283,7 +283,7 @@ export default function BillingDashboard({ stripePromise }: BillingDashboardProp
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Payment Methods</h3>
                   <div className="space-y-3">
                     {analytics.paymentMethods.map((method, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div key={index} className="flex items-center justify-between rounded-xl border border-gray-200 p-3 dark:border-zinc-800">
                         <div>
                           <p className="font-medium text-gray-800">{method.paymentMethod}</p>
                           <p className="text-sm text-gray-600">{method._count.paymentMethod} payments</p>
