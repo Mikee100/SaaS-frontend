@@ -42,22 +42,19 @@ interface NavItem extends NavSubItem {
   subItems?: NavSubItem[];
 }
 
+type NavSectionKey = 'overview' | 'operations' | 'insights' | 'people' | 'system';
+
+const NAV_SECTION_LABELS: Record<NavSectionKey, string> = {
+  overview: 'Overview',
+  operations: 'Operations',
+  insights: 'Insights',
+  people: 'People',
+  system: 'System',
+};
+
 function iconBadgeClass(path: string): string {
-  const normalized = String(path || '').toLowerCase();
-  if (normalized.startsWith('/dashboard')) return 'bg-sky-100 text-sky-700';
-  if (normalized.startsWith('/ai')) return 'bg-violet-100 text-violet-700';
-  if (normalized.startsWith('/accounts')) return 'bg-amber-100 text-amber-700';
-  if (normalized.startsWith('/products') || normalized.startsWith('/inventory')) return 'bg-emerald-100 text-emerald-700';
-  if (normalized.startsWith('/sales') || normalized.startsWith('/mpesa')) return 'bg-indigo-100 text-indigo-700';
-  if (normalized.startsWith('/restaurant')) return 'bg-rose-100 text-rose-700';
-  if (normalized.startsWith('/analytics') || normalized.startsWith('/reports')) return 'bg-cyan-100 text-cyan-700';
-  if (normalized.startsWith('/credit')) return 'bg-fuchsia-100 text-fuchsia-700';
-  if (normalized.startsWith('/hr') || normalized.startsWith('/users')) return 'bg-orange-100 text-orange-700';
-  if (normalized.startsWith('/payroll')) return 'bg-lime-100 text-lime-700';
-  if (normalized.startsWith('/expenses')) return 'bg-red-100 text-red-700';
-  if (normalized.startsWith('/settings')) return 'bg-slate-200 text-slate-700';
-  if (normalized.startsWith('/billing') || normalized.startsWith('/account')) return 'bg-teal-100 text-teal-700';
-  return 'bg-gray-100 text-gray-700';
+  void path;
+  return 'text-current';
 }
 
 function isRestaurantRoute(path: string): boolean {
@@ -289,6 +286,7 @@ export default function PlanBasedNav() {
   const tenantBranchLoading = tenantLoading;
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
+  const itemRowBase = 'adeera-nav-item transition-colors duration-150';
 
   // Detect mobile/tablet viewport
   React.useEffect(() => {
@@ -326,7 +324,7 @@ export default function PlanBasedNav() {
     if (
       pathname?.startsWith('/products') ||
       pathname?.startsWith('/inventory')
-    ) {
+    ) {                                                                                                                                     
       newOpen.add('Products & Inventory');
     }
     if (
@@ -651,6 +649,37 @@ export default function PlanBasedNav() {
     }));
   };
 
+  const getSectionForItem = (item: NavItem): NavSectionKey => {
+    const href = String(item.href || '').toLowerCase();
+    const name = String(item.name || '').toLowerCase();
+
+    if (href === '/' || href.startsWith('/dashboard') || href.startsWith('/ai')) {
+      return 'overview';
+    }
+
+    if (
+      href.startsWith('/accounts') ||
+      href.startsWith('/products') ||
+      href.startsWith('/inventory') ||
+      href.startsWith('/sales') ||
+      href.startsWith('/restaurant') ||
+      href.startsWith('/mpesa') ||
+      href.startsWith('/expenses')
+    ) {
+      return 'operations';
+    }
+
+    if (href.startsWith('/analytics') || href.startsWith('/reports')) {
+      return 'insights';
+    }
+
+    if (href.startsWith('/hr') || href.startsWith('/payroll') || name.includes('user')) {
+      return 'people';
+    }
+
+    return 'system';
+  };
+
   // Navigation
   return (
     <>
@@ -658,7 +687,7 @@ export default function PlanBasedNav() {
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 bg-white rounded-lg shadow-lg border transition-all duration-200 hover:scale-105 active:scale-95"
+          className="p-2 rounded-lg border transition-all duration-200 hover:scale-105 active:scale-95 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100"
           style={{
             transform: sidebarOpen ? 'rotate(90deg)' : 'rotate(0deg)',
             transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), scale 0.2s ease-out'
@@ -671,7 +700,7 @@ export default function PlanBasedNav() {
       {/* Sidebar */}
       {/* On mobile, always show full width when open; on desktop, respect collapsed state */}
       <div 
-        className={`fixed top-0 left-0 h-full bg-white shadow-xl border-r z-40 ${
+        className={`fixed top-0 left-0 h-full border-r z-40 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 ${
           isMobile 
             ? (sidebarOpen ? 'translate-x-0' : '-translate-x-full')
             : 'lg:translate-x-0'
@@ -701,7 +730,7 @@ export default function PlanBasedNav() {
           <Tooltip content={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} position="right">
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors shadow-sm"
+              className="w-6 h-6 rounded-full flex items-center justify-center transition-colors shadow-sm bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100"
               aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {sidebarCollapsed ? <FaChevronRight className="w-3.5 h-3.5" /> : <FaChevronLeft className="w-3.5 h-3.5" />}
@@ -711,9 +740,9 @@ export default function PlanBasedNav() {
         <div className="flex flex-col h-full relative z-10" style={{ position: 'relative' }}>
           {/* Header - Minimal spacing */}
           {!sidebarCollapsed && !sidebarOpen && tenant?.logoUrl && (
-            <div className="border-b border-gray-200 px-4 py-2">
+            <div className="border-b border-gray-200 dark:border-zinc-800 px-4 py-2">
               <div className="flex items-center justify-center">
-                <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-100 dark:bg-zinc-800 flex items-center justify-center">
                   <img
                     src={getFullAssetUrl(tenant.logoUrl)}
                     alt={`${tenant.name} logo`}
@@ -737,13 +766,17 @@ export default function PlanBasedNav() {
             }}
           >
             <div className="space-y-1">
-              {accessibleItems.map((item) => {
+              {accessibleItems.map((item, index) => {
                 const Icon = item.icon;
                 const hasSubItems = item.subItems && item.subItems.length > 0;
                 const isDropdownOpen = openDropdowns.has(item.name);
                 const isActive =
                   pathname === item.href ||
                   (hasSubItems && item.subItems?.some((subItem) => pathname === subItem.href));
+                const currentSection = getSectionForItem(item);
+                const previousSection =
+                  index > 0 ? getSectionForItem(accessibleItems[index - 1]) : null;
+                const showSectionSeparator = index === 0 || currentSection !== previousSection;
                 
                 // Show subitems as collapsible accordions when:
                 // - On mobile: when sidebar is open (always show accordion, ignore collapsed state)
@@ -758,33 +791,45 @@ export default function PlanBasedNav() {
                   const submenuKey = item.href || item.name;
                   const open = !!openSubmenus[submenuKey];
                   return (
-                    <div key={item.name} className="mb-1">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleSubmenu(submenuKey)}
-                        className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                          isActive
-                            ? 'bg-linear-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-300 shadow-sm'
-                            : 'text-gray-700 hover:text-blue-700 hover:bg-blue-50'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2 min-w-0">
-                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md shrink-0 ${iconBadgeClass(item.href)}`}>
-                            <Icon className="w-3.5 h-3.5" />
-                          </span>
-                          <span className="truncate text-xs">{item.name}</span>
-                        </span>
-                        <span className="shrink-0">
-                          {open ? (
-                            <FaChevronUp className="w-3.5 h-3.5" />
+                    <React.Fragment key={item.name}>
+                      {showSectionSeparator && (
+                        <div className={index === 0 ? 'mb-2' : 'mb-2 mt-3'}>
+                          {sidebarCollapsed ? (
+                            <div className="mx-1 h-px bg-gray-200 dark:bg-zinc-800" />
                           ) : (
-                            <FaChevronDown className="w-3.5 h-3.5" />
+                            <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-zinc-400">
+                              {NAV_SECTION_LABELS[currentSection]}
+                            </p>
                           )}
-                        </span>
-                      </button>
-                      {open && (
-                        <div className="ml-4 mt-1">
-                          {item.subItems?.map((subItem) => {
+                        </div>
+                      )}
+                      <div className="mb-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleSubmenu(submenuKey)}
+                          className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg text-xs font-semibold transition-colors duration-150 ${
+                            isActive
+                              ? `${itemRowBase} adeera-nav-item-active`
+                              : `${itemRowBase}`
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md shrink-0 ${iconBadgeClass(item.href)}`}>
+                              <Icon className="w-3.5 h-3.5" />
+                            </span>
+                            <span className="truncate text-xs">{item.name}</span>
+                          </span>
+                          <span className="shrink-0">
+                            {open ? (
+                              <FaChevronUp className="w-3.5 h-3.5" />
+                            ) : (
+                              <FaChevronDown className="w-3.5 h-3.5" />
+                            )}
+                          </span>
+                        </button>
+                        {open && (
+                          <div className="ml-4 mt-1">
+                            {item.subItems?.map((subItem) => {
                             const SubIcon = subItem.icon || FaChevronRight;
                             const isSubActive = pathname === subItem.href;
                             const nestedItems = subItem.subItems || [];
@@ -797,10 +842,10 @@ export default function PlanBasedNav() {
                                   <button
                                     type="button"
                                     onClick={() => handleToggleSubmenu(submenuKey)}
-                                    className={`flex items-center w-full space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
+                                    className={`flex items-center w-full space-x-2 px-2 py-1.5 rounded-md text-xs transition-colors duration-150 ${
                                       isSubActive || openNested
-                                        ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        ? `${itemRowBase} adeera-nav-item-active`
+                                        : `${itemRowBase}`
                                     }`}
                                   >
                                     <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(subItem.href)}`}>
@@ -824,10 +869,10 @@ export default function PlanBasedNav() {
                                         setSidebarOpen(false);
                                       }
                                     }}
-                                    className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
+                                    className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-colors duration-150 ${
                                       isSubActive
-                                        ? 'bg-blue-100 text-blue-700 border border-blue-300 shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        ? `${itemRowBase} adeera-nav-item-active`
+                                        : `${itemRowBase}`
                                     }`}
                                   >
                                     <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(subItem.href)}`}>
@@ -852,10 +897,10 @@ export default function PlanBasedNav() {
                                               setSidebarOpen(false);
                                             }
                                           }}
-                                          className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
+                                          className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-colors duration-150 ${
                                             isNestedActive
-                                              ? 'bg-blue-100 text-blue-700 border border-blue-300 shadow-sm'
-                                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                              ? `${itemRowBase} adeera-nav-item-active`
+                                              : `${itemRowBase}`
                                           }`}
                                         >
                                           <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(nested.href)}`}>
@@ -869,10 +914,11 @@ export default function PlanBasedNav() {
                                 )}
                               </div>
                             );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </React.Fragment>
                   );
                 }
                 // Desktop: dropdown or tooltip (fallback for collapsed sidebar)
@@ -891,12 +937,12 @@ export default function PlanBasedNav() {
                           }
                           setOpenDropdowns(newOpenDropdowns);
                         }}
-                        className={`flex items-center justify-between transition-all duration-200 rounded-lg text-xs font-semibold w-full ${
+                        className={`flex items-center justify-between transition-colors duration-150 rounded-lg text-xs font-semibold w-full ${
                           sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'space-x-2 px-2.5 py-2'
                         } ${
                           isActive
-                            ? 'bg-linear-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-300 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            ? `${itemRowBase} adeera-nav-item-active`
+                            : `${itemRowBase}`
                         }`}
                       >
                         <div className="flex items-center space-x-2 min-w-0">
@@ -932,10 +978,10 @@ export default function PlanBasedNav() {
                                   <button
                                     type="button"
                                     onClick={() => handleToggleSubmenu(submenuKey)}
-                                    className={`flex items-center w-full space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
+                                    className={`flex items-center w-full space-x-2 px-2 py-1.5 rounded-md text-xs transition-colors duration-150 ${
                                       isSubActive || open
-                                        ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        ? `${itemRowBase} adeera-nav-item-active`
+                                        : `${itemRowBase}`
                                     }`}
                                   >
                                     <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(subItem.href)}`}>
@@ -953,10 +999,10 @@ export default function PlanBasedNav() {
                                 ) : (
                                   <a
                                     href={subItem.href}
-                                    className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
+                                    className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-colors duration-150 ${
                                       isSubActive
-                                        ? 'bg-blue-100 text-blue-700 border border-blue-300 shadow-sm'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        ? `${itemRowBase} adeera-nav-item-active`
+                                        : `${itemRowBase}`
                                     }`}
                                   >
                                     <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(subItem.href)}`}>
@@ -975,10 +1021,10 @@ export default function PlanBasedNav() {
                                         <a
                                           key={nested.name}
                                           href={nested.href}
-                                          className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ${
+                                          className={`flex items-center space-x-2 px-2 py-1.5 rounded-md text-xs transition-colors duration-150 ${
                                             isNestedActive
-                                              ? 'bg-blue-100 text-blue-700 border border-blue-300 shadow-sm'
-                                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                              ? `${itemRowBase} adeera-nav-item-active`
+                                              : `${itemRowBase}`
                                           }`}
                                         >
                                           <span className={`inline-flex h-5 w-5 items-center justify-center rounded ${iconBadgeClass(nested.href)}`}>
@@ -997,25 +1043,40 @@ export default function PlanBasedNav() {
                       )}
                     </div>
                   );
-                  return sidebarCollapsed ? (
-                    <Tooltip key={item.name} content={item.name} position="right">
-                      <a
-                        href={item.href}
-                        className={`flex items-center transition-all duration-200 rounded text-sm font-medium ${
-                          'justify-center px-2 py-3'
-                        } ${
-                          isActive
-                            ? 'bg-linear-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-300 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                        }`}
-                      >
-                        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 ${iconBadgeClass(item.href)}`}>
-                          <Icon className="w-4 h-4" />
-                        </span>
-                      </a>
-                    </Tooltip>
-                  ) : (
-                    dropdownContent
+                  return (
+                    <React.Fragment key={item.name}>
+                      {showSectionSeparator && (
+                        <div className={index === 0 ? 'mb-2' : 'mb-2 mt-3'}>
+                          {sidebarCollapsed ? (
+                            <div className="mx-1 h-px bg-gray-200 dark:bg-zinc-800" />
+                          ) : (
+                            <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-zinc-400">
+                              {NAV_SECTION_LABELS[currentSection]}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {sidebarCollapsed ? (
+                        <Tooltip content={item.name} position="right">
+                          <a
+                            href={item.href}
+                            className={`flex items-center transition-colors duration-150 rounded text-sm font-medium ${
+                              'justify-center px-2 py-3'
+                            } ${
+                              isActive
+                                ? `${itemRowBase} adeera-nav-item-active`
+                                : `${itemRowBase}`
+                            }`}
+                          >
+                            <span className={`inline-flex h-7 w-7 items-center justify-center rounded-md shrink-0 ${iconBadgeClass(item.href)}`}>
+                              <Icon className="w-4 h-4" />
+                            </span>
+                          </a>
+                        </Tooltip>
+                      ) : (
+                        dropdownContent
+                      )}
+                    </React.Fragment>
                   );
                 } else {
                   // Regular link
@@ -1023,12 +1084,12 @@ export default function PlanBasedNav() {
                     <a
                       key={item.name}
                       href={item.href}
-                      className={`flex items-center transition-all duration-200 rounded text-xs font-medium ${
+                      className={`flex items-center transition-colors duration-150 rounded text-xs font-medium ${
                         sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'space-x-2 px-2.5 py-2'
                       } ${
                         isActive
-                          ? 'bg-linear-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-300 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            ? `${itemRowBase} adeera-nav-item-active`
+                            : `${itemRowBase}`
                       }`}
                     >
                       <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md shrink-0 ${iconBadgeClass(item.href)}`}>
@@ -1039,12 +1100,27 @@ export default function PlanBasedNav() {
                       )}
                     </a>
                   );
-                  return sidebarCollapsed ? (
-                    <Tooltip key={item.name} content={item.name} position="right">
-                      {linkContent}
-                    </Tooltip>
-                  ) : (
-                    linkContent
+                  return (
+                    <React.Fragment key={item.name}>
+                      {showSectionSeparator && (
+                        <div className={index === 0 ? 'mb-2' : 'mb-2 mt-3'}>
+                          {sidebarCollapsed ? (
+                            <div className="mx-1 h-px bg-gray-200 dark:bg-zinc-800" />
+                          ) : (
+                            <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-zinc-400">
+                              {NAV_SECTION_LABELS[currentSection]}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {sidebarCollapsed ? (
+                        <Tooltip content={item.name} position="right">
+                          {linkContent}
+                        </Tooltip>
+                      ) : (
+                        linkContent
+                      )}
+                    </React.Fragment>
                   );
                 }
               })}
@@ -1052,14 +1128,14 @@ export default function PlanBasedNav() {
           </nav>
 
           {/* Footer actions pinned by flex layout (does not overlap nav list) */}
-          <div className="mt-auto shrink-0 border-t border-gray-200 bg-white">
+          <div className="mt-auto shrink-0 border-t border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
             {sidebarCollapsed ? (
               <>
                 <Tooltip content={isDark ? 'Light mode' : 'Dark mode'} position="right">
                   <button
                     type="button"
                     onClick={() => setTheme({ colorScheme: isDark ? 'light' : 'dark' })}
-                    className="w-full flex items-center justify-center py-2.5 text-gray-600 hover:text-blue-600 hover:bg-gray-50 border-b border-gray-200 transition-colors"
+                    className="w-full flex items-center justify-center py-2.5 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 hover:bg-gray-100 dark:hover:bg-zinc-800 border-b border-gray-200 dark:border-zinc-800 transition-colors"
                     aria-label="Toggle theme"
                   >
                     {isDark ? <FaSun className="w-4 h-4" /> : <FaMoon className="w-4 h-4" />}
@@ -1069,7 +1145,7 @@ export default function PlanBasedNav() {
                   <div className="w-full block">
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center justify-center py-3 bg-linear-to-r from-red-500 to-red-600 text-white font-medium shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-95"
+                      className="w-full flex items-center justify-center py-3 text-gray-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all duration-200 active:scale-95"
                       title="Log out"
                     >
                       <FaSignOutAlt className="w-4 h-4 shrink-0" />
@@ -1079,42 +1155,39 @@ export default function PlanBasedNav() {
               </>
             ) : (
               <div className="p-2 space-y-2">
-                {/* Theme toggle */}
-                <div className="flex items-center justify-between gap-2 px-2 py-1">
-                  <span className="text-xs font-medium text-gray-600">Theme</span>
+                <div className="flex items-center justify-end gap-2 px-1 py-1">
                   <button
                     type="button"
                     onClick={() => setTheme({ colorScheme: isDark ? 'light' : 'dark' })}
-                    className="p-1.5 rounded-lg text-gray-600 hover:text-blue-600 hover:bg-gray-100 transition-colors"
+                    className="p-1.5 rounded-lg text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                     aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
                   >
                     {isDark ? <FaSun className="w-4 h-4" /> : <FaMoon className="w-4 h-4" />}
                   </button>
                 </div>
-                {/* User Info */}
                 {userContext?.user && (
-                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50">
-                    <div className="w-7 h-7 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-xs shrink-0">
+                  <div className="flex items-center gap-2 px-2 py-2 rounded-lg border border-gray-200 dark:border-zinc-800 bg-gray-100 dark:bg-zinc-800">
+                    <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-zinc-700 text-gray-900 dark:text-zinc-100 flex items-center justify-center font-semibold text-xs shrink-0">
                       {userContext.user.name?.[0]?.toUpperCase() || 'U'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-gray-900 truncate">
+                      <p className="text-xs font-medium text-gray-900 dark:text-zinc-100 truncate">
                         {userContext.user.name || 'User'}
                       </p>
-                      <p className="text-[10px] text-gray-500 truncate">
+                      <p className="text-[10px] text-gray-600 dark:text-zinc-400 truncate">
                         {userContext.user.email || ''}
                       </p>
                     </div>
+                    <button
+                      onClick={handleLogout}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                      aria-label="Log out"
+                      title="Log out"
+                    >
+                      <FaSignOutAlt className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 )}
-                {/* Logout Button */}
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-linear-to-r from-red-500 to-red-600 text-white text-xs font-medium rounded-lg shadow-sm hover:from-red-600 hover:to-red-700 transition-all duration-200 active:scale-[0.98] group"
-                >
-                  <FaSignOutAlt className="w-4 h-4 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                  <span>Log out</span>
-                </button>
               </div>
             )}
           </div>

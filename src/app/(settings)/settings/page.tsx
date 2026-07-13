@@ -74,7 +74,6 @@ export default function SettingsPage() {
           label: 'Business Info', 
           icon: FaBuilding, 
           description: 'Update your organization details',
-          color: 'blue',
           permission: 'view_settings'
         },
         { 
@@ -82,7 +81,6 @@ export default function SettingsPage() {
           label: 'Users', 
           icon: FaUsers, 
           description: 'Manage team members',
-          color: 'green',
           permission: 'view_users'
         },
         { 
@@ -90,7 +88,6 @@ export default function SettingsPage() {
           label: 'Branches', 
           icon: FaBuilding, 
           description: 'Manage your branches',
-          color: 'indigo',
           permission: 'view_branches'
         },
         { 
@@ -98,7 +95,6 @@ export default function SettingsPage() {
           label: 'Permissions', 
           icon: FaUserShield, 
           description: 'Configure access controls',
-          color: 'purple',
           permission: 'view_roles'
         },
         { 
@@ -106,7 +102,6 @@ export default function SettingsPage() {
           label: 'Billing & Subscription', 
           icon: FaCreditCard, 
           description: 'Manage your plan and payments',
-          color: 'amber',
           permission: 'view_billing'
         },
         { 
@@ -114,14 +109,12 @@ export default function SettingsPage() {
           label: 'Notifications', 
           icon: FaBell, 
           description: 'Configure notification preferences',
-          color: 'orange'
         },
         { 
           href: '/settings/integrations', 
           label: 'Integrations', 
           icon: FaPlug, 
           description: 'Connect with third-party services',
-          color: 'pink',
           permission: 'view_settings'
         },
         {
@@ -129,7 +122,6 @@ export default function SettingsPage() {
           label: 'Modules',
           icon: FaCogs,
           description: 'Enable or disable modules for this tenant',
-          color: 'purple',
           permission: 'view_settings'
         },
         { 
@@ -137,7 +129,6 @@ export default function SettingsPage() {
           label: 'Logo & Branding', 
           icon: FaImage, 
           description: 'Customize your branding',
-          color: 'teal',
           permission: 'view_settings'
         },
         {
@@ -145,7 +136,6 @@ export default function SettingsPage() {
           label: 'POS Display Name',
           icon: FaFileAlt,
           description: 'Set the business name shown on POS screens',
-          color: 'indigo',
           permission: 'view_settings'
         },
         { 
@@ -153,7 +143,6 @@ export default function SettingsPage() {
           label: 'Report / PDF Design', 
           icon: FaFileAlt, 
           description: 'Design how your reports, invoices, and receipts look',
-          color: 'teal',
           permission: 'view_settings'
         },
       ]
@@ -166,21 +155,18 @@ export default function SettingsPage() {
           label: 'Preferences', 
           icon: FaCogs, 
           description: 'Personalize your experience',
-          color: 'gray'
         },
         { 
           href: '/settings/password', 
           label: 'Password', 
           icon: FaKey, 
           description: 'Change your password',
-          color: 'red'
         },
         { 
           href: '/settings/security', 
           label: 'Security', 
           icon: FaShieldAlt, 
           description: 'Security and privacy settings',
-          color: 'blue'
         },
       ]
     }
@@ -193,19 +179,6 @@ export default function SettingsPage() {
       return user.isSuperadmin || user.roles?.includes('owner') || user.roles?.includes('admin') || user.permissions?.includes(item.permission);
     })
   })).filter(cat => cat.items.length > 0);
-
-  const colorClasses = {
-    blue: 'bg-blue-100 text-blue-600 hover:bg-blue-200',
-    green: 'bg-green-100 text-green-600 hover:bg-green-200',
-    indigo: 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200',
-    purple: 'bg-purple-100 text-purple-600 hover:bg-purple-200',
-    amber: 'bg-amber-100 text-amber-600 hover:bg-amber-200',
-    orange: 'bg-orange-100 text-orange-600 hover:bg-orange-200',
-    pink: 'bg-pink-100 text-pink-600 hover:bg-pink-200',
-    teal: 'bg-teal-100 text-teal-600 hover:bg-teal-200',
-    gray: 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-    red: 'bg-red-100 text-red-600 hover:bg-red-200',
-  };
 
   if (loading) {
     return (
@@ -250,18 +223,18 @@ export default function SettingsPage() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="group bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 p-6 hover:border-blue-300 dark:hover:border-slate-500 hover:shadow-lg transition-all duration-200 flex flex-col"
+                    className="group flex flex-col rounded-xl border border-gray-200 bg-white p-6 transition-colors duration-200 hover:border-indigo-300 hover:bg-indigo-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/20"
                   >
                     <div className="flex items-start justify-between mb-4">
-                      <div className={`p-3 rounded-xl ${colorClasses[item.color as keyof typeof colorClasses]}`}>
-                        <Icon className="w-6 h-6" />
+                      <div className="rounded-lg bg-gray-100 p-3 text-gray-600 dark:bg-zinc-800 dark:text-zinc-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300">
+                        <Icon className="h-6 w-6" />
                       </div>
-                      <FaArrowRight className="w-5 h-5 text-gray-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+                      <FaArrowRight className="h-5 w-5 text-gray-400 transition-all group-hover:translate-x-1 group-hover:text-indigo-600 dark:text-zinc-500 dark:group-hover:text-indigo-300" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    <h3 className="mb-2 text-lg font-semibold text-gray-900 transition-colors group-hover:text-indigo-700 dark:text-zinc-100 dark:group-hover:text-indigo-300">
                       {item.label}
                     </h3>
-                    <p className="text-sm text-gray-600 dark:text-slate-400 flex-1">
+                    <p className="flex-1 text-sm text-gray-600 dark:text-zinc-400">
                       {item.description}
                     </p>
                   </Link>
@@ -278,34 +251,34 @@ export default function SettingsPage() {
           {(user.isSuperadmin || user.roles?.includes('owner') || user.roles?.includes('admin') || user.permissions?.includes('view_audit_log')) && (
             <Link
               href="/settings/audit-logs"
-              className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl hover:border-blue-300 dark:hover:border-slate-500 hover:shadow-md transition-all group"
+              className="group flex items-center justify-between rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/20"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-gray-100 dark:bg-slate-700 rounded-lg group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors">
-                  <FaChartLine className="w-5 h-5 text-gray-600 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
+                <div className="rounded-lg bg-gray-100 p-2 transition-colors group-hover:bg-indigo-50 dark:bg-zinc-800 dark:group-hover:bg-indigo-950/40">
+                  <FaChartLine className="h-5 w-5 text-gray-600 group-hover:text-indigo-600 dark:text-zinc-400 dark:group-hover:text-indigo-300" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">Audit Logs</h3>
-                  <p className="text-sm text-gray-500 dark:text-slate-400">View activity history</p>
+                  <h3 className="font-semibold text-gray-900 group-hover:text-indigo-700 dark:text-zinc-100 dark:group-hover:text-indigo-300">Audit Logs</h3>
+                  <p className="text-sm text-gray-500 dark:text-zinc-400">View activity history</p>
                 </div>
               </div>
-              <FaArrowRight className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+              <FaArrowRight className="h-4 w-4 text-gray-400 transition-all group-hover:translate-x-1 group-hover:text-indigo-600 dark:text-zinc-500 dark:group-hover:text-indigo-300" />
             </Link>
           )}
           <Link
             href="/settings/contact"
-            className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl hover:border-blue-300 dark:hover:border-slate-500 hover:shadow-md transition-all group"
+            className="group flex items-center justify-between rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/20"
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-gray-100 dark:bg-slate-700 rounded-lg group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors">
-                <FaBuilding className="w-5 h-5 text-gray-600 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
+              <div className="rounded-lg bg-gray-100 p-2 transition-colors group-hover:bg-indigo-50 dark:bg-zinc-800 dark:group-hover:bg-indigo-950/40">
+                <FaBuilding className="h-5 w-5 text-gray-600 group-hover:text-indigo-600 dark:text-zinc-400 dark:group-hover:text-indigo-300" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">Contact Admin</h3>
-                <p className="text-sm text-gray-500 dark:text-slate-400">Get help and support</p>
+                <h3 className="font-semibold text-gray-900 group-hover:text-indigo-700 dark:text-zinc-100 dark:group-hover:text-indigo-300">Contact Admin</h3>
+                <p className="text-sm text-gray-500 dark:text-zinc-400">Get help and support</p>
               </div>
             </div>
-            <FaArrowRight className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+            <FaArrowRight className="h-4 w-4 text-gray-400 transition-all group-hover:translate-x-1 group-hover:text-indigo-600 dark:text-zinc-500 dark:group-hover:text-indigo-300" />
           </Link>
         </div>
       </div>

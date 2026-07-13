@@ -44,7 +44,12 @@ interface SalesTrendsChartProps {
 }
 
 const SalesTrendsChart: React.FC<SalesTrendsChartProps> = ({ data }) => {
-  console.log('Rendering SalesTrendsChart with data:', data);
+  const palette = {
+    accent: 'rgba(79, 70, 229, 1)',
+    accentSoft: 'rgba(79, 70, 229, 0.12)',
+    textMuted: 'rgba(107, 107, 112, 1)',
+    border: 'rgba(229, 229, 231, 1)',
+  };
 
   // Format currency
   const formatCurrency = React.useMemo(() => {
@@ -66,19 +71,19 @@ const SalesTrendsChart: React.FC<SalesTrendsChartProps> = ({ data }) => {
         {
           label: 'Sales',
           data: data.trends.map(item => item.totalSales),
-          borderColor: 'rgba(99, 102, 241, 1)',
-          backgroundColor: 'rgba(99, 102, 241, 0.1)',
+          borderColor: palette.accent,
+          backgroundColor: palette.accentSoft,
           tension: 0.4,
           fill: true,
-          pointBackgroundColor: 'white',
-          pointBorderColor: 'rgba(99, 102, 241, 1)',
+          pointBackgroundColor: '#ffffff',
+          pointBorderColor: palette.accent,
           pointBorderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
+          pointRadius: 3,
+          pointHoverRadius: 5,
         },
       ],
     };
-  }, [data]);
+  }, [data, palette.accent, palette.accentSoft]);
 
   const options = React.useMemo(() => {
     if (!formatCurrency) return null;
@@ -97,44 +102,59 @@ const SalesTrendsChart: React.FC<SalesTrendsChartProps> = ({ data }) => {
         },
       },
       scales: {
-        x: { grid: { display: false } },
-        y: {
-          grid: { display: true },
+        x: {
+          grid: { display: false },
           ticks: {
+            color: palette.textMuted,
+            font: { size: 11 },
+            maxTicksLimit: 8,
+          },
+        },
+        y: {
+          grid: {
+            display: true,
+            color: palette.border,
+            drawBorder: false,
+            tickLength: 0,
+            borderDash: [2, 3],
+          },
+          ticks: {
+            color: palette.textMuted,
+            font: { size: 11 },
             callback: (value: string | number) => formatCurrency(Number(value))
           }
         }
       }
     };
-  }, [formatCurrency]);
+  }, [formatCurrency, palette.border, palette.textMuted]);
 
   if (!data?.trends?.length || !chartData || !options) {
     return (
-      <div className="bg-white rounded-xl p-6 text-center">
-        <p className="text-gray-500">No sales data available</p>
+      <div className="adeera-card p-6 text-center">
+        <p className="text-[var(--adeera-text-muted)]">No sales data available</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl p-4 border border-gray-200">
+    <div className="adeera-card p-5">
       <div className="mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Sales Trends</h3>
-        <p className="text-sm text-gray-500">Last 30 days</p>
+        <h3 className="adeera-section-title">Sales Trends</h3>
+        <p className="text-sm text-[var(--adeera-text-muted)]">Last 30 days</p>
       </div>
       <div className="h-64">
         <Line data={chartData} options={options} />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-4">
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <p className="text-sm text-gray-500">Total Sales</p>
-          <p className="font-semibold text-indigo-600">
+        <div className="rounded-lg border border-[var(--adeera-border)] bg-[var(--adeera-surface-muted)] p-3">
+          <p className="text-sm text-[var(--adeera-text-muted)]">Total Sales</p>
+          <p className="font-semibold text-[var(--adeera-text)]">
             {formatCurrency(data.summary.totalSales)}
           </p>
         </div>
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <p className="text-sm text-gray-500">Total Orders</p>
-          <p className="font-semibold text-indigo-600">
+        <div className="rounded-lg border border-[var(--adeera-border)] bg-[var(--adeera-surface-muted)] p-3">
+          <p className="text-sm text-[var(--adeera-text-muted)]">Total Orders</p>
+          <p className="font-semibold text-[var(--adeera-text)]">
             {data.summary.totalOrders}
           </p>
         </div>

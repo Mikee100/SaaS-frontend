@@ -326,7 +326,12 @@ export default function PermissionsSettings() {
           <FaShieldAlt className="text-blue-600 dark:text-blue-400 text-2xl" />
           <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Roles & Permissions</h2>
         </div>
-        <Link href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">← All Settings</Link>
+        <Link
+          href="/settings"
+          className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          Back to Settings
+        </Link>
       </div>
 
       {success && (
@@ -380,7 +385,7 @@ export default function PermissionsSettings() {
                       Role-inherited permissions are checked and read-only.
                     </p>
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto bg-gray-50 dark:bg-gray-900/30 rounded p-3">
+                  <div className="grid max-h-64 grid-cols-1 gap-3 overflow-y-auto rounded-xl border border-gray-200 p-3 dark:border-gray-700 sm:grid-cols-2">
                     {visiblePermissions.map((p) => (
                       <label key={p.key} className="flex items-center gap-2 text-gray-800 dark:text-gray-200 py-1">
                         {(() => {
@@ -703,7 +708,7 @@ export default function PermissionsSettings() {
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition"
+                          className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                           title="Edit Role"
                           onClick={() => openEditRole(role)}
                         >
@@ -711,7 +716,7 @@ export default function PermissionsSettings() {
                         </button>
                         <button
                           type="button"
-                          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition"
+                          className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100 hover:text-red-600 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-red-400"
                           title="Delete Role"
                           onClick={() => setRoleToDelete(role)}
                         >

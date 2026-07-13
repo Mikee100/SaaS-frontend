@@ -154,6 +154,73 @@ type ProductComparisonData = {
   };
 };
 
+type RetailSnapshot = {
+  periodStart: string;
+  periodEnd: string;
+  totalOrders: number;
+  totalSales: number;
+  avgTicket: number;
+  cashTotal: number;
+  nonCashTotal: number;
+  paymentMethods: Array<{ method: string; count: number; amount: number }>;
+};
+
+type RetailCenterData = {
+  range: {
+    label: string;
+    start: string;
+    end: string;
+  };
+  xReport: RetailSnapshot;
+  zReport: RetailSnapshot;
+  byPaymentMethod: Array<{
+    method: string;
+    count: number;
+    amount: number;
+    sharePct: number;
+  }>;
+  byCashier: Array<{
+    userId: string;
+    cashier: string;
+    orders: number;
+    sales: number;
+    avgTicket: number;
+  }>;
+  todayByCashier: Array<{
+    userId: string;
+    cashier: string;
+    orders: number;
+    sales: number;
+    avgTicket: number;
+  }>;
+  variance: {
+    todayVsYesterday: {
+      salesDelta: number;
+      salesDeltaPct: number;
+      ordersDelta: number;
+      ordersDeltaPct: number;
+      avgTicketDelta: number;
+      avgTicketDeltaPct: number;
+      comparedTo: {
+        start: string;
+        end: string;
+      };
+    };
+    periodOverPeriod: {
+      salesDelta: number;
+      salesDeltaPct: number;
+      ordersDelta: number;
+      ordersDeltaPct: number;
+      avgTicketDelta: number;
+      avgTicketDeltaPct: number;
+      comparedTo: {
+        start: string;
+        end: string;
+      };
+    };
+  };
+};
+
 export default function ReportsPage() {
   // Low stock notification state
   const [showLowStockAlert, setShowLowStockAlert] = useState(true);
@@ -260,7 +327,13 @@ export default function ReportsPage() {
           totalSales?: number;
           averageOrderValue?: number;
           topProducts?: Array<{ productId: string; productName: string; quantitySold: number; totalRevenue: number }>;
-          paymentMethods?: Array<{ method: string; amount: number }>;
+          paymentMethods?: Array<{
+            method: string;
+            amount: number;
+            count?: number;
+            componentCount?: number;
+            transactionCount?: number;
+          }>;
           salesTrend?: Array<{ date: string; sales: number }>;
         };
         // Transform branch data to match Metrics interface
@@ -296,6 +369,38 @@ export default function ReportsPage() {
     },
     enabled: !!user?.tenantId,
     staleTime: 2 * 60 * 1000, // 2 minutes - reports data changes frequently
+    gcTime: 5 * 60 * 1000,
+  });
+
+  const { data: retailCenterData } = useQuery({
+    queryKey: [
+      'reports',
+      'retail-center',
+      user?.tenantId,
+      selectedReportBranch,
+      dateFrom,
+      dateTo,
+    ],
+    queryFn: async () => {
+      if (!user?.tenantId) return null;
+      const params = new URLSearchParams();
+      if (dateFrom && dateTo) {
+        params.append('startDate', dateFrom);
+        params.append('endDate', dateTo);
+      } else {
+        params.append('timeRange', '30days');
+      }
+      if (selectedReportBranch !== 'all') {
+        params.append('branchId', selectedReportBranch);
+      }
+
+      const query = params.toString();
+      return apiGet(
+        `/api/reports/branches/${user.tenantId}/retail-center${query ? `?${query}` : ''}`,
+      ) as Promise<RetailCenterData>;
+    },
+    enabled: !!user?.tenantId,
+    staleTime: 2 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
   });
 
@@ -875,6 +980,164 @@ export default function ReportsPage() {
         </div>
 
         {/* Key Metrics Section */}
+        {retailCenterData && (
+          <section className="mb-5">
+            <h2 className="text-base font-semibold text-gray-800 mb-2">Retail Reports Center</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 mb-2">
+              <div className="bg-white rounded shadow p-3 text-xs border border-blue-100">
+                <div className="text-[11px] uppercase tracking-wide text-blue-700 font-semibold mb-1">X Report (Live Today)</div>
+                <div className="text-gray-700">Orders: <span className="font-semibold">{retailCenterData.xReport.totalOrders}</span></div>
+                <div className="text-gray-700">Sales: <span className="font-semibold">Ksh {retailCenterData.xReport.totalSales.toLocaleString()}</span></div>
+                <div className="text-gray-700">Avg Ticket: <span className="font-semibold">Ksh {retailCenterData.xReport.avgTicket.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                <div className="text-gray-500 mt-1">{new Date(retailCenterData.xReport.periodStart).toLocaleString()} to {new Date(retailCenterData.xReport.periodEnd).toLocaleString()}</div>
+              </div>
+              <div className="bg-white rounded shadow p-3 text-xs border border-emerald-100">
+                <div className="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold mb-1">Z Report (Last Closed Day)</div>
+                <div className="text-gray-700">Orders: <span className="font-semibold">{retailCenterData.zReport.totalOrders}</span></div>
+                <div className="text-gray-700">Sales: <span className="font-semibold">Ksh {retailCenterData.zReport.totalSales.toLocaleString()}</span></div>
+                <div className="text-gray-700">Avg Ticket: <span className="font-semibold">Ksh {retailCenterData.zReport.avgTicket.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                <div className="text-gray-500 mt-1">{new Date(retailCenterData.zReport.periodStart).toLocaleString()} to {new Date(retailCenterData.zReport.periodEnd).toLocaleString()}</div>
+              </div>
+              <div className="bg-white rounded shadow p-3 text-xs border border-amber-100">
+                <div className="text-[11px] uppercase tracking-wide text-amber-700 font-semibold mb-1">Variance (X vs Z)</div>
+                <div className="text-gray-700">Sales: <span className={`font-semibold ${retailCenterData.variance.todayVsYesterday.salesDelta >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{retailCenterData.variance.todayVsYesterday.salesDelta >= 0 ? '+' : ''}Ksh {retailCenterData.variance.todayVsYesterday.salesDelta.toLocaleString()} ({retailCenterData.variance.todayVsYesterday.salesDeltaPct >= 0 ? '+' : ''}{retailCenterData.variance.todayVsYesterday.salesDeltaPct.toFixed(2)}%)</span></div>
+                <div className="text-gray-700">Orders: <span className={`font-semibold ${retailCenterData.variance.todayVsYesterday.ordersDelta >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{retailCenterData.variance.todayVsYesterday.ordersDelta >= 0 ? '+' : ''}{retailCenterData.variance.todayVsYesterday.ordersDelta} ({retailCenterData.variance.todayVsYesterday.ordersDeltaPct >= 0 ? '+' : ''}{retailCenterData.variance.todayVsYesterday.ordersDeltaPct.toFixed(2)}%)</span></div>
+                <div className="text-gray-700">Avg Ticket: <span className={`font-semibold ${retailCenterData.variance.todayVsYesterday.avgTicketDelta >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{retailCenterData.variance.todayVsYesterday.avgTicketDelta >= 0 ? '+' : ''}Ksh {retailCenterData.variance.todayVsYesterday.avgTicketDelta.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({retailCenterData.variance.todayVsYesterday.avgTicketDeltaPct >= 0 ? '+' : ''}{retailCenterData.variance.todayVsYesterday.avgTicketDeltaPct.toFixed(2)}%)</span></div>
+                <div className="text-gray-500 mt-1">Compared to {new Date(retailCenterData.variance.todayVsYesterday.comparedTo.start).toLocaleDateString()} - {new Date(retailCenterData.variance.todayVsYesterday.comparedTo.end).toLocaleDateString()}</div>
+                <div className="mt-2 pt-2 border-t border-amber-100 text-[11px] text-gray-600">
+                  Period variance: {retailCenterData.variance.periodOverPeriod.salesDelta >= 0 ? '+' : ''}Ksh {retailCenterData.variance.periodOverPeriod.salesDelta.toLocaleString()} ({retailCenterData.variance.periodOverPeriod.salesDeltaPct >= 0 ? '+' : ''}{retailCenterData.variance.periodOverPeriod.salesDeltaPct.toFixed(2)}%)
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+              <div className="bg-white rounded shadow p-3 text-xs">
+                <h3 className="text-sm font-semibold text-gray-800 mb-1">By Payment Method</h3>
+                <div className="text-[11px] text-gray-500 mb-2">
+                  Selected range: {new Date(retailCenterData.range.start).toLocaleDateString()} - {new Date(retailCenterData.range.end).toLocaleDateString()}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="py-2 px-2 text-left font-semibold text-gray-600">Method</th>
+                        <th className="py-2 px-2 text-right font-semibold text-gray-600">Count</th>
+                        <th className="py-2 px-2 text-right font-semibold text-gray-600">Amount</th>
+                        <th className="py-2 px-2 text-right font-semibold text-gray-600">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {retailCenterData.byPaymentMethod.length === 0 ? (
+                        <tr><td colSpan={4} className="py-3 text-center text-gray-400">No payment data in selected range</td></tr>
+                      ) : (
+                        retailCenterData.byPaymentMethod.map((row) => (
+                          <tr key={row.method} className="border-b">
+                            <td className="py-2 px-2 font-medium text-gray-800">{row.method}</td>
+                            <td className="py-2 px-2 text-right">{row.count}</td>
+                            <td className="py-2 px-2 text-right">Ksh {row.amount.toLocaleString()}</td>
+                            <td className="py-2 px-2 text-right">{row.sharePct.toFixed(2)}%</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-gray-100">
+                  <h4 className="text-[11px] font-semibold text-gray-700 mb-1">Today (X Report) Payment Mix</h4>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="py-1.5 px-2 text-left font-semibold text-gray-600">Method</th>
+                          <th className="py-1.5 px-2 text-right font-semibold text-gray-600">Count</th>
+                          <th className="py-1.5 px-2 text-right font-semibold text-gray-600">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(retailCenterData.xReport.paymentMethods || []).length === 0 ? (
+                          <tr><td colSpan={3} className="py-2 text-center text-gray-400">No payments today</td></tr>
+                        ) : (
+                          (retailCenterData.xReport.paymentMethods || []).map((row) => (
+                            <tr key={`today-${row.method}`} className="border-b">
+                              <td className="py-1.5 px-2 font-medium text-gray-800">{row.method}</td>
+                              <td className="py-1.5 px-2 text-right">{row.count}</td>
+                              <td className="py-1.5 px-2 text-right">Ksh {row.amount.toLocaleString()}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded shadow p-3 text-xs">
+                <h3 className="text-sm font-semibold text-gray-800 mb-1">By Cashier</h3>
+                <div className="text-[11px] text-gray-500 mb-2">
+                  Selected range: {new Date(retailCenterData.range.start).toLocaleDateString()} - {new Date(retailCenterData.range.end).toLocaleDateString()}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="py-2 px-2 text-left font-semibold text-gray-600">Cashier</th>
+                        <th className="py-2 px-2 text-right font-semibold text-gray-600">Orders</th>
+                        <th className="py-2 px-2 text-right font-semibold text-gray-600">Sales</th>
+                        <th className="py-2 px-2 text-right font-semibold text-gray-600">Avg Ticket</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {retailCenterData.byCashier.length === 0 ? (
+                        <tr><td colSpan={4} className="py-3 text-center text-gray-400">No cashier data in selected range</td></tr>
+                      ) : (
+                        retailCenterData.byCashier.slice(0, 10).map((row) => (
+                          <tr key={row.userId} className="border-b">
+                            <td className="py-2 px-2 font-medium text-gray-800">{row.cashier}</td>
+                            <td className="py-2 px-2 text-right">{row.orders}</td>
+                            <td className="py-2 px-2 text-right">Ksh {row.sales.toLocaleString()}</td>
+                            <td className="py-2 px-2 text-right">Ksh {row.avgTicket.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-gray-100">
+                  <h4 className="text-[11px] font-semibold text-gray-700 mb-1">Today (X Report) by Cashier</h4>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="py-1.5 px-2 text-left font-semibold text-gray-600">Cashier</th>
+                          <th className="py-1.5 px-2 text-right font-semibold text-gray-600">Orders</th>
+                          <th className="py-1.5 px-2 text-right font-semibold text-gray-600">Sales</th>
+                          <th className="py-1.5 px-2 text-right font-semibold text-gray-600">Avg Ticket</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(retailCenterData.todayByCashier || []).length === 0 ? (
+                          <tr><td colSpan={4} className="py-2 text-center text-gray-400">No cashier sales today</td></tr>
+                        ) : (
+                          (retailCenterData.todayByCashier || []).map((row) => (
+                            <tr key={`today-cashier-${row.userId}`} className="border-b">
+                              <td className="py-1.5 px-2 font-medium text-gray-800">{row.cashier}</td>
+                              <td className="py-1.5 px-2 text-right">{row.orders}</td>
+                              <td className="py-1.5 px-2 text-right">Ksh {row.sales.toLocaleString()}</td>
+                              <td className="py-1.5 px-2 text-right">Ksh {row.avgTicket.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         <section className="mb-5">
           <h2 className="text-base font-semibold text-gray-800 mb-2">
             Key Metrics

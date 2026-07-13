@@ -791,7 +791,7 @@ export default function SalesHistoryPage() {
                 id="branch-select"
                 value={selectedBranchId}
                 onChange={e => setSelectedBranchId(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 bg-white shadow-sm text-xs min-w-[120px]"
+                className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 bg-white shadow-sm text-xs min-w-30"
               >
                 <option value="all">All Branches</option>
                 {branches.map(branch => (
@@ -823,7 +823,7 @@ export default function SalesHistoryPage() {
 
       {/* Filters Panel */}
       <div
-        className={`overflow-hidden transition-all duration-300 ${showFilters ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0'} mb-3`}
+        className={`overflow-hidden transition-all duration-300 ${showFilters ? 'max-h-100 opacity-100' : 'max-h-0 opacity-0'} mb-3`}
         aria-expanded={showFilters}
       >
         {showFilters && (
@@ -840,7 +840,7 @@ export default function SalesHistoryPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                   <CalendarDaysIcon className="w-4 h-4" />
                   Start Date
                 </label>
@@ -853,7 +853,7 @@ export default function SalesHistoryPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                   <CalendarDaysIcon className="w-4 h-4" />
                   End Date
                 </label>
@@ -866,7 +866,7 @@ export default function SalesHistoryPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                   <UserIcon className="w-4 h-4" />
                   Cashier
                 </label>
@@ -881,7 +881,7 @@ export default function SalesHistoryPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                   <CreditCardIcon className="w-4 h-4" />
                   Payment Method
                 </label>
@@ -925,7 +925,7 @@ export default function SalesHistoryPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-1 mb-2">
-        <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-2 rounded border border-blue-100 shadow-sm animate-fade-in">
+        <div className="bg-linear-to-r from-blue-50 to-blue-100 p-2 rounded border border-blue-100 shadow-sm animate-fade-in">
           <div className="flex items-center gap-1 mb-0.5">
             <div className="p-0.5 bg-blue-200 rounded">
               <DocumentTextIcon className="w-3 h-3 text-blue-700" />
@@ -938,7 +938,7 @@ export default function SalesHistoryPage() {
           <p className="text-[9px] text-blue-600 mt-0.5 leading-tight">Completed transactions</p>
         </div>
 
-        <div className="bg-gradient-to-r from-green-50 to-green-100 p-2 rounded border border-green-100 shadow-sm animate-fade-in">
+        <div className="bg-linear-to-r from-green-50 to-green-100 p-2 rounded border border-green-100 shadow-sm animate-fade-in">
           <div className="flex items-center gap-1 mb-0.5">
             <div className="p-0.5 bg-green-200 rounded">
               <DocumentChartBarIcon className="w-3 h-3 text-green-700" />
@@ -951,7 +951,7 @@ export default function SalesHistoryPage() {
           <p className="text-[9px] text-green-600 mt-0.5 leading-tight">Sum of values</p>
         </div>
 
-        <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-2 rounded border border-purple-100 shadow-sm animate-fade-in">
+        <div className="bg-linear-to-r from-purple-50 to-purple-100 p-2 rounded border border-purple-100 shadow-sm animate-fade-in">
           <div className="flex items-center gap-1 mb-0.5">
             <div className="p-0.5 bg-purple-200 rounded">
               <CreditCardIcon className="w-3 h-3 text-purple-700" />
@@ -1045,9 +1045,18 @@ export default function SalesHistoryPage() {
                                 {payment.method === 'mpesa' && (
                                   <span>
                                     📱 MPESA: Ksh {payment.amount.toFixed(2)}
-                                    {payment.mpesaTransactionId && (
+                                    {payment.mpesaReceipt ? (
                                       <div className="text-xs text-gray-500 mt-0.5">
-                                        Transaction: {payment.mpesaTransactionId}
+                                        Receipt: {payment.mpesaReceipt}
+                                      </div>
+                                    ) : payment.mpesaTransactionId ? (
+                                      <div className="text-xs text-gray-500 mt-0.5">
+                                        Ref: {payment.mpesaTransactionId}
+                                      </div>
+                                    ) : null}
+                                    {payment.mpesaReceipt && payment.mpesaTransactionId && payment.mpesaTransactionId !== payment.mpesaReceipt && (
+                                      <div className="text-xs text-gray-500">
+                                        Ref: {payment.mpesaTransactionId}
                                       </div>
                                     )}
                                   </span>
@@ -1170,14 +1179,14 @@ export default function SalesHistoryPage() {
                             {payment.method === 'mpesa' && (
                               <div>
                                 <span className="font-semibold">📱 M-Pesa:</span> Ksh {payment.amount.toFixed(2)}
-                                {payment.mpesaTransactionId && (
-                                  <div className="text-xs text-gray-600 ml-4 mt-1">
-                                    Transaction: {payment.mpesaTransactionId}
-                                  </div>
-                                )}
                                 {payment.mpesaReceipt && (
                                   <div className="text-xs text-gray-600 ml-4">
                                     Receipt: {payment.mpesaReceipt}
+                                  </div>
+                                )}
+                                {payment.mpesaTransactionId && (
+                                  <div className="text-xs text-gray-600 ml-4 mt-1">
+                                    Ref: {payment.mpesaTransactionId}
                                   </div>
                                 )}
                               </div>

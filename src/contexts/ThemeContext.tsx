@@ -21,7 +21,7 @@ type ThemeContextType = {
 
 const defaultTheme: Theme = {
   colorScheme: 'light',
-  accentColor: '#3b82f6',
+  accentColor: '#4f46e5',
   density: 'normal',
   fontSize: 16,
 };
