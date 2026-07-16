@@ -80,7 +80,18 @@ export default function LoginPage() {
             user.roles?.includes("superadmin") || user.isSuperadmin;
           const isAdmin = user.roles?.includes("admin");
 
-          if (isSuperAdmin) {
+          const redirectTo = new URLSearchParams(window.location.search).get(
+            "redirect",
+          );
+          const isSafeRedirect =
+            redirectTo &&
+            redirectTo.startsWith("/") &&
+            !redirectTo.startsWith("//") &&
+            redirectTo !== "/login";
+
+          if (isSafeRedirect) {
+            router.push(redirectTo);
+          } else if (isSuperAdmin) {
             router.push("/superadmin");
           } else if (isAdmin) {
             router.push("/admin");
