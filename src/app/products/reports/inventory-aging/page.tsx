@@ -46,6 +46,8 @@ type InventoryItem = {
   lastReceived: string | null;
   daysInStock: number;
   ageBucket: string;
+  unitCost: number;
+  stockValue: number;
 };
 
 export default function InventoryAgingReportPage() {
@@ -77,7 +79,7 @@ export default function InventoryAgingReportPage() {
     '90+': filteredItems.filter(item => item.ageBucket === '90+').length,
   };
 
-  const totalValue = filteredItems.reduce((sum, item) => sum + (item.stock * 100), 0); // Assuming average price of 100
+  const totalValue = filteredItems.reduce((sum, item) => sum + item.stockValue, 0);
   const slowMovingItems = filteredItems.filter(item => item.daysInStock > 90);
   const obsoleteItems = filteredItems.filter(item => item.daysInStock > 180);
 
