@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-
+import { apiGet } from "@/utils/api";
 import { Line, Bar } from "react-chartjs-2";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -56,22 +56,14 @@ export default function InventoryMovementReportPage() {
   const { data: tenantData } = useTenant();
   const [movements, setMovements] = useState<MovementData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-
-    // Simulate movement data
-    const mockMovements: MovementData[] = [
-      { date: '2024-01-01', receipts: 150, issues: 120, adjustments: 5, netMovement: 35 },
-      { date: '2024-01-02', receipts: 200, issues: 180, adjustments: -3, netMovement: 17 },
-      { date: '2024-01-03', receipts: 180, issues: 160, adjustments: 2, netMovement: 22 },
-      { date: '2024-01-04', receipts: 220, issues: 200, adjustments: 1, netMovement: 21 },
-      { date: '2024-01-05', receipts: 190, issues: 170, adjustments: -2, netMovement: 18 },
-      { date: '2024-01-06', receipts: 210, issues: 190, adjustments: 3, netMovement: 23 },
-      { date: '2024-01-07', receipts: 170, issues: 150, adjustments: 0, netMovement: 20 },
-    ];
-    setMovements(mockMovements);
-    setLoading(false);
+    const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
+    apiGet("/analytics/inventory-movement", headers)
+      .then((data) => setMovements(data as MovementData[]))
+      .catch((err: unknown) => setError((err as Error).message || "An error occurred while fetching data."))
+      .finally(() => setLoading(false));
   }, [selectedBranchId]);
 
   const movementChartData = {

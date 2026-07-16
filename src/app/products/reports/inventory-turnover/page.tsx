@@ -43,6 +43,7 @@ ChartJS.register(
 );
 
 type TurnoverData = {
+  id: string;
   product: string;
   turnover: number;
   avgStock: number;
@@ -58,20 +59,10 @@ export default function InventoryTurnoverReportPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    
-    Promise.all([
-      apiGet(`/analytics/dashboard`)
-    ]).then(([analyticsData]) => {
-      // Type analyticsData as Record<string, unknown>
-      const topProducts = (analyticsData as { topProducts?: { name: string; unitsSold: number }[] }).topProducts || [];
-      const simulatedTurnover = topProducts.map((p) => ({
-        product: p.name,
-        turnover: Math.random() * 12 + 1, // Random turnover between 1-13
-        avgStock: Math.floor(Math.random() * 100) + 20,
-        sold: p.unitsSold
-      }));
-      setTurnoverData(simulatedTurnover);
-    }).catch((err: unknown) => setError((err as Error).message || "An error occurred while fetching data."))
+    const headers = selectedBranchId ? { 'x-branch-id': selectedBranchId } : undefined;
+    apiGet("/analytics/inventory-turnover", headers)
+      .then((data) => setTurnoverData(data as TurnoverData[]))
+      .catch((err: unknown) => setError((err as Error).message || "An error occurred while fetching data."))
       .finally(() => setLoading(false));
   }, [selectedBranchId]);
 
@@ -278,7 +269,7 @@ export default function InventoryTurnoverReportPage() {
                 </thead>
                 <tbody>
                   {turnoverData.map((data) => (
-                    <tr key={data.product} className="border-b">
+                    <tr key={data.id} className="border-b">
                       <td className="py-2 px-4">{data.product}</td>
                       <td className="py-2 px-4">{data.turnover.toFixed(2)}</td>
                       <td className="py-2 px-4">{data.avgStock}</td>
