@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaExclamationTriangle, FaBox, FaShoppingCart, FaFilePdf, FaFileExcel, FaTh, FaList, FaFileAlt } from "react-icons/fa";
+import { FaExclamationTriangle, FaBox, FaShoppingCart, FaFilePdf, FaFileExcel, FaTh, FaList, FaFileAlt, FaSyncAlt, FaLayerGroup, FaExchangeAlt, FaClock, FaMoneyBillWave, FaBan } from "react-icons/fa";
 import { hasPermission } from "@/utils/permissions";
 import { useUser } from "@/components/UserContext";
 
@@ -45,51 +45,63 @@ const reports: Report[] = [
     icon: FaExclamationTriangle,
     category: 'inventory',
     requiredPermission: 'view_inventory'
+  },
+  {
+    id: 'inventory-turnover',
+    title: 'Inventory Turnover',
+    description: 'How quickly each product sells relative to stock on hand, over the last 30 days.',
+    icon: FaSyncAlt,
+    category: 'inventory',
+    requiredPermission: 'view_inventory'
+  },
+  {
+    id: 'inventory-movement',
+    title: 'Inventory Movement',
+    description: 'Daily receipts, issues, and adjustments recorded against your stock.',
+    icon: FaExchangeAlt,
+    category: 'inventory',
+    requiredPermission: 'view_inventory'
+  },
+  {
+    id: 'inventory-aging',
+    title: 'Inventory Aging',
+    description: 'How long stock has been sitting since it was last received, by age bucket.',
+    icon: FaClock,
+    category: 'inventory',
+    requiredPermission: 'view_inventory'
+  },
+  {
+    id: 'inventory-valuation',
+    title: 'Inventory Valuation',
+    description: 'Financial value of current stock, including cost, potential revenue, and margin.',
+    icon: FaMoneyBillWave,
+    category: 'inventory',
+    requiredPermission: 'view_inventory'
+  },
+  {
+    id: 'stockout-lost-sales',
+    title: 'Stockout & Lost Sales',
+    description: 'Products currently out of stock and the estimated sales lost while unavailable.',
+    icon: FaBan,
+    category: 'inventory',
+    requiredPermission: 'view_inventory'
+  },
+  {
+    id: 'product-category-analysis',
+    title: 'Product Category Analysis',
+    description: 'Revenue, units sold, and margin performance broken down by product category.',
+    icon: FaLayerGroup,
+    category: 'products',
+    requiredPermission: 'view_sales'
   }
 ];
 
 const hiddenReports: HiddenReportStatus[] = [
   {
-    id: 'inventory-turnover',
-    title: 'Inventory Turnover',
-    reason: 'Uses simulated/random values in frontend.',
-    endpoint: 'GET /analytics/inventory-turnover',
-  },
-  {
     id: 'supplier-performance',
     title: 'Supplier Performance',
-    reason: 'Uses hardcoded mock supplier records.',
+    reason: 'No purchase-order or delivery-tracking data exists in the schema to compute this from — would require a new data model, not just a new endpoint.',
     endpoint: 'GET /analytics/supplier-performance',
-  },
-  {
-    id: 'product-category-analysis',
-    title: 'Product Category Analysis',
-    reason: 'No valid report page is currently implemented.',
-    endpoint: 'GET /analytics/product-category-analysis',
-  },
-  {
-    id: 'inventory-movement',
-    title: 'Inventory Movement',
-    reason: 'Uses static fake movement data.',
-    endpoint: 'GET /analytics/inventory-movement',
-  },
-  {
-    id: 'inventory-aging',
-    title: 'Inventory Aging',
-    reason: 'Backend endpoint missing and value assumptions in frontend.',
-    endpoint: 'GET /analytics/inventory-aging',
-  },
-  {
-    id: 'stockout-lost-sales',
-    title: 'Stockout & Lost Sales',
-    reason: 'Frontend expects endpoint that is not implemented.',
-    endpoint: 'GET /analytics/stockout-lost-sales',
-  },
-  {
-    id: 'inventory-valuation',
-    title: 'Inventory Valuation',
-    reason: 'Frontend expects endpoint that is not implemented.',
-    endpoint: 'GET /analytics/inventory-valuation',
   },
 ];
 
