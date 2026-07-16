@@ -5,6 +5,7 @@ import { apiGet, apiPost } from "@/utils/api";
 import { login as authLogin, logout as authLogout } from "@/lib/auth-client";
 import { AppModuleKey, CrmEntitlements, normalizeCrmEntitlements, normalizeEnabledModules } from '@/utils/moduleAccess';
 import { getEffectiveTenantManifest } from '@/utils/manifest/manifestClient';
+import { setSessionMarker, clearSessionMarker } from '@/utils/authSession';
 
 export interface User {
   id: string;
@@ -333,6 +334,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       setUser(normalizedUser);
       setLoading(false);
       setError(null);
+      setSessionMarker();
       // Keep initialized so we don't refetch on redirect (avoids 401/hang when cookies aren't sent cross-origin)
       initializedRef.current = true;
       await new Promise((r) => setTimeout(r, 100));
@@ -349,6 +351,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       setEntitlementsSyncedAt(null);
       setError(err instanceof Error ? err.message : 'Login failed');
       if (typeof window !== 'undefined') localStorage.removeItem('token');
+      clearSessionMarker();
     } finally {
       setLoading(false);
     }
@@ -357,6 +360,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   const logout = useCallback(async () => {
     await authLogout();
     if (typeof window !== 'undefined') localStorage.removeItem('token');
+    clearSessionMarker();
     clearUserCache();
     setUser(null);
     setEntitlementsSyncedAt(null);
