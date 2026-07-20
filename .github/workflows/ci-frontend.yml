@@ -1,0 +1,35 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches: [master, main]
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      # Lint is intentionally not run here yet: package.json's `lint` script
+      # calls `next lint`, which Next 16 removed, and eslint-config-next
+      # isn't installed. Fix the script (call eslint directly against
+      # eslint.config.mjs, add eslint-config-next as a devDependency), then
+      # add a `npm run lint` step here.
