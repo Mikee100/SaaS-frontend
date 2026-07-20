@@ -56,6 +56,18 @@ interface RevenuePoint {
   mrr: number;
 }
 
+interface RevenueByPlan {
+  planName: string;
+  mrr: number;
+  subscriberCount: number;
+}
+
+interface ChurnPoint {
+  month: string;
+  newSubs: number;
+  churned: number;
+}
+
 const COLORS = [
   "#3b82f6",
   "#10b981",
@@ -79,6 +91,8 @@ export default function SystemAnalyticsPage() {
   const router = useRouter();
   const [tenantStats, setTenantStats] = useState<TenantStats[]>([]);
   const [revenueHistory, setRevenueHistory] = useState<RevenuePoint[]>([]);
+  const [revenueByPlan, setRevenueByPlan] = useState<RevenueByPlan[]>([]);
+  const [churnHistory, setChurnHistory] = useState<ChurnPoint[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
   const [sortBy, setSortBy] = useState<"name" | "spaceUsed" | "percentage">(
     "spaceUsed"
@@ -100,14 +114,21 @@ export default function SystemAnalyticsPage() {
   const fetchAnalytics = async () => {
     try {
       setLoadingStats(true);
-      const [tenantData, revenueData] = await Promise.all([
-        apiGet("/admin/tenants/analytics") as Promise<TenantStats[]>,
-        apiGet("/admin/stats/revenue-history?months=12") as Promise<
-          RevenuePoint[]
-        >,
-      ]);
+      const [tenantData, revenueData, revenueByPlanData, churnData] =
+        await Promise.all([
+          apiGet("/admin/tenants/analytics") as Promise<TenantStats[]>,
+          apiGet("/admin/stats/revenue-history?months=12") as Promise<
+            RevenuePoint[]
+          >,
+          apiGet("/admin/stats/revenue-by-plan") as Promise<RevenueByPlan[]>,
+          apiGet("/admin/stats/churn-history?months=12") as Promise<
+            ChurnPoint[]
+          >,
+        ]);
       setTenantStats(tenantData);
       setRevenueHistory(revenueData);
+      setRevenueByPlan(revenueByPlanData);
+      setChurnHistory(churnData);
     } catch (error) {
       console.error("Failed to fetch analytics data:", error);
     } finally {
@@ -454,6 +475,71 @@ export default function SystemAnalyticsPage() {
                     ]}
                   />
                 </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Revenue by Plan */}
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-gray-900 md:text-base">
+                Revenue by Plan (MRR)
+              </h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={revenueByPlan} layout="vertical" margin={{ left: 16 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    type="number"
+                    tick={{ fontSize: 10, fill: "#6b7280" }}
+                    tickFormatter={(v) => `Ksh ${v}`}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="planName"
+                    width={90}
+                    tick={{ fontSize: 10, fill: "#6b7280" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#fff",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 6,
+                    }}
+                    formatter={(value, name, entry) => [
+                      `Ksh ${Number(value ?? 0).toFixed(2)} (${entry?.payload?.subscriberCount ?? 0} subscribers)`,
+                      "MRR",
+                    ]}
+                  />
+                  <Bar dataKey="mrr" radius={[0, 4, 4, 0]} fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Subscription Churn Trend */}
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-gray-900 md:text-base">
+                New vs. Churned Subscriptions (Last 12 Months)
+              </h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={churnHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 10, fill: "#6b7280" }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: "#6b7280" }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#fff",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 6,
+                    }}
+                  />
+                  <Legend />
+                  <Bar dataKey="newSubs" name="New" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="churned" name="Churned" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
 

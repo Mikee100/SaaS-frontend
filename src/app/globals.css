@@ -622,6 +622,26 @@
   border: 1px solid var(--adeera-border);
   border-radius: var(--adeera-radius-md);
   padding: var(--adeera-space-3) var(--adeera-space-4);
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+a.adeera-status-row:hover {
+  background: var(--adeera-surface-muted);
+  border-color: color-mix(in srgb, var(--adeera-text-muted) 30%, var(--adeera-border));
+}
+
+.adeera-card-interactive {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.adeera-card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.16);
+  border-color: color-mix(in srgb, var(--adeera-accent) 25%, var(--adeera-border));
+}
+
+.dark .adeera-card-interactive:hover {
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.6);
 }
 
 .adeera-status-dot {

@@ -179,7 +179,7 @@ const RESTAURANT_MENU_CATEGORIES = [
 
 type TabType = 'products' | 'inventory' | 'advanced' | 'attributes' | 'variations';
 type AdvancedSubTab = 'overview' | 'movements' | 'alerts' | 'forecasting' | 'locations';
-type ProductBusinessFlow = 'restaurant' | 'fashion' | 'spa';
+type ProductBusinessFlow = 'restaurant' | 'fashion' | 'spa' | 'hardware';
 
 interface UnifiedProductsDisplayConfig {
   version: 'v1';
@@ -306,6 +306,7 @@ export default function UnifiedProductsInventoryPage() {
   const [showUsageBanner, setShowUsageBanner] = useState(true);
   const [showDeletedProducts, setShowDeletedProducts] = useState(false);
   const [productType, setProductType] = useState<'simple' | 'withVariations'>('simple');
+  const [hardwareUnitId, setHardwareUnitId] = useState('');
   const [redirectToVariations, setRedirectToVariations] = useState(false);
   const [productCategoryInput, setProductCategoryInput] = useState('');
   const [showCategoryManager, setShowCategoryManager] = useState(false);
@@ -1126,6 +1127,9 @@ export default function UnifiedProductsInventoryPage() {
     if (manifestBusinessType.includes('spa') || manifestBusinessType.includes('barber')) {
       return 'spa';
     }
+    if (manifestBusinessType.includes('hardware')) {
+      return 'hardware';
+    }
     if (Boolean(tenantData.restaurantFeaturesEnabled)) {
       return 'restaurant';
     }
@@ -1150,12 +1154,20 @@ export default function UnifiedProductsInventoryPage() {
     ) {
       return 'spa';
     }
+    if (
+      tenantBusinessType.includes('hardware') ||
+      classificationSlug.includes('hardware') ||
+      classificationName.includes('hardware')
+    ) {
+      return 'hardware';
+    }
     return 'fashion';
   }, [tenant, classificationMeta, effectiveManifest]);
 
   const isRestaurantTenant = businessFlow === 'restaurant';
   const isSpaTenant = businessFlow === 'spa';
   const isFashionTenant = businessFlow === 'fashion';
+  const isHardwareTenant = businessFlow === 'hardware';
 
   useEffect(() => {
     if (!tenantLoading && isRestaurantTenant) {
@@ -1312,6 +1324,21 @@ export default function UnifiedProductsInventoryPage() {
         console.warn('Platform create failed, falling back to /products only:', platformErr);
       }
 
+      // Declares how the backend should provision this product (sets
+      // inventoryPolicy etc. - see backend product-mode.types.ts). Restaurant
+      // tenants never reach this form (redirected to /restaurant/menu-studio
+      // above), so only fashion/spa/hardware are mapped here today.
+      const selectedHardwareUnit = isHardwareTenant
+        ? classificationUnits.find((unit: any) => unit.id === hardwareUnitId)
+        : undefined;
+      const mode = isSpaTenant
+        ? 'service'
+        : isFashionTenant
+          ? (wantsVariations ? 'variable' : 'simple')
+          : isHardwareTenant
+            ? (selectedHardwareUnit ? 'unit_priced' : 'simple')
+            : undefined;
+
       const created = await apiPost("/products", {
         name,
         sku,
@@ -1322,6 +1349,15 @@ export default function UnifiedProductsInventoryPage() {
         category,
         supplier,
         branchId: selectedBranchId,
+        ...(mode ? { mode } : {}),
+        ...(selectedHardwareUnit
+          ? {
+              unitId: selectedHardwareUnit.id,
+              unitAbbreviation: selectedHardwareUnit.abbreviation,
+              unitName: selectedHardwareUnit.name,
+              pricePerUnit: true,
+            }
+          : {}),
       }, { 'x-branch-id': selectedBranchId || '' }) as Product;
 
       if (created?.id && productImageFiles.length > 0) {
@@ -1382,6 +1418,7 @@ export default function UnifiedProductsInventoryPage() {
   const resetForm = () => {
     setEditProduct(null);
     setProductCategoryInput('');
+    setHardwareUnitId('');
     productImagePreviewUrls.forEach((url) => {
       if (url.startsWith('blob:')) {
         URL.revokeObjectURL(url);
@@ -2230,6 +2267,30 @@ export default function UnifiedProductsInventoryPage() {
                               {productType === 'simple'
                                 ? 'Use this for products that do not vary by size, color, or other options.'
                                 : 'Use this when the same product is sold in multiple options (for example T-shirts with different sizes and colors).'}
+                            </p>
+                          </div>
+                          )}
+                          {isHardwareTenant && (
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Sold by unit
+                            </label>
+                            <select
+                              value={hardwareUnitId}
+                              onChange={(e) => setHardwareUnitId(e.target.value)}
+                              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">Whole item (no unit pricing)</option>
+                              {classificationUnits.map((unit: any) => (
+                                <option key={unit.id} value={unit.id}>
+                                  {unit.name} ({unit.abbreviation})
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-gray-500 mt-2">
+                              {hardwareUnitId
+                                ? 'Price above is per unit (e.g. per kg or per metre). Stock will be tracked in that unit.'
+                                : 'Leave as "Whole item" to price and stock this product as a single piece.'}
                             </p>
                           </div>
                           )}

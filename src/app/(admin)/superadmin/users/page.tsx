@@ -29,6 +29,7 @@ interface User {
   email: string;
   isSuperadmin: boolean;
   isDisabled: boolean;
+  adminRoles: string[];
   createdAt: string;
   tenant: {
     id: string;
@@ -111,6 +112,7 @@ export default function SuperadminUsersPage() {
   const [sortKey, setSortKey] = useState<SortKey>("createdAt_desc");
 
   const [pendingRoleByUser, setPendingRoleByUser] = useState<Record<string, string>>({});
+  const [pendingAdminRolesByUser, setPendingAdminRolesByUser] = useState<Record<string, string[]>>({});
   const [actionByUser, setActionByUser] = useState<Record<string, string>>({});
   const [provisioningByTenant, setProvisioningByTenant] = useState<Record<string, boolean>>({});
   const [classifications, setClassifications] = useState<ClassificationOption[]>([]);
@@ -278,6 +280,23 @@ export default function SuperadminUsersPage() {
     } catch (error) {
       console.error("Failed to update user role:", error);
       setNotice({ type: "error", message: "Failed to update user role." });
+    } finally {
+      setRowAction(targetUser.id, null);
+    }
+  };
+
+  const updateAdminRoles = async (targetUser: User, adminRoles: string[]) => {
+    try {
+      setRowAction(targetUser.id, "adminRoles");
+      await apiPut(`/admin/users/${targetUser.id}/admin-roles`, { adminRoles });
+      setNotice({
+        type: "success",
+        message: `${targetUser.name}: admin roles updated to ${adminRoles.length ? adminRoles.join(", ") : "none"}.`,
+      });
+      await fetchUsers();
+    } catch (error) {
+      console.error("Failed to update admin roles:", error);
+      setNotice({ type: "error", message: "Failed to update admin roles." });
     } finally {
       setRowAction(targetUser.id, null);
     }
@@ -502,6 +521,24 @@ export default function SuperadminUsersPage() {
     return pendingRoleByUser[targetUser.id] ?? roleIdFromUser(targetUser);
   };
 
+  const resolvePendingAdminRoles = (targetUser: User) => {
+    return pendingAdminRolesByUser[targetUser.id] ?? targetUser.adminRoles ?? [];
+  };
+
+  const toggleAdminRole = (targetUser: User, role: "SUPPORT" | "BILLING") => {
+    const current = resolvePendingAdminRoles(targetUser);
+    const next = current.includes(role)
+      ? current.filter((r) => r !== role)
+      : [...current, role];
+    setPendingAdminRolesByUser((prev) => ({ ...prev, [targetUser.id]: next }));
+  };
+
+  const sameAdminRoles = (a: string[], b: string[]) => {
+    if (a.length !== b.length) return false;
+    const setB = new Set(b);
+    return a.every((role) => setB.has(role));
+  };
+
   const selectedActivitySuccessCount = userActivity.filter((a) => a.success).length;
   const selectedActivityFailureCount = userActivity.filter((a) => !a.success).length;
 
@@ -685,6 +722,7 @@ export default function SuperadminUsersPage() {
                             <th className="px-3 py-2 font-semibold">User</th>
                             <th className="px-3 py-2 font-semibold">Scope</th>
                             <th className="px-3 py-2 font-semibold">Roles</th>
+                            <th className="px-3 py-2 font-semibold">Admin Roles</th>
                             <th className="px-3 py-2 font-semibold">Joined</th>
                             <th className="px-3 py-2 font-semibold">Role Update</th>
                             <th className="px-3 py-2 font-semibold">Actions</th>
@@ -697,6 +735,9 @@ export default function SuperadminUsersPage() {
                     const roleBusy = rowAction === "role";
                     const statusBusy = rowAction === "status";
                     const logoutBusy = rowAction === "logoutAll";
+                    const adminRolesBusy = rowAction === "adminRoles";
+                    const isPlatformStaffRow = !rowUser.tenant?.id && !rowUser.isSuperadmin;
+                    const pendingAdminRoles = resolvePendingAdminRoles(rowUser);
                     const joinedDate = new Date(rowUser.createdAt);
 
                     return (
@@ -734,10 +775,56 @@ export default function SuperadminUsersPage() {
                                 <FiCheck className="h-3 w-3" /> Active
                               </span>
                             )}
+
+                            {!rowUser.isSuperadmin &&
+                              rowUser.adminRoles?.map((role) => (
+                                <span
+                                  key={role}
+                                  className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-800"
+                                >
+                                  {role === "SUPPORT" ? "Support" : role === "BILLING" ? "Billing" : role}
+                                </span>
+                              ))}
                           </div>
                         </td>
 
                         <td className="px-3 py-2 align-top text-xs text-slate-700">{getRoleNames(rowUser.userRoles)}</td>
+
+                        <td className="px-3 py-2 align-top">
+                          {isPlatformStaffRow ? (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex flex-wrap gap-2 text-xs text-slate-700">
+                                <label className="inline-flex items-center gap-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={pendingAdminRoles.includes("SUPPORT")}
+                                    onChange={() => toggleAdminRole(rowUser, "SUPPORT")}
+                                    disabled={adminRolesBusy}
+                                  />
+                                  Support
+                                </label>
+                                <label className="inline-flex items-center gap-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={pendingAdminRoles.includes("BILLING")}
+                                    onChange={() => toggleAdminRole(rowUser, "BILLING")}
+                                    disabled={adminRolesBusy}
+                                  />
+                                  Billing
+                                </label>
+                              </div>
+                              <button
+                                onClick={() => void updateAdminRoles(rowUser, pendingAdminRoles)}
+                                disabled={adminRolesBusy || sameAdminRoles(pendingAdminRoles, rowUser.adminRoles ?? [])}
+                                className="w-fit rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {adminRolesBusy ? "Saving..." : "Apply"}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
 
                         <td className="px-3 py-2 align-top text-xs text-slate-600">
                           <div className="flex items-center gap-1">

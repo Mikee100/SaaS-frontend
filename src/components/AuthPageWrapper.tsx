@@ -11,6 +11,7 @@ const AUTH_PATHS = [
   '/register',
   '/forgot-password',
   '/reset-password',
+  '/mfa-setup',
   '/api/auth',
   '/_next',
   '/favicon.ico',

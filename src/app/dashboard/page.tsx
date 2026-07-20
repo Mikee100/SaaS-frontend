@@ -3,11 +3,13 @@ import React from 'react';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import PlanGuard from '@/components/PlanGuard';
 import AuthGuard from '@/components/AuthGuard';
 import LogoEnforcement from '@/components/LogoEnforcement';
 import BranchSwitcher from '@/components/BranchSwitcher';
 import BlueprintWidgetRegistry from '@/components/dashboard/BlueprintWidgetRegistry';
+import MetricCard from '@/components/dashboard/MetricCard';
 import QuickActions from '../QuickActions';
 import { useUser } from '@/components/UserContext';
 import { useAppPreferences, preferenceDateRangeToDashboard } from '@/hooks/useAppPreferences';
@@ -20,7 +22,11 @@ import {
   FiRefreshCw,
   FiDollarSign,
   FiAlertCircle,
-  FiUserPlus
+  FiUsers,
+  FiPackage,
+  FiClock,
+  FiList,
+  FiShoppingBag
 } from 'react-icons/fi';
 
 // Dynamically import components with no SSR for better performance
@@ -363,6 +369,13 @@ export default function DashboardPage() {
     };
   })();
 
+  const recentActivity = (() => {
+    if (!salesTrends?.trends?.length) return [];
+    return [...salesTrends.trends]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 4);
+  })();
+
   const retentionRate =
     analyticsData.customerRetention?.retentionRate ?? null;
   const lowStockAlerts = analyticsData.inventoryAnalytics?.lowStockItems ?? 0;
@@ -399,6 +412,7 @@ export default function DashboardPage() {
           value: `Ksh ${(analyticsData.totalRevenue || 0).toLocaleString()}`,
           note: 'All-time revenue',
           href: '/analytics',
+          icon: FiDollarSign,
         },
         {
           id: 'owner-retention',
@@ -406,6 +420,7 @@ export default function DashboardPage() {
           value: retentionRate !== null ? `${retentionRate.toFixed(1)}%` : '—',
           note: 'Repeat customer rate',
           href: '/analytics',
+          icon: FiTrendingUp,
         },
         {
           id: 'owner-overdue',
@@ -413,6 +428,7 @@ export default function DashboardPage() {
           value: overdueCreditsCount.toLocaleString(),
           note: 'Customers with overdue balances',
           href: '/credit',
+          icon: FiAlertCircle,
         },
         {
           id: 'owner-low-stock',
@@ -420,6 +436,7 @@ export default function DashboardPage() {
           value: lowStockAlerts.toLocaleString(),
           note: 'Items below threshold',
           href: '/products/reports/low-stock-alerts',
+          icon: FiPackage,
         },
       ];
     }
@@ -432,6 +449,7 @@ export default function DashboardPage() {
           value: todaySummary ? todaySummary.ordersToday.toLocaleString() : '—',
           note: 'Transactions recorded today',
           href: '/sales/history',
+          icon: FiShoppingBag,
         },
         {
           id: 'cashier-open-shifts',
@@ -439,6 +457,7 @@ export default function DashboardPage() {
           value: openShiftsCount === null ? '—' : openShiftsCount.toLocaleString(),
           note: 'Active shifts now',
           href: '/sales',
+          icon: FiClock,
         },
         {
           id: 'cashier-pending-orders',
@@ -446,6 +465,7 @@ export default function DashboardPage() {
           value: pendingOrdersCount.toLocaleString(),
           note: 'Orders awaiting completion',
           href: '/sales/history',
+          icon: FiList,
         },
         {
           id: 'cashier-revenue-today',
@@ -455,6 +475,7 @@ export default function DashboardPage() {
             : '—',
           note: 'Current day revenue',
           href: '/sales/history',
+          icon: FiDollarSign,
         },
       ];
     }
@@ -467,6 +488,7 @@ export default function DashboardPage() {
           value: todaySummary ? todaySummary.ordersToday.toLocaleString() : '—',
           note: 'Current branch activity',
           href: '/sales/history',
+          icon: FiShoppingBag,
         },
         {
           id: 'manager-revenue',
@@ -476,6 +498,7 @@ export default function DashboardPage() {
             : '—',
           note: 'Daily revenue trend',
           href: '/analytics',
+          icon: FiDollarSign,
         },
         {
           id: 'manager-low-stock',
@@ -483,6 +506,7 @@ export default function DashboardPage() {
           value: lowStockAlerts.toLocaleString(),
           note: 'Action needed on inventory',
           href: '/products/reports/low-stock-alerts',
+          icon: FiPackage,
         },
         {
           id: 'manager-pending',
@@ -490,6 +514,7 @@ export default function DashboardPage() {
           value: pendingOrdersCount.toLocaleString(),
           note: 'Orders to close out',
           href: '/sales/history',
+          icon: FiList,
         },
       ];
     }
@@ -503,6 +528,7 @@ export default function DashboardPage() {
           : '—',
         note: 'Latest daily performance',
         href: '/analytics',
+        icon: FiDollarSign,
       },
       {
         id: 'default-orders',
@@ -510,6 +536,7 @@ export default function DashboardPage() {
         value: todaySummary ? todaySummary.ordersToday.toLocaleString() : '—',
         note: 'Sales processed today',
         href: '/sales/history',
+        icon: FiShoppingBag,
       },
       {
         id: 'default-customers',
@@ -517,6 +544,7 @@ export default function DashboardPage() {
         value: analyticsData.totalCustomers?.toLocaleString() ?? '—',
         note: 'Total tracked customers',
         href: '/analytics',
+        icon: FiUsers,
       },
       {
         id: 'default-products',
@@ -524,6 +552,7 @@ export default function DashboardPage() {
         value: analyticsData.totalProducts?.toLocaleString() ?? '—',
         note: 'Items in catalog',
         href: '/products/unified',
+        icon: FiPackage,
       },
     ];
   })();
@@ -722,25 +751,16 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {roleCards.map((card) => {
-                  const content = (
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-                      <p className="adeera-label">
-                        {card.label}
-                      </p>
-                      <p className="mt-1 text-xl font-semibold text-(--adeera-text)">{card.value}</p>
-                      <p className="mt-1 text-xs text-(--adeera-text-muted)">{card.note}</p>
-                    </div>
-                  );
-
-                  return card.href ? (
-                    <a key={card.id} href={card.href}>
-                      {content}
-                    </a>
-                  ) : (
-                    <div key={card.id}>{content}</div>
-                  );
-                })}
+                {roleCards.map((card) => (
+                  <MetricCard
+                    key={card.id}
+                    label={card.label}
+                    value={card.value}
+                    note={card.note}
+                    href={card.href}
+                    icon={card.icon}
+                  />
+                ))}
               </div>
 
               {isCashier && cashierPosActions.length > 0 && (
@@ -1015,53 +1035,11 @@ export default function DashboardPage() {
             {/* Customer Segmentation Section */}
             {showCustomerSegmentationWidget && (
             <div className="mb-6">
-<div className="adeera-card p-5">
+              <div className="adeera-card p-5">
                 <div className="mb-4 flex items-center justify-between">
-                <h2 className="adeera-section-title">Customer Segmentation</h2>
+                  <h2 className="adeera-section-title">Customer Segmentation</h2>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div className="lg:col-span-2">
-                    <ChartComponents.CustomerSegmentation />
-                  </div>
-                  <div className="space-y-3">
-                    <div className="rounded-lg border border-(--adeera-border) bg-(--adeera-surface-muted) p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="adeera-label">Top Spending Segment</p>
-                          <p className="text-lg font-semibold text-(--adeera-text)">Champions</p>
-                          <p className="text-xs text-(--adeera-text-muted)">15% of customers, 45% of revenue</p>
-                        </div>
-                        <div className="rounded-full bg-(--adeera-accent-soft) p-2">
-                          <FiDollarSign className="w-4 h-4 text-(--adeera-accent)" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-(--adeera-warning)/30 bg-(--adeera-warning-soft) p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="adeera-label">Growth Opportunity</p>
-                          <p className="text-lg font-semibold text-(--adeera-text)">Potential Loyalists</p>
-                          <p className="text-xs text-(--adeera-text-muted)">30% of customers, 25% of revenue</p>
-                        </div>
-                        <div className="rounded-full bg-(--adeera-surface) p-2">
-                          <FiTrendingUp className="w-4 h-4 text-(--adeera-warning)" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-(--adeera-danger)/30 bg-(--adeera-danger-soft) p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="adeera-label">At Risk</p>
-                          <p className="text-lg font-semibold text-(--adeera-text)">18% of customers</p>
-                          <p className="text-xs text-(--adeera-text-muted)">Last purchase 30-60 days ago</p>
-                        </div>
-                        <div className="rounded-full bg-(--adeera-surface) p-2">
-                          <FiAlertCircle className="w-4 h-4 text-(--adeera-danger)" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <ChartComponents.CustomerSegmentation />
               </div>
             </div>
             )}
@@ -1073,12 +1051,6 @@ export default function DashboardPage() {
                 <div className="adeera-card p-5">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="adeera-section-title">Sales Overview</h3>
-                    <div className="flex items-center space-x-2">
-                      <span className="inline-flex items-center rounded-full bg-(--adeera-success-soft) px-2 py-0.5 text-xs font-medium text-(--adeera-success)">
-                        <FiTrendingUp className="mr-1 h-3 w-3" />
-                        12.5% from last month
-                      </span>
-                    </div>
                   </div>
                   <div className="h-72">
                     <ChartComponents.SalesTrendsAnalysis salesData={analyticsData.salesByMonth || {}} />
@@ -1099,26 +1071,36 @@ export default function DashboardPage() {
                 {/* Recent Activities */}
                 <div className="adeera-card p-5">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="adeera-section-title">Recent Activities</h3>
-                    <button className="text-(--adeera-accent) hover:opacity-85 text-sm font-medium">
+                    <h3 className="adeera-section-title">Recent Activity</h3>
+                    <a href="/sales/history" className="text-(--adeera-accent) hover:opacity-85 text-sm font-medium">
                       View All
-                    </button>
+                    </a>
                   </div>
-                  <div className="space-y-3">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="flex items-start">
-                        <div className="shrink-0">
-                          <div className="h-8 w-8 rounded-full bg-(--adeera-surface-muted) flex items-center justify-center">
-                            <FiUserPlus className="h-4 w-4 text-(--adeera-text-muted)" />
+                  {recentActivity.length > 0 ? (
+                    <div className="space-y-3">
+                      {recentActivity.map((day) => (
+                        <div key={day.date} className="flex items-start">
+                          <div className="shrink-0">
+                            <div className="h-8 w-8 rounded-full bg-(--adeera-surface-muted) flex items-center justify-center">
+                              <FiShoppingBag className="h-4 w-4 text-(--adeera-text-muted)" />
+                            </div>
+                          </div>
+                          <div className="ml-2">
+                            <p className="text-sm font-medium text-(--adeera-text)">
+                              {format(new Date(day.date), 'EEE, MMM d')}
+                            </p>
+                            <p className="text-xs text-(--adeera-text-muted)">
+                              {day.totalOrders.toLocaleString()} order{day.totalOrders === 1 ? '' : 's'} · Ksh {Math.round(day.totalSales).toLocaleString()}
+                            </p>
                           </div>
                         </div>
-                        <div className="ml-2">
-                          <p className="text-sm font-medium text-(--adeera-text)">New customer registered</p>
-                          <p className="text-xs text-(--adeera-text-muted)">2 hours ago</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-(--adeera-text-muted)">
+                      Activity will appear here once sales start coming in.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

@@ -7,6 +7,8 @@ import { apiGet } from "@/utils/api";
 import {
   AreaChart,
   Area,
+  Bar,
+  BarChart,
   XAxis,
   YAxis,
   Tooltip,
@@ -211,6 +213,43 @@ export default function SuperadminDashboard() {
                   />
                 </AreaChart>
               </ResponsiveContainer>
+            </div>
+          </section>
+
+          {/* Tenant growth over time */}
+          <section>
+            <h2 className="text-sm font-medium text-zinc-700 mb-4">New tenants per month (last 12 months)</h2>
+            <div className="bg-white border border-zinc-200/80 rounded-xl p-6">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={tenantGrowth} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#fff",
+                      border: "1px solid #e4e4e7",
+                      borderRadius: "8px",
+                      fontSize: "13px",
+                    }}
+                    formatter={(value) => [value, "New tenants"]}
+                    labelStyle={{ color: "#71717a" }}
+                  />
+                  <Bar dataKey="newTenants" fill="#52525b" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              <p className="mt-2 text-xs text-zinc-400">
+                {stats.totalTenants} tenants total to date.
+              </p>
             </div>
           </section>
 

@@ -47,7 +47,9 @@ function normalizeManifest(input: unknown): BlueprintManifestV1 {
   return {
     schemaVersion: raw.schemaVersion === '1.0.0' ? raw.schemaVersion : '1.0.0',
     businessType:
-      raw.businessType === 'restaurant' || raw.businessType === 'spa_barber'
+      raw.businessType === 'restaurant' ||
+      raw.businessType === 'spa_barber' ||
+      raw.businessType === 'hardware'
         ? raw.businessType
         : 'fashion',
     blueprintKey: String(raw.blueprintKey || DEFAULT_MANIFEST.blueprintKey),

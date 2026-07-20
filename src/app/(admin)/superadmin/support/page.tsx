@@ -4,6 +4,18 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "@/utils/api";
+import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 interface SupportTicket {
   id: string;
@@ -22,6 +34,17 @@ interface SupportTicket {
   assignedTo?: string;
   resolution?: string;
   attachments?: string[];
+}
+
+interface TicketStats {
+  byStatus: { status: string; count: number }[];
+  byPriority: { priority: string; count: number }[];
+  byCategory: { category: string; count: number }[];
+}
+
+interface TicketHistoryPoint {
+  month: string;
+  count: number;
 }
 
 interface TicketResponse {
@@ -48,6 +71,8 @@ export default function SupportTicketsPage() {
   
   const [filter, setFilter] = useState<TicketStatus>('all');
   const [priorityFilter, setPriorityFilter] = useState<TicketPriority>('all');
+  const [ticketStats, setTicketStats] = useState<TicketStats | null>(null);
+  const [ticketHistory, setTicketHistory] = useState<TicketHistoryPoint[]>([]);
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
@@ -74,6 +99,22 @@ export default function SupportTicketsPage() {
   useEffect(() => {
     fetchTickets();
   }, [fetchTickets]);
+
+  useEffect(() => {
+    if (!user?.isSuperadmin) return;
+    (async () => {
+      try {
+        const [stats, history] = await Promise.all([
+          apiGet("/admin/support/stats") as Promise<TicketStats>,
+          apiGet("/admin/support/stats/history?months=6") as Promise<TicketHistoryPoint[]>,
+        ]);
+        setTicketStats(stats);
+        setTicketHistory(history);
+      } catch (error) {
+        console.error("Failed to fetch ticket stats:", error);
+      }
+    })();
+  }, [user?.isSuperadmin]);
 
 
   const fetchTicketResponses = async (ticketId: string) => {
@@ -166,6 +207,63 @@ export default function SupportTicketsPage() {
       <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 24 }}>
         Support Tickets
       </h1>
+
+      {ticketStats && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "2rem" }}>
+          <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", padding: "1rem" }}>
+            <h3 style={{ margin: "0 0 0.75rem", fontSize: 14, fontWeight: 600, color: "#374151" }}>By Status</h3>
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie
+                  data={ticketStats.byStatus}
+                  dataKey="count"
+                  nameKey="status"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={65}
+                  label={({ name, value }) => `${name}: ${value}`}
+                  labelLine={false}
+                >
+                  {ticketStats.byStatus.map((entry) => (
+                    <Cell key={entry.status} fill={getStatusColor(entry.status as SupportTicket['status'])} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", padding: "1rem" }}>
+            <h3 style={{ margin: "0 0 0.75rem", fontSize: 14, fontWeight: 600, color: "#374151" }}>By Priority</h3>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={ticketStats.byPriority}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="priority" tick={{ fontSize: 10, fill: "#6b7280" }} />
+                <YAxis tick={{ fontSize: 10, fill: "#6b7280" }} allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {ticketStats.byPriority.map((entry) => (
+                    <Cell key={entry.priority} fill={getPriorityColor(entry.priority as SupportTicket['priority'])} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={{ background: "#fff", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", padding: "1rem" }}>
+            <h3 style={{ margin: "0 0 0.75rem", fontSize: 14, fontWeight: 600, color: "#374151" }}>Volume (Last 6 Months)</h3>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={ticketHistory}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#6b7280" }} />
+                <YAxis tick={{ fontSize: 10, fill: "#6b7280" }} allowDecimals={false} />
+                <Tooltip formatter={(value) => [value, "Tickets"]} />
+                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
         <select 

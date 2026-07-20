@@ -61,6 +61,16 @@ function isRestaurantRoute(path: string): boolean {
   return String(path || '').toLowerCase().startsWith('/restaurant');
 }
 
+// The products/inventory nav entry reads differently depending on what the
+// tenant actually sells - a restaurant manages a menu, a spa manages
+// services, everyone else manages products.
+function getProductsNavLabel(businessType: unknown): string {
+  const normalized = String(businessType || '').toLowerCase();
+  if (normalized.includes('restaurant')) return 'Menu Items';
+  if (normalized.includes('spa') || normalized.includes('barber')) return 'Services';
+  return 'Products';
+}
+
 function iconForPath(path: string): IconType {
   const normalized = String(path || '').toLowerCase();
   if (normalized.startsWith('/dashboard') || normalized === '/') return FaTachometerAlt;
@@ -134,7 +144,7 @@ function flattenNavItems(items: NavItem[]): NavSubItem[] {
   return output;
 }
 
-function buildGroupedNavigation(items: NavItem[]): NavItem[] {
+function buildGroupedNavigation(items: NavItem[], productsLabel: string): NavItem[] {
   const flat = flattenNavItems(items);
   const byHref = new Map(flat.map((entry) => [entry.href, entry]));
 
@@ -187,7 +197,7 @@ function buildGroupedNavigation(items: NavItem[]): NavItem[] {
   ].filter((item): item is NavSubItem => Boolean(item));
 
   const productsInventorySubItems = [
-    createSubItem('Unified Management', '/products/unified', 'view_products', FaLayerGroup),
+    createSubItem(productsLabel, '/products/unified', 'view_products', FaLayerGroup),
     createSubItem('Restaurant Menu Studio', '/restaurant/menu-studio', 'view_products', FaShoppingBasket),
     createSubItem('Suppliers', '/inventory/suppliers', 'view_inventory', FaUsers),
     createSubItem('Product Sales Report', '/products/reports/product-sales', 'view_reports', FaChartBar),
@@ -282,6 +292,7 @@ export default function PlanBasedNav() {
   const [isMobile, setIsMobile] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [manifestNavigationItems, setManifestNavigationItems] = useState<NavItem[] | null>(null);
+  const [manifestBusinessType, setManifestBusinessType] = useState<string | null>(null);
 
   const tenantBranchLoading = tenantLoading;
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
@@ -349,6 +360,7 @@ export default function PlanBasedNav() {
       if (!userContext?.user) {
         if (active) {
           setManifestNavigationItems(null);
+          setManifestBusinessType(null);
         }
         return;
       }
@@ -360,10 +372,14 @@ export default function PlanBasedNav() {
           setManifestNavigationItems(
             manifestItems.length > 0 ? manifestItems : null,
           );
+          setManifestBusinessType(
+            payload?.manifest?.businessType || payload?.source?.businessType || null,
+          );
         }
       } catch {
         if (active) {
           setManifestNavigationItems(null);
+          setManifestBusinessType(null);
         }
       }
     };
@@ -380,6 +396,10 @@ export default function PlanBasedNav() {
     name: tenantData.name || '',
     logoUrl: (tenantData.logoUrl ?? tenantData.logo) as string | undefined,
   } : null;
+
+  const productsNavLabel = getProductsNavLabel(
+    manifestBusinessType || tenantData?.businessType,
+  );
 
   // Improved icon mapping for main and sub items
   const defaultNavigationItems: NavItem[] = React.useMemo(() => [
@@ -416,7 +436,7 @@ export default function PlanBasedNav() {
       requiredPermission: 'view_products',
       requiredModule: 'inventory' as AppModuleKey,
       subItems: [
-        { name: 'Unified Management', href: '/products/unified', requiredPermission: 'view_products', icon: FaLayerGroup },
+        { name: productsNavLabel, href: '/products/unified', requiredPermission: 'view_products', icon: FaLayerGroup },
         { name: 'Suppliers', href: '/inventory/suppliers', requiredPermission: 'view_inventory', icon: FaUsers },
         {
           name: 'Reports',
@@ -497,11 +517,11 @@ export default function PlanBasedNav() {
     { name: 'Expenses', href: '/expenses', icon: FaHistory, requiredPlan: null, requiredPermission: 'view_users', requiredModule: 'expenses' as AppModuleKey },
     { name: 'Settings', href: '/settings', icon: MdOutlineSettings, requiredPlan: null, requiredPermission: null, requiredModule: 'settings' as AppModuleKey },
     { name: 'Billing & Subscription', href: '/account/billing', icon: FaFileInvoiceDollar, requiredPlan: null, requiredPermission: null, requiredModule: 'billing' as AppModuleKey },
-  ], []);
+  ], [productsNavLabel]);
 
   const navigationItems =
     Array.isArray(manifestNavigationItems) && manifestNavigationItems.length > 0
-      ? buildGroupedNavigation(manifestNavigationItems)
+      ? buildGroupedNavigation(manifestNavigationItems, productsNavLabel)
       : defaultNavigationItems;
 
   const planHierarchy: Record<PlanName, number> = React.useMemo(() => ({

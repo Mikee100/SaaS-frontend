@@ -4,278 +4,76 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter, useParams } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "@/utils/api";
-import { FaArrowLeft, FaStore, FaReceipt, FaArrowRight, FaUsers, FaBuilding, FaPlug, FaSpinner, FaCheckCircle, FaFileInvoice } from 'react-icons/fa';
+import * as TabsPrimitive from "@radix-ui/react-tabs";
+import { FaArrowLeft, FaStore, FaUsers, FaBuilding, FaReceipt, FaDatabase, FaExclamationTriangle } from "react-icons/fa";
+import type {
+  AppModuleKey,
+  TenantModulesResponse,
+  ModulePresetDefinition,
+  ModulePresetsResponse,
+  ModulePermissionMatrixEntry,
+  ModulePermissionMatrixResponse,
+  BlueprintCatalogEntry,
+  BlueprintCatalogResponse,
+  TenantBlueprintPreviewResponse,
+  TenantBlueprintResponse,
+  CrmPackageKey,
+  CrmCapabilityKey,
+  CrmLimits,
+  CrmAllowedProviders,
+  TenantCrmEntitlementsResponse,
+  TenantCrmEntitlementTimelineEntry,
+  TenantCrmEntitlementTimelineResponse,
+  TenantDetails,
+  ClassificationOption,
+  MpesaConfigApiResponse,
+  Product,
+  Transaction,
+  Branch,
+  TabKey,
+  Notice,
+  ConfirmActionState,
+} from "./types";
+import OverviewTab from "./_components/OverviewTab";
+import ProductsTab from "./_components/ProductsTab";
+import TransactionsTab from "./_components/TransactionsTab";
+import BranchesTab from "./_components/BranchesTab";
+import AnalyticsTab from "./_components/AnalyticsTab";
+import IntegrationsTab from "./_components/IntegrationsTab";
+import BusinessKraTab from "./_components/BusinessKraTab";
+import ModulesTab from "./_components/ModulesTab";
+import CrmEntitlementsTab from "./_components/CrmEntitlementsTab";
+import ProvisionModal from "./_components/ProvisionModal";
+import { formatDate, formatCurrency, formatSpace } from "./utils";
 
-type AppModuleKey =
-  | 'dashboard'
-  | 'payroll'
-  | 'sales'
-  | 'credits'
-  | 'inventory'
-  | 'accounts'
-  | 'analytics'
-  | 'reports'
-  | 'expenses'
-  | 'crm'
-  | 'ai'
-  | 'settings'
-  | 'billing';
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "products", label: "Products" },
+  { key: "transactions", label: "Transactions" },
+  { key: "branches", label: "Branches" },
+  { key: "analytics", label: "Analytics" },
+  { key: "integrations", label: "Integrations" },
+  { key: "business-kra", label: "Business & KRA" },
+  { key: "modules", label: "Modules" },
+  { key: "crm-entitlements", label: "CRM Entitlements" },
+];
 
-interface TenantModulesResponse {
-  tenantId: string;
-  key: string;
-  enabledModules: AppModuleKey[];
-  availableModules: AppModuleKey[];
-}
-
-interface ModulePresetDefinition {
-  key: string;
-  label: string;
-  description: string;
-  enabledModules: AppModuleKey[];
-}
-
-interface ModulePresetsResponse {
-  presets: ModulePresetDefinition[];
-}
-
-interface ModulePermissionRoleCheck {
-  roleName: string;
-  allowed: boolean;
-  missing: string[];
-}
-
-interface ModulePermissionMatrixEntry {
-  module: AppModuleKey;
-  enabled: boolean;
-  requiredPermissions: string[];
-  roleChecks: ModulePermissionRoleCheck[];
-}
-
-interface ModulePermissionMatrixResponse {
-  tenantId: string;
-  enabledModules: AppModuleKey[];
-  roles: string[];
-  matrix: ModulePermissionMatrixEntry[];
-}
-
-interface BlueprintCatalogEntry {
-  businessType: string;
-  blueprintKey: string;
-  blueprintVersion: string;
-  displayName: string;
-  description: string;
-  enabledModules: AppModuleKey[];
-  navigation: Array<{
-    key: string;
-    label: string;
-    path: string;
-    requiredModule?: AppModuleKey;
-  }>;
-  apps: Array<{ key: string; label: string; enabledByDefault?: boolean }>;
-  features: string[];
-}
-
-interface BlueprintCatalogResponse {
-  version: string;
-  total: number;
-  blueprints: BlueprintCatalogEntry[];
-  navigationCatalog?: BlueprintCatalogEntry['navigation'];
-}
-
-interface TenantBlueprintConfigured {
-  businessType: string;
-  blueprintKey: string;
-  blueprintVersion: string;
-  installedApps: string[];
-  featureFlags: Record<string, boolean>;
-  enabledModules: AppModuleKey[];
-  navigationKeys: string[];
-}
-
-interface TenantBlueprintResponse {
-  tenantId: string;
-  configuredNavigationKeysSet?: boolean;
-  configured: TenantBlueprintConfigured;
-}
-
-interface TenantBlueprintPreviewResponse {
-  tenantId: string;
-  mode: 'preview';
-  current: TenantBlueprintConfigured;
-  proposed: TenantBlueprintConfigured;
-  effectivePreview: {
-    manifest: {
-      navigation?: Array<{ key?: string; label?: string; path?: string }>;
-      dashboard?: Array<unknown>;
-      quickActions?: Array<unknown>;
-      enabledModules?: AppModuleKey[];
-    };
-  };
-}
-
-type CrmPackageKey = 'starter' | 'growth' | 'pro' | 'enterprise';
-
-type CrmCapabilityKey =
-  | 'crm.pipeline'
-  | 'crm.tasks'
-  | 'crm.documents'
-  | 'crm.calendar_integration'
-  | 'crm.meeting_scheduler'
-  | 'crm.email_integration'
-  | 'crm.reporting'
-  | 'crm.workflow_automation'
-  | 'crm.lead_scoring'
-  | 'crm.telephony'
-  | 'crm.proposal_management'
-  | 'crm.contract_management'
-  | 'crm.third_party_integrations';
-
-interface CrmLimits {
-  pipelines: number | null;
-  automationRules: number | null;
-  documentStorageGb: number | null;
-  integrationConnections: number | null;
-  telephonyMinutesMonthly: number | null;
-  proposalsMonthly: number | null;
-  contractsMonthly: number | null;
-}
-
-interface CrmAllowedProviders {
-  calendar: string[];
-  email: string[];
-  telephony: string[];
-  integrations: string[];
-}
-
-interface CrmEntitlements {
-  packageKey: CrmPackageKey;
-  enabledCapabilities: CrmCapabilityKey[];
-  limits: CrmLimits;
-  allowedProviders: CrmAllowedProviders;
-}
-
-interface TenantCrmEntitlementsResponse {
-  tenantId: string;
-  key: string;
-  entitlements: CrmEntitlements;
-  availablePackages: CrmPackageKey[];
-  availableCapabilities: CrmCapabilityKey[];
-}
-
-interface TenantCrmEntitlementTimelineEntry {
-  id: string;
-  action: string;
-  createdAt: string;
-  ip?: string | null;
-  actor?: {
-    id: string;
-    name?: string;
-    email?: string;
-  } | null;
-  source?: string | null;
-  reason?: string | null;
-  effectiveFrom?: string | null;
-  effectiveTo?: string | null;
-}
-
-interface TenantCrmEntitlementTimelineResponse {
-  tenantId: string;
-  total: number;
-  items: TenantCrmEntitlementTimelineEntry[];
-}
-
-const EAST_AFRICAN_COUNTRIES = [
-  "Kenya",
-  "Tanzania",
-  "Uganda",
-  "Rwanda",
-  "Burundi",
-  "South Sudan",
-  "Democratic Republic of the Congo",
-  "Ethiopia",
-  "Somalia",
-  "Eritrea",
-  "Djibouti",
-] as const;
-
-const CRM_PROVIDER_OPTIONS: CrmAllowedProviders = {
-  calendar: ['google', 'microsoft'],
-  email: ['gmail', 'outlook'],
-  telephony: ['twilio', 'africa_talking'],
-  integrations: ['zapier', 'zoom', 'slack', 'shopify'],
+const DEFAULT_CRM_LIMITS: CrmLimits = {
+  pipelines: 1,
+  automationRules: 0,
+  documentStorageGb: 2,
+  integrationConnections: 2,
+  telephonyMinutesMonthly: 0,
+  proposalsMonthly: 0,
+  contractsMonthly: 0,
 };
 
-interface TenantDetails {
-  id: string;
-  name: string;
-  businessType: string;
-  classificationId?: string | null;
-  restaurantFeaturesEnabled?: boolean;
-  contactEmail: string;
-  contactPhone: string;
-  address?: string;
-  country?: string;
-  kraEnabled?: boolean;
-  kraPin?: string;
-  vatNumber?: string;
-  etimsQrUrl?: string;
-  createdAt: string;
-  userCount: number;
-  productCount: number;
-  salesCount: number;
-  branchCount: number;
-  spaceUsedMB: string;
-  resourceSpaceUsage?: Record<string, number>;
-}
-
-interface ClassificationOption {
-  id: string;
-  name: string;
-  slug: string;
-  isActive?: boolean;
-}
-
-interface MpesaConfigApiResponse {
-  consumerKey?: string;
-  consumerSecret?: string;
-  shortCode?: string;
-  passkey?: string;
-  callbackUrl?: string;
-  environment?: string;
-  isActive?: boolean;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  inventory: {
-    quantity: number;
-  }[];
-}
-
-interface Transaction {
-  id: string;
-  total: number;
-  createdAt: string;
-}
-
-interface Branch {
-  id: string;
-  name: string;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  country?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  manager?: string | null;
-  isMainBranch?: boolean;
-  status?: string | null;
-  createdAt: string;
-  deletedAt?: string | null;
-}
+const DEFAULT_CRM_PROVIDERS: CrmAllowedProviders = {
+  calendar: [],
+  email: [],
+  telephony: [],
+  integrations: [],
+};
 
 export default function TenantDetailsPage() {
   const { user, loading, refreshUser } = useUser();
@@ -288,21 +86,22 @@ export default function TenantDetailsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'transactions' | 'branches' | 'analytics' | 'integrations' | 'business-kra' | 'modules' | 'crm-entitlements'>('overview');
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+
   const [availableModules, setAvailableModules] = useState<AppModuleKey[]>([]);
   const [enabledModules, setEnabledModules] = useState<AppModuleKey[]>([]);
   const [savingModules, setSavingModules] = useState(false);
   const [modulePresets, setModulePresets] = useState<ModulePresetDefinition[]>([]);
-  const [selectedModulePreset, setSelectedModulePreset] = useState('');
+  const [selectedModulePreset, setSelectedModulePreset] = useState("");
   const [applyingModulePreset, setApplyingModulePreset] = useState(false);
   const [blueprintCatalog, setBlueprintCatalog] = useState<BlueprintCatalogEntry[]>([]);
-  const [blueprintNavigationCatalog, setBlueprintNavigationCatalog] = useState<BlueprintCatalogEntry['navigation']>([]);
-  const [selectedBusinessType, setSelectedBusinessType] = useState('fashion');
-  const [selectedBlueprintKey, setSelectedBlueprintKey] = useState('');
-  const [selectedBlueprintVersion, setSelectedBlueprintVersion] = useState('v1');
+  const [blueprintNavigationCatalog, setBlueprintNavigationCatalog] = useState<BlueprintCatalogEntry["navigation"]>([]);
+  const [selectedBusinessType, setSelectedBusinessType] = useState("fashion");
+  const [selectedBlueprintKey, setSelectedBlueprintKey] = useState("");
+  const [selectedBlueprintVersion, setSelectedBlueprintVersion] = useState("v1");
   const [selectedNavigationKeys, setSelectedNavigationKeys] = useState<string[]>([]);
-  const [installedAppsInput, setInstalledAppsInput] = useState('');
-  const [featureFlagsInput, setFeatureFlagsInput] = useState('{}');
+  const [installedAppsInput, setInstalledAppsInput] = useState("");
+  const [featureFlagsInput, setFeatureFlagsInput] = useState("{}");
   const [savingBlueprint, setSavingBlueprint] = useState(false);
   const [previewingBlueprint, setPreviewingBlueprint] = useState(false);
   const [rollingBackBlueprint, setRollingBackBlueprint] = useState(false);
@@ -310,61 +109,68 @@ export default function TenantDetailsPage() {
   const [modulePermissionMatrix, setModulePermissionMatrix] = useState<ModulePermissionMatrixEntry[]>([]);
   const [moduleMatrixRoles, setModuleMatrixRoles] = useState<string[]>([]);
   const [loadingModuleMatrix, setLoadingModuleMatrix] = useState(false);
-  const [availableCrmPackages, setAvailableCrmPackages] = useState<CrmPackageKey[]>(['starter', 'growth', 'pro', 'enterprise']);
+
+  const [availableCrmPackages, setAvailableCrmPackages] = useState<CrmPackageKey[]>(["starter", "growth", "pro", "enterprise"]);
   const [availableCrmCapabilities, setAvailableCrmCapabilities] = useState<CrmCapabilityKey[]>([]);
-  const [crmPackageKey, setCrmPackageKey] = useState<CrmPackageKey>('starter');
+  const [crmPackageKey, setCrmPackageKey] = useState<CrmPackageKey>("starter");
   const [crmCapabilities, setCrmCapabilities] = useState<CrmCapabilityKey[]>([]);
-  const [crmLimits, setCrmLimits] = useState<CrmLimits>({
-    pipelines: 1,
-    automationRules: 0,
-    documentStorageGb: 2,
-    integrationConnections: 2,
-    telephonyMinutesMonthly: 0,
-    proposalsMonthly: 0,
-    contractsMonthly: 0,
-  });
-  const [crmProviders, setCrmProviders] = useState<CrmAllowedProviders>({
-    calendar: [],
-    email: [],
-    telephony: [],
-    integrations: [],
-  });
+  const [crmLimits, setCrmLimits] = useState<CrmLimits>(DEFAULT_CRM_LIMITS);
+  const [crmProviders, setCrmProviders] = useState<CrmAllowedProviders>(DEFAULT_CRM_PROVIDERS);
   const [savingCrmEntitlements, setSavingCrmEntitlements] = useState(false);
   const [crmTimeline, setCrmTimeline] = useState<TenantCrmEntitlementTimelineEntry[]>([]);
   const [loadingCrmTimeline, setLoadingCrmTimeline] = useState(false);
 
-  // Business & KRA (admin-editable)
   const [businessKra, setBusinessKra] = useState<Partial<TenantDetails>>({});
   const [savingBusinessKra, setSavingBusinessKra] = useState(false);
   const [restaurantAddonEnabled, setRestaurantAddonEnabled] = useState(false);
   const [savingRestaurantAddon, setSavingRestaurantAddon] = useState(false);
 
-  // Classification assign + provision modal
   const [showProvisionModal, setShowProvisionModal] = useState(false);
   const [classificationOptions, setClassificationOptions] = useState<ClassificationOption[]>([]);
   const [loadingClassifications, setLoadingClassifications] = useState(false);
-  const [selectedClassificationId, setSelectedClassificationId] = useState('');
+  const [selectedClassificationId, setSelectedClassificationId] = useState("");
   const [savingProvisioning, setSavingProvisioning] = useState(false);
 
-  // M-Pesa integration state
   const [mpesaConfig, setMpesaConfig] = useState({
-    mpesaConsumerKey: '',
-    mpesaConsumerSecret: '',
-    mpesaShortCode: '',
-    mpesaPasskey: '',
-    mpesaCallbackUrl: '',
-    mpesaEnvironment: 'sandbox',
-    mpesaIsActive: false
+    mpesaConsumerKey: "",
+    mpesaConsumerSecret: "",
+    mpesaShortCode: "",
+    mpesaPasskey: "",
+    mpesaCallbackUrl: "",
+    mpesaEnvironment: "sandbox",
+    mpesaIsActive: false,
   });
   const [savingMpesa, setSavingMpesa] = useState(false);
   const [testingMpesa, setTestingMpesa] = useState(false);
-  const [mpesaStatus, setMpesaStatus] = useState<'disconnected' | 'connected'>('disconnected');
+  const [mpesaStatus, setMpesaStatus] = useState<"disconnected" | "connected">("disconnected");
+
+  const [notice, setNotice] = useState<Notice>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const showSuccess = useCallback((message: string) => setNotice({ type: "success", message }), []);
+  const showError = useCallback((message: string) => setNotice({ type: "error", message }), []);
+  const requestConfirm = useCallback((state: ConfirmActionState) => setConfirmAction(state), []);
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
       router.replace("/");
     }
   }, [user, loading, router]);
+
+  const refreshModulePermissionMatrix = useCallback(async () => {
+    const latestMatrix = await apiGet<ModulePermissionMatrixResponse>(
+      `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
+    );
+    setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
+    setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
+  }, [tenantId]);
 
   const fetchTenantData = useCallback(async () => {
     try {
@@ -382,160 +188,137 @@ export default function TenantDetailsPage() {
         name: tenantDetails.name,
         businessType: tenantDetails.businessType,
         contactEmail: tenantDetails.contactEmail,
-        contactPhone: tenantDetails.contactPhone ?? '',
-        address: tenantDetails.address ?? '',
-        country: tenantDetails.country ?? '',
+        contactPhone: tenantDetails.contactPhone ?? "",
+        address: tenantDetails.address ?? "",
+        country: tenantDetails.country ?? "",
         kraEnabled: tenantDetails.kraEnabled ?? false,
-        kraPin: tenantDetails.kraPin ?? '',
-        vatNumber: tenantDetails.vatNumber ?? '',
-        etimsQrUrl: tenantDetails.etimsQrUrl ?? '',
+        kraPin: tenantDetails.kraPin ?? "",
+        vatNumber: tenantDetails.vatNumber ?? "",
+        etimsQrUrl: tenantDetails.etimsQrUrl ?? "",
       });
       setProducts(tenantProducts);
       setTransactions(tenantTransactions);
       setBranches(tenantBranches);
 
-      const modules = await apiGet<TenantModulesResponse>(
-        `/admin/tenants/${tenantId}/modules?t=${Date.now()}`,
-      );
+      const modules = await apiGet<TenantModulesResponse>(`/admin/tenants/${tenantId}/modules?t=${Date.now()}`);
       setAvailableModules(Array.isArray(modules?.availableModules) ? modules.availableModules : []);
       setEnabledModules(Array.isArray(modules?.enabledModules) ? modules.enabledModules : []);
 
       setLoadingModuleMatrix(true);
       try {
-        const matrix = await apiGet<ModulePermissionMatrixResponse>(
-          `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
-        );
-        setModulePermissionMatrix(Array.isArray(matrix?.matrix) ? matrix.matrix : []);
-        setModuleMatrixRoles(Array.isArray(matrix?.roles) ? matrix.roles : []);
+        await refreshModulePermissionMatrix();
       } finally {
         setLoadingModuleMatrix(false);
       }
 
       try {
-        const presets = await apiGet<ModulePresetsResponse>(
-          '/admin/module-presets',
-          { 'x-suppress-error-log': 'true' },
-        );
+        const presets = await apiGet<ModulePresetsResponse>("/admin/module-presets", { "x-suppress-error-log": "true" });
         setModulePresets(Array.isArray(presets?.presets) ? presets.presets : []);
       } catch (presetError) {
-        console.warn('Failed to load module presets:', presetError);
+        console.warn("Failed to load module presets:", presetError);
         setModulePresets([]);
       }
 
       try {
         const [catalog, blueprint] = await Promise.all([
-          apiGet<BlueprintCatalogResponse>('/admin/blueprints', {
-            'x-suppress-error-log': 'true',
-          }),
-          apiGet<TenantBlueprintResponse>(
-            `/admin/tenants/${tenantId}/blueprint?t=${Date.now()}`,
-            { 'x-suppress-error-log': 'true' },
-          ),
+          apiGet<BlueprintCatalogResponse>("/admin/blueprints", { "x-suppress-error-log": "true" }),
+          apiGet<TenantBlueprintResponse>(`/admin/tenants/${tenantId}/blueprint?t=${Date.now()}`, { "x-suppress-error-log": "true" }),
         ]);
 
-        const blueprints = Array.isArray(catalog?.blueprints)
-          ? catalog.blueprints
-          : [];
-        const navigationCatalog = Array.isArray(catalog?.navigationCatalog)
-          ? catalog.navigationCatalog
-          : [];
+        const blueprints = Array.isArray(catalog?.blueprints) ? catalog.blueprints : [];
+        const navigationCatalog = Array.isArray(catalog?.navigationCatalog) ? catalog.navigationCatalog : [];
         const configured = blueprint?.configured;
 
         setBlueprintCatalog(blueprints);
         setBlueprintNavigationCatalog(navigationCatalog);
-        setSelectedBusinessType(configured?.businessType || 'fashion');
-        setSelectedBlueprintVersion(configured?.blueprintVersion || 'v1');
+        setSelectedBusinessType(configured?.businessType || blueprints[0]?.businessType || "fashion");
+        setSelectedBlueprintVersion(configured?.blueprintVersion || "v1");
 
         const preferredKey =
           configured?.blueprintKey ||
-          blueprints.find((entry) => entry.businessType === (configured?.businessType || 'fashion'))?.blueprintKey ||
+          blueprints.find((entry) => entry.businessType === (configured?.businessType || "fashion"))?.blueprintKey ||
           blueprints[0]?.blueprintKey ||
-          '';
+          "";
 
         setSelectedBlueprintKey(preferredKey);
-        const preferredBlueprint = blueprints.find(
-          (entry) => entry.blueprintKey === preferredKey,
-        );
+        const preferredBlueprint = blueprints.find((entry) => entry.blueprintKey === preferredKey);
         const defaultNavigationKeys = Array.isArray(preferredBlueprint?.navigation)
-          ? preferredBlueprint.navigation
-              .map((item) => String(item?.key || '').trim().toLowerCase())
-              .filter((item) => item.length > 0)
+          ? preferredBlueprint.navigation.map((item) => String(item?.key || "").trim().toLowerCase()).filter((item) => item.length > 0)
           : [];
         const configuredNavigationKeys = Array.isArray(configured?.navigationKeys)
-          ? configured.navigationKeys
-              .map((entry) => String(entry || '').trim().toLowerCase())
-              .filter((entry) => entry.length > 0)
+          ? configured.navigationKeys.map((entry) => String(entry || "").trim().toLowerCase()).filter((entry) => entry.length > 0)
           : [];
-        setSelectedNavigationKeys(
-          blueprint?.configuredNavigationKeysSet
-            ? configuredNavigationKeys
-            : defaultNavigationKeys,
-        );
-        setInstalledAppsInput((configured?.installedApps || []).join(', '));
-        setFeatureFlagsInput(
-          JSON.stringify(configured?.featureFlags || {}, null, 2),
-        );
+        setSelectedNavigationKeys(blueprint?.configuredNavigationKeysSet ? configuredNavigationKeys : defaultNavigationKeys);
+        setInstalledAppsInput((configured?.installedApps || []).join(", "));
+        setFeatureFlagsInput(JSON.stringify(configured?.featureFlags || {}, null, 2));
       } catch (blueprintError) {
-        console.warn('Failed to load blueprint configuration:', blueprintError);
+        console.warn("Failed to load blueprint configuration:", blueprintError);
         setBlueprintCatalog([]);
-      setBlueprintNavigationCatalog([]);
+        setBlueprintNavigationCatalog([]);
         setSelectedNavigationKeys([]);
+        setSelectedBusinessType("fashion");
+        setSelectedBlueprintKey("");
+        setSelectedBlueprintVersion("v1");
       }
 
       const crm = await apiGet<TenantCrmEntitlementsResponse>(`/admin/tenants/${tenantId}/crm-entitlements`);
       if (crm?.entitlements) {
-        setAvailableCrmPackages(Array.isArray(crm.availablePackages) ? crm.availablePackages : ['starter', 'growth', 'pro', 'enterprise']);
+        setAvailableCrmPackages(Array.isArray(crm.availablePackages) ? crm.availablePackages : ["starter", "growth", "pro", "enterprise"]);
         setAvailableCrmCapabilities(Array.isArray(crm.availableCapabilities) ? crm.availableCapabilities : []);
-        setCrmPackageKey(crm.entitlements.packageKey || 'starter');
+        setCrmPackageKey(crm.entitlements.packageKey || "starter");
         setCrmCapabilities(Array.isArray(crm.entitlements.enabledCapabilities) ? crm.entitlements.enabledCapabilities : []);
-        setCrmLimits(crm.entitlements.limits || {
-          pipelines: 1,
-          automationRules: 0,
-          documentStorageGb: 2,
-          integrationConnections: 2,
-          telephonyMinutesMonthly: 0,
-          proposalsMonthly: 0,
-          contractsMonthly: 0,
-        });
-        setCrmProviders(crm.entitlements.allowedProviders || {
-          calendar: [],
-          email: [],
-          telephony: [],
-          integrations: [],
-        });
+        setCrmLimits(crm.entitlements.limits || DEFAULT_CRM_LIMITS);
+        setCrmProviders(crm.entitlements.allowedProviders || DEFAULT_CRM_PROVIDERS);
       }
 
       setLoadingCrmTimeline(true);
       try {
-        const timeline = await apiGet<TenantCrmEntitlementTimelineResponse>(
-          `/admin/tenants/${tenantId}/crm-entitlements/timeline?limit=20`,
-        );
+        const timeline = await apiGet<TenantCrmEntitlementTimelineResponse>(`/admin/tenants/${tenantId}/crm-entitlements/timeline?limit=20`);
         setCrmTimeline(Array.isArray(timeline?.items) ? timeline.items : []);
       } finally {
         setLoadingCrmTimeline(false);
       }
     } catch (error) {
       console.error("Failed to fetch tenant data:", error);
-      alert("Failed to load tenant data");
+      showError("Failed to load tenant data.");
     } finally {
       setLoadingData(false);
     }
+  }, [tenantId, refreshModulePermissionMatrix, showError]);
+
+  const fetchMpesaConfig = useCallback(async () => {
+    try {
+      const config = (await apiGet(`/mpesa/config?tenantId=${encodeURIComponent(tenantId)}`)) as MpesaConfigApiResponse;
+      if (config) {
+        setMpesaConfig({
+          mpesaConsumerKey: config.consumerKey || "",
+          mpesaConsumerSecret: config.consumerSecret || "",
+          mpesaShortCode: config.shortCode || "",
+          mpesaPasskey: config.passkey || "",
+          mpesaCallbackUrl: config.callbackUrl || "",
+          mpesaEnvironment: config.environment || "sandbox",
+          mpesaIsActive: config.isActive || false,
+        });
+        setMpesaStatus(config.isActive ? "connected" : "disconnected");
+      }
+    } catch (error) {
+      console.error("Failed to fetch M-Pesa config:", error);
+    }
   }, [tenantId]);
 
+  useEffect(() => {
+    if (user?.isSuperadmin && tenantId) {
+      fetchTenantData();
+      fetchMpesaConfig();
+    }
+  }, [user, tenantId, fetchTenantData, fetchMpesaConfig]);
+
   const toggleModule = (moduleKey: AppModuleKey) => {
-    setEnabledModules((prev) =>
-      prev.includes(moduleKey)
-        ? prev.filter((entry) => entry !== moduleKey)
-        : [...prev, moduleKey],
-    );
+    setEnabledModules((prev) => (prev.includes(moduleKey) ? prev.filter((entry) => entry !== moduleKey) : [...prev, moduleKey]));
   };
 
   const toggleNavigationKey = (navKey: string) => {
-    setSelectedNavigationKeys((prev) =>
-      prev.includes(navKey)
-        ? prev.filter((entry) => entry !== navKey)
-        : [...prev, navKey],
-    );
+    setSelectedNavigationKeys((prev) => (prev.includes(navKey) ? prev.filter((entry) => entry !== navKey) : [...prev, navKey]));
   };
 
   const selectedBlueprintDefinition = React.useMemo(
@@ -549,25 +332,23 @@ export default function TenantDetailsPage() {
         : selectedBlueprintDefinition?.navigation || [],
     [blueprintNavigationCatalog, selectedBlueprintDefinition],
   );
+  const availableBusinessTypes = React.useMemo(
+    () => Array.from(new Set(blueprintCatalog.map((entry) => entry.businessType))).filter(Boolean),
+    [blueprintCatalog],
+  );
 
   const saveTenantModules = async () => {
     try {
       setSavingModules(true);
       await apiPut(`/admin/tenants/${tenantId}/modules`, { enabledModules });
-      const latestModules = await apiGet<TenantModulesResponse>(
-        `/admin/tenants/${tenantId}/modules?t=${Date.now()}`,
-      );
+      const latestModules = await apiGet<TenantModulesResponse>(`/admin/tenants/${tenantId}/modules?t=${Date.now()}`);
       setAvailableModules(Array.isArray(latestModules?.availableModules) ? latestModules.availableModules : []);
       setEnabledModules(Array.isArray(latestModules?.enabledModules) ? latestModules.enabledModules : []);
-      const latestMatrix = await apiGet<ModulePermissionMatrixResponse>(
-        `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
-      );
-      setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
-      setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
-      alert('Tenant modules updated successfully.');
+      await refreshModulePermissionMatrix();
+      showSuccess("Tenant modules updated successfully.");
     } catch (error) {
-      console.error('Failed to update tenant modules:', error);
-      alert('Failed to update tenant modules');
+      console.error("Failed to update tenant modules:", error);
+      showError("Failed to update tenant modules.");
     } finally {
       setSavingModules(false);
     }
@@ -575,38 +356,27 @@ export default function TenantDetailsPage() {
 
   const applyModulePreset = async () => {
     if (!selectedModulePreset) {
-      alert('Select a module preset first.');
+      showError("Select a module preset first.");
       return;
     }
-
     const preset = modulePresets.find((entry) => entry.key === selectedModulePreset);
     if (!preset || !Array.isArray(preset.enabledModules) || preset.enabledModules.length === 0) {
-      alert('Selected preset is invalid. Reload the page and try again.');
+      showError("Selected preset is invalid. Reload the page and try again.");
       return;
     }
-
     try {
       setApplyingModulePreset(true);
-      await apiPut<TenantModulesResponse>(
-        `/admin/tenants/${tenantId}/modules`,
-        { enabledModules: preset.enabledModules },
-      );
-      const latestModules = await apiGet<TenantModulesResponse>(
-        `/admin/tenants/${tenantId}/modules?t=${Date.now()}`,
-      );
+      await apiPut<TenantModulesResponse>(`/admin/tenants/${tenantId}/modules`, { enabledModules: preset.enabledModules });
+      const latestModules = await apiGet<TenantModulesResponse>(`/admin/tenants/${tenantId}/modules?t=${Date.now()}`);
       setAvailableModules(Array.isArray(latestModules?.availableModules) ? latestModules.availableModules : []);
       setEnabledModules(Array.isArray(latestModules?.enabledModules) ? latestModules.enabledModules : []);
-      const latestMatrix = await apiGet<ModulePermissionMatrixResponse>(
-        `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
-      );
-      setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
-      setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
-      setSelectedModulePreset('');
+      await refreshModulePermissionMatrix();
+      setSelectedModulePreset("");
       await refreshUser();
-      alert(`Module preset applied successfully: ${preset.label}.`);
+      showSuccess(`Module preset applied successfully: ${preset.label}.`);
     } catch (error) {
-      console.error('Failed to apply module preset:', error);
-      alert('Failed to apply module preset');
+      console.error("Failed to apply module preset:", error);
+      showError("Failed to apply module preset.");
     } finally {
       setApplyingModulePreset(false);
     }
@@ -614,72 +384,51 @@ export default function TenantDetailsPage() {
 
   const saveTenantBlueprint = async () => {
     if (!selectedBlueprintKey) {
-      alert('Select a blueprint first.');
+      showError("Select a blueprint first.");
       return;
     }
-
     let parsedFeatureFlags: Record<string, boolean> = {};
     try {
-      const parsed = JSON.parse(featureFlagsInput || '{}');
-      if (typeof parsed === 'object' && parsed !== null) {
+      const parsed = JSON.parse(featureFlagsInput || "{}");
+      if (typeof parsed === "object" && parsed !== null) {
         parsedFeatureFlags = Object.fromEntries(
-          Object.entries(parsed as Record<string, unknown>).filter(
-            ([, value]) => typeof value === 'boolean',
-          ),
+          Object.entries(parsed as Record<string, unknown>).filter(([, value]) => typeof value === "boolean"),
         ) as Record<string, boolean>;
       }
     } catch {
-      alert('Feature flags must be valid JSON (object with boolean values).');
+      showError("Feature flags must be valid JSON (object with boolean values).");
       return;
     }
-
-    const installedApps = installedAppsInput
-      .split(',')
-      .map((entry) => entry.trim().toLowerCase())
-      .filter((entry) => entry.length > 0);
+    const installedApps = installedAppsInput.split(",").map((entry) => entry.trim().toLowerCase()).filter((entry) => entry.length > 0);
 
     try {
       setSavingBlueprint(true);
-      const updated = await apiPut<TenantBlueprintResponse>(
-        `/admin/tenants/${tenantId}/blueprint`,
-        {
-          businessType: selectedBusinessType,
-          blueprintKey: selectedBlueprintKey,
-          blueprintVersion: selectedBlueprintVersion || 'v1',
-          installedApps,
-          featureFlags: parsedFeatureFlags,
-          navigationKeys: selectedNavigationKeys,
-        },
-      );
+      const updated = await apiPut<TenantBlueprintResponse>(`/admin/tenants/${tenantId}/blueprint`, {
+        businessType: selectedBusinessType,
+        blueprintKey: selectedBlueprintKey,
+        blueprintVersion: selectedBlueprintVersion || "v1",
+        installedApps,
+        featureFlags: parsedFeatureFlags,
+        navigationKeys: selectedNavigationKeys,
+      });
 
       const configured = updated?.configured;
       if (configured) {
         setSelectedBusinessType(configured.businessType || selectedBusinessType);
         setSelectedBlueprintKey(configured.blueprintKey || selectedBlueprintKey);
-        setSelectedBlueprintVersion(configured.blueprintVersion || 'v1');
-        setInstalledAppsInput((configured.installedApps || []).join(', '));
-        setFeatureFlagsInput(
-          JSON.stringify(configured.featureFlags || {}, null, 2),
-        );
-        setSelectedNavigationKeys(
-          Array.isArray(configured.navigationKeys)
-            ? configured.navigationKeys
-            : [],
-        );
+        setSelectedBlueprintVersion(configured.blueprintVersion || "v1");
+        setInstalledAppsInput((configured.installedApps || []).join(", "));
+        setFeatureFlagsInput(JSON.stringify(configured.featureFlags || {}, null, 2));
+        setSelectedNavigationKeys(Array.isArray(configured.navigationKeys) ? configured.navigationKeys : []);
         setEnabledModules(Array.isArray(configured.enabledModules) ? configured.enabledModules : enabledModules);
       }
 
-      const latestMatrix = await apiGet<ModulePermissionMatrixResponse>(
-        `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
-      );
-      setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
-      setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
+      await refreshModulePermissionMatrix();
       setBlueprintPreview(null);
-
-      alert('Tenant blueprint configuration updated successfully.');
+      showSuccess("Tenant blueprint configuration updated successfully.");
     } catch (error) {
-      console.error('Failed to update tenant blueprint:', error);
-      alert('Failed to update tenant blueprint configuration');
+      console.error("Failed to update tenant blueprint:", error);
+      showError("Failed to update tenant blueprint configuration.");
     } finally {
       setSavingBlueprint(false);
     }
@@ -687,109 +436,83 @@ export default function TenantDetailsPage() {
 
   const previewTenantBlueprint = async () => {
     if (!selectedBlueprintKey) {
-      alert('Select a blueprint first.');
+      showError("Select a blueprint first.");
       return;
     }
-
     let parsedFeatureFlags: Record<string, boolean> = {};
     try {
-      const parsed = JSON.parse(featureFlagsInput || '{}');
-      if (typeof parsed === 'object' && parsed !== null) {
+      const parsed = JSON.parse(featureFlagsInput || "{}");
+      if (typeof parsed === "object" && parsed !== null) {
         parsedFeatureFlags = Object.fromEntries(
-          Object.entries(parsed as Record<string, unknown>).filter(
-            ([, value]) => typeof value === 'boolean',
-          ),
+          Object.entries(parsed as Record<string, unknown>).filter(([, value]) => typeof value === "boolean"),
         ) as Record<string, boolean>;
       }
     } catch {
-      alert('Feature flags must be valid JSON (object with boolean values).');
+      showError("Feature flags must be valid JSON (object with boolean values).");
       return;
     }
-
-    const installedApps = installedAppsInput
-      .split(',')
-      .map((entry) => entry.trim().toLowerCase())
-      .filter((entry) => entry.length > 0);
+    const installedApps = installedAppsInput.split(",").map((entry) => entry.trim().toLowerCase()).filter((entry) => entry.length > 0);
 
     try {
       setPreviewingBlueprint(true);
-      const preview = await apiPost<TenantBlueprintPreviewResponse>(
-        `/admin/tenants/${tenantId}/blueprint/preview`,
-        {
-          businessType: selectedBusinessType,
-          blueprintKey: selectedBlueprintKey,
-          blueprintVersion: selectedBlueprintVersion || 'v1',
-          installedApps,
-          featureFlags: parsedFeatureFlags,
-          navigationKeys: selectedNavigationKeys,
-        },
-      );
+      const preview = await apiPost<TenantBlueprintPreviewResponse>(`/admin/tenants/${tenantId}/blueprint/preview`, {
+        businessType: selectedBusinessType,
+        blueprintKey: selectedBlueprintKey,
+        blueprintVersion: selectedBlueprintVersion || "v1",
+        installedApps,
+        featureFlags: parsedFeatureFlags,
+        navigationKeys: selectedNavigationKeys,
+      });
       setBlueprintPreview(preview || null);
-      alert('Blueprint preview generated successfully.');
+      showSuccess("Blueprint preview generated successfully.");
     } catch (error) {
-      console.error('Failed to preview tenant blueprint:', error);
-      alert('Failed to preview tenant blueprint configuration');
+      console.error("Failed to preview tenant blueprint:", error);
+      showError("Failed to preview tenant blueprint configuration.");
     } finally {
       setPreviewingBlueprint(false);
     }
   };
 
-  const rollbackTenantBlueprint = async () => {
-    const confirmed = window.confirm(
-      'Rollback will restore the previous blueprint snapshot from audit history. Continue?',
-    );
-    if (!confirmed) {
-      return;
-    }
-
+  const doRollbackTenantBlueprint = async () => {
     try {
       setRollingBackBlueprint(true);
-      const rolledBack = await apiPost<TenantBlueprintResponse>(
-        `/admin/tenants/${tenantId}/blueprint/rollback`,
-        {},
-      );
-
+      const rolledBack = await apiPost<TenantBlueprintResponse>(`/admin/tenants/${tenantId}/blueprint/rollback`, {});
       const configured = rolledBack?.configured;
       if (configured) {
-        setSelectedBusinessType(configured.businessType || 'fashion');
-        setSelectedBlueprintKey(configured.blueprintKey || '');
-        setSelectedBlueprintVersion(configured.blueprintVersion || 'v1');
-        setInstalledAppsInput((configured.installedApps || []).join(', '));
+        setSelectedBusinessType(configured.businessType || "fashion");
+        setSelectedBlueprintKey(configured.blueprintKey || "");
+        setSelectedBlueprintVersion(configured.blueprintVersion || "v1");
+        setInstalledAppsInput((configured.installedApps || []).join(", "));
         setFeatureFlagsInput(JSON.stringify(configured.featureFlags || {}, null, 2));
-        setSelectedNavigationKeys(
-          Array.isArray(configured.navigationKeys)
-            ? configured.navigationKeys
-            : [],
-        );
+        setSelectedNavigationKeys(Array.isArray(configured.navigationKeys) ? configured.navigationKeys : []);
         setEnabledModules(Array.isArray(configured.enabledModules) ? configured.enabledModules : []);
       }
-
-      const latestMatrix = await apiGet<ModulePermissionMatrixResponse>(
-        `/admin/tenants/${tenantId}/module-permission-matrix?t=${Date.now()}`,
-      );
-      setModulePermissionMatrix(Array.isArray(latestMatrix?.matrix) ? latestMatrix.matrix : []);
-      setModuleMatrixRoles(Array.isArray(latestMatrix?.roles) ? latestMatrix.roles : []);
+      await refreshModulePermissionMatrix();
       setBlueprintPreview(null);
-
-      alert('Tenant blueprint rolled back successfully.');
+      showSuccess("Tenant blueprint rolled back successfully.");
     } catch (error) {
-      console.error('Failed to rollback tenant blueprint:', error);
-      alert('Failed to rollback tenant blueprint configuration');
+      console.error("Failed to rollback tenant blueprint:", error);
+      showError("Failed to rollback tenant blueprint configuration.");
     } finally {
       setRollingBackBlueprint(false);
     }
   };
 
+  const rollbackTenantBlueprint = () => {
+    requestConfirm({
+      title: "Rollback blueprint configuration?",
+      body: "This restores the previous blueprint snapshot from audit history.",
+      confirmLabel: "Rollback",
+      onConfirm: doRollbackTenantBlueprint,
+    });
+  };
+
   const toggleCrmCapability = (capability: CrmCapabilityKey) => {
-    setCrmCapabilities((prev) =>
-      prev.includes(capability)
-        ? prev.filter((entry) => entry !== capability)
-        : [...prev, capability],
-    );
+    setCrmCapabilities((prev) => (prev.includes(capability) ? prev.filter((entry) => entry !== capability) : [...prev, capability]));
   };
 
   const updateCrmLimit = (key: keyof CrmLimits, rawValue: string) => {
-    const parsed = rawValue.trim() === '' ? null : Number(rawValue);
+    const parsed = rawValue.trim() === "" ? null : Number(rawValue);
     setCrmLimits((prev) => ({
       ...prev,
       [key]: parsed !== null && Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null,
@@ -799,9 +522,7 @@ export default function TenantDetailsPage() {
   const toggleCrmProvider = (group: keyof CrmAllowedProviders, provider: string) => {
     setCrmProviders((prev) => {
       const groupProviders = prev[group] || [];
-      const updated = groupProviders.includes(provider)
-        ? groupProviders.filter((entry) => entry !== provider)
-        : [...groupProviders, provider];
+      const updated = groupProviders.includes(provider) ? groupProviders.filter((entry) => entry !== provider) : [...groupProviders, provider];
       return { ...prev, [group]: updated };
     });
   };
@@ -809,30 +530,19 @@ export default function TenantDetailsPage() {
   const crmDependencyErrors = React.useMemo(() => {
     const set = new Set(crmCapabilities);
     const errors: string[] = [];
-    if (set.has('crm.meeting_scheduler') && !set.has('crm.calendar_integration')) {
-      errors.push('Meeting scheduler requires calendar integration.');
-    }
-    if (set.has('crm.lead_scoring') && !set.has('crm.pipeline')) {
-      errors.push('Lead scoring requires visual pipeline.');
-    }
-    if (set.has('crm.proposal_management') && !set.has('crm.documents')) {
-      errors.push('Proposal management requires document management.');
-    }
-    if (set.has('crm.contract_management') && !set.has('crm.documents')) {
-      errors.push('Contract management requires document management.');
-    }
-    if (set.has('crm.telephony') && !set.has('crm.third_party_integrations')) {
-      errors.push('Built-in telephony requires third-party integrations.');
-    }
+    if (set.has("crm.meeting_scheduler") && !set.has("crm.calendar_integration")) errors.push("Meeting scheduler requires calendar integration.");
+    if (set.has("crm.lead_scoring") && !set.has("crm.pipeline")) errors.push("Lead scoring requires visual pipeline.");
+    if (set.has("crm.proposal_management") && !set.has("crm.documents")) errors.push("Proposal management requires document management.");
+    if (set.has("crm.contract_management") && !set.has("crm.documents")) errors.push("Contract management requires document management.");
+    if (set.has("crm.telephony") && !set.has("crm.third_party_integrations")) errors.push("Built-in telephony requires third-party integrations.");
     return errors;
   }, [crmCapabilities]);
 
   const saveCrmEntitlements = async () => {
     if (crmDependencyErrors.length > 0) {
-      alert(`Please fix dependency issues before saving:\n- ${crmDependencyErrors.join('\n- ')}`);
+      showError(`Please fix dependency issues before saving: ${crmDependencyErrors.join(" ")}`);
       return;
     }
-
     try {
       setSavingCrmEntitlements(true);
       await apiPut(`/admin/tenants/${tenantId}/crm-entitlements`, {
@@ -840,107 +550,60 @@ export default function TenantDetailsPage() {
         enabledCapabilities: crmCapabilities,
         limits: crmLimits,
         allowedProviders: crmProviders,
-        source: 'manual_override',
-        reason: 'superadmin ui update',
+        source: "manual_override",
+        reason: "superadmin ui update",
       });
+      setLoadingCrmTimeline(true);
       try {
-        setLoadingCrmTimeline(true);
-        const timeline = await apiGet<TenantCrmEntitlementTimelineResponse>(
-          `/admin/tenants/${tenantId}/crm-entitlements/timeline?limit=20`,
-        );
+        const timeline = await apiGet<TenantCrmEntitlementTimelineResponse>(`/admin/tenants/${tenantId}/crm-entitlements/timeline?limit=20`);
         setCrmTimeline(Array.isArray(timeline?.items) ? timeline.items : []);
       } finally {
         setLoadingCrmTimeline(false);
       }
-      alert('CRM entitlements updated successfully.');
+      showSuccess("CRM entitlements updated successfully.");
     } catch (error: any) {
-      console.error('Failed to update CRM entitlements:', error);
-      alert(error?.message || 'Failed to update CRM entitlements');
+      console.error("Failed to update CRM entitlements:", error);
+      showError(error?.message || "Failed to update CRM entitlements.");
     } finally {
       setSavingCrmEntitlements(false);
     }
   };
 
-const fetchMpesaConfig = useCallback(async () => {
-  try {
-    const config = await apiGet(
-      `/mpesa/config?tenantId=${encodeURIComponent(tenantId)}`,
-    ) as MpesaConfigApiResponse;
-    if (config) {
-      setMpesaConfig({
-        mpesaConsumerKey: config.consumerKey || '',
-        mpesaConsumerSecret: config.consumerSecret || '',
-        mpesaShortCode: config.shortCode || '',
-        mpesaPasskey: config.passkey || '',
-        mpesaCallbackUrl: config.callbackUrl || '',
-        mpesaEnvironment: config.environment || 'sandbox',
-        mpesaIsActive: config.isActive || false
-      });
-      setMpesaStatus(config.isActive ? 'connected' : 'disconnected');
-    }
-  } catch (error) {
-    console.error("Failed to fetch M-Pesa config:", error);
-    // Keep default disconnected status
-  }
-}, [tenantId]);
-
   const normalizeBusinessToken = (input?: string | null) =>
-    (input ?? '')
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-');
+    (input ?? "").toLowerCase().trim().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-");
 
-  const resolveClassificationByBusinessType = (
-    businessType: string | undefined,
-    options: ClassificationOption[],
-  ) => {
+  const resolveClassificationByBusinessType = (businessType: string | undefined, options: ClassificationOption[]) => {
     const normalized = normalizeBusinessToken(businessType);
-    if (!normalized) return '';
-
-    const exact = options.find(
-      (c) => normalizeBusinessToken(c.slug) === normalized || normalizeBusinessToken(c.name) === normalized,
-    );
+    if (!normalized) return "";
+    const exact = options.find((c) => normalizeBusinessToken(c.slug) === normalized || normalizeBusinessToken(c.name) === normalized);
     if (exact) return exact.id;
-
     const partial = options.find((c) => {
       const slug = normalizeBusinessToken(c.slug);
       const name = normalizeBusinessToken(c.name);
       return normalized.includes(slug) || slug.includes(normalized) || normalized.includes(name);
     });
-
-    return partial?.id || '';
+    return partial?.id || "";
   };
 
   const openProvisionModal = async () => {
     if (!tenant) return;
-
     try {
       setLoadingClassifications(true);
       let data: ClassificationOption[] = [];
       try {
-        data = await apiGet<ClassificationOption[]>('/admin/classifications', {
-          'x-suppress-error-log': 'true',
-        });
+        data = await apiGet<ClassificationOption[]>("/admin/classifications", { "x-suppress-error-log": "true" });
       } catch {
         // Hosted environments may temporarily miss admin classification routes.
-        // Fall back to the public catalog so provisioning can still proceed.
-        data = await apiGet<ClassificationOption[]>('/classifications/public', {
-          'x-suppress-error-log': 'true',
-        });
+        data = await apiGet<ClassificationOption[]>("/classifications/public", { "x-suppress-error-log": "true" });
       }
-      const active = Array.isArray(data)
-        ? data.filter((c) => c.isActive !== false)
-        : [];
+      const active = Array.isArray(data) ? data.filter((c) => c.isActive !== false) : [];
       setClassificationOptions(active);
-
       const preselected = tenant.classificationId || resolveClassificationByBusinessType(tenant.businessType, active);
-      setSelectedClassificationId(preselected || '');
+      setSelectedClassificationId(preselected || "");
       setShowProvisionModal(true);
     } catch (error) {
-      console.error('Failed to load classifications:', error);
-      alert('Failed to load classifications');
+      console.error("Failed to load classifications:", error);
+      showError("Failed to load classifications.");
     } finally {
       setLoadingClassifications(false);
     }
@@ -948,39 +611,26 @@ const fetchMpesaConfig = useCallback(async () => {
 
   const assignAndProvisionMetrics = async () => {
     if (!tenant || !selectedClassificationId) return;
-
     try {
       setSavingProvisioning(true);
       const result = await apiPost<{ defaultsProvisioning?: { provisionedAttributes?: string[]; allowedUnits?: string[]; defaultUnit?: string | null } }>(
         `/admin/tenants/${tenant.id}/classification`,
-        {
-          classificationId: selectedClassificationId,
-          provisionDefaults: true,
-        },
+        { classificationId: selectedClassificationId, provisionDefaults: true },
       );
-
       const defaults = result?.defaultsProvisioning;
-      const attrs = defaults?.provisionedAttributes?.length ? defaults.provisionedAttributes.join(', ') : 'none';
-      const units = defaults?.allowedUnits?.length ? defaults.allowedUnits.join(', ') : 'none';
-      const defaultUnit = defaults?.defaultUnit || 'not set';
-
-      alert(`Metrics provisioned. Attrs: ${attrs}. Units: ${units}. Default: ${defaultUnit}.`);
+      const attrs = defaults?.provisionedAttributes?.length ? defaults.provisionedAttributes.join(", ") : "none";
+      const units = defaults?.allowedUnits?.length ? defaults.allowedUnits.join(", ") : "none";
+      const defaultUnit = defaults?.defaultUnit || "not set";
+      showSuccess(`Metrics provisioned. Attrs: ${attrs}. Units: ${units}. Default: ${defaultUnit}.`);
       setShowProvisionModal(false);
       await fetchTenantData();
     } catch (error: any) {
-      console.error('Failed to assign and provision metrics:', error);
-      alert(error?.message || 'Failed to provision metrics');
+      console.error("Failed to assign and provision metrics:", error);
+      showError(error?.message || "Failed to provision metrics.");
     } finally {
       setSavingProvisioning(false);
     }
   };
-
-  useEffect(() => {
-    if (user?.isSuperadmin && tenantId) {
-      fetchTenantData();
-      fetchMpesaConfig();
-    }
-  }, [user, tenantId, fetchTenantData, fetchMpesaConfig]);
 
   const saveMpesaConfig = async () => {
     try {
@@ -993,45 +643,62 @@ const fetchMpesaConfig = useCallback(async () => {
         mpesaPasskey: mpesaConfig.mpesaPasskey,
         mpesaCallbackUrl: mpesaConfig.mpesaCallbackUrl,
         mpesaIsActive: mpesaConfig.mpesaIsActive,
-        mpesaEnvironment: mpesaConfig.mpesaEnvironment
+        mpesaEnvironment: mpesaConfig.mpesaEnvironment,
       });
-      setMpesaStatus('connected');
-      alert("M-Pesa configuration saved successfully!");
+      setMpesaStatus("connected");
+      showSuccess("M-Pesa configuration saved successfully.");
     } catch (error) {
       console.error("Failed to save M-Pesa config:", error);
-      alert("Failed to save M-Pesa configuration");
+      showError("Failed to save M-Pesa configuration.");
     } finally {
       setSavingMpesa(false);
     }
   };
 
-  const testMpesaConnection = async () => {
+  /** Not a live Safaricom connectivity test — re-fetches the saved config and confirms the round-trip matches. */
+  const verifyMpesaConfig = async () => {
     try {
       setTestingMpesa(true);
-      // For now, just simulate a test - in real implementation, you'd call a test endpoint
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
-      setMpesaStatus('connected');
-      alert("M-Pesa connection test successful!");
+      const config = (await apiGet(`/mpesa/config?tenantId=${encodeURIComponent(tenantId)}`)) as MpesaConfigApiResponse;
+      const matches =
+        !!config &&
+        config.shortCode === mpesaConfig.mpesaShortCode &&
+        config.environment === mpesaConfig.mpesaEnvironment &&
+        !!config.isActive === mpesaConfig.mpesaIsActive;
+      setMpesaStatus(config?.isActive ? "connected" : "disconnected");
+      if (matches) {
+        showSuccess("Saved M-Pesa configuration verified.");
+      } else {
+        showError("Saved configuration does not match the form. Save again.");
+      }
     } catch (error) {
-      console.error("Failed to test M-Pesa connection:", error);
-      setMpesaStatus('disconnected');
-      alert("M-Pesa connection test failed");
+      console.error("Failed to verify M-Pesa config:", error);
+      showError("Failed to verify M-Pesa configuration.");
     } finally {
       setTestingMpesa(false);
     }
   };
 
-  const handleImpersonate = async () => {
+  const doImpersonate = async () => {
     if (!tenant) return;
-
     try {
-      await apiPost('/admin/impersonate/start', { tenantId: tenant.id });
+      await apiPost("/admin/impersonate/start", { tenantId: tenant.id });
       await refreshUser();
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (error) {
       console.error("Failed to impersonate tenant:", error);
-      alert("Failed to impersonate tenant");
+      showError("Failed to impersonate tenant.");
     }
+  };
+
+  const handleImpersonate = () => {
+    if (!tenant) return;
+    requestConfirm({
+      title: "Impersonate this tenant?",
+      body: `You'll be logged in as ${tenant.name} until you end the session.`,
+      confirmLabel: "Impersonate",
+      onConfirm: doImpersonate,
+    });
   };
 
   const saveBusinessKra = async () => {
@@ -1051,10 +718,10 @@ const fetchMpesaConfig = useCallback(async () => {
         etimsQrUrl: businessKra.etimsQrUrl || null,
       });
       await fetchTenantData();
-      alert("Business & KRA details saved.");
+      showSuccess("Business & KRA details saved.");
     } catch (error) {
       console.error("Failed to save:", error);
-      alert("Failed to save Business & KRA details");
+      showError("Failed to save Business & KRA details.");
     } finally {
       setSavingBusinessKra(false);
     }
@@ -1064,1595 +731,273 @@ const fetchMpesaConfig = useCallback(async () => {
     if (!tenantId) return;
     try {
       setSavingRestaurantAddon(true);
-      await apiPut(`/admin/tenants/${tenantId}`, {
-        restaurantFeaturesEnabled: restaurantAddonEnabled,
-      });
+      await apiPut(`/admin/tenants/${tenantId}`, { restaurantFeaturesEnabled: restaurantAddonEnabled });
       await fetchTenantData();
-      alert(`Restaurant add-on ${restaurantAddonEnabled ? 'enabled' : 'disabled'} for this tenant.`);
+      showSuccess(`Restaurant add-on ${restaurantAddonEnabled ? "enabled" : "disabled"} for this tenant.`);
     } catch (error) {
-      console.error('Failed to update restaurant add-on setting:', error);
-      alert('Failed to update restaurant add-on setting');
+      console.error("Failed to update restaurant add-on setting:", error);
+      showError("Failed to update restaurant add-on setting.");
     } finally {
       setSavingRestaurantAddon(false);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const formatCurrency = (amount: number) => {
-    return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   if (loading || !user) return null;
 
   if (loadingData) {
     return (
-      <main style={{ padding: "1rem", background: "#f8fafc", minHeight: "100vh" }}>
-        <div style={{ textAlign: "center", padding: "1rem", fontSize: "13px", color: "#64748b" }}>
-          Loading tenant data...
-        </div>
+      <main className="min-h-screen bg-gray-50 p-4 md:p-6">
+        <div className="p-4 text-center text-sm text-gray-500">Loading tenant data...</div>
       </main>
     );
   }
 
   if (!tenant) {
     return (
-      <main style={{ padding: "1rem", background: "#f8fafc", minHeight: "100vh" }}>
-        <div style={{ textAlign: "center", padding: "1rem", fontSize: "13px", color: "#64748b" }}>
-          Tenant not found
-        </div>
+      <main className="min-h-screen bg-gray-50 p-4 md:p-6">
+        <div className="p-4 text-center text-sm text-gray-500">Tenant not found</div>
       </main>
     );
   }
 
+  const statCards = [
+    { icon: <FaUsers className="h-4 w-4" />, label: "Users", value: tenant.userCount },
+    { icon: <FaStore className="h-4 w-4" />, label: "Physical Items", value: tenant.productCount },
+    { icon: <FaReceipt className="h-4 w-4" />, label: "Transactions", value: tenant.salesCount },
+    { icon: <FaBuilding className="h-4 w-4" />, label: "Branches", value: tenant.branchCount },
+    { icon: <FaDatabase className="h-4 w-4" />, label: "DB Space", value: formatSpace(parseFloat(tenant.spaceUsedMB || "0")) },
+  ];
+
   return (
-    <main style={{ padding: "1rem", background: "#f8fafc", minHeight: "100vh" }}>
-      <div style={{ marginBottom: "1rem" }}>
-        <button
-          onClick={() => router.push('/superadmin/tenants')}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.3rem",
-            background: "none",
-            border: "none",
-            color: "#2563eb",
-            cursor: "pointer",
-            fontSize: "13px",
-            marginBottom: "0.7rem",
-            fontWeight: 500
-          }}
+    <main className="min-h-screen bg-gray-50 p-4 md:p-6">
+      {notice && (
+        <div
+          className={`mb-4 flex items-center justify-between rounded-lg border px-4 py-3 text-sm ${
+            notice.type === "success" ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-rose-300 bg-rose-50 text-rose-800"
+          }`}
         >
-          <FaArrowLeft /> Back
-        </button>
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h1 style={{ fontSize: 16, fontWeight: "bold", marginBottom: "0.2rem", color: "#1e293b" }}>{tenant.name}</h1>
-            <p style={{ color: "#64748b", fontSize: "12px", marginBottom: "0.2rem" }}>{tenant.businessType}</p>
-            <p style={{ color: "#64748b", fontSize: "12px" }}>{tenant.contactEmail} • {tenant.contactPhone}</p>
-          </div>
-
-          <button
-            onClick={handleImpersonate}
-            style={{
-              background: "#2563eb",
-              color: "#fff",
-              padding: "0.3rem 0.8rem",
-              borderRadius: "5px",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: 500,
-              display: "flex",
-              alignItems: "center",
-              gap: "0.3rem",
-              fontSize: "12px",
-              boxShadow: "0 1px 2px rgba(37,99,235,0.04)"
-            }}
-          >
-            <FaArrowRight /> Impersonate
+          <span>{notice.message}</span>
+          <button type="button" onClick={() => setNotice(null)} className="ml-4 text-xs font-medium opacity-70 hover:opacity-100">
+            Dismiss
           </button>
-        </div>
-
-        <div style={{ marginTop: '0.6rem' }}>
-          <button
-            onClick={() => router.push(`/superadmin/tenants/${tenantId}/unified-page-display`)}
-            style={{
-              background: '#eff6ff',
-              color: '#1d4ed8',
-              padding: '0.28rem 0.75rem',
-              borderRadius: '5px',
-              border: '1px solid #bfdbfe',
-              cursor: 'pointer',
-              fontWeight: 500,
-              fontSize: '12px',
-              marginRight: '0.45rem',
-            }}
-          >
-            Unified Page Display
-          </button>
-          <button
-            onClick={openProvisionModal}
-            disabled={loadingClassifications}
-            style={{
-              background: '#f5f3ff',
-              color: '#5b21b6',
-              padding: '0.28rem 0.75rem',
-              borderRadius: '5px',
-              border: '1px solid #c4b5fd',
-              cursor: loadingClassifications ? 'not-allowed' : 'pointer',
-              fontWeight: 500,
-              fontSize: '12px',
-              opacity: loadingClassifications ? 0.65 : 1,
-            }}
-          >
-            {loadingClassifications ? 'Loading classifications...' : 'Assign + Provision Metrics'}
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-        gap: "0.7rem",
-        marginBottom: "1.2rem"
-      }}>
-        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
-            <FaUsers style={{ color: "#2563eb", fontSize: "13px" }} />
-            <span style={{ fontSize: "11px", color: "#64748b" }}>Users</span>
-          </div>
-          <div style={{ fontSize: 15, fontWeight: "bold", color: "#1e293b" }}>{tenant.userCount}</div>
-        </div>
-        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
-            <FaStore style={{ color: "#059669", fontSize: "13px" }} />
-            <span style={{ fontSize: "11px", color: "#64748b" }}>Physical Items</span>
-          </div>
-          <div style={{ fontSize: 15, fontWeight: "bold", color: "#1e293b" }}>{tenant.productCount}</div>
-        </div>
-        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
-            <FaReceipt style={{ color: "#f59e0b", fontSize: "13px" }} />
-            <span style={{ fontSize: "11px", color: "#64748b" }}>Transactions</span>
-          </div>
-          <div style={{ fontSize: 15, fontWeight: "bold", color: "#1e293b" }}>{tenant.salesCount}</div>
-        </div>
-        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
-            <FaBuilding style={{ color: "#8b5cf6", fontSize: "13px" }} />
-            <span style={{ fontSize: "11px", color: "#64748b" }}>Branches</span>
-          </div>
-          <div style={{ fontSize: 15, fontWeight: "bold", color: "#1e293b" }}>{tenant.branchCount}</div>
-        </div>
-        <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.2rem" }}>
-            <FaStore style={{ color: "#ef4444", fontSize: "13px" }} />
-            <span style={{ fontSize: "11px", color: "#64748b" }}>DB Space</span>
-          </div>
-          <div style={{ fontSize: 13, fontWeight: "bold", color: "#1e293b" }}>{tenant.spaceUsedMB} MB</div>
-          <div style={{ marginTop: "0.2rem" }}>
-            <div style={{ width: "100%", height: "6px", background: "#e5e7eb", borderRadius: "3px", overflow: "hidden" }}>
-              <div
-                style={{
-                  width: `${Math.min((parseFloat(tenant.spaceUsedMB) / 1000) * 100, 100)}%`,
-                  height: "100%",
-                  background: parseFloat(tenant.spaceUsedMB) > 750 ? "#ef4444" : parseFloat(tenant.spaceUsedMB) > 500 ? "#f59e0b" : "#10b981",
-                  transition: "width 0.3s ease"
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ borderBottom: "1px solid #e5e7eb", marginBottom: "1.2rem" }}>
-        <nav style={{ display: "flex", gap: "1rem" }}>
-          <button
-            onClick={() => setActiveTab('overview')}
-            style={{
-              padding: "0.5rem 0",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === 'overview' ? "2px solid #2563eb" : "2px solid transparent",
-              color: activeTab === 'overview' ? "#2563eb" : "#64748b",
-              fontWeight: activeTab === 'overview' ? "600" : "500",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('products')}
-            style={{
-              padding: "0.5rem 0",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === 'products' ? "2px solid #2563eb" : "2px solid transparent",
-              color: activeTab === 'products' ? "#2563eb" : "#64748b",
-              fontWeight: activeTab === 'products' ? "600" : "500",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            Products ({products.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('transactions')}
-            style={{
-              padding: "0.5rem 0",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === 'transactions' ? "2px solid #2563eb" : "2px solid transparent",
-              color: activeTab === 'transactions' ? "#2563eb" : "#64748b",
-              fontWeight: activeTab === 'transactions' ? "600" : "500",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            Transactions ({transactions.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('branches')}
-            style={{
-              padding: "0.5rem 0",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === 'branches' ? "2px solid #2563eb" : "2px solid transparent",
-              color: activeTab === 'branches' ? "#2563eb" : "#64748b",
-              fontWeight: activeTab === 'branches' ? "600" : "500",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            Branches ({branches.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('analytics')}
-            style={{
-              padding: "0.5rem 0",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === 'analytics' ? "2px solid #2563eb" : "2px solid transparent",
-              color: activeTab === 'analytics' ? "#2563eb" : "#64748b",
-              fontWeight: activeTab === 'analytics' ? "600" : "500",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            Analytics
-          </button>
-          <button
-            onClick={() => setActiveTab('integrations')}
-            style={{
-              padding: "0.5rem 0",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === 'integrations' ? "2px solid #2563eb" : "2px solid transparent",
-              color: activeTab === 'integrations' ? "#2563eb" : "#64748b",
-              fontWeight: activeTab === 'integrations' ? "600" : "500",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            Integrations
-          </button>
-          <button
-            onClick={() => setActiveTab('business-kra')}
-            style={{
-              padding: "0.5rem 0",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === 'business-kra' ? "2px solid #2563eb" : "2px solid transparent",
-              color: activeTab === 'business-kra' ? "#2563eb" : "#64748b",
-              fontWeight: activeTab === 'business-kra' ? "600" : "500",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            Business & KRA
-          </button>
-          <button
-            onClick={() => setActiveTab('modules')}
-            style={{
-              padding: "0.5rem 0",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === 'modules' ? "2px solid #2563eb" : "2px solid transparent",
-              color: activeTab === 'modules' ? "#2563eb" : "#64748b",
-              fontWeight: activeTab === 'modules' ? "600" : "500",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            Modules
-          </button>
-          <button
-            onClick={() => setActiveTab('crm-entitlements')}
-            style={{
-              padding: "0.5rem 0",
-              border: "none",
-              background: "none",
-              borderBottom: activeTab === 'crm-entitlements' ? "2px solid #2563eb" : "2px solid transparent",
-              color: activeTab === 'crm-entitlements' ? "#2563eb" : "#64748b",
-              fontWeight: activeTab === 'crm-entitlements' ? "600" : "500",
-              fontSize: "12px",
-              cursor: "pointer"
-            }}
-          >
-            CRM Entitlements
-          </button>
-        </nav>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'overview' && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          <div>
-            <h3 style={{ fontSize: 13, fontWeight: "bold", marginBottom: "0.5rem", color: "#334155" }}>Recent Products</h3>
-            <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-              {products.slice(0, 5).map(product => (
-                <div key={product.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
-                  <div style={{ fontWeight: "500" }}>{product.name}</div>
-                  <div style={{ color: "#64748b" }}>
-                    {formatCurrency(product.price)} • Stock: {product.inventory[0]?.quantity || 0}
-                  </div>
-                </div>
-              ))}
-              {products.length === 0 && (
-                <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
-                  No products found
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h3 style={{ fontSize: 13, fontWeight: "bold", marginBottom: "0.5rem", color: "#334155" }}>Recent Transactions</h3>
-            <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-              {transactions.slice(0, 5).map(transaction => (
-                <div key={transaction.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
-                  <div style={{ fontWeight: "500" }}>{formatCurrency(transaction.total)}</div>
-                  <div style={{ color: "#64748b" }}>{formatDate(transaction.createdAt)}</div>
-                </div>
-              ))}
-              {transactions.length === 0 && (
-                <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
-                  No transactions found
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       )}
 
-      {activeTab === 'analytics' && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          <div>
-            <h3 style={{ fontSize: 13, fontWeight: "bold", marginBottom: "0.5rem", color: "#334155" }}>Space Usage Trend</h3>
-            <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-              <div style={{ height: "80px", display: "flex", alignItems: "end", justifyContent: "center", background: "#f9fafb", borderRadius: "4px" }}>
-                <div style={{ width: "60%", height: `${Math.min((parseFloat(tenant.spaceUsedMB) / 1000) * 100, 100)}%`, background: "#2563eb", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }}></div>
-              </div>
-              <p style={{ textAlign: "center", marginTop: "0.5rem", color: "#64748b", fontSize: "12px" }}>
-                Current usage: {tenant.spaceUsedMB} MB
-              </p>
-            </div>
-          </div>
+      <button
+        type="button"
+        onClick={() => router.push("/superadmin/tenants")}
+        className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+      >
+        <FaArrowLeft className="h-3 w-3" /> Back
+      </button>
 
-          <div>
-            <h3 style={{ fontSize: 13, fontWeight: "bold", marginBottom: "0.5rem", color: "#334155" }}>Resource Distribution</h3>
-            <div style={{ background: "#fff", padding: "0.7rem", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
-                {tenant.resourceSpaceUsage && Object.entries(tenant.resourceSpaceUsage).map(([resource, bytes]) => {
-                  const mb = (bytes / (1024 * 1024)).toFixed(2);
-                  const maxBytes = Math.max(...Object.values(tenant.resourceSpaceUsage!));
-                  const percentage = maxBytes > 0 ? (bytes / maxBytes) * 100 : 0;
-
-                  return (
-                    <div key={resource} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
-                      <span style={{ color: "#64748b" }}>{resource}</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                        <div style={{ width: "60px", height: "6px", background: "#e5e7eb", borderRadius: "3px", overflow: "hidden" }}>
-                          <div style={{ width: `${percentage}%`, height: "100%", background: "#059669" }}></div>
-                        </div>
-                        <span style={{ color: "#1e293b" }}>{mb} MB</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'products' && (
-        <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-          <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
-            <h3 style={{ fontSize: 13, fontWeight: "bold", margin: 0, color: "#334155" }}>All Products</h3>
-          </div>
-          {products.map(product => (
-            <div key={product.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: "500" }}>{product.name}</div>
-                  <div style={{ color: "#64748b" }}>
-                    Stock: {product.inventory[0]?.quantity || 0}
-                  </div>
-                </div>
-                <div style={{ fontWeight: "600", color: "#1e293b" }}>
-                  {formatCurrency(product.price)}
-                </div>
-              </div>
-            </div>
-          ))}
-          {products.length === 0 && (
-            <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
-              No products found
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'transactions' && (
-        <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-          <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
-            <h3 style={{ fontSize: 13, fontWeight: "bold", margin: 0, color: "#334155" }}>All Transactions</h3>
-          </div>
-          {transactions.map(transaction => (
-            <div key={transaction.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: "500" }}>Transaction #{transaction.id.slice(-8)}</div>
-                  <div style={{ color: "#64748b" }}>
-                    {formatDate(transaction.createdAt)}
-                  </div>
-                </div>
-                <div style={{ fontWeight: "600", color: "#1e293b" }}>
-                  {formatCurrency(transaction.total)}
-                </div>
-              </div>
-            </div>
-          ))}
-          {transactions.length === 0 && (
-            <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
-              No transactions found
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'branches' && (
-        <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-          <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
-            <h3 style={{ fontSize: 13, fontWeight: "bold", margin: 0, color: "#334155" }}>Tenant Branches</h3>
-          </div>
-          {branches.map(branch => {
-            const locationParts = [branch.city, branch.state, branch.country].filter(Boolean).join(', ');
-            const statusLabel = branch.deletedAt ? 'Deleted' : (branch.status || 'active');
-            const statusColor = branch.deletedAt
-              ? '#dc2626'
-              : statusLabel.toLowerCase() === 'active'
-                ? '#059669'
-                : '#d97706';
-
-            return (
-              <div key={branch.id} style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb", fontSize: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.7rem" }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.2rem" }}>
-                      <span style={{ fontWeight: "600", color: "#1e293b" }}>{branch.name}</span>
-                      {branch.isMainBranch && (
-                        <span style={{ fontSize: "10px", fontWeight: 600, color: "#1d4ed8", background: "#dbeafe", padding: "0.1rem 0.35rem", borderRadius: "999px" }}>
-                          MAIN
-                        </span>
-                      )}
-                      <span style={{ fontSize: "10px", fontWeight: 600, color: statusColor, background: `${statusColor}1A`, padding: "0.1rem 0.35rem", borderRadius: "999px", textTransform: "capitalize" }}>
-                        {statusLabel}
-                      </span>
-                    </div>
-                    <div style={{ color: "#64748b" }}>
-                      {branch.address || 'No address provided'}
-                    </div>
-                    <div style={{ color: "#64748b" }}>
-                      {locationParts || 'No location details'}
-                    </div>
-                    <div style={{ color: "#64748b" }}>
-                      Manager: {branch.manager || 'N/A'} • Phone: {branch.phone || 'N/A'} • Email: {branch.email || 'N/A'}
-                    </div>
-                  </div>
-                  <div style={{ color: "#64748b", whiteSpace: "nowrap" }}>
-                    Created: {formatDate(branch.createdAt)}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {branches.length === 0 && (
-            <div style={{ padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "12px" }}>
-              No branches found for this tenant
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'integrations' && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          {/* M-Pesa Integration */}
-          <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-            <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.5rem" }}>
-                <FaPlug style={{ color: "#059669", fontSize: "13px" }} />
-                <span style={{ fontSize: 13, fontWeight: "bold", color: "#334155" }}>M-Pesa Integration</span>
-                {mpesaStatus === 'connected' ? (
-                  <FaCheckCircle style={{ color: "#059669", fontSize: "13px" }} />
-                ) : (
-                  <FaSpinner style={{ color: "#f59e0b", fontSize: "13px", animation: "spin 1s linear infinite" }} />
-                )}
-              </div>
-              <span style={{ color: "#64748b", fontSize: "12px" }}>
-                Configure M-Pesa payment gateway
-              </span>
-            </div>
-
-            <div style={{ padding: "0.7rem" }}>
-              <form onSubmit={(e) => e.preventDefault()}>
-                <div style={{ marginBottom: "0.5rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
-                    Consumer Key
-                  </label>
-                  <input
-                    type="text"
-                    value={mpesaConfig.mpesaConsumerKey}
-                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaConsumerKey: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "0.3rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "3px",
-                      fontSize: "12px"
-                    }}
-                    placeholder="Enter M-Pesa Consumer Key"
-                  />
-                </div>
-                <div style={{ marginBottom: "0.5rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
-                    Consumer Secret
-                  </label>
-                  <input
-                    type="password"
-                    value={mpesaConfig.mpesaConsumerSecret}
-                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaConsumerSecret: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "0.3rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "3px",
-                      fontSize: "12px"
-                    }}
-                    placeholder="Enter M-Pesa Consumer Secret"
-                  />
-                </div>
-                <div style={{ marginBottom: "0.5rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
-                    Short Code
-                  </label>
-                  <input
-                    type="text"
-                    value={mpesaConfig.mpesaShortCode}
-                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaShortCode: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "0.3rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "3px",
-                      fontSize: "12px"
-                    }}
-                    placeholder="Enter M-Pesa Short Code"
-                  />
-                </div>
-                <div style={{ marginBottom: "0.5rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
-                    Passkey
-                  </label>
-                  <input
-                    type="password"
-                    value={mpesaConfig.mpesaPasskey}
-                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaPasskey: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "0.3rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "3px",
-                      fontSize: "12px"
-                    }}
-                    placeholder="Enter M-Pesa Passkey"
-                  />
-                </div>
-                <div style={{ marginBottom: "0.5rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
-                    Callback URL
-                  </label>
-                  <input
-                    type="url"
-                    value={mpesaConfig.mpesaCallbackUrl}
-                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaCallbackUrl: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "0.3rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "3px",
-                      fontSize: "12px"
-                    }}
-                    placeholder="https://your-domain.com/mpesa/callback"
-                  />
-                </div>
-                <div style={{ marginBottom: "0.7rem" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>
-                    Environment
-                  </label>
-                  <select
-                    value={mpesaConfig.mpesaEnvironment}
-                    onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaEnvironment: e.target.value }))}
-                    style={{
-                      width: "100%",
-                      padding: "0.3rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "3px",
-                      fontSize: "12px"
-                    }}
-                  >
-                    <option value="sandbox">Sandbox</option>
-                    <option value="production">Production</option>
-                  </select>
-                </div>
-                <div style={{ marginBottom: "0.7rem" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "12px" }}>
-                    <input
-                      type="checkbox"
-                      checked={mpesaConfig.mpesaIsActive}
-                      onChange={(e) => setMpesaConfig(prev => ({ ...prev, mpesaIsActive: e.target.checked }))}
-                      style={{ width: "14px", height: "14px" }}
-                    />
-                    <span style={{ fontWeight: "500", color: "#334155" }}>Enable M-Pesa for this tenant</span>
-                  </label>
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button
-                    type="button"
-                    onClick={saveMpesaConfig}
-                    disabled={savingMpesa}
-                    style={{
-                      background: "#2563eb",
-                      color: "#fff",
-                      padding: "0.3rem 0.8rem",
-                      borderRadius: "5px",
-                      border: "none",
-                      cursor: savingMpesa ? "not-allowed" : "pointer",
-                      fontWeight: "500",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.2rem",
-                      opacity: savingMpesa ? 0.6 : 1,
-                      fontSize: "12px"
-                    }}
-                  >
-                    {savingMpesa ? <FaSpinner style={{ animation: "spin 1s linear infinite" }} /> : <FaCheckCircle />}
-                    {savingMpesa ? 'Saving...' : 'Save'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={testMpesaConnection}
-                    disabled={testingMpesa}
-                    style={{
-                      background: "#059669",
-                      color: "#fff",
-                      padding: "0.3rem 0.8rem",
-                      borderRadius: "5px",
-                      border: "none",
-                      cursor: testingMpesa ? "not-allowed" : "pointer",
-                      fontWeight: "500",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.2rem",
-                      opacity: testingMpesa ? 0.6 : 1,
-                      fontSize: "12px"
-                    }}
-                  >
-                    {testingMpesa ? <FaSpinner style={{ animation: "spin 1s linear infinite" }} /> : <FaPlug />}
-                    {testingMpesa ? 'Testing...' : 'Test'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          {/* Integration Status */}
-          <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-            <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
-              <span style={{ fontSize: 13, fontWeight: "bold", color: "#334155" }}>Integration Status</span>
-            </div>
-            <div style={{ padding: "0.7rem" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.7rem", fontSize: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#64748b" }}>M-Pesa</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
-                    {mpesaStatus === 'connected' ? (
-                      <>
-                        <FaCheckCircle style={{ color: "#059669", fontSize: "13px" }} />
-                        <span style={{ color: "#059669", fontWeight: "500" }}>Connected</span>
-                      </>
-                    ) : (
-                      <>
-                        <FaSpinner style={{ color: "#f59e0b", fontSize: "13px", animation: "spin 1s linear infinite" }} />
-                        <span style={{ color: "#f59e0b", fontWeight: "500" }}>Disconnected</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#64748b" }}>Restaurant Add-on</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
-                    {restaurantAddonEnabled ? (
-                      <>
-                        <FaCheckCircle style={{ color: "#059669", fontSize: "13px" }} />
-                        <span style={{ color: "#059669", fontWeight: "500" }}>Enabled</span>
-                      </>
-                    ) : (
-                      <>
-                        <FaSpinner style={{ color: "#f59e0b", fontSize: "13px" }} />
-                        <span style={{ color: "#f59e0b", fontWeight: "500" }}>Disabled</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#64748b" }}>Webhook Status</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
-                    <FaCheckCircle style={{ color: "#059669", fontSize: "13px" }} />
-                    <span style={{ color: "#059669", fontWeight: "500" }}>Active</span>
-                  </div>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#64748b" }}>Last Sync</span>
-                  <span style={{ color: "#1e293b", fontWeight: "500" }}>2 hours ago</span>
-                </div>
-
-                <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "0.6rem" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "12px", marginBottom: "0.5rem" }}>
-                    <input
-                      type="checkbox"
-                      checked={restaurantAddonEnabled}
-                      onChange={(e) => setRestaurantAddonEnabled(e.target.checked)}
-                      style={{ width: "14px", height: "14px" }}
-                    />
-                    <span style={{ fontWeight: "500", color: "#334155" }}>
-                      Enable Restaurant POS add-on for this tenant
-                    </span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={saveRestaurantAddon}
-                    disabled={savingRestaurantAddon}
-                    style={{
-                      background: "#0f172a",
-                      color: "#fff",
-                      padding: "0.3rem 0.8rem",
-                      borderRadius: "5px",
-                      border: "none",
-                      cursor: savingRestaurantAddon ? "not-allowed" : "pointer",
-                      fontWeight: "500",
-                      fontSize: "12px",
-                      opacity: savingRestaurantAddon ? 0.6 : 1,
-                    }}
-                  >
-                    {savingRestaurantAddon ? "Saving..." : "Save Add-on Setting"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'modules' && (
-        <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
-            <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
-              Tenant Module Entitlements
-            </h3>
-            <p style={{ marginTop: '0.2rem', fontSize: '12px', color: '#64748b' }}>
-              Toggle which modules this tenant can access. Changes apply immediately.
-            </p>
-          </div>
-
-          <div style={{ padding: '0.8rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem' }}>
-            <div style={{ gridColumn: '1 / -1', border: '1px solid #d1fae5', background: '#ecfdf5', borderRadius: '6px', padding: '0.6rem', marginBottom: '0.2rem' }}>
-              <div style={{ marginBottom: '0.45rem', fontSize: '12px', fontWeight: 700, color: '#065f46' }}>
-                Blueprint Configuration
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
-                    Business Type
-                  </label>
-                  <select
-                    value={selectedBusinessType}
-                    onChange={(e) => {
-                      const nextType = e.target.value;
-                      setSelectedBusinessType(nextType);
-                      const preferred = blueprintCatalog.find((entry) => entry.businessType === nextType);
-                      if (preferred) {
-                        setSelectedBlueprintKey(preferred.blueprintKey);
-                        setSelectedBlueprintVersion(preferred.blueprintVersion || 'v1');
-                        setSelectedNavigationKeys(
-                          Array.isArray(preferred.navigation)
-                            ? preferred.navigation
-                                .map((item) => String(item?.key || '').trim().toLowerCase())
-                                .filter((item) => item.length > 0)
-                            : [],
-                        );
-                      }
-                    }}
-                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
-                  >
-                    <option value="fashion">fashion</option>
-                    <option value="restaurant">restaurant</option>
-                    <option value="spa_barber">spa_barber</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
-                    Blueprint
-                  </label>
-                  <select
-                    value={selectedBlueprintKey}
-                    onChange={(e) => {
-                      const key = e.target.value;
-                      setSelectedBlueprintKey(key);
-                      const selected = blueprintCatalog.find((entry) => entry.blueprintKey === key);
-                      if (selected) {
-                        setSelectedBusinessType(selected.businessType);
-                        setSelectedBlueprintVersion(selected.blueprintVersion || 'v1');
-                        setSelectedNavigationKeys(
-                          Array.isArray(selected.navigation)
-                            ? selected.navigation
-                                .map((item) => String(item?.key || '').trim().toLowerCase())
-                                .filter((item) => item.length > 0)
-                            : [],
-                        );
-                      }
-                    }}
-                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
-                  >
-                    <option value="">Select blueprint...</option>
-                    {blueprintCatalog.map((entry) => (
-                      <option key={`${entry.blueprintKey}-${entry.blueprintVersion}`} value={entry.blueprintKey}>
-                        {entry.displayName} ({entry.blueprintVersion})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
-                    Version
-                  </label>
-                  <input
-                    type="text"
-                    value={selectedBlueprintVersion}
-                    onChange={(e) => setSelectedBlueprintVersion(e.target.value)}
-                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
-                    Installed Apps (comma-separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={installedAppsInput}
-                    onChange={(e) => setInstalledAppsInput(e.target.value)}
-                    placeholder="loyalty, online_booking"
-                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#065f46', fontWeight: 600, marginBottom: '0.2rem' }}>
-                    Feature Flags (JSON)
-                  </label>
-                  <textarea
-                    value={featureFlagsInput}
-                    onChange={(e) => setFeatureFlagsInput(e.target.value)}
-                    rows={3}
-                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #6ee7b7', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ marginTop: '0.5rem', border: '1px solid #a7f3d0', borderRadius: '5px', padding: '0.45rem', background: '#f0fdf4' }}>
-                <div style={{ fontSize: '12px', color: '#065f46', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Tenant Navigation Items
-                </div>
-                <div style={{ fontSize: '11px', color: '#047857', marginBottom: '0.35rem' }}>
-                  Select which blueprint menu items should show for this tenant.
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.3rem' }}>
-                  {availableNavigationOptions.map((item) => {
-                    const key = String(item?.key || '').trim().toLowerCase();
-                    if (!key) {
-                      return null;
-                    }
-                    return (
-                      <label
-                        key={key}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.35rem',
-                          fontSize: '11px',
-                          color: '#064e3b',
-                          background: '#ffffff',
-                          border: '1px solid #d1fae5',
-                          borderRadius: '4px',
-                          padding: '0.28rem 0.35rem',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedNavigationKeys.includes(key)}
-                          onChange={() => toggleNavigationKey(key)}
-                          style={{ width: '12px', height: '12px' }}
-                        />
-                        <span>
-                          {item.label}
-                          <span style={{ color: '#6b7280' }}> ({item.path})</span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '11px', color: '#065f46' }}>
-                  Saving blueprint syncs modules and applies the selected navigation items for this tenant.
-                </span>
-                <div style={{ display: 'flex', gap: '0.35rem' }}>
-                  <button
-                    type="button"
-                    onClick={previewTenantBlueprint}
-                    disabled={previewingBlueprint || !selectedBlueprintKey}
-                    style={{
-                      background: '#0369a1',
-                      color: '#fff',
-                      padding: '0.35rem 0.85rem',
-                      borderRadius: '5px',
-                      border: 'none',
-                      cursor: previewingBlueprint || !selectedBlueprintKey ? 'not-allowed' : 'pointer',
-                      fontWeight: 500,
-                      fontSize: '12px',
-                      opacity: previewingBlueprint || !selectedBlueprintKey ? 0.7 : 1,
-                    }}
-                  >
-                    {previewingBlueprint ? 'Previewing...' : 'Preview'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={saveTenantBlueprint}
-                    disabled={savingBlueprint || !selectedBlueprintKey}
-                    style={{
-                      background: '#047857',
-                      color: '#fff',
-                      padding: '0.35rem 0.85rem',
-                      borderRadius: '5px',
-                      border: 'none',
-                      cursor: savingBlueprint || !selectedBlueprintKey ? 'not-allowed' : 'pointer',
-                      fontWeight: 500,
-                      fontSize: '12px',
-                      opacity: savingBlueprint || !selectedBlueprintKey ? 0.7 : 1,
-                    }}
-                  >
-                    {savingBlueprint ? 'Saving Blueprint...' : 'Save Blueprint'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={rollbackTenantBlueprint}
-                    disabled={rollingBackBlueprint}
-                    style={{
-                      background: '#b91c1c',
-                      color: '#fff',
-                      padding: '0.35rem 0.85rem',
-                      borderRadius: '5px',
-                      border: 'none',
-                      cursor: rollingBackBlueprint ? 'not-allowed' : 'pointer',
-                      fontWeight: 500,
-                      fontSize: '12px',
-                      opacity: rollingBackBlueprint ? 0.7 : 1,
-                    }}
-                  >
-                    {rollingBackBlueprint ? 'Rolling Back...' : 'Rollback'}
-                  </button>
-                </div>
-              </div>
-
-              {blueprintPreview && (
-                <div style={{ marginTop: '0.5rem', border: '1px solid #bae6fd', background: '#f0f9ff', borderRadius: '5px', padding: '0.45rem' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#0c4a6e', marginBottom: '0.2rem' }}>
-                    Preview Summary
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#075985' }}>
-                    Current: {blueprintPreview.current.blueprintKey} ({blueprintPreview.current.blueprintVersion})
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#075985' }}>
-                    Proposed: {blueprintPreview.proposed.blueprintKey} ({blueprintPreview.proposed.blueprintVersion})
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#075985' }}>
-                    Navigation: {Array.isArray(blueprintPreview.effectivePreview?.manifest?.navigation) ? blueprintPreview.effectivePreview.manifest.navigation.length : 0} items,
-                    Dashboard: {Array.isArray(blueprintPreview.effectivePreview?.manifest?.dashboard) ? blueprintPreview.effectivePreview.manifest.dashboard.length : 0} widgets,
-                    Quick actions: {Array.isArray(blueprintPreview.effectivePreview?.manifest?.quickActions) ? blueprintPreview.effectivePreview.manifest.quickActions.length : 0}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ gridColumn: '1 / -1', border: '1px solid #dbeafe', background: '#eff6ff', borderRadius: '6px', padding: '0.6rem', marginBottom: '0.2rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#1e3a8a', fontWeight: 600, marginBottom: '0.25rem' }}>
-                    Quick Module Presets
-                  </label>
-                  <select
-                    value={selectedModulePreset}
-                    onChange={(e) => setSelectedModulePreset(e.target.value)}
-                    style={{ width: '100%', padding: '0.35rem', border: '1px solid #bfdbfe', borderRadius: '4px', fontSize: '12px' }}
-                  >
-                    <option value="">Select preset...</option>
-                    {modulePresets.map((preset) => (
-                      <option key={preset.key} value={preset.key}>
-                        {preset.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={applyModulePreset}
-                  disabled={applyingModulePreset || !selectedModulePreset}
-                  style={{
-                    background: '#1d4ed8',
-                    color: '#fff',
-                    padding: '0.35rem 0.85rem',
-                    borderRadius: '5px',
-                    border: 'none',
-                    cursor: applyingModulePreset || !selectedModulePreset ? 'not-allowed' : 'pointer',
-                    fontWeight: 500,
-                    fontSize: '12px',
-                    opacity: applyingModulePreset || !selectedModulePreset ? 0.7 : 1,
-                    marginTop: '1.2rem',
-                  }}
-                >
-                  {applyingModulePreset ? 'Applying...' : 'Apply Preset'}
-                </button>
-              </div>
-              {selectedModulePreset && (
-                <p style={{ marginTop: '0.35rem', marginBottom: 0, fontSize: '11px', color: '#1e40af' }}>
-                  {modulePresets.find((preset) => preset.key === selectedModulePreset)?.description || 'Preset applies a recommended module bundle.'}
-                </p>
-              )}
-            </div>
-
-            {availableModules.map((moduleKey) => {
-              const checked = enabledModules.includes(moduleKey);
-              return (
-                <label
-                  key={moduleKey}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '6px',
-                    padding: '0.55rem 0.65rem',
-                    fontSize: '12px',
-                    color: '#1e293b',
-                    background: checked ? '#eff6ff' : '#fff',
-                  }}
-                >
-                  <span style={{ fontWeight: 500 }}>{moduleKey}</span>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleModule(moduleKey)}
-                  />
-                </label>
-              );
-            })}
-          </div>
-
-          <div style={{ padding: '0.8rem', borderTop: '1px solid #e5e7eb' }}>
-            <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#334155', margin: 0 }}>
-              Module Permission Matrix
-            </h4>
-            <p style={{ marginTop: '0.2rem', fontSize: '11px', color: '#64748b' }}>
-              Shows where a module is enabled but role permissions may still hide nav/actions.
-            </p>
-
-            {loadingModuleMatrix ? (
-              <div style={{ marginTop: '0.6rem', fontSize: '12px', color: '#64748b' }}>Loading matrix...</div>
-            ) : modulePermissionMatrix.length === 0 ? (
-              <div style={{ marginTop: '0.6rem', fontSize: '12px', color: '#64748b' }}>No role permission data found for this tenant yet.</div>
-            ) : (
-              <div style={{ marginTop: '0.6rem', overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      <th style={{ textAlign: 'left', padding: '0.4rem' }}>Module</th>
-                      <th style={{ textAlign: 'left', padding: '0.4rem' }}>Required Permissions</th>
-                      {moduleMatrixRoles.map((role) => (
-                        <th key={role} style={{ textAlign: 'left', padding: '0.4rem' }}>{role}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {modulePermissionMatrix.map((entry) => (
-                      <tr key={entry.module} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '0.4rem', fontWeight: 600, color: entry.enabled ? '#1e3a8a' : '#64748b' }}>
-                          {entry.module} {entry.enabled ? '(enabled)' : '(disabled)'}
-                        </td>
-                        <td style={{ padding: '0.4rem', color: '#334155' }}>
-                          {entry.requiredPermissions.length > 0 ? entry.requiredPermissions.join(', ') : 'none'}
-                        </td>
-                        {moduleMatrixRoles.map((role) => {
-                          const check = entry.roleChecks.find((item) => item.roleName === role);
-                          return (
-                            <td key={`${entry.module}-${role}`} style={{ padding: '0.4rem' }}>
-                              {!check ? (
-                                <span style={{ color: '#94a3b8' }}>n/a</span>
-                              ) : check.allowed ? (
-                                <span style={{ color: '#166534', fontWeight: 600 }}>ok</span>
-                              ) : (
-                                <span style={{ color: '#b45309' }} title={check.missing.join(', ')}>
-                                  missing: {check.missing.join(', ')}
-                                </span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div style={{ padding: '0.8rem', borderTop: '1px solid #e5e7eb' }}>
+      <div className="mb-4 flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">{tenant.name}</h1>
+          <p className="mt-0.5 text-sm text-gray-500">{tenant.businessType}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            {tenant.contactEmail} • {tenant.contactPhone}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
-              onClick={saveTenantModules}
-              disabled={savingModules}
-              style={{
-                background: '#2563eb',
-                color: '#fff',
-                padding: '0.35rem 0.85rem',
-                borderRadius: '5px',
-                border: 'none',
-                cursor: savingModules ? 'not-allowed' : 'pointer',
-                fontWeight: 500,
-                fontSize: '12px',
-                opacity: savingModules ? 0.7 : 1,
-              }}
+              type="button"
+              onClick={() => router.push(`/superadmin/tenants/${tenantId}/unified-page-display`)}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
             >
-              {savingModules ? 'Saving...' : 'Save Modules'}
+              Product Display Settings
+            </button>
+            <button
+              type="button"
+              onClick={() => void openProvisionModal()}
+              disabled={loadingClassifications}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Assign Classification
             </button>
           </div>
         </div>
-      )}
+        <button
+          type="button"
+          onClick={handleImpersonate}
+          className="inline-flex items-center gap-1.5 self-start rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+        >
+          Impersonate <span aria-hidden>→</span>
+        </button>
+      </div>
 
-      {activeTab === 'crm-entitlements' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '0.8rem' }}>
-          <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-            <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
-              <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
-                CRM Package and Capabilities
-              </h3>
-              <p style={{ marginTop: '0.2rem', fontSize: '12px', color: '#64748b' }}>
-                Assign package and fine tune CRM features for this tenant.
-              </p>
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+        {statCards.map((card) => (
+          <div key={card.label} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+              {card.icon}
+              {card.label}
             </div>
-
-            <div style={{ padding: '0.75rem' }}>
-              <div style={{ marginBottom: '0.7rem' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#334155', fontWeight: 600, marginBottom: '0.25rem' }}>
-                  Package
-                </label>
-                <select
-                  value={crmPackageKey}
-                  onChange={(e) => setCrmPackageKey(e.target.value as CrmPackageKey)}
-                  style={{ width: '100%', padding: '0.35rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
-                >
-                  {availableCrmPackages.map((pkg) => (
-                    <option key={pkg} value={pkg}>{pkg}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ marginBottom: '0.4rem', fontSize: '12px', color: '#334155', fontWeight: 600 }}>
-                Capabilities
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.45rem' }}>
-                {availableCrmCapabilities.map((capability) => {
-                  const checked = crmCapabilities.includes(capability);
-                  return (
-                    <label
-                      key={capability}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '5px',
-                        padding: '0.45rem 0.55rem',
-                        fontSize: '12px',
-                        background: checked ? '#eff6ff' : '#fff',
-                        color: '#1e293b',
-                      }}
-                    >
-                      <span>{capability}</span>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleCrmCapability(capability)}
-                      />
-                    </label>
-                  );
-                })}
-              </div>
-
-              {crmDependencyErrors.length > 0 && (
-                <div style={{ marginTop: '0.6rem', border: '1px solid #fecaca', background: '#fef2f2', borderRadius: '5px', padding: '0.55rem' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#991b1b', marginBottom: '0.2rem' }}>
-                    Dependency issues
-                  </div>
-                  <ul style={{ margin: 0, paddingLeft: '1rem', color: '#7f1d1d', fontSize: '12px' }}>
-                    {crmDependencyErrors.map((issue) => (
-                      <li key={issue}>{issue}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            <p className="mt-1 text-lg font-bold text-gray-900">{card.value}</p>
           </div>
+        ))}
+      </div>
 
-          <div style={{ display: 'grid', gridTemplateRows: 'auto auto auto', gap: '0.8rem' }}>
-            <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-              <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
-                <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
-                  CRM Limits
-                </h3>
-              </div>
-              <div style={{ padding: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.55rem' }}>
-                {([
-                  ['pipelines', 'Pipelines'],
-                  ['automationRules', 'Automation Rules'],
-                  ['documentStorageGb', 'Storage (GB)'],
-                  ['integrationConnections', 'Integrations'],
-                  ['telephonyMinutesMonthly', 'Telephony Minutes'],
-                  ['proposalsMonthly', 'Proposals / Month'],
-                  ['contractsMonthly', 'Contracts / Month'],
-                ] as [keyof CrmLimits, string][]).map(([key, label]) => (
-                  <div key={key}>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#334155', marginBottom: '0.2rem' }}>{label}</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={crmLimits[key] ?? ''}
-                      onChange={(e) => updateCrmLimit(key, e.target.value)}
-                      placeholder="unlimited"
-                      style={{ width: '100%', padding: '0.32rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-              <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
-                <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
-                  Allowed Providers
-                </h3>
-              </div>
-              <div style={{ padding: '0.75rem', display: 'grid', gap: '0.65rem' }}>
-                {(Object.keys(CRM_PROVIDER_OPTIONS) as (keyof CrmAllowedProviders)[]).map((group) => (
-                  <div key={group}>
-                    <div style={{ fontSize: '12px', color: '#334155', fontWeight: 600, marginBottom: '0.25rem', textTransform: 'capitalize' }}>
-                      {group}
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                      {CRM_PROVIDER_OPTIONS[group].map((provider) => {
-                        const checked = (crmProviders[group] || []).includes(provider);
-                        return (
-                          <label
-                            key={`${group}-${provider}`}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.3rem',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '999px',
-                              padding: '0.2rem 0.45rem',
-                              fontSize: '12px',
-                              background: checked ? '#eff6ff' : '#fff',
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleCrmProvider(group, provider)}
-                            />
-                            <span>{provider}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-
-                <div>
-                  <button
-                    type="button"
-                    onClick={saveCrmEntitlements}
-                    disabled={savingCrmEntitlements}
-                    style={{
-                      background: '#2563eb',
-                      color: '#fff',
-                      padding: '0.35rem 0.85rem',
-                      borderRadius: '5px',
-                      border: 'none',
-                      cursor: savingCrmEntitlements ? 'not-allowed' : 'pointer',
-                      fontWeight: 500,
-                      fontSize: '12px',
-                      opacity: savingCrmEntitlements ? 0.7 : 1,
-                    }}
-                  >
-                    {savingCrmEntitlements ? 'Saving...' : 'Save CRM Entitlements'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ background: '#fff', borderRadius: '7px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-              <div style={{ padding: '0.7rem', borderBottom: '1px solid #e5e7eb' }}>
-                <h3 style={{ fontSize: 13, fontWeight: 'bold', margin: 0, color: '#334155' }}>
-                  Entitlement Timeline
-                </h3>
-              </div>
-              <div style={{ padding: '0.75rem' }}>
-                {loadingCrmTimeline ? (
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>Loading timeline...</div>
-                ) : crmTimeline.length === 0 ? (
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>No CRM entitlement changes recorded yet.</div>
-                ) : (
-                  <div style={{ display: 'grid', gap: '0.45rem' }}>
-                    {crmTimeline.map((item) => (
-                      <div
-                        key={item.id}
-                        style={{
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '5px',
-                          padding: '0.45rem 0.55rem',
-                          fontSize: '12px',
-                          background: '#f8fafc',
-                        }}
-                      >
-                        <div style={{ color: '#0f172a', fontWeight: 600 }}>
-                          {item.source || 'manual_override'}
-                        </div>
-                        <div style={{ color: '#334155' }}>{item.reason || 'No reason provided'}</div>
-                        <div style={{ color: '#64748b' }}>
-                          {new Date(item.createdAt).toLocaleString()} • {item.actor?.email || item.actor?.name || 'unknown actor'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'business-kra' && (
-        <div style={{ background: "#fff", borderRadius: "7px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-          <div style={{ padding: "0.7rem", borderBottom: "1px solid #e5e7eb" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-              <FaFileInvoice style={{ color: "#2563eb", fontSize: "13px" }} />
-              <span style={{ fontSize: 13, fontWeight: "bold", color: "#334155" }}>Business & KRA (Kenya Revenue Authority)</span>
-            </div>
-            <span style={{ color: "#64748b", fontSize: "12px", display: "block", marginTop: "0.2rem" }}>
-              Edit business details and KRA compliance for this tenant. Tenant users can only view these details in Settings.
-            </span>
-          </div>
-          <div style={{ padding: "0.7rem" }}>
-            <form onSubmit={(e) => { e.preventDefault(); saveBusinessKra(); }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.7rem", marginBottom: "0.7rem" }}>
-                <div>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Business Name</label>
-                  <input type="text" value={businessKra.name ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, name: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Business Type</label>
-                  <input type="text" value={businessKra.businessType ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, businessType: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Contact Email</label>
-                  <input type="email" value={businessKra.contactEmail ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, contactEmail: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Contact Phone</label>
-                  <input type="text" value={businessKra.contactPhone ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, contactPhone: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Address</label>
-                  <input type="text" value={businessKra.address ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, address: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>Country</label>
-                  <select
-                    value={businessKra.country ?? ''}
-                    onChange={(e) => setBusinessKra(prev => ({ ...prev, country: e.target.value || undefined }))}
-                    style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }}
-                  >
-                    <option value="">Select country</option>
-                    {EAST_AFRICAN_COUNTRIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "0.7rem", marginTop: "0.7rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                  <input type="checkbox" id="kraEnabled" checked={!!businessKra.kraEnabled} onChange={(e) => setBusinessKra(prev => ({ ...prev, kraEnabled: e.target.checked }))} style={{ width: "14px", height: "14px" }} />
-                  <label htmlFor="kraEnabled" style={{ fontWeight: "500", fontSize: "12px" }}>Enable KRA compliance (show KRA PIN / VAT / eTIMS on receipts)</label>
-                </div>
-                {businessKra.kraEnabled && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.7rem", marginTop: "0.5rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>KRA PIN</label>
-                      <input type="text" value={businessKra.kraPin ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, kraPin: e.target.value }))} placeholder="e.g. P051234567A" style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>VAT Number</label>
-                      <input type="text" value={businessKra.vatNumber ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, vatNumber: e.target.value }))} style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
-                    </div>
-                    <div style={{ gridColumn: "1 / -1" }}>
-                      <label style={{ display: "block", fontWeight: "500", marginBottom: "0.2rem", fontSize: "12px" }}>KRA eTIMS QR Code URL</label>
-                      <input type="url" value={businessKra.etimsQrUrl ?? ''} onChange={(e) => setBusinessKra(prev => ({ ...prev, etimsQrUrl: e.target.value }))} placeholder="URL to eTIMS QR image (required for Kenya)" style={{ width: "100%", padding: "0.3rem", border: "1px solid #d1d5db", borderRadius: "3px", fontSize: "12px" }} />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div style={{ marginTop: "0.7rem" }}>
-                <button type="submit" disabled={savingBusinessKra} style={{ background: "#2563eb", color: "#fff", padding: "0.3rem 0.8rem", borderRadius: "5px", border: "none", cursor: savingBusinessKra ? "not-allowed" : "pointer", fontWeight: "500", fontSize: "12px", opacity: savingBusinessKra ? 0.6 : 1 }}>
-                  {savingBusinessKra ? "Saving..." : "Save Business & KRA"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showProvisionModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15, 23, 42, 0.45)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 60,
-          padding: '1rem',
-        }}>
-          <div style={{
-            width: '100%',
-            maxWidth: '520px',
-            background: '#fff',
-            borderRadius: '10px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 10px 30px rgba(2, 6, 23, 0.2)',
-            padding: '1rem',
-          }}>
-            <h3 style={{ margin: 0, fontSize: '15px', color: '#0f172a' }}>Assign + Provision Metrics</h3>
-            <p style={{ marginTop: '0.35rem', marginBottom: '0.75rem', fontSize: '12px', color: '#64748b' }}>
-              Pick the classification for this tenant, then provision default units and variant attributes.
-            </p>
-
-            <div style={{ marginBottom: '0.6rem', fontSize: '12px', color: '#334155' }}>
-              <strong>Tenant:</strong> {tenant.name}
-            </div>
-            <div style={{ marginBottom: '0.6rem', fontSize: '12px', color: '#334155' }}>
-              <strong>Business Type:</strong> {tenant.businessType || 'Unknown'}
-            </div>
-
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '0.2rem' }}>
-              Classification
-            </label>
-            <select
-              value={selectedClassificationId}
-              onChange={(e) => setSelectedClassificationId(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.35rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                fontSize: '12px',
-                marginBottom: '0.4rem',
-              }}
+      <TabsPrimitive.Root value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+        <TabsPrimitive.List className="mb-4 flex flex-wrap gap-1 border-b border-gray-200">
+          {TABS.map((tab) => (
+            <TabsPrimitive.Trigger
+              key={tab.key}
+              value={tab.key}
+              className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600"
             >
-              <option value="">Select classification</option>
-              {classificationOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              {tab.label}
+            </TabsPrimitive.Trigger>
+          ))}
+        </TabsPrimitive.List>
 
-            {classificationOptions.length === 0 && (
-              <p style={{ marginTop: '0.25rem', marginBottom: '0.5rem', color: '#b91c1c', fontSize: '12px' }}>
-                No active classifications available. Create or activate one first.
-              </p>
-            )}
+        <TabsPrimitive.Content value="overview">
+          <OverviewTab products={products} transactions={transactions} formatCurrency={formatCurrency} formatDate={formatDate} />
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="products">
+          <ProductsTab products={products} formatCurrency={formatCurrency} />
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="transactions">
+          <TransactionsTab transactions={transactions} formatCurrency={formatCurrency} formatDate={formatDate} />
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="branches">
+          <BranchesTab branches={branches} formatDate={formatDate} />
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="analytics">
+          <AnalyticsTab tenant={tenant} />
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="integrations">
+          <IntegrationsTab
+            mpesaConfig={mpesaConfig}
+            setMpesaConfig={setMpesaConfig}
+            savingMpesa={savingMpesa}
+            testingMpesa={testingMpesa}
+            mpesaStatus={mpesaStatus}
+            saveMpesaConfig={saveMpesaConfig}
+            verifyMpesaConfig={verifyMpesaConfig}
+            restaurantAddonEnabled={restaurantAddonEnabled}
+            setRestaurantAddonEnabled={setRestaurantAddonEnabled}
+            savingRestaurantAddon={savingRestaurantAddon}
+            saveRestaurantAddon={saveRestaurantAddon}
+          />
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="business-kra">
+          <BusinessKraTab
+            businessKra={businessKra}
+            setBusinessKra={setBusinessKra}
+            savingBusinessKra={savingBusinessKra}
+            saveBusinessKra={saveBusinessKra}
+            availableBusinessTypes={availableBusinessTypes}
+          />
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="modules">
+          <ModulesTab
+            availableModules={availableModules}
+            enabledModules={enabledModules}
+            toggleModule={toggleModule}
+            savingModules={savingModules}
+            saveTenantModules={saveTenantModules}
+            modulePresets={modulePresets}
+            selectedModulePreset={selectedModulePreset}
+            setSelectedModulePreset={setSelectedModulePreset}
+            applyingModulePreset={applyingModulePreset}
+            applyModulePreset={applyModulePreset}
+            availableBusinessTypes={availableBusinessTypes}
+            selectedBusinessType={selectedBusinessType}
+            setSelectedBusinessType={setSelectedBusinessType}
+            blueprintCatalog={blueprintCatalog}
+            selectedBlueprintKey={selectedBlueprintKey}
+            setSelectedBlueprintKey={setSelectedBlueprintKey}
+            selectedBlueprintVersion={selectedBlueprintVersion}
+            setSelectedBlueprintVersion={setSelectedBlueprintVersion}
+            installedAppsInput={installedAppsInput}
+            setInstalledAppsInput={setInstalledAppsInput}
+            featureFlagsInput={featureFlagsInput}
+            setFeatureFlagsInput={setFeatureFlagsInput}
+            availableNavigationOptions={availableNavigationOptions}
+            selectedNavigationKeys={selectedNavigationKeys}
+            toggleNavigationKey={toggleNavigationKey}
+            savingBlueprint={savingBlueprint}
+            saveTenantBlueprint={saveTenantBlueprint}
+            previewingBlueprint={previewingBlueprint}
+            previewTenantBlueprint={previewTenantBlueprint}
+            rollingBackBlueprint={rollingBackBlueprint}
+            rollbackTenantBlueprint={rollbackTenantBlueprint}
+            blueprintPreview={blueprintPreview}
+            modulePermissionMatrix={modulePermissionMatrix}
+            moduleMatrixRoles={moduleMatrixRoles}
+            loadingModuleMatrix={loadingModuleMatrix}
+          />
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="crm-entitlements">
+          <CrmEntitlementsTab
+            availableCrmPackages={availableCrmPackages}
+            availableCrmCapabilities={availableCrmCapabilities}
+            crmPackageKey={crmPackageKey}
+            setCrmPackageKey={setCrmPackageKey}
+            crmCapabilities={crmCapabilities}
+            toggleCrmCapability={toggleCrmCapability}
+            crmDependencyErrors={crmDependencyErrors}
+            crmLimits={crmLimits}
+            updateCrmLimit={updateCrmLimit}
+            crmProviders={crmProviders}
+            toggleCrmProvider={toggleCrmProvider}
+            savingCrmEntitlements={savingCrmEntitlements}
+            saveCrmEntitlements={saveCrmEntitlements}
+            crmTimeline={crmTimeline}
+            loadingCrmTimeline={loadingCrmTimeline}
+          />
+        </TabsPrimitive.Content>
+      </TabsPrimitive.Root>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.45rem', marginTop: '0.9rem' }}>
+      {showProvisionModal && tenant && (
+        <ProvisionModal
+          tenant={tenant}
+          classificationOptions={classificationOptions}
+          selectedClassificationId={selectedClassificationId}
+          setSelectedClassificationId={setSelectedClassificationId}
+          savingProvisioning={savingProvisioning}
+          onCancel={() => setShowProvisionModal(false)}
+          onConfirm={assignAndProvisionMetrics}
+        />
+      )}
+
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
+            <div className="flex items-start gap-2">
+              <FaExclamationTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <h3 className="text-base font-semibold text-slate-900">{confirmAction.title}</h3>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">{confirmAction.body}</p>
+            <div className="mt-4 flex justify-end gap-2">
               <button
-                onClick={() => setShowProvisionModal(false)}
-                style={{
-                  background: '#fff',
-                  color: '#334155',
-                  padding: '0.3rem 0.75rem',
-                  borderRadius: '5px',
-                  border: '1px solid #cbd5e1',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
+                type="button"
+                onClick={() => setConfirmAction(null)}
+                disabled={confirmBusy}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
-                onClick={assignAndProvisionMetrics}
-                disabled={!selectedClassificationId || savingProvisioning}
-                style={{
-                  background: '#0f172a',
-                  color: '#fff',
-                  padding: '0.3rem 0.75rem',
-                  borderRadius: '5px',
-                  border: 'none',
-                  cursor: !selectedClassificationId || savingProvisioning ? 'not-allowed' : 'pointer',
-                  fontSize: '12px',
-                  opacity: !selectedClassificationId || savingProvisioning ? 0.6 : 1,
-                  fontWeight: 500,
+                type="button"
+                onClick={async () => {
+                  setConfirmBusy(true);
+                  try {
+                    await confirmAction.onConfirm();
+                  } finally {
+                    setConfirmBusy(false);
+                    setConfirmAction(null);
+                  }
                 }}
+                disabled={confirmBusy}
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                {savingProvisioning ? 'Provisioning...' : 'Assign + Provision'}
+                {confirmBusy ? "Working..." : confirmAction.confirmLabel}
               </button>
             </div>
           </div>
         </div>
       )}
-
     </main>
   );
 }

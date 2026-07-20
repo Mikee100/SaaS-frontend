@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { apiGet } from '@/utils/api';
 import { useQuery } from '@tanstack/react-query';
 import AuthGuard from '@/components/AuthGuard';
-import AIInsights from '@/components/AIInsights';
 import AdvancedSegments from '@/components/AdvancedSegments';
 import InteractiveChart from '@/components/InteractiveChart';
 import AlertBanner from '@/components/AlertBanner';
@@ -37,12 +36,9 @@ interface AnalyticsData {
     bounceRate?: number;
   };
   predictiveAnalytics?: {
-    nextMonthForecast: number;
-    churnRisk: number;
+    nextMonthForecast: number | null;
     growthRate: number;
-    seasonalTrend?: number;
-    marketTrend?: number;
-    demandForecast?: Record<string, number>;
+    hasEnoughData: boolean;
   };
   performanceMetrics?: {
     customerLifetimeValue: number;
@@ -58,12 +54,6 @@ interface AnalyticsData {
   };
   advancedSegments?: {
     byLocation: Array<{ location: string; revenue: number; customers: number }>;
-    byAge: Array<{ age: string; revenue: number; customers: number }>;
-    byDevice: Array<{ device: string; revenue: number; customers: number }>;
-  };
-  aiInsights?: {
-    recommendations: string[];
-    anomalies: string[];
   };
   customReports?: Array<{ name: string; data: string; lastUpdated?: string }>;
   message?: string;
@@ -410,7 +400,7 @@ export default function AnalyticsPage() {
                             const revenue = product.revenue || 0;
                             const percentage = totalRevenue > 0 ? (revenue / totalRevenue) * 100 : 0;
                             return (
-                              <div key={product.name || index} className="flex items-center justify-between">
+                              <div key={index} className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
                                     {index + 1}
@@ -755,7 +745,7 @@ export default function AnalyticsPage() {
                         const revenue = product.revenue || 0;
                         const percentage = totalRevenue > 0 ? (revenue / totalRevenue) * 100 : 0;
                       return (
-                        <div key={product.name || index}>
+                        <div key={index}>
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-sm font-medium text-gray-900">{product.name || 'Unknown'}</span>
                             <span className="text-sm font-bold text-gray-900">Ksh {(revenue || 0).toLocaleString()}</span>
@@ -1117,7 +1107,7 @@ export default function AnalyticsPage() {
         {activeTab === 'segments' && (
           <div className="space-y-6">
             <h2 className="text-sm font-semibold text-gray-900">Customer Segments</h2>
-            {advancedData?.customerSegments && (
+            {advancedData?.customerSegments && advancedData.customerSegments.length > 0 ? (
               <InteractiveChart
                 data={advancedData.customerSegments.map(segment => ({
                   segment: segment.segment,
@@ -1129,6 +1119,8 @@ export default function AnalyticsPage() {
                 xKey="segment"
                 yKey="revenue"
               />
+            ) : (
+              <p className="text-sm text-gray-500">Not enough customer purchase history yet to segment customers.</p>
             )}
             <AdvancedSegments segments={enterpriseData?.advancedSegments || {}} />
           </div>
@@ -1137,25 +1129,26 @@ export default function AnalyticsPage() {
         {activeTab === 'predictive' && (
           <div className="space-y-6">
             <h2 className="text-sm font-semibold text-gray-900">Predictive Analytics</h2>
-            {advancedData?.predictiveAnalytics && (
+            {advancedData?.predictiveAnalytics?.hasEnoughData ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div className="bg-white rounded border border-gray-200 p-2">
                   <h3 className="text-xs font-semibold mb-2">Forecast Data</h3>
                   <p className="text-sm font-semibold text-gray-900">
-                    ${advancedData.predictiveAnalytics.nextMonthForecast?.toLocaleString()}
+                    {advancedData.predictiveAnalytics.nextMonthForecast?.toLocaleString()} transactions
                   </p>
-                  <p className="text-[11px] text-gray-500">Next month forecast</p>
+                  <p className="text-[11px] text-gray-500">Predicted next month&apos;s sales volume</p>
                 </div>
                 <div className="bg-white rounded border border-gray-200 p-2">
                   <h3 className="text-xs font-semibold mb-2">Growth Rate</h3>
                   <p className="text-sm font-semibold text-gray-900">
-                    {advancedData.predictiveAnalytics.growthRate?.toFixed(1)}%
+                    {advancedData.predictiveAnalytics.growthRate >= 0 ? '+' : ''}{advancedData.predictiveAnalytics.growthRate?.toFixed(1)}%
                   </p>
-                  <p className="text-[11px] text-gray-500">Predicted growth</p>
+                  <p className="text-[11px] text-gray-500">Predicted growth vs last month</p>
                 </div>
               </div>
+            ) : (
+              <p className="text-sm text-gray-500">Not enough sales history yet to generate a forecast. At least 3 months of sales data is needed.</p>
             )}
-            <AIInsights insights={enterpriseData?.aiInsights || { recommendations: [], anomalies: [] }} />
           </div>
         )}
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/components/UserContext";
+import { verifyMfa } from "@/lib/auth-client";
 import {
   FaSpinner,
   FaCheck,
@@ -18,10 +19,13 @@ import { ReactQueryProvider } from "@/providers/ReactQueryProvider";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, loading, error, user, clearError } = useUser();
+  const { login, loading, error, user, clearError, mfaStep, completeMfaLogin } = useUser();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaError, setMfaError] = useState("");
+  const [mfaSubmitting, setMfaSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [year, setYear] = useState<number | null>(null);
   const [showLoginAnimation, setShowLoginAnimation] = useState(false);
@@ -96,6 +100,33 @@ export default function LoginPage() {
       return () => window.clearTimeout(timer);
     }
   }, [user, router]);
+
+  useEffect(() => {
+    if (mfaStep === "enroll") {
+      router.push("/mfa-setup");
+    }
+  }, [mfaStep, router]);
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMfaError("");
+    if (!mfaCode.trim()) {
+      setMfaError("Enter the 6-digit code from your authenticator app.");
+      return;
+    }
+    setMfaSubmitting(true);
+    try {
+      const isBackupCode = mfaCode.trim().length > 6;
+      const { user: verifiedUser } = await verifyMfa(
+        isBackupCode ? { backupCode: mfaCode.trim() } : { code: mfaCode.trim() },
+      );
+      await completeMfaLogin(verifiedUser);
+    } catch (err: any) {
+      setMfaError(err?.message || "Invalid code. Please try again.");
+    } finally {
+      setMfaSubmitting(false);
+    }
+  };
 
   const validateEmail = (value: string): string => {
     if (!value.trim()) return "Email address is required";
@@ -258,6 +289,66 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (mfaStep === "pending") {
+    return (
+      <ReactQueryProvider>
+        <ThemeProvider>
+          <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 shadow-xl p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                  <FaShieldAlt className="text-xl text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">Two-factor verification</h2>
+                  <p className="text-sm text-slate-500">Enter the 6-digit code from your authenticator app.</p>
+                </div>
+              </div>
+
+              {mfaError && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm flex items-start">
+                  <FaExclamationTriangle className="mr-2 mt-0.5 flex-shrink-0 text-amber-600" />
+                  <span>{mfaError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleMfaSubmit} className="space-y-4">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoFocus
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value)}
+                  placeholder="123456 or backup code"
+                  className="w-full px-4 py-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 text-center text-lg tracking-widest placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500/20"
+                  disabled={mfaSubmitting}
+                />
+                <button
+                  type="submit"
+                  disabled={mfaSubmitting}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3.5 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+                >
+                  {mfaSubmitting ? (
+                    <>
+                      <FaSpinner className="animate-spin mr-3" />
+                      <span>Verifying...</span>
+                    </>
+                  ) : (
+                    <span>Verify</span>
+                  )}
+                </button>
+              </form>
+
+              <p className="mt-4 text-center text-xs text-slate-500">
+                Lost your device? Use one of your backup codes instead.
+              </p>
+            </div>
+          </div>
+        </ThemeProvider>
+      </ReactQueryProvider>
     );
   }
 

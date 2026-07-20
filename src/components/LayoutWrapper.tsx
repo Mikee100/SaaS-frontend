@@ -75,7 +75,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
     <>
       {showImpersonationBanner && <ImpersonationBanner />}
       {showAccessRestrictionBanner && (
-        <div className={`mx-2 mt-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 lg:mr-4 lg:mt-3 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
+        <div className={`mx-2 mt-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 lg:mr-4 lg:mt-3 transition-[margin-left] duration-250 ease-in-out ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
           <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="font-semibold">Subscription Access Restricted</p>
@@ -94,7 +94,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
         </div>
       )}
       {!isInRouteGroup && <PlanBasedNav />}
-      <main className={`${isAIAssistant ? 'min-h-screen' : 'min-h-screen'} bg-gray-50 transition-all duration-300 ${!isInRouteGroup
+      <main className={`${isAIAssistant ? 'min-h-screen' : 'min-h-screen'} bg-gray-50 transition-[margin-left] duration-250 ease-in-out ${!isInRouteGroup
         ? sidebarCollapsed
           ? 'lg:ml-16'
           : 'lg:ml-64'

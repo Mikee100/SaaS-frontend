@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, Dispatch, SetStateAction, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { apiGet, apiPost } from "@/utils/api";
-import { login as authLogin, logout as authLogout } from "@/lib/auth-client";
+import { login as authLogin, logout as authLogout, AuthUser } from "@/lib/auth-client";
 import { AppModuleKey, CrmEntitlements, normalizeCrmEntitlements, normalizeEnabledModules } from '@/utils/moduleAccess';
 import { getEffectiveTenantManifest } from '@/utils/manifest/manifestClient';
 
@@ -35,6 +35,9 @@ interface UserContextType {
   refreshUser: () => Promise<void>;
   clearError: () => void;
   endImpersonation?: () => Promise<void>;
+  mfaStep: "enroll" | "pending" | null;
+  completeMfaLogin: (user: AuthUser) => Promise<void>;
+  clearMfaStep: () => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -106,6 +109,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [entitlementsSyncedAt, setEntitlementsSyncedAt] = useState<number | null>(null);
+  const [mfaStep, setMfaStep] = useState<"enroll" | "pending" | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -289,11 +293,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     }
   }, [pathname, skipUserFetch, isAuthPath]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { user: loginUser } = await authLogin(email, password);
+  const finalizeLogin = useCallback(async (loginUser: AuthUser) => {
       if (!loginUser) throw new Error('No user in response');
 
       let effectiveModules: AppModuleKey[] | null = null;
@@ -344,6 +344,25 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       else router.push('/');
 
       // Don't refetch here: cross-origin cookies often aren't sent, so /user/me would 401 and we'd clear user and redirect back to login
+  }, [router]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    setLoading(true);
+    setError(null);
+    setMfaStep(null);
+    try {
+      const result = await authLogin(email, password);
+
+      if (result.status === 'mfa_enroll') {
+        setMfaStep('enroll');
+        return;
+      }
+      if (result.status === 'mfa_pending') {
+        setMfaStep('pending');
+        return;
+      }
+
+      await finalizeLogin(result.user);
     } catch (err) {
       setUser(null);
       setEntitlementsSyncedAt(null);
@@ -352,7 +371,24 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     } finally {
       setLoading(false);
     }
-  }, [router, fetchUser]);
+  }, [finalizeLogin]);
+
+  const completeMfaLogin = useCallback(async (user: AuthUser) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setMfaStep(null);
+      await finalizeLogin(user);
+    } catch (err) {
+      setUser(null);
+      setEntitlementsSyncedAt(null);
+      setError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [finalizeLogin]);
+
+  const clearMfaStep = useCallback(() => setMfaStep(null), []);
 
   const logout = useCallback(async () => {
     await authLogout();
@@ -402,7 +438,10 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     refreshUser,
     clearError,
     endImpersonation,
-  }), [user, loading, error, entitlementsSyncedAt, login, logout, refreshUser, endImpersonation]);
+    mfaStep,
+    completeMfaLogin,
+    clearMfaStep,
+  }), [user, loading, error, entitlementsSyncedAt, login, logout, refreshUser, endImpersonation, mfaStep, completeMfaLogin, clearMfaStep]);
 
   return (
     <UserContext.Provider value={ctxValue}>

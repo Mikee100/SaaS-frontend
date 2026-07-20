@@ -4,6 +4,16 @@ import React, { useState, useEffect } from "react";
 import { useUser } from "@/components/UserContext";
 import { useRouter } from "next/navigation";
 import { apiGet } from "@/utils/api";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 interface SystemHealth {
   database: {
@@ -68,6 +78,17 @@ type TimeSeriesData = {
   value: number;
 };
 
+interface HealthSnapshot {
+  id: string;
+  status: string;
+  responseTimeMs: number;
+  dbResponseTimeMs: number;
+  cpuPercent: number;
+  memoryPercent: number;
+  diskPercent: number;
+  createdAt: string;
+}
+
 export default function SystemHealthPage() {
   const { user, loading } = useUser();
   const router = useRouter();
@@ -76,6 +97,7 @@ export default function SystemHealthPage() {
   const [loadingHealth, setLoadingHealth] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('24h');
+  const [snapshotHistory, setSnapshotHistory] = useState<HealthSnapshot[]>([]);
 
   React.useEffect(() => {
     if (!loading && (!user || !user.isSuperadmin)) {
@@ -102,12 +124,14 @@ export default function SystemHealthPage() {
   const fetchHealthData = async () => {
     try {
       setLoadingHealth(true);
-      const [healthData, metricsData] = await Promise.all([
+      const [healthData, metricsData, snapshotData] = await Promise.all([
         apiGet("/admin/health"),
-        apiGet("/admin/health/metrics")
+        apiGet("/admin/health/metrics"),
+        apiGet("/admin/health/history-range?hours=24")
       ]);
       setHealth(healthData as SystemHealth);
       setMetrics(metricsData as PerformanceMetrics);
+      setSnapshotHistory(snapshotData as HealthSnapshot[]);
     } catch (error) {
       console.error("Failed to fetch health data:", error);
     } finally {
@@ -469,6 +493,51 @@ export default function SystemHealthPage() {
                   <div style={{ color: "#6b7280", fontSize: 14 }}>No data available</div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Persisted Historical Trends (survives restarts, unlike the sparklines above) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+            <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+              <h4 style={{ margin: "0 0 1rem 0", fontSize: 16, fontWeight: "bold" }}>CPU &amp; Memory (Last 24h)</h4>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={snapshotHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="createdAt"
+                    tickFormatter={(v) => new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    tick={{ fontSize: 10, fill: "#6b7280" }}
+                  />
+                  <YAxis tick={{ fontSize: 10, fill: "#6b7280" }} tickFormatter={(v) => `${v}%`} />
+                  <Tooltip
+                    labelFormatter={(v) => new Date(v).toLocaleString()}
+                    formatter={(value, name) => [`${value}%`, name === "cpuPercent" ? "CPU" : "Memory"]}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="cpuPercent" name="CPU" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="memoryPercent" name="Memory" stroke="#10b981" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={{ background: "#fff", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+              <h4 style={{ margin: "0 0 1rem 0", fontSize: 16, fontWeight: "bold" }}>Database Response Time (Last 24h)</h4>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={snapshotHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="createdAt"
+                    tickFormatter={(v) => new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    tick={{ fontSize: 10, fill: "#6b7280" }}
+                  />
+                  <YAxis tick={{ fontSize: 10, fill: "#6b7280" }} tickFormatter={(v) => `${v}ms`} />
+                  <Tooltip
+                    labelFormatter={(v) => new Date(v).toLocaleString()}
+                    formatter={(value) => [`${value}ms`, "DB Response"]}
+                  />
+                  <Line type="monotone" dataKey="dbResponseTimeMs" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </div>
 

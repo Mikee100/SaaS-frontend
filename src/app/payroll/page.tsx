@@ -8,6 +8,21 @@ import { hasPermission } from '@/utils/permissions';
 import { ApiError, apiGet, apiPost, apiPut } from '@/utils/api';
 import { FaCalculator, FaCheckCircle, FaHistory, FaMoneyBillWave, FaPlay, FaPlus } from 'react-icons/fa';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { useTenant } from '@/hooks/useTenant';
+import { getFullAssetUrl } from '@/utils/logoUrl';
+import {
+  getPdfDocOptions,
+  getPdfMargin,
+  getPdfBodyFontSize,
+  getPdfTitleFontSize,
+  getPdfCurrency,
+  applyPdfBusinessHeader,
+  applyPdfFooterAndPageNumbers,
+  getPdfTableColors,
+  preparePdfWatermark,
+  type PdfTemplate,
+} from '@/utils/pdfTemplate';
 
 interface SalaryScheme {
   id: string;
@@ -132,6 +147,7 @@ interface TaxPreset {
 
 export default function PayrollPage() {
   const { user } = useUser();
+  const { data: tenantData } = useTenant();
   const canView = hasPermission(user, 'view_sales');
   const canCreate = hasPermission(user, 'create_sales');
 
@@ -160,7 +176,7 @@ export default function PayrollPage() {
   const [selectedRunId, setSelectedRunId] = useState<string>('');
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [adjustments, setAdjustments] = useState<
-    Record<string, { bonus: number; commission: number; deduction: number; paidAmount: number }>
+    Record<string, { bonus: number; commission: number; deduction: number; paidAmount?: number }>
   >({});
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -267,7 +283,7 @@ export default function PayrollPage() {
       bonus: Number(value.bonus || 0),
       commission: Number(value.commission || 0),
       deduction: Number(value.deduction || 0),
-      paidAmount: Number(value.paidAmount || 0),
+      ...(value.paidAmount !== undefined ? { paidAmount: Number(value.paidAmount) } : {}),
     }));
   }, [adjustments]);
 
@@ -346,20 +362,23 @@ export default function PayrollPage() {
       (item) => item.salarySchemeId === schemeId,
     );
 
-    setAdjustments((prev) => ({
-      ...prev,
-      [schemeId]: {
-        bonus: prev[schemeId]?.bonus ?? Number(currentItem?.bonus || 0),
-        commission:
-          prev[schemeId]?.commission ?? Number(currentItem?.commission || 0),
-        deduction:
-          prev[schemeId]?.deduction ?? Number(currentItem?.deduction || 0),
-        paidAmount:
-          prev[schemeId]?.paidAmount ??
-          Number((currentItem?.paidAmount ?? currentItem?.netPay) || 0),
-        [field]: Number.isFinite(numeric) ? numeric : 0,
-      },
-    }));
+    setAdjustments((prev) => {
+      const existing = prev[schemeId];
+      const next = {
+        bonus: existing?.bonus ?? Number(currentItem?.bonus || 0),
+        commission: existing?.commission ?? Number(currentItem?.commission || 0),
+        deduction: existing?.deduction ?? Number(currentItem?.deduction || 0),
+        paidAmount: existing?.paidAmount,
+      };
+
+      if (field === 'paidAmount') {
+        next.paidAmount = Number.isFinite(numeric) ? numeric : 0;
+      } else {
+        next[field] = Number.isFinite(numeric) ? numeric : 0;
+      }
+
+      return { ...prev, [schemeId]: next };
+    });
   };
 
   const savePayrollSettings = async () => {
@@ -457,52 +476,86 @@ export default function PayrollPage() {
     }
   };
 
-  const renderPayslipPdf = (payslip: any) => {
-    const doc = new jsPDF();
-    let y = 16;
-    doc.setFontSize(15);
-    doc.text('Employee Payslip', 14, y);
-    y += 8;
-    doc.setFontSize(10);
-    doc.text(`Employee: ${payslip.employeeName}`, 14, y);
-    y += 5;
-    doc.text(`Period: ${payslip.monthName}`, 14, y);
-    y += 5;
-    doc.text(`Generated: ${new Date(payslip.processedAt).toLocaleString()}`, 14, y);
-    y += 8;
+  const renderPayslipPdf = async (payslip: any) => {
+    const pdfTemplate = (tenantData?.pdfTemplate || {}) as PdfTemplate;
+    const margin = getPdfMargin(pdfTemplate);
+    const titleFontSize = getPdfTitleFontSize(pdfTemplate);
+    const bodyFontSize = getPdfBodyFontSize(pdfTemplate);
+    const currency = getPdfCurrency(tenantData, pdfTemplate);
+    const { primaryRgb } = getPdfTableColors(pdfTemplate);
+    const money = (value?: number) => `${currency} ${(Number(value) || 0).toFixed(2)}`;
 
-    doc.setFontSize(11);
-    doc.text('Earnings', 14, y);
+    const doc = new jsPDF(getPdfDocOptions(pdfTemplate));
+    await preparePdfWatermark(
+      doc,
+      getFullAssetUrl(tenantData?.watermark as string | null | undefined),
+    );
+
+    let y = applyPdfBusinessHeader(doc, tenantData, pdfTemplate, margin);
+
+    doc.setFontSize(titleFontSize);
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text('Payslip', margin, y + 6);
+    y += 12;
+
+    doc.setFontSize(bodyFontSize);
+    doc.setTextColor('333333');
+    doc.text(`Employee: ${payslip.employeeName}`, margin, y);
     y += 6;
-    doc.setFontSize(10);
-    doc.text(`Base Salary: ${formatMoney(Number(payslip.earnings.baseSalary))}`, 16, y);
-    y += 5;
-    doc.text(`Bonus: ${formatMoney(Number(payslip.earnings.bonus))}`, 16, y);
-    y += 5;
-    doc.text(`Commission: ${formatMoney(Number(payslip.earnings.commission))}`, 16, y);
-    y += 5;
-    doc.text(`Gross Pay: ${formatMoney(Number(payslip.earnings.grossPay))}`, 16, y);
-    y += 8;
-
-    doc.setFontSize(11);
-    doc.text('Deductions', 14, y);
+    doc.text(`Pay Period: ${payslip.monthName}`, margin, y);
     y += 6;
-    doc.setFontSize(10);
-    doc.text(`Other Deductions: ${formatMoney(Number(payslip.deductions.nonTaxDeduction))}`, 16, y);
-    y += 5;
-    doc.text(`PAYE: ${formatMoney(Number(payslip.deductions.paye))}`, 16, y);
-    y += 5;
-    doc.text(`NSSF: ${formatMoney(Number(payslip.deductions.nssf))}`, 16, y);
-    y += 5;
-    doc.text(`Health: ${formatMoney(Number(payslip.deductions.health))}`, 16, y);
-    y += 5;
-    doc.text(`Housing Levy: ${formatMoney(Number(payslip.deductions.housingLevy))}`, 16, y);
-    y += 7;
+    doc.text(`Generated: ${new Date(payslip.processedAt).toLocaleString()}`, margin, y);
+    y += 4;
 
-    doc.setFontSize(11);
-    doc.text(`Net Pay: ${formatMoney(Number(payslip.netPay))}`, 14, y);
-    y += 5;
-    doc.text(`Paid Amount: ${formatMoney(Number(payslip.paidAmount))}`, 14, y);
+    autoTable(doc, {
+      startY: y + 4,
+      head: [['Earnings', `Amount (${currency})`]],
+      body: [
+        ['Base Salary', money(payslip.earnings.baseSalary)],
+        ['Bonus', money(payslip.earnings.bonus)],
+        ['Commission', money(payslip.earnings.commission)],
+        ['Gross Pay', money(payslip.earnings.grossPay)],
+      ],
+      styles: { fontSize: Math.max(8, bodyFontSize - 2), cellPadding: 3 },
+      headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255] },
+      columnStyles: { 1: { halign: 'right' } },
+      margin: { left: margin, right: margin },
+    });
+
+    let nextY =
+      ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
+        ?.finalY || y) + 6;
+
+    autoTable(doc, {
+      startY: nextY,
+      head: [['Deductions', `Amount (${currency})`]],
+      body: [
+        ['Other Deductions', money(payslip.deductions.nonTaxDeduction)],
+        ['PAYE', money(payslip.deductions.paye)],
+        ['NSSF', money(payslip.deductions.nssf)],
+        ['Health', money(payslip.deductions.health)],
+        ['Housing Levy', money(payslip.deductions.housingLevy)],
+      ],
+      styles: { fontSize: Math.max(8, bodyFontSize - 2), cellPadding: 3 },
+      headStyles: { fillColor: primaryRgb, textColor: [255, 255, 255] },
+      columnStyles: { 1: { halign: 'right' } },
+      margin: { left: margin, right: margin },
+    });
+
+    nextY =
+      ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
+        ?.finalY || nextY) + 8;
+
+    doc.setFontSize(Math.max(11, bodyFontSize + 1));
+    doc.setTextColor((pdfTemplate.primaryColor || '#000000').replace('#', '') || '000000');
+    doc.text(`Net Pay: ${money(payslip.netPay)}`, margin, nextY);
+    nextY += 6;
+
+    doc.setFontSize(bodyFontSize);
+    doc.setTextColor('333333');
+    doc.text(`Paid Amount: ${money(payslip.paidAmount)}`, margin, nextY);
+
+    applyPdfFooterAndPageNumbers(doc, pdfTemplate, tenantData?.name || 'Payslip');
 
     doc.save(`payslip-${payslip.employeeName}-${year}-${String(month).padStart(2, '0')}.pdf`);
   };
@@ -518,7 +571,7 @@ export default function PayrollPage() {
         throw new Error('No payslip data found');
       }
 
-      renderPayslipPdf(payslip);
+      await renderPayslipPdf(payslip);
       return;
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) {
@@ -548,7 +601,7 @@ export default function PayrollPage() {
           paidAmount: Number(item.paidAmount || 0),
         };
 
-        renderPayslipPdf(fallbackPayslip);
+        await renderPayslipPdf(fallbackPayslip);
         setSuccess('Generated payslip from payroll preview (no saved run found yet for this period).');
         return;
       }
@@ -583,6 +636,12 @@ export default function PayrollPage() {
   };
 
   const lockCurrentPeriod = async () => {
+    const monthLabel = monthOptions.find((option) => option.value === month)?.label;
+    const confirmed = window.confirm(
+      `Lock payroll for ${monthLabel} ${year}? No one will be able to process or edit payroll for this period until it is unlocked.`,
+    );
+    if (!confirmed) return;
+
     try {
       await apiPost('/hr/payroll-period-locks', { month, year, reason: 'Closed by payroll admin' });
       setSuccess('Payroll period locked');
@@ -613,6 +672,11 @@ export default function PayrollPage() {
   };
 
   const reverseRun = async (runId: string) => {
+    const confirmed = window.confirm(
+      'Reverse this posted payroll run? This will unbook the associated expense entries. This cannot be undone.',
+    );
+    if (!confirmed) return;
+
     try {
       await apiPost(`/salary-schemes/payroll-runs/${runId}/reverse`, {
         reason: 'Manual reversal by admin',
@@ -625,6 +689,11 @@ export default function PayrollPage() {
   };
 
   const cancelDraftRun = async (runId: string) => {
+    const confirmed = window.confirm(
+      'Cancel this payroll draft? All calculated amounts and adjustments for this draft will be discarded.',
+    );
+    if (!confirmed) return;
+
     try {
       await apiPost(`/hr/payroll-runs/${runId}/cancel`, { reason: 'Draft cancelled by admin' });
       setSuccess('Payroll draft cancelled');
@@ -635,6 +704,11 @@ export default function PayrollPage() {
   };
 
   const postRun = async (runId: string) => {
+    const confirmed = window.confirm(
+      'Post this payroll run? This will book the expense entries to the ledger. This cannot be undone except by reversing the run.',
+    );
+    if (!confirmed) return;
+
     try {
       await apiPost(`/salary-schemes/payroll-runs/${runId}/post`, {});
       setSuccess('Payroll run posted and expenses booked');

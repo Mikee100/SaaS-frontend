@@ -1,6 +1,6 @@
 import { AppModuleKey } from '@/utils/moduleAccess';
 
-export type BusinessTypeKey = 'fashion' | 'restaurant' | 'spa_barber';
+export type BusinessTypeKey = 'fashion' | 'restaurant' | 'spa_barber' | 'hardware';
 
 export type BlueprintVersionKey = 'v1';
 
