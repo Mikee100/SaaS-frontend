@@ -268,6 +268,14 @@ export interface Branch {
   deletedAt?: string | null;
 }
 
+export interface TenantUserSummary {
+  id: string;
+  name: string;
+  email: string;
+  isDisabled: boolean;
+  createdAt: string;
+}
+
 export type TabKey =
   | 'overview'
   | 'products'
@@ -277,7 +285,8 @@ export type TabKey =
   | 'integrations'
   | 'business-kra'
   | 'modules'
-  | 'crm-entitlements';
+  | 'crm-entitlements'
+  | 'password-reset';
 
 export type Notice = { type: 'success' | 'error'; message: string } | null;
 

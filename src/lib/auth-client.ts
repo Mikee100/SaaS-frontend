@@ -18,10 +18,7 @@ export interface AuthUser {
   adminRoles?: string[];
 }
 
-export type LoginResult =
-  | { status: 'ok'; user: AuthUser }
-  | { status: 'mfa_enroll' }
-  | { status: 'mfa_pending' };
+export type LoginResult = { status: 'ok'; user: AuthUser };
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -96,65 +93,7 @@ export async function login(
   if (!res.ok) {
     throw new Error(data.message || `Login failed: ${res.status}`);
   }
-  if (data.mfaEnrollmentRequired) {
-    return { status: 'mfa_enroll' };
-  }
-  if (data.mfaRequired) {
-    return { status: 'mfa_pending' };
-  }
   return { status: 'ok', user: data.user };
-}
-
-/**
- * Complete a pending MFA login with a TOTP code (or a backup code).
- */
-export async function verifyMfa(input: { code?: string; backupCode?: string }): Promise<{ user: AuthUser }> {
-  const res = await fetch(`${getApiUrl()}/auth/mfa/verify`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.message || `MFA verification failed: ${res.status}`);
-  }
-  return { user: data.user };
-}
-
-/**
- * Begin MFA enrollment (first login for a platform-staff account): generates a TOTP
- * secret and returns a QR code for an authenticator app.
- */
-export async function setupMfa(): Promise<{ secret: string; otpauthUri: string; qrCodeDataUrl: string }> {
-  const res = await fetch(`${getApiUrl()}/auth/mfa/setup`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.message || `MFA setup failed: ${res.status}`);
-  }
-  return data;
-}
-
-/**
- * Confirm MFA enrollment with the first code from the authenticator app.
- * Returns backup codes (shown exactly once) and completes the session.
- */
-export async function enableMfa(code: string): Promise<{ backupCodes: string[]; user: AuthUser }> {
-  const res = await fetch(`${getApiUrl()}/auth/mfa/enable`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.message || `MFA enable failed: ${res.status}`);
-  }
-  return data;
 }
 
 /**

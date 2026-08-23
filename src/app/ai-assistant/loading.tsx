@@ -1,16 +1,19 @@
-import { FaRobot, FaSpinner } from 'react-icons/fa';
+import { Bot, Loader2 } from 'lucide-react';
 
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-white p-3">
-      <div className="mx-auto mt-20 max-w-md rounded-md border border-gray-200 bg-white p-3 text-left">
-        <div className="mb-2 inline-flex items-center justify-center rounded-md bg-gray-100 p-2">
-          <FaRobot className="h-4 w-4 text-gray-700" />
+    <div className="adeera-page min-h-screen p-3">
+      <div className="adeera-card mx-auto mt-20 max-w-md p-3 text-left">
+        <div
+          className="mb-2 inline-flex items-center justify-center rounded-md p-2"
+          style={{ background: 'var(--adeera-accent-soft)' }}
+        >
+          <Bot className="h-4 w-4 text-(--adeera-accent)" />
         </div>
-        <h2 className="mb-1 text-sm font-semibold text-gray-900">Loading AI Assistant</h2>
+        <h2 className="mb-1 text-sm font-semibold text-(--adeera-text)">Loading AI Assistant</h2>
         <div className="flex items-center gap-2">
-          <FaSpinner className="h-3.5 w-3.5 animate-spin text-gray-600" />
-          <p className="text-xs text-gray-600">Preparing your workspace data...</p>
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-(--adeera-text-muted)" />
+          <p className="text-xs text-(--adeera-text-muted)">Preparing your workspace data...</p>
         </div>
       </div>
     </div>

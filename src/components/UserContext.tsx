@@ -35,9 +35,6 @@ interface UserContextType {
   refreshUser: () => Promise<void>;
   clearError: () => void;
   endImpersonation?: () => Promise<void>;
-  mfaStep: "enroll" | "pending" | null;
-  completeMfaLogin: (user: AuthUser) => Promise<void>;
-  clearMfaStep: () => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -109,7 +106,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [entitlementsSyncedAt, setEntitlementsSyncedAt] = useState<number | null>(null);
-  const [mfaStep, setMfaStep] = useState<"enroll" | "pending" | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -349,19 +345,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     setError(null);
-    setMfaStep(null);
     try {
       const result = await authLogin(email, password);
-
-      if (result.status === 'mfa_enroll') {
-        setMfaStep('enroll');
-        return;
-      }
-      if (result.status === 'mfa_pending') {
-        setMfaStep('pending');
-        return;
-      }
-
       await finalizeLogin(result.user);
     } catch (err) {
       setUser(null);
@@ -372,23 +357,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
       setLoading(false);
     }
   }, [finalizeLogin]);
-
-  const completeMfaLogin = useCallback(async (user: AuthUser) => {
-    setLoading(true);
-    setError(null);
-    try {
-      setMfaStep(null);
-      await finalizeLogin(user);
-    } catch (err) {
-      setUser(null);
-      setEntitlementsSyncedAt(null);
-      setError(err instanceof Error ? err.message : 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  }, [finalizeLogin]);
-
-  const clearMfaStep = useCallback(() => setMfaStep(null), []);
 
   const logout = useCallback(async () => {
     await authLogout();
@@ -438,10 +406,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children, skipUserFe
     refreshUser,
     clearError,
     endImpersonation,
-    mfaStep,
-    completeMfaLogin,
-    clearMfaStep,
-  }), [user, loading, error, entitlementsSyncedAt, login, logout, refreshUser, endImpersonation, mfaStep, completeMfaLogin, clearMfaStep]);
+  }), [user, loading, error, entitlementsSyncedAt, login, logout, refreshUser, endImpersonation]);
 
   return (
     <UserContext.Provider value={ctxValue}>

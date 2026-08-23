@@ -5,7 +5,7 @@ import { useUser } from "@/components/UserContext";
 import { useRouter, useParams } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "@/utils/api";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
-import { FaArrowLeft, FaStore, FaUsers, FaBuilding, FaReceipt, FaDatabase, FaExclamationTriangle } from "react-icons/fa";
+import { FaArrowLeft, FaStore, FaUsers, FaBuilding, FaReceipt, FaDatabase, FaExclamationTriangle, FaSpinner } from "react-icons/fa";
 import type {
   AppModuleKey,
   TenantModulesResponse,
@@ -30,6 +30,7 @@ import type {
   Product,
   Transaction,
   Branch,
+  TenantUserSummary,
   TabKey,
   Notice,
   ConfirmActionState,
@@ -44,6 +45,7 @@ import BusinessKraTab from "./_components/BusinessKraTab";
 import ModulesTab from "./_components/ModulesTab";
 import CrmEntitlementsTab from "./_components/CrmEntitlementsTab";
 import ProvisionModal from "./_components/ProvisionModal";
+import PasswordResetTab from "./_components/PasswordResetTab";
 import { formatDate, formatCurrency, formatSpace } from "./utils";
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -56,6 +58,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "business-kra", label: "Business & KRA" },
   { key: "modules", label: "Modules" },
   { key: "crm-entitlements", label: "CRM Entitlements" },
+  { key: "password-reset", label: "Password Reset" },
 ];
 
 const DEFAULT_CRM_LIMITS: CrmLimits = {
@@ -85,7 +88,14 @@ export default function TenantDetailsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [tenantUsers, setTenantUsers] = useState<TenantUserSummary[]>([]);
+  const [loadingTenantUsers, setLoadingTenantUsers] = useState(false);
+  const [tenantUsersLoadError, setTenantUsersLoadError] = useState<string | null>(null);
+  const [selectedPasswordResetUserId, setSelectedPasswordResetUserId] = useState("");
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [loadingData, setLoadingData] = useState(true);
+  const [tenantLoadError, setTenantLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   const [availableModules, setAvailableModules] = useState<AppModuleKey[]>([]);
@@ -175,11 +185,16 @@ export default function TenantDetailsPage() {
   const fetchTenantData = useCallback(async () => {
     try {
       setLoadingData(true);
-      const [tenantDetails, tenantProducts, tenantTransactions, tenantBranches] = await Promise.all([
-        apiGet<TenantDetails>(`/admin/tenants/${tenantId}`),
+      setTenantLoadError(null);
+
+      const tenantDetails = await apiGet<TenantDetails>(`/admin/tenants/${tenantId}`);
+      setLoadingTenantUsers(true);
+      setTenantUsersLoadError(null);
+      const [tenantProductsResult, tenantTransactionsResult, tenantBranchesResult, tenantUsersResult] = await Promise.allSettled([
         apiGet<Product[]>(`/admin/tenants/${tenantId}/products`),
         apiGet<Transaction[]>(`/admin/tenants/${tenantId}/transactions`),
         apiGet<Branch[]>(`/admin/tenants/${tenantId}/branches`),
+        apiGet<TenantUserSummary[]>(`/admin/tenants/${tenantId}/users`),
       ]);
 
       setTenant(tenantDetails);
@@ -196,9 +211,72 @@ export default function TenantDetailsPage() {
         vatNumber: tenantDetails.vatNumber ?? "",
         etimsQrUrl: tenantDetails.etimsQrUrl ?? "",
       });
-      setProducts(tenantProducts);
-      setTransactions(tenantTransactions);
-      setBranches(tenantBranches);
+      setProducts(tenantProductsResult.status === "fulfilled" ? tenantProductsResult.value : []);
+      setTransactions(tenantTransactionsResult.status === "fulfilled" ? tenantTransactionsResult.value : []);
+      setBranches(tenantBranchesResult.status === "fulfilled" ? tenantBranchesResult.value : []);
+      let loadedUsers: TenantUserSummary[] = [];
+      if (tenantUsersResult.status === "fulfilled" && Array.isArray(tenantUsersResult.value)) {
+        loadedUsers = tenantUsersResult.value;
+      }
+
+      // Some environments return an empty tenant users list even when users exist.
+      // Fall back to the global admin users endpoint when the direct lookup is empty or fails.
+      if (loadedUsers.length === 0) {
+        try {
+          const allUsers = await apiGet<Array<{
+            id: string;
+            name: string;
+            email: string;
+            isDisabled: boolean;
+            createdAt: string;
+            tenantId?: string | null;
+            tenant?: { id?: string } | null;
+            userRoles?: Array<{ tenantId?: string | null }>;
+          }>>("/admin/users");
+          loadedUsers = (Array.isArray(allUsers) ? allUsers : [])
+            .filter(
+              (u) =>
+                u?.tenant?.id === tenantId ||
+                u?.tenantId === tenantId ||
+                (Array.isArray(u?.userRoles) &&
+                  u.userRoles.some((roleLink) => roleLink?.tenantId === tenantId)),
+            )
+            .map((u) => ({
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              isDisabled: !!u.isDisabled,
+              createdAt: u.createdAt,
+            }));
+
+          if (loadedUsers.length === 0 && tenantDetails?.contactEmail) {
+            const normalizedContactEmail = tenantDetails.contactEmail.toLowerCase().trim();
+            const byEmail = (Array.isArray(allUsers) ? allUsers : []).find(
+              (u) => (u?.email || "").toLowerCase().trim() === normalizedContactEmail,
+            );
+
+            if (byEmail) {
+              loadedUsers = [
+                {
+                  id: byEmail.id,
+                  name: byEmail.name,
+                  email: byEmail.email,
+                  isDisabled: !!byEmail.isDisabled,
+                  createdAt: byEmail.createdAt,
+                },
+              ];
+            }
+          }
+        } catch {
+          setTenantUsersLoadError("Could not load tenant users. Reload after backend restart.");
+        }
+      }
+
+      setTenantUsers(loadedUsers);
+      setSelectedPasswordResetUserId((prev) => {
+        if (prev && loadedUsers.some((u) => u.id === prev)) return prev;
+        return loadedUsers[0]?.id || "";
+      });
 
       const modules = await apiGet<TenantModulesResponse>(`/admin/tenants/${tenantId}/modules?t=${Date.now()}`);
       setAvailableModules(Array.isArray(modules?.availableModules) ? modules.availableModules : []);
@@ -280,8 +358,11 @@ export default function TenantDetailsPage() {
       }
     } catch (error) {
       console.error("Failed to fetch tenant data:", error);
-      showError("Failed to load tenant data.");
+      const message = error instanceof Error ? error.message : "Failed to load tenant data.";
+      setTenantLoadError(message);
+      showError(message || "Failed to load tenant data.");
     } finally {
+      setLoadingTenantUsers(false);
       setLoadingData(false);
     }
   }, [tenantId, refreshModulePermissionMatrix, showError]);
@@ -679,6 +760,53 @@ export default function TenantDetailsPage() {
     }
   };
 
+  const resetTemporaryPassword = async () => {
+    if (!tenantId || !selectedPasswordResetUserId) return;
+    try {
+      setResettingPassword(true);
+      setTemporaryPassword("");
+      const result = await apiPost<{ temporaryPassword: string; userName?: string; email?: string }>(
+        `/admin/tenants/${tenantId}/users/${selectedPasswordResetUserId}/reset-temporary-password`,
+        {},
+      );
+      setTemporaryPassword(result?.temporaryPassword || "");
+      showSuccess(`Default password reset${result?.email ? ` for ${result.email}` : ""}.`);
+    } catch (error: any) {
+      console.error("Failed to reset temporary password:", error);
+      showError(error?.message || "Failed to reset default password.");
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
+  const resetTemporaryPasswordByContact = async () => {
+    if (!tenantId || !tenant?.contactEmail) return;
+    try {
+      setResettingPassword(true);
+      setTemporaryPassword("");
+      const result = await apiPost<{ temporaryPassword: string; userName?: string; email?: string }>(
+        `/admin/tenants/${tenantId}/reset-contact-temporary-password`,
+        { email: tenant.contactEmail },
+      );
+      setTemporaryPassword(result?.temporaryPassword || "");
+      showSuccess(`Default password reset${result?.email ? ` for ${result.email}` : ""}.`);
+
+      // Reload users after potential auto-relink.
+      const reloaded = await apiGet<TenantUserSummary[]>(`/admin/tenants/${tenantId}/users`);
+      const loaded = Array.isArray(reloaded) ? reloaded : [];
+      setTenantUsers(loaded);
+      setSelectedPasswordResetUserId((prev) => {
+        if (prev && loaded.some((u) => u.id === prev)) return prev;
+        return loaded[0]?.id || "";
+      });
+    } catch (error: any) {
+      console.error("Failed to reset temporary password by contact email:", error);
+      showError(error?.message || "Failed to reset default password.");
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
   const doImpersonate = async () => {
     if (!tenant) return;
     try {
@@ -747,7 +875,11 @@ export default function TenantDetailsPage() {
   if (loadingData) {
     return (
       <main className="min-h-screen bg-gray-50 p-4 md:p-6">
-        <div className="p-4 text-center text-sm text-gray-500">Loading tenant data...</div>
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm">
+          <FaSpinner className="h-6 w-6 animate-spin text-blue-600" aria-hidden="true" />
+          <p className="text-sm font-medium text-gray-700">Loading tenant data...</p>
+          <p className="text-xs text-gray-500">Please wait while we fetch tenant details.</p>
+        </div>
       </main>
     );
   }
@@ -755,7 +887,7 @@ export default function TenantDetailsPage() {
   if (!tenant) {
     return (
       <main className="min-h-screen bg-gray-50 p-4 md:p-6">
-        <div className="p-4 text-center text-sm text-gray-500">Tenant not found</div>
+        <div className="p-4 text-center text-sm text-gray-500">{tenantLoadError || "Tenant not found"}</div>
       </main>
     );
   }
@@ -945,6 +1077,21 @@ export default function TenantDetailsPage() {
             saveCrmEntitlements={saveCrmEntitlements}
             crmTimeline={crmTimeline}
             loadingCrmTimeline={loadingCrmTimeline}
+          />
+        </TabsPrimitive.Content>
+        <TabsPrimitive.Content value="password-reset">
+          <PasswordResetTab
+            users={tenantUsers}
+            loadingUsers={loadingTenantUsers}
+            selectedUserId={selectedPasswordResetUserId}
+            setSelectedUserId={setSelectedPasswordResetUserId}
+            resettingPassword={resettingPassword}
+            temporaryPassword={temporaryPassword}
+            resetTemporaryPassword={resetTemporaryPassword}
+            resetByContactEmail={resetTemporaryPasswordByContact}
+            tenantContactEmail={tenant?.contactEmail}
+            onCreateUser={() => router.push(`/superadmin/create-user?tenantId=${tenantId}`)}
+            loadError={tenantUsersLoadError}
           />
         </TabsPrimitive.Content>
       </TabsPrimitive.Root>

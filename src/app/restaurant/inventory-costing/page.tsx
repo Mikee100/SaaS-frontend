@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/utils/api";
 import { useUser } from "@/components/UserContext";
@@ -14,6 +14,7 @@ type Product = {
   sku?: string;
   price?: number;
   cost?: number;
+  unitAbbreviation?: string;
   category?: { name?: string } | string;
   customFields?: Record<string, unknown>;
 };
@@ -56,6 +57,73 @@ const BOM_UNIT_GROUPS: Array<{ label: string; options: string[] }> = [
 ];
 
 const BOM_UNIT_OPTIONS = BOM_UNIT_GROUPS.flatMap((group) => group.options);
+
+// Grams-per-unit / millilitres-per-unit, so a recipe line's unit only needs
+// to share a family with the ingredient's own inventory unit, not match it
+// exactly. Mirrors the conversion table used server-side for BOM deduction
+// (backend/src/restaurant/services/restaurant-order/restaurant-order.service.ts)
+// so the cost preview shown here matches what actually gets deducted.
+const WEIGHT_TO_GRAMS: Record<string, number> = {
+  mg: 0.001,
+  g: 1,
+  gram: 1,
+  grams: 1,
+  kg: 1000,
+  kilogram: 1000,
+  kilograms: 1000,
+  oz: 28.3495,
+  ounce: 28.3495,
+  ounces: 28.3495,
+  lb: 453.592,
+  lbs: 453.592,
+  pound: 453.592,
+  pounds: 453.592,
+};
+
+const VOLUME_TO_ML: Record<string, number> = {
+  ml: 1,
+  milliliter: 1,
+  milliliters: 1,
+  millilitre: 1,
+  millilitres: 1,
+  cl: 10,
+  l: 1000,
+  liter: 1000,
+  liters: 1000,
+  litre: 1000,
+  litres: 1000,
+  tsp: 4.92892,
+  teaspoon: 4.92892,
+  tbsp: 14.7868,
+  tablespoon: 14.7868,
+  cup: 236.588,
+};
+
+function normalizeUnit(unit?: string | null): string {
+  return String(unit || "").trim().toLowerCase();
+}
+
+// Returns null when both units are specified but not known to be
+// convertible - callers should treat that as "cost unknown", not silently
+// apply a wrong factor.
+function convertQuantity(value: number, fromUnitRaw?: string | null, toUnitRaw?: string | null): number | null {
+  const from = normalizeUnit(fromUnitRaw);
+  const to = normalizeUnit(toUnitRaw);
+
+  if (!from || !to || from === to) {
+    return value;
+  }
+
+  if (from in WEIGHT_TO_GRAMS && to in WEIGHT_TO_GRAMS) {
+    return (value * WEIGHT_TO_GRAMS[from]) / WEIGHT_TO_GRAMS[to];
+  }
+
+  if (from in VOLUME_TO_ML && to in VOLUME_TO_ML) {
+    return (value * VOLUME_TO_ML[from]) / VOLUME_TO_ML[to];
+  }
+
+  return null;
+}
 
 function resolvedCategory(product: Product): string {
   if (typeof product.category === "string") {
@@ -217,6 +285,32 @@ export default function RestaurantInventoryCostingPage() {
     return map;
   }, [products]);
 
+  const productUnitById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const product of products) {
+      if (product.unitAbbreviation) {
+        map.set(product.id, product.unitAbbreviation);
+      }
+    }
+    return map;
+  }, [products]);
+
+  // Cost of one recipe line: converts the line's quantity into the
+  // ingredient's own inventory unit before pricing it, since `unitCost` is
+  // KES-per-inventory-unit. Returns null if the units are incompatible, so
+  // callers can flag "unit mismatch" instead of showing a wrong number.
+  const lineCost = useCallback(
+    (line: { ingredientProductId: string; quantity: number; unit?: string; wastePercent?: number }): number | null => {
+      const unitCost = Number(productCostById.get(line.ingredientProductId) || 0);
+      const ingredientUnit = productUnitById.get(line.ingredientProductId);
+      const converted = convertQuantity(Number(line.quantity || 0), line.unit, ingredientUnit);
+      if (converted === null) return null;
+      const wasteMultiplier = 1 + Math.max(0, Number(line.wastePercent || 0)) / 100;
+      return unitCost * converted * wasteMultiplier;
+    },
+    [productCostById, productUnitById],
+  );
+
   const selectedMeal = useMemo(
     () => mealProducts.find((item) => item.id === selectedMealId) || null,
     [mealProducts, selectedMealId],
@@ -268,15 +362,24 @@ export default function RestaurantInventoryCostingPage() {
     );
   }, [recipes, selectedMealId]);
 
-  const recipeCost = useMemo(() => {
-    return lineDrafts.reduce((sum, line) => {
-      const qty = Number(line.quantity || 0);
-      const waste = Math.max(0, Number(line.wastePercent || 0));
-      const unitCost = Number(productCostById.get(line.ingredientProductId) || 0);
-      const multiplier = 1 + waste / 100;
-      return sum + unitCost * qty * multiplier;
-    }, 0);
-  }, [lineDrafts, productCostById]);
+  const { recipeCost, recipeCostHasUnitMismatch } = useMemo(() => {
+    let total = 0;
+    let hasUnitMismatch = false;
+    for (const line of lineDrafts) {
+      const cost = lineCost({
+        ingredientProductId: line.ingredientProductId,
+        quantity: Number(line.quantity || 0),
+        unit: line.unit,
+        wastePercent: Number(line.wastePercent || 0),
+      });
+      if (cost === null) {
+        hasUnitMismatch = true;
+      } else {
+        total += cost;
+      }
+    }
+    return { recipeCost: total, recipeCostHasUnitMismatch: hasUnitMismatch };
+  }, [lineDrafts, lineCost]);
 
   const sellingPrice = Number(selectedMeal?.price || 0);
   const grossMargin = sellingPrice - recipeCost;
@@ -371,12 +474,16 @@ export default function RestaurantInventoryCostingPage() {
   const recipeRows = useMemo(() => {
     return recipes
       .map((recipe) => {
-        const cost = (recipe.lines || []).reduce((sum, line) => {
-          const unitCost = Number(productCostById.get(line.ingredientProductId) || 0);
-          const qty = Number(line.quantity || 0);
-          const wasteMultiplier = 1 + Math.max(0, Number(line.wastePercent || 0)) / 100;
-          return sum + unitCost * qty * wasteMultiplier;
-        }, 0);
+        let cost = 0;
+        let hasUnitMismatch = false;
+        for (const line of recipe.lines || []) {
+          const lineResult = lineCost(line);
+          if (lineResult === null) {
+            hasUnitMismatch = true;
+          } else {
+            cost += lineResult;
+          }
+        }
         const product = mealProducts.find((item) => item.id === recipe.productId);
         const price = Number(product?.price || 0);
         const margin = price - cost;
@@ -390,10 +497,11 @@ export default function RestaurantInventoryCostingPage() {
           sellingPrice: price,
           margin,
           marginPct,
+          hasUnitMismatch,
         };
       })
       .sort((a, b) => a.mealName.localeCompare(b.mealName));
-  }, [mealProducts, productCostById, productNameById, recipes]);
+  }, [mealProducts, lineCost, productNameById, recipes]);
 
   if (tenantLoading || branchesLoading) {
     return <div className="p-6 text-sm text-gray-600">Loading restaurant inventory costing...</div>;
@@ -508,6 +616,12 @@ export default function RestaurantInventoryCostingPage() {
                   <p className="text-[11px] text-gray-500">{grossMarginPct.toFixed(1)}%</p>
                 </div>
               </div>
+
+              {recipeCostHasUnitMismatch && (
+                <p className="text-[11px] font-medium text-amber-700">
+                  ⚠ One or more lines use a unit that doesn&apos;t match the ingredient&apos;s stock unit — those lines are excluded from the cost above until fixed.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -641,6 +755,11 @@ export default function RestaurantInventoryCostingPage() {
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-gray-500">{row.ingredientCount} ingredients</p>
+                  {row.hasUnitMismatch && (
+                    <p className="mt-1 text-[11px] font-medium text-amber-700">
+                      ⚠ Cost incomplete — one or more lines use a unit that doesn&apos;t match the ingredient&apos;s stock unit.
+                    </p>
+                  )}
                   <div className="mt-2 grid grid-cols-3 gap-1 text-[11px]">
                     <div>
                       <p className="text-gray-500">Cost</p>

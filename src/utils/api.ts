@@ -122,6 +122,24 @@ class EnhancedAPI {
     return !endpoint.startsWith('/admin');
   }
 
+  private getRequestTimeoutMs(endpoint: string): number {
+    const path = this.getEndpointPath(endpoint);
+
+    // Classification endpoints can trigger initial server-side bootstrap checks.
+    // Give them a longer timeout to avoid noisy AbortErrors on slower networks.
+    if (path.startsWith('/admin/classifications')) {
+      return 45_000;
+    }
+
+    // Subscription operations (manual renewal, grace extension, payment actions)
+    // can take longer because they may create invoices and update multiple records.
+    if (path.startsWith('/admin/subscriptions/operations')) {
+      return 60_000;
+    }
+
+    return 15_000;
+  }
+
   private async makeRequest<T = unknown>(
     endpoint: string,
     options: RequestInit = {},
@@ -155,7 +173,7 @@ class EnhancedAPI {
     const maxRetries = 5;
     let attempt = 0;
 
-    const REQUEST_TIMEOUT_MS = 15000;
+    const REQUEST_TIMEOUT_MS = this.getRequestTimeoutMs(endpoint);
 
     // Create the request promise
     const requestPromise = (async (): Promise<T> => {
@@ -314,7 +332,11 @@ class EnhancedAPI {
 
         // Abort errors typically indicate timeout/user navigation and are not recoverable by retries.
         if (error instanceof DOMException && error.name === 'AbortError') {
-          throw error;
+          throw new ApiError(
+            `Request timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s. Please retry.`,
+            408,
+            'REQUEST_TIMEOUT',
+          );
         }
         
         if (attempt >= maxRetries) {

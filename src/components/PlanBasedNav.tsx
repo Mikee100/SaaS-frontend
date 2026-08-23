@@ -209,6 +209,7 @@ function buildGroupedNavigation(items: NavItem[], productsLabel: string): NavIte
     createSubItem('Sales History', '/sales/history', 'view_sales'),
     createSubItem('Restaurant Activity', '/restaurant/activity', 'view_sales'),
     createSubItem('Restaurant Inventory Costing', '/restaurant/inventory-costing', 'view_sales'),
+    createSubItem('Employee Performance', '/restaurant/employee-performance', 'view_sales'),
     createSubItem('M-Pesa Transactions', '/mpesa-transactions', 'view_sales'),
     createSubItem('Sales Target', '/sales/targets', 'view_sales'),
   ].filter((item): item is NavSubItem => Boolean(item));
@@ -463,6 +464,7 @@ export default function PlanBasedNav() {
         { name: 'Sales History', href: '/sales/history', requiredPermission: 'view_sales', icon: FaHistory },
         { name: 'Restaurant Activity', href: '/restaurant/activity', requiredPermission: 'view_sales', icon: FaHistory },
         { name: 'Restaurant Inventory Costing', href: '/restaurant/inventory-costing', requiredPermission: 'view_sales', icon: MdOutlineInventory2 },
+        { name: 'Employee Performance', href: '/restaurant/employee-performance', requiredPermission: 'view_sales', icon: FaChartBar },
         { name: 'M-Pesa Transactions', href: '/mpesa-transactions', requiredPermission: 'view_sales', icon: FaMoneyBillWave },
         { name: 'Sales Target', href: '/sales/targets', requiredPermission: 'view_sales', icon: FaBullseye },
       ]
